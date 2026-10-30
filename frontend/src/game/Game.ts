@@ -425,7 +425,7 @@ export class Game {
     const racers = this.racers();
     while (this.accumulator >= PHYSICS_DT && steps < 8) {
       for (const r of racers) {
-        r.sim.assist = r.ai ? 1 : this.assist;
+        if (!r.ai) r.sim.assist = this.assist;
         r.sim.input = r.input;
         r.sim.preStep(PHYSICS_DT);
       }

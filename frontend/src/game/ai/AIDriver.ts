@@ -20,9 +20,9 @@ export interface AIProfile {
 }
 
 export const AI_PROFILES: Record<AILevel, AIProfile> = {
-  rookie: { level: 'rookie', name: '森 健太', title: 'ROOKIE / 走り始めた新人', gripUse: 0.64, brakeUse: 0.55, sloppiness: 1.2, catchUp: 0.15 },
-  ace: { level: 'ace', name: '高嶺 遼', title: 'LOCAL ACE / 朧峠の地元最速', gripUse: 0.8, brakeUse: 0.72, sloppiness: 0.5, catchUp: 0.25 },
-  legend: { level: 'legend', name: '朧', title: 'LEGEND / 夜を走る幽霊', gripUse: 0.93, brakeUse: 0.85, sloppiness: 0.15, catchUp: 0.3 },
+  rookie: { level: 'rookie', name: '森 健太', title: 'ROOKIE / 走り始めた新人', gripUse: 0.55, brakeUse: 0.46, sloppiness: 0.45, catchUp: 0.35 },
+  ace: { level: 'ace', name: '高嶺 遼', title: 'LOCAL ACE / 朧峠の地元最速', gripUse: 0.72, brakeUse: 0.64, sloppiness: 0.3, catchUp: 0.25 },
+  legend: { level: 'legend', name: '朧', title: 'LEGEND / 夜を走る幽霊', gripUse: 0.95, brakeUse: 0.86, sloppiness: 0.1, catchUp: 0.3 },
 };
 
 const _target = new Vector3();
@@ -54,6 +54,8 @@ export class AIDriver {
 
   /** Must be called once the car spec is known. */
   calibrate(vehicle: VehicleSim) {
+    vehicle.gripDriver = true;
+    vehicle.assist = 2;
     const grip = Math.min(vehicle.spec.gripFront, vehicle.spec.gripRear) * 9.81;
     this.speeds = this.line.speedProfile(grip * this.profile.gripUse, grip * this.profile.brakeUse, 50, 62);
   }

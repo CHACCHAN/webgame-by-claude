@@ -63,6 +63,8 @@ export class VehicleSim {
   gripScale = 1;
   powerScale = 1;
   autoShift = true;
+  /** AI drivers grip-drive: feint/power drift triggers are disabled */
+  gripDriver = false;
 
   // drivetrain state
   rpm = 900;
@@ -74,6 +76,9 @@ export class VehicleSim {
   private wheelSpin = 0;
   private steerSmoothed = 0;
   private limiterCut = 0;
+  /** 0..1 drift state: while set, the rear tyres let go so slides are easy to start and hold */
+  driftState = 0;
+  private driftHold = 0;
 
   // derived state (read by HUD/audio/fx/camera)
   speed = 0;
@@ -314,7 +319,24 @@ export class VehicleSim {
     const angv = _w.set(av.x, av.y, av.z);
     let grounded = 0;
     const wheelMass = spec.mass / 4;
-    const rearGripDrift = 1 - spec.driftiness * 0.22 * throttle * Math.abs(this.steerSmoothed) * smoothstep(10, 18, planarSpeed);
+    // ---------------- drift state machine (arcade): handbrake + steer, a "feint" (brake +
+    // sharp steer), power + steer, or an existing slide puts the car into a drift
+    const steerAbs = Math.abs(this.steerSmoothed);
+    const fast = planarSpeed > 8.5 && fwdSpeed > 0;
+    const powerTrigger = throttle > 0.85 && steerAbs > 0.6 && this.gear > 0 && this.gear <= 3 && spec.driftiness > 0.55 && planarSpeed > 11;
+    const trigger = this.gripDriver
+      ? Math.abs(this.slipAngle) > 0.3
+      : (inp.handbrake && steerAbs > 0.2) ||
+        (brake > 0.35 && steerAbs > 0.5 && planarSpeed > 13) ||
+        powerTrigger ||
+        Math.abs(this.slipAngle) > 0.2;
+    if (fast && trigger) this.driftHold = 0.3;
+    else this.driftHold = Math.max(0, this.driftHold - dt);
+    const sustain = fast && (this.driftHold > 0 || (this.driftState > 0.3 && Math.abs(this.slipAngle) > 0.08 && throttle > 0.2));
+    this.driftState = damp(this.driftState, sustain ? 1 : 0, sustain ? 7 : 2.5, dt);
+    // throttle widens the angle, lifting tightens it
+    const character = lerp(0.55, 1, spec.driftiness) * (spec.drive === 'AWD' ? 0.8 : 1);
+    const rearGripDrift = 1 - this.driftState * (0.26 + 0.2 * throttle) * character;
     let spinDemand = 0;
 
     for (const w of this.wheels) {
@@ -392,10 +414,9 @@ export class VehicleSim {
       // --- lateral
       let mu = (w.front ? spec.gripFront : spec.gripRear) * this.gripScale;
       if (!w.front) {
-        mu *= spec.drive === 'RWD' ? rearGripDrift : lerp(1, rearGripDrift, 0.5);
-        if (handbrake) mu *= 0.5;
+        mu *= rearGripDrift;
         // recover grip when the driver straightens up and lifts
-        if (this.assist > 0 && drifting > 0 && throttle < 0.2 && Math.abs(this.steerSmoothed) < 0.25) mu *= 1.12;
+        if (this.assist > 0 && drifting > 0 && throttle < 0.2 && steerAbs < 0.25) mu *= 1.1;
       }
       const alpha = Math.atan2(vL, Math.max(Math.abs(vF), 4));
       w.slipAngle = alpha;
@@ -416,10 +437,11 @@ export class VehicleSim {
       }
       const brakeShare = w.front ? 0.6 : 0.4;
       let brakeF = brake * spec.brakeForce * brakeShare * 0.5;
-      if (handbrake && !w.front) brakeF += spec.brakeForce * 0.45;
       const stopLong = (Math.abs(vF) * wheelMass) / dt;
       fx -= Math.sign(vF) * Math.min(brakeF, stopLong);
-      fx -= vF * 14; // rolling resistance
+      // rolling resistance (roughly constant, ~1.5% of load)
+      fx -= Math.sign(vF) * Math.min(Math.abs(vF) * 40, load * 0.015);
+      const locked = handbrake && !w.front && Math.abs(vF) > 1;
 
       // --- friction circle (lateral keeps a share of grip even when spinning)
       const maxF = mu * load * 1.05;
@@ -432,6 +454,13 @@ export class VehicleSim {
       const keep = 0.55 + (1 - spec.driftiness) * 0.25;
       const latCap = maxF * Math.sqrt(Math.max(0, 1 - usage * usage * (1 - keep * keep)));
       if (Math.abs(fy) > latCap) fy = Math.sign(fy) * latCap;
+      if (locked) {
+        // a locked wheel just slides: friction opposes the contact patch velocity
+        const vs = Math.hypot(vF, vL) || 1;
+        const slide = mu * 0.8 * load;
+        fx = (-vF / vs) * slide;
+        fy = (-vL / vs) * slide;
+      }
       if (w.driven) spinDemand = Math.max(spinDemand, spinning);
 
       _imp.copy(_f).multiplyScalar(fx).addScaledVector(_lat, fy).multiplyScalar(dt);

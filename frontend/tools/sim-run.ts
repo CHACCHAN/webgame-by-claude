@@ -11,11 +11,12 @@ import { RacingLine } from '../src/game/ai/RacingLine';
 await initRapier();
 const track = new Track(OBORO_DOWNHILL);
 const line = new RacingLine(track);
-const cars = (process.argv[2] ?? 'hayate,raijin,shiden').split(',') as CarId[];
-const levels = (process.argv[3] ?? 'rookie,ace,legend').split(',') as AILevel[];
+const pairs = process.argv[2] === 'rivals'
+  ? ([['hayate', 'rookie'], ['raijin', 'ace'], ['shiden', 'legend']] as [CarId, AILevel][])
+  : ((process.argv[2] ?? 'hayate,raijin,shiden').split(',') as CarId[]).flatMap((c) => ((process.argv[3] ?? 'rookie,ace,legend').split(',') as AILevel[]).map((l) => [c, l] as [CarId, AILevel]));
 
-for (const car of cars) {
-  for (const level of levels) {
+for (const [car, level] of pairs) {
+  {
     const physics = new PhysicsWorld(track);
     const start = track.pointAt(track.startS - 12);
     const v = new VehicleSim(physics, CAR_SPECS[car], start, track.headingAt(track.startS - 12));
