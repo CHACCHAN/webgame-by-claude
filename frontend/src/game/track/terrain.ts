@@ -63,19 +63,34 @@ interface RoadSample {
   halfW: number;
   bridge: boolean;
   index: number;
+  /** hillside gradient (height change per metre) used to tilt the local terrain plane */
+  gx: number;
+  gz: number;
 }
+
+/** Steepness of the hillside the road is cut into, per zone. */
+const SLOPE: Partial<Record<string, number>> = { vista: 1.0, hairpins: 0.62, start: 0.38, forest: 0.58, rockshed: 0.95, bridge: 0.3, finish: 0.4 };
 
 function roadSamples(track: Track, spacing: number): RoadSample[] {
   const out: RoadSample[] = [];
   for (let i = 0; i < track.count; i += spacing) {
-    out.push({
-      x: track.pos[i * 3],
-      y: track.pos[i * 3 + 1],
-      z: track.pos[i * 3 + 2],
-      halfW: track.width[i] / 2,
-      bridge: track.zone[i] === 'bridge',
-      index: i,
-    });
+    const x = track.pos[i * 3], z = track.pos[i * 3 + 2];
+    // fall line of the large-scale landform around the sample
+    const e = 40;
+    let gx = (baseHeight(x + e, z) - baseHeight(x - e, z)) / (2 * e);
+    let gz = (baseHeight(x, z + e) - baseHeight(x, z - e)) / (2 * e);
+    const len = Math.hypot(gx, gz) || 1;
+    const steep = SLOPE[track.zone[i] ?? ''] ?? 0.55;
+    gx = (gx / len) * steep;
+    gz = (gz / len) * steep;
+    out.push({ x, y: track.pos[i * 3 + 1], z, halfW: track.width[i] / 2, bridge: track.zone[i] === 'bridge', index: i, gx, gz });
+  }
+  // smooth the gradients along the road so the hillside doesn't twist abruptly
+  for (let pass = 0; pass < 3; pass++) {
+    for (let k = 1; k < out.length - 1; k++) {
+      out[k].gx = (out[k - 1].gx + out[k].gx * 2 + out[k + 1].gx) / 4;
+      out[k].gz = (out[k - 1].gz + out[k].gz * 2 + out[k + 1].gz) / 4;
+    }
   }
   return out;
 }
@@ -144,8 +159,11 @@ export function buildTerrain(track: Track, opts: { nearCell?: number; farCell?: 
           // taper to zero at the influence radius so there is no visible rim
           const taper = smoothstep(ROAD_INFLUENCE, ROAD_INFLUENCE * 0.5, Math.sqrt(d2));
           const w = ((s.bridge ? 0.05 : 1) * taper) / (d2 + 400);
+          // each sample contributes a tilted plane: the road is cut into a hillside
+          const along = 120 * Math.tanh((dx * s.gx + dz * s.gz) / Math.max(Math.hypot(s.gx, s.gz), 1e-6) / 120);
+          const rise = along * Math.hypot(s.gx, s.gz);
           wSum += w;
-          hSum += w * s.y;
+          hSum += w * (s.y + rise);
         }
       }
     out.dist = Infinity;

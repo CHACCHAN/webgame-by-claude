@@ -151,6 +151,9 @@ export class Game {
   private cinematic = { shot: 0, t: 0, anchor: new THREE.Vector3(), pos: new THREE.Vector3() };
   private garageCar: CarVisual | null = null;
   private garageAngle = 0;
+  /** world yaw of the camera offset that looks from the hillside out over the valley */
+  private garageViewYaw = 0;
+  private garageLight = new THREE.SpotLight('#fff1e0', 0, 30, 0.55, 0.8, 1.2);
   private lampLights: THREE.PointLight[] = [];
   timeOfDay: TimeOfDay = 'night';
   assist: AssistLevel = 1;
@@ -240,9 +243,9 @@ export class Game {
     const road = this.scenery.roadMaterial;
     this.dryMaterials.road ??= { roughness: road.roughness, color: road.color.clone(), normal: road.normalScale.x, env: road.envMapIntensity };
     const dry = this.dryMaterials.road;
-    road.roughness = lerp(dry.roughness, 0.16, wet);
+    road.roughness = lerp(dry.roughness, 0.2, wet);
     road.color.copy(dry.color).multiplyScalar(lerp(1, 0.6, wet));
-    road.normalScale.setScalar(lerp(dry.normal, 0.25, wet));
+    road.normalScale.setScalar(lerp(dry.normal, 0.08, wet));
     road.envMapIntensity = lerp(dry.env, 1.8, wet);
     const terrain = this.scenery.lightmapMats[1];
     this.dryMaterials.terrain ??= terrain.roughness;
@@ -314,6 +317,7 @@ export class Game {
       this.ghost.visual.dispose();
       this.ghost = null;
     }
+    this.garageLight.intensity = 0;
     if (this.garageCar) {
       this.root.remove(this.garageCar.root);
       this.garageCar.dispose();
@@ -356,12 +360,22 @@ export class Game {
     this.garageCar = new CarVisual(spec, { headlights: true, shadows: this.quality.shadows, rideHeight: 0, bodyColor: color });
     this.garageCar.setHeadlights(this.env.preset.lampsOn > 0.5 ? 1 : 0.5);
     // park at the summit, just before the start line, angled for the camera
-    const s = this.track.startS - 22;
-    const p = this.track.pointAt(s, 1.2);
+    const s = this.track.startS - 14;
+    const p = this.track.pointAt(s, 0.6);
     this.garageCar.root.position.copy(p);
-    this.garageCar.root.rotation.y = this.track.headingAt(s) + 0.5;
+    this.garageCar.root.rotation.y = this.track.headingAt(s) + 0.35;
     this.root.add(this.garageCar.root);
     void ride;
+    // showroom key light above and in front of the car
+    this.garageLight.position.copy(p).add(new THREE.Vector3(0, 7, 0));
+    this.garageLight.target.position.copy(p);
+    this.garageLight.intensity = 70;
+    this.garageLight.castShadow = this.quality.shadows;
+    if (!this.garageLight.parent) this.root.add(this.garageLight, this.garageLight.target);
+    // put the camera on the uphill side so the background is the valley, not the cutting
+    const r = this.track.getRight(Math.round(s), new THREE.Vector3());
+    const up = this.terrain.heightAt(p.x + r.x * 14, p.z + r.z * 14) > this.terrain.heightAt(p.x - r.x * 14, p.z - r.z * 14) ? 1 : -1;
+    this.garageViewYaw = Math.atan2(r.x * up, r.z * up);
     if (this.phase !== 'garage') this.garageAngle = 0.6;
     this.setPhase('garage');
   }
@@ -879,12 +893,15 @@ export class Game {
 
   private garageCamera(dt: number) {
     const car = this.garageCar!.root.position;
-    this.garageAngle += dt * 0.18;
-    const a = this.garageAngle;
+    // swing slowly from the uphill side; the car sits left of centre beside the UI card
+    this.garageAngle += dt * 0.2;
+    const a = this.garageViewYaw + Math.sin(this.garageAngle) * 0.75;
     const cam = this.camera;
-    _v.set(car.x + Math.sin(a) * 6.2, car.y + 1.45, car.z + Math.cos(a) * 6.2);
+    _v.set(car.x + Math.sin(a) * 8.6, car.y + 1.7, car.z + Math.cos(a) * 8.6);
     cam.position.lerp(_v, 1 - Math.exp(-dt * 3));
-    cam.lookAt(car.x, car.y + 0.55, car.z);
+    // aim to the right of the car so it is framed in the left part of the screen
+    _f.set(-Math.cos(a), 0, Math.sin(a)).multiplyScalar(-2.4);
+    cam.lookAt(car.x + _f.x, car.y + 0.6, car.z + _f.z);
     if (Math.abs(cam.fov - 38) > 0.01) {
       cam.fov = damp(cam.fov, 38, 3, dt);
       cam.updateProjectionMatrix();

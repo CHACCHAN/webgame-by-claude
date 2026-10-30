@@ -863,6 +863,8 @@ function buildClutter(track: Track, terrain: TerrainData, density: number) {
     const i = Math.round(s);
     const side = r() < 0.5 ? -1 : 1;
     const off = track.width[i] / 2 + SHOULDER + 1.4 + r() ** 2 * 22;
+    // keep the summit start area (garage, grid) tidy
+    if (s < track.startS + 45 && off < 16) continue;
     track.pointAt(s, side * off, p);
     const y = terrain.heightAt(p.x, p.z);
     const steep = Math.abs(terrain.heightAt(p.x + 1.5, p.z) - terrain.heightAt(p.x - 1.5, p.z)) / 3;
