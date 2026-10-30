@@ -27,7 +27,7 @@ COPY backend/composer.json backend/composer.lock ./
 RUN composer install --no-dev --no-scripts --no-autoloader --prefer-dist
 
 COPY backend/ ./
-RUN rm -f .env \
+RUN rm -f .env && touch .env \
  && composer dump-autoload --optimize --no-dev \
  && mkdir -p storage/framework/cache storage/framework/views storage/framework/sessions storage/logs bootstrap/cache \
  && chown -R www-data:www-data storage bootstrap/cache

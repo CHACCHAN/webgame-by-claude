@@ -39,9 +39,30 @@ Newest first. "Verified" means actually executed in this environment; anything e
   the physics budget); AI now updates every physics step.
 - Replay: cinematic replay of the player's run (and the rival's) from the recorded ghost data.
 
-### Known issues / next
-- Night visuals: balance still being tuned; terrain readability; lamp light pools on the road.
-- Car models are procedural — readable but low-detail. A GLB override path would allow dropping in better models.
-- Driving feel not yet tuned with scripted manoeuvre tests; drift assist values are first guesses.
-- No e2e Playwright suite yet; no seeded bot ghosts yet.
-- Performance on a real GPU unmeasured (cloud VM has no GPU; SwiftShader gives ~1–6 fps).
+- Weather/time presets: 深夜（夜景）, 深夜（雨）(wet glossy road, rain streaks, spray, rain ambience, 14 % less
+  grip, AI recalibrated), 夜明け（雲海）(sea of clouds with soft terrain fade). Screenshots checked for all three.
+- Terrain reworked to tilted-plane interpolation: roads are now cut into real hillsides (uphill +15–30 m,
+  valley side −5…−18 m within 30 m) instead of nearly flat surroundings.
+- Medals (bronze/silver/gold per car, from simulated AI laps) and per-car personal bests in the garage.
+- GLB pipeline: procedural cars → GLTFExporter (headless browser) → glTF-Transform (dedup + meshopt) →
+  loaded at runtime with procedural fallback; node/material contract documented in ASSETS.md.
+- E2E (Playwright, against the Docker stack): boot/title, menus + settings persistence, ranking from the
+  API, full autodriven time attack → results → online submission → appears in ranking, ghost battle vs CPU
+  ghost, rival battle + pause, API validation. Found & fixed: garage CTA offscreen at 720p, rival card
+  click starting the wrong rival.
+- Containerised backend tests (`docker compose --profile test run --rm backend-test`): 9 passed.
+
+## Quality self-assessment (end of session 1)
+- Playable end to end: yes (all modes, ranking, ghosts, replay) — verified by E2E and headless sims.
+- Driving feel: tuned by measurement only (no human playtest possible here). Drift entry is deliberately
+  easy (handbrake / brake+steer / power+steer) with assists; needs real-player feedback.
+- Visuals: strongest in night aerials (city + lamp pools), wet night and dawn sea of clouds. Weakest: close-up
+  car detail (procedural) and ground clutter (low-poly bushes/rocks).
+- Performance: unmeasured on a real GPU. Tree LOD and quality presets exist; ~1.2 M triangles at low.
+
+## Known issues / next
+- Real-GPU performance pass (frame time budget, shadow map cost, draw calls).
+- Optional owner-provided assets (docs/ASSET_REQUESTS.md): race/menu BGM and a key art image.
+- Car models could be replaced by artist GLBs following the contract in docs/ASSETS.md.
+- Engine sound is synthesised and unverified by ear in this environment.
+- Touch controls (mobile) are not implemented (PC is the target).

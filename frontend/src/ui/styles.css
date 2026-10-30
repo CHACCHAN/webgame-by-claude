@@ -338,3 +338,4 @@ kbd {
 .car-record small { display: block; font-family: var(--font-en); font-weight: 700; font-size: 10px; letter-spacing: 0.18em; color: var(--muted); }
 .car-record b { font-family: var(--font-en); font-size: 18px; }
 .medal-dot { margin-left: 8px; font-family: var(--font-en); font-weight: 700; font-size: 11px; letter-spacing: 0.15em; }
+.no-webgl { position: fixed; inset: 0; display: grid; place-items: center; text-align: center; padding: 24px; line-height: 2; color: var(--text); background: var(--bg); }

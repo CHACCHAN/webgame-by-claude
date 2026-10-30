@@ -90,6 +90,13 @@ export function GameCanvas() {
       shadows={p.shadows ? 'percentage' : false}
       gl={{ antialias: false, powerPreference: 'high-performance', stencil: false, preserveDrawingBuffer: false }}
       camera={{ fov: 60, near: 0.25, far: 16000, position: [0, 600, 0] }}
+      fallback={
+        <div className="no-webgl">
+          このブラウザでは WebGL2 が利用できないため、ゲームを表示できません。
+          <br />
+          最新の Chrome / Edge / Firefox で、ハードウェアアクセラレーションを有効にしてお試しください。
+        </div>
+      }
       onCreated={({ gl }) => {
         gl.toneMapping = THREE.ACESFilmicToneMapping;
         gl.setClearColor('#05070c');
