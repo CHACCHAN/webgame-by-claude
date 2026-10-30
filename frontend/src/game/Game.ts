@@ -432,7 +432,23 @@ export class Game {
     // put the camera on the uphill side so the background is the valley, not the cutting
     const r = this.track.getRight(Math.round(s), new THREE.Vector3());
     const up = this.terrain.heightAt(p.x + r.x * 14, p.z + r.z * 14) > this.terrain.heightAt(p.x - r.x * 14, p.z - r.z * 14) ? 1 : -1;
-    this.garageViewYaw = Math.atan2(r.x * up, r.z * up);
+    const side = Math.atan2(r.x * up, r.z * up);
+    const ahead = this.track.headingAt(s);
+    // too steep a bank on that side (ridge courses) hides the car: take the first direction whose whole
+    // camera swing stays clear of the terrain (other side, then along the road)
+    const clear = (yaw: number) => {
+      for (let k = -3; k <= 3; k++) {
+        const a = yaw + (k / 3) * 0.75;
+        for (const d of [2.5, 4, 5.5, 7, 8.6]) {
+          // the sight line from the camera (1.7 m up at 8.6 m) to the car body (0.6 m); the ground clamp in
+          // garageCamera() may lift the camera spot itself a little, but not onto a bank
+          const sight = d >= 8.6 ? p.y + 1.3 : p.y + 0.6 + 1.1 * (d / 8.6);
+          if (this.terrain.heightAt(p.x + Math.sin(a) * d, p.z + Math.cos(a) * d) > sight) return false;
+        }
+      }
+      return true;
+    };
+    this.garageViewYaw = [side, side + Math.PI, ahead, ahead + Math.PI].find(clear) ?? side;
     if (this.phase !== 'garage') this.garageAngle = 0.6;
     this.setPhase('garage');
   }
@@ -987,7 +1003,10 @@ export class Game {
     const a = this.garageViewYaw + Math.sin(this.garageAngle) * 0.75;
     const cam = this.camera;
     _v.set(car.x + Math.sin(a) * 8.6, car.y + 1.7, car.z + Math.cos(a) * 8.6);
+    // steep cuttings (ridge courses) would swallow the camera: keep it, and its glide in, above ground
+    _v.y = Math.max(_v.y, this.terrain.heightAt(_v.x, _v.z) + 1.4);
     cam.position.lerp(_v, 1 - Math.exp(-dt * 3));
+    cam.position.y = Math.max(cam.position.y, this.terrain.heightAt(cam.position.x, cam.position.z) + 1.2);
     // aim to the right of the car so it is framed in the left part of the screen
     _f.set(-Math.cos(a), 0, Math.sin(a)).multiplyScalar(-2.4);
     cam.lookAt(car.x + _f.x, car.y + 0.6, car.z + _f.z);

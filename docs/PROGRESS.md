@@ -34,6 +34,12 @@ Newest first. "Verified" means actually executed in this environment; anything e
 - Keyboard selection on menus could be overridden by the synthetic mouse events browsers send when a screen
   appears under a resting cursor; hover-to-select now ignores events without movement.
 - vitest 15 tests pass; E2E now covers course select and course switching (8 tests).
+- Owner assets batch 2: 天狼 rival portraits + key art, race BGMs for 霧降湖/天狼 (loop points from spectral
+  matching of "end of chorus" moments), defeat jingle (final phrase of the delivered track). Checked in the browser:
+  portraits load (768×1152) on the 天狼 rival screen, the course card shows the art, all three audio files decode.
+- Bug found & fixed: on 天狼 the garage camera dipped into the steep bank beside the start and glided in from the
+  title camera through the hill (rival select showed the road from underneath). The camera and its glide are now
+  kept above ground, and the camera side is chosen by a sight-line test (uphill side kept on all three courses).
 
 ## Session 1 (2026-10-30)
 

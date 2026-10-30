@@ -14,6 +14,9 @@ const DEFAULT_LOOP: LoopConfig = { volume: 0.6, loopFrom: 0, xfade: 3, fadeIn: 1
 const MUSIC: Record<string, Partial<LoopConfig>> = {
   bgm_menu: { volume: 0.7, loopFrom: 0, loopAt: 149, xfade: 4 },
   bgm_race: { volume: 0.5, loopFrom: 39, loopAt: 164.5, xfade: 1.5, fadeIn: 0.8 },
+  // loop points sit at matching "end of chorus" moments found by spectral comparison
+  bgm_race_kirifuri: { volume: 0.5, loopFrom: 72.37, loopAt: 159.63, xfade: 1.5, fadeIn: 0.8 },
+  bgm_race_tenrou: { volume: 0.5, loopFrom: 94.25, loopAt: 145.46, xfade: 1.5, fadeIn: 0.8 },
 };
 
 /** Synthesised engine/tyre/wind audio built with WebAudio nodes only. */

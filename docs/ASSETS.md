@@ -66,12 +66,16 @@ for commercial use.
 | `video/loading_loop.mp4`, `video/loading_poster.webp` | Gemini | ping-pong loop to 20 s, audio removed, H.264 CRF 30; poster frame | boot / loading screen, dimmed |
 | `img/rivals/oboro-{rookie,ace,legend}.webp` | ChatGPT | 768×1152 WebP with alpha | rival cards, battle HUD |
 | `img/keyart.webp`, `img/og.jpg` | ChatGPT | 1600 px WebP; 1200×630 crop for social cards | course card / loading art, `og:image` |
+| `img/rivals/tenrou-{rookie,ace,legend}.webp` | ChatGPT (batch 2) | 1024×1536 PNG with alpha → 768×1152 WebP (q85, alpha q90) | 天狼スカイライン rival cards, battle HUD |
+| `img/courses/tenrou.webp` | ChatGPT (batch 2) | 1536×1024 WebP q84 | 天狼 course card, loading screen |
+| `audio/bgm_race_kirifuri.mp3` | Gemini (batch 2) | 172 s; two-pass loudnorm −15 LUFS, 128 kbps; loop 72.37–159.63 s (matching end-of-chorus points found by spectral comparison), 1.5 s crossfade | 霧降湖 races |
+| `audio/bgm_race_tenrou.mp3` | Gemini (batch 2) | 174 s; same processing; loop 94.25–145.46 s | 天狼スカイライン races |
+| `audio/jingle_lose.mp3` | Gemini (batch 2) | delivered as a 61.6 s track: the final phrase from 52.92 s (bar-aligned at 123 BPM) through the release, 8.0 s, fades in/out, −17 LUFS | results after losing a rival battle (synth fallback) |
 
 Caution noted to the owner: the coupe in the delivered key art looks close to a real 1980s production car.
 It is used only as a background illustration; replacing it with a more clearly fictional car is recommended
 before any public release.
 
 ## Still requested
-See `docs/ASSET_REQUESTS.md`: portraits for the six rivals of 霧降湖 and 天狼スカイライン, race music for those two
-courses and their course key art. Until they arrive the game shows silhouettes, the shared race BGM and the main
-key art.
+霧降湖: the three rival portraits and the course key art (delivered in chat during a running task, so the files
+were not saved; to be re-sent). Until then the game shows silhouettes and a gradient course card.
