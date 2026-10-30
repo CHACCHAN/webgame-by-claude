@@ -1,9 +1,12 @@
 import { useEffect, useState } from 'react';
 import { gameHolder } from '../GameCanvas';
 import { useApp } from '../../store/app';
-import { useMenuInput } from '../useMenuInput';
+import { useMenuInput, hoverSelect } from '../useMenuInput';
 import { CAR_ORDER, CAR_SPECS } from '../../game/vehicle/carSpecs';
-import { AI_PROFILES, type AILevel } from '../../game/ai/AIDriver';
+import type { AILevel } from '../../game/ai/AIDriver';
+import { COURSES, COURSE_ORDER, type CourseId } from '../../game/track/courses';
+import { Track } from '../../game/track/Track';
+import { currentCourseId, useSettings } from '../../store/settings';
 import { decodeGhost } from '../../game/race/Ghost';
 import { api, loadCarBests, loadLocalBest } from '../../api/client';
 import { MEDAL_LABEL, medalFor, nextTarget } from '../../game/race/medals';
@@ -22,6 +25,7 @@ export function BootScreen() {
   const p = loading?.progress ?? 0;
   return (
     <div className="screen boot">
+      <video className="boot-video" src="/video/loading_loop.mp4" poster="/video/loading_poster.webp" autoPlay muted loop playsInline />
       <div className="boot-art" />
       <div className="boot-mark">
         <div className="logo-kanji">峠</div>
@@ -50,7 +54,7 @@ export function TitleScreen() {
   return (
     <div className="screen title" onClick={start}>
       <div className="title-logo">
-        <div className="title-small">OBORO PASS DOWNHILL</div>
+        <div className="title-small">{COURSES[currentCourseId()].nameEn} ・ 3 COURSES</div>
         <h1>
           <span className="kanji">峠</span>
           <span className="en">TOUGE<br />NOCTURNE</span>
@@ -78,9 +82,9 @@ export function ModesScreen() {
   const { go, set } = useApp();
   const [idx, setIdx] = useState(0);
   const items: MenuItem[] = [
-    { id: 'ta', label: 'TIME ATTACK', jp: 'タイムアタック', desc: '朧峠ダウンヒルを全開で駆け下り、自己ベストとオンラインランキング上位を狙う。', action: () => { set({ mode: 'time_attack', ghostChoice: null }); go('garage'); } },
-    { id: 'rival', label: 'RIVAL BATTLE', jp: 'ライバルバトル', desc: '峠に棲む走り屋と1対1のダウンヒルバトル。先にゴールした方が勝ち。', action: () => { set({ mode: 'rival', ghostChoice: null }); go('garage'); } },
-    { id: 'ghost', label: 'GHOST BATTLE', jp: 'ゴーストバトル', desc: 'ランキング上位者や自己ベストの走りを半透明のゴーストで再現。その背中を追え。', action: () => { set({ mode: 'ghost' }); go('leaderboard'); } },
+    { id: 'ta', label: 'TIME ATTACK', jp: 'タイムアタック', desc: '峠を全開で駆け下り、自己ベストとメダル、オンラインランキング上位を狙う。', action: () => { set({ mode: 'time_attack', ghostChoice: null, afterLoad: 'garage' }); go('courses'); } },
+    { id: 'rival', label: 'RIVAL BATTLE', jp: 'ライバルバトル', desc: '峠に棲む走り屋と1対1のダウンヒルバトル。先にゴールした方が勝ち。', action: () => { set({ mode: 'rival', ghostChoice: null, afterLoad: 'garage' }); go('courses'); } },
+    { id: 'ghost', label: 'GHOST BATTLE', jp: 'ゴーストバトル', desc: 'ランキング上位者や自己ベストの走りを半透明のゴーストで再現。その背中を追え。', action: () => { set({ mode: 'ghost', afterLoad: 'leaderboard' }); go('courses'); } },
     { id: 'rank', label: 'RANKING', jp: 'ランキング', desc: 'オンラインランキングを確認する。', action: () => { set({ mode: 'time_attack' }); go('leaderboard'); } },
     { id: 'settings', label: 'SETTINGS', jp: '設定', desc: 'グラフィック品質、時間帯、サウンド、運転アシスト。', action: () => go('settings') },
     { id: 'controls', label: 'CONTROLS', jp: '操作方法', desc: 'キーボード / ゲームパッドの操作を確認する。', action: () => go('controls') },
@@ -102,7 +106,7 @@ export function ModesScreen() {
           <span className="kanji-badge">峠</span>
           <div>
             <div className="ph-en">MAIN MENU</div>
-            <div className="ph-jp">朧峠 ダウンヒル</div>
+            <div className="ph-jp">{COURSES[currentCourseId()].name}</div>
           </div>
         </div>
         <ul className="menu-list">
@@ -110,7 +114,7 @@ export function ModesScreen() {
             <li
               key={it.id}
               className={i === idx ? 'active' : ''}
-              onMouseEnter={() => setIdx(i)}
+              {...hoverSelect(() => setIdx(i))}
               onClick={() => { sfx.confirm(); it.action(); }}
             >
               <span className="mi-en">{it.label}</span>
@@ -174,7 +178,7 @@ export function GarageScreen() {
     if (a === 'up') cycleColor(-1);
     if (a === 'down') cycleColor(1);
     if (a === 'confirm') confirm();
-    if (a === 'back') { sfx.back(); go(mode === 'ghost' ? 'leaderboard' : 'modes'); }
+    if (a === 'back') { sfx.back(); go(mode === 'ghost' ? 'leaderboard' : 'courses'); }
   });
   const stat = (label: string, v: number) => (
     <div className="stat" key={label}>
@@ -227,12 +231,7 @@ export function RivalsScreen() {
   const { go, set, rivalLevel } = useApp();
   const levels: AILevel[] = ['rookie', 'ace', 'legend'];
   const [i, setI] = useState(levels.indexOf(rivalLevel));
-  const desc: Record<AILevel, string> = {
-    rookie: '免許を取ったばかりの新人。ラインは甘いが、峠への情熱は本物。',
-    ace: '朧峠を知り尽くした地元最速の男。ミスを待っていても勝てない。',
-    legend: '夜明け前にだけ現れるという白い影。誰も、その背中に追いついたことがない。',
-  };
-  const car: Record<AILevel, string> = { rookie: 'HAYATE TR-S', ace: 'RAIJIN GT-X', legend: 'SHIDEN RS' };
+  const course = COURSES[currentCourseId()];
   const start = (level: AILevel = levels[i]) => {
     set({ rivalLevel: level });
     sfx.confirm();
@@ -246,22 +245,144 @@ export function RivalsScreen() {
   });
   return (
     <div className="screen rivals">
-      <div className="crumb center">CHOOSE YOUR RIVAL ― 対戦相手</div>
+      <div className="crumb center">CHOOSE YOUR RIVAL ― {course.name}の走り屋</div>
       <div className="rival-cards">
         {levels.map((l, k) => {
-          const p = AI_PROFILES[l];
+          const p = course.rivals[l];
           return (
-            <div key={l} className={`rival-card ${l} ${k === i ? 'active' : ''}`} onMouseEnter={() => setI(k)} onClick={() => { setI(k); start(l); }}>
-              <div className="rc-level">{['★', '★★', '★★★'][k]}</div>
-              <div className="rc-title">{p.title}</div>
-              <div className="rc-name">{p.name}</div>
-              <div className="rc-car">{car[l]}</div>
-              <p>{desc[l]}</p>
+            <div key={l} className={`rival-card ${l} ${k === i ? 'active' : ''}`} {...hoverSelect(() => setI(k))} onClick={() => { setI(k); start(l); }}>
+              <Portrait src={p.portrait} />
+              <div className="rc-body">
+                <div className="rc-level">{['★', '★★', '★★★'][k]}</div>
+                <div className="rc-title">{p.title}</div>
+                <div className="rc-name">{p.name}</div>
+                <div className="rc-car">{CAR_SPECS[p.car].name}</div>
+                <p>{p.description}</p>
+              </div>
             </div>
           );
         })}
       </div>
       <Hint items={[['←→', '選択'], ['Enter', 'バトル開始'], ['Esc', '戻る']]} />
+    </div>
+  );
+}
+
+/** Rival portrait with a silhouette fallback while the art is not delivered yet. */
+export function Portrait({ src, className = '' }: { src: string; className?: string }) {
+  const [ok, setOk] = useState(true);
+  return (
+    <div className={`portrait ${className} ${ok ? '' : 'missing'}`}>
+      {ok ? <img src={src} alt="" onError={() => setOk(false)} draggable={false} /> : <div className="silhouette" />}
+    </div>
+  );
+}
+
+/** Mini map of a course drawn from its centerline. */
+function CourseMap({ id }: { id: CourseId }) {
+  const [path, setPath] = useState<{ d: string; start: [number, number]; end: [number, number] } | null>(null);
+  useEffect(() => {
+    const t = new Track(COURSES[id].design);
+    let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+    for (let k = 0; k < t.count; k += 4) {
+      minX = Math.min(minX, t.pos[k * 3]); maxX = Math.max(maxX, t.pos[k * 3]);
+      minZ = Math.min(minZ, t.pos[k * 3 + 2]); maxZ = Math.max(maxZ, t.pos[k * 3 + 2]);
+    }
+    const sc = Math.min(260 / (maxX - minX), 150 / (maxZ - minZ));
+    const ox = (300 - (maxX - minX) * sc) / 2, oz = (170 - (maxZ - minZ) * sc) / 2;
+    const m = (k: number): [number, number] => [ox + (t.pos[k * 3] - minX) * sc, oz + (t.pos[k * 3 + 2] - minZ) * sc];
+    let d = '';
+    for (let k = 0; k < t.count; k += 6) d += (k ? 'L' : 'M') + m(k).map((v) => v.toFixed(1)).join(',');
+    setPath({ d, start: m(Math.round(t.startS)), end: m(Math.round(t.finishS)) });
+  }, [id]);
+  if (!path) return <svg className="course-map" viewBox="0 0 300 170" />;
+  return (
+    <svg className="course-map" viewBox="0 0 300 170">
+      <path d={path.d} className="cm-shadow" />
+      <path d={path.d} className="cm-line" />
+      <circle cx={path.start[0]} cy={path.start[1]} r="5" className="cm-start" />
+      <circle cx={path.end[0]} cy={path.end[1]} r="5" className="cm-end" />
+    </svg>
+  );
+}
+
+export function CoursesScreen() {
+  const { go, set, afterLoad, mode } = useApp();
+  const [i, setI] = useState(Math.max(0, COURSE_ORDER.indexOf(currentCourseId())));
+  const stats = (id: CourseId) => {
+    const t = new Track(COURSES[id].design);
+    const y0 = t.pos[Math.round(t.startS) * 3 + 1], y1 = t.pos[Math.round(t.finishS) * 3 + 1];
+    return { km: ((t.finishS - t.startS) / 1000).toFixed(2), drop: Math.round(y0 - y1) };
+  };
+  const [info] = useState(() => Object.fromEntries(COURSE_ORDER.map((id) => [id, stats(id)])) as Record<CourseId, { km: string; drop: number }>);
+  const choose = async (id: CourseId) => {
+    sfx.confirm();
+    useSettings.getState().set({ courseId: id });
+    const game = gameHolder.game;
+    if (game && game.course.id !== id) {
+      set({ loading: { progress: 0, label: '' } });
+      go('loading');
+      await game.switchCourse(id);
+      game.startAttract();
+    }
+    set({ loading: null });
+    go(afterLoad);
+  };
+  useMenuInput((a) => {
+    if (a === 'left' || a === 'up') { setI((x) => (x + COURSE_ORDER.length - 1) % COURSE_ORDER.length); sfx.move(); }
+    if (a === 'right' || a === 'down') { setI((x) => (x + 1) % COURSE_ORDER.length); sfx.move(); }
+    if (a === 'confirm') void choose(COURSE_ORDER[i]);
+    if (a === 'back') { sfx.back(); go('modes'); }
+  });
+  return (
+    <div className="screen courses">
+      <div className="crumb center">SELECT COURSE ― コース選択{mode === 'ghost' ? '（ゴーストバトル）' : ''}</div>
+      <div className="course-cards">
+        {COURSE_ORDER.map((id, k) => {
+          const c = COURSES[id];
+          const best = Math.min(...Object.values(loadCarBests(id)).filter((v): v is number => typeof v === 'number'));
+          return (
+            <div key={id} className={`course-card ${k === i ? 'active' : ''}`} {...hoverSelect(() => setI(k))} onClick={() => { setI(k); void choose(id); }}>
+              <div className="cc-art" style={{ backgroundImage: `url(${c.art}), radial-gradient(ellipse at 70% 115%, rgba(255, 150, 60, 0.32), transparent 60%), linear-gradient(180deg, #0f1c36, #05080e)` }}>
+                <CourseMap id={id} />
+              </div>
+              <div className="cc-body">
+                <div className="cc-en">{c.nameEn}</div>
+                <div className="cc-name">{c.name}</div>
+                <div className="cc-tag">{c.tagline}</div>
+                <p>{c.description}</p>
+                <div className="cc-stats">
+                  <span><small>LENGTH</small>{info[id].km} km</span>
+                  <span><small>DROP</small>{info[id].drop} m</span>
+                  <span><small>BEST</small>{isFinite(best) ? formatTime(best) : '--:--.---'}</span>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <Hint items={[['←→', 'コース'], ['Enter', '決定'], ['Esc', '戻る']]} />
+    </div>
+  );
+}
+
+/** Shown while a different course is being built. */
+export function CourseLoadingScreen() {
+  const loading = useApp((s) => s.loading);
+  const c = COURSES[currentCourseId()];
+  const p = loading?.progress ?? 0;
+  return (
+    <div className="screen boot course-loading">
+      <div className="boot-art" style={{ backgroundImage: `url(${c.art}), url(/img/keyart.webp)` }} />
+      <div className="boot-mark">
+        <div className="cl-en">{c.nameEn}</div>
+        <div className="cl-name">{c.name}</div>
+        <div className="cl-tag">{c.tagline}</div>
+      </div>
+      <div className="boot-bar">
+        <div className="boot-fill" style={{ width: `${Math.round(p * 100)}%` }} />
+      </div>
+      <div className="boot-label">{loading?.label ?? ''}</div>
     </div>
   );
 }
@@ -275,14 +396,14 @@ export async function startRaceFromState(rival?: AILevel) {
   try {
     if (app.mode === 'ghost' && app.ghostChoice) {
       if (app.ghostChoice.runId === 'local') {
-        const lb = loadLocalBest();
+        const lb = loadLocalBest(game.course.id);
         if (lb) ghost = { data: await decodeGhost(lb.ghost), label: '自己ベスト', carId: lb.carId, timeMs: lb.timeMs, splits: lb.splits };
       } else {
         const g = await api.ghost(app.ghostChoice.runId);
         ghost = { data: await decodeGhost(g), label: g.player_name, carId: g.car_id, timeMs: g.time_ms, splits: g.sector_ms };
       }
     } else if (app.mode === 'time_attack') {
-      const lb = loadLocalBest();
+      const lb = loadLocalBest(game.course.id);
       if (lb) ghost = { data: await decodeGhost(lb.ghost), label: '自己ベスト', carId: lb.carId, timeMs: lb.timeMs, splits: lb.splits };
     }
   } catch (e) {
@@ -339,14 +460,15 @@ export function ControlsScreen() {
 }
 
 export function useLocalBestLabel() {
-  const lb = loadLocalBest();
+  const lb = loadLocalBest(currentCourseId());
   return lb ? `${formatTime(lb.timeMs)} (${CAR_SPECS[lb.carId].name})` : null;
 }
 
 function CarRecord({ id }: { id: (typeof CAR_ORDER)[number] }) {
-  const best = loadCarBests()[id] ?? null;
-  const medal = best !== null ? medalFor(id, best) : null;
-  const next = nextTarget(id, best);
+  const course = currentCourseId();
+  const best = loadCarBests(course)[id] ?? null;
+  const medal = best !== null ? medalFor(course, id, best) : null;
+  const next = nextTarget(course, id, best);
   return (
     <div className="car-record">
       <div>

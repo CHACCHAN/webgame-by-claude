@@ -9,12 +9,26 @@ return [
     'version' => env('GAME_VERSION', '1.0.0'),
 
     'tracks' => [
+        // min_time_ms: anything faster is physically impossible on the course
         'oboro-downhill' => [
             'name' => '朧峠 ダウンヒル',
             'name_en' => 'Oboro Pass Downhill',
             'sectors' => 4,
-            // Anything faster than this is physically impossible on the course.
             'min_time_ms' => 60_000,
+            'max_time_ms' => 30 * 60_000,
+        ],
+        'kirifuri-lakeside' => [
+            'name' => '霧降湖 レイクサイド',
+            'name_en' => 'Kirifuri Lakeside',
+            'sectors' => 4,
+            'min_time_ms' => 50_000,
+            'max_time_ms' => 30 * 60_000,
+        ],
+        'tenrou-skyline' => [
+            'name' => '天狼スカイライン',
+            'name_en' => 'Tenrou Skyline',
+            'sectors' => 4,
+            'min_time_ms' => 45_000,
             'max_time_ms' => 30 * 60_000,
         ],
     ],

@@ -4,7 +4,7 @@ import { BlendFunction, ToneMappingMode } from 'postprocessing';
 import { useEffect, useMemo } from 'react';
 import * as THREE from 'three';
 import { Game } from '../game/Game';
-import { qualityProfile, useSettings } from '../store/settings';
+import { currentCourseId, qualityProfile, useSettings } from '../store/settings';
 import { useApp } from '../store/app';
 
 /** The single game instance (the 3D world is expensive to build). */
@@ -27,6 +27,7 @@ function GameBridge() {
     game.assist = s.assist;
     game.autoShift = s.autoShift;
     game.showGhost = s.showGhost;
+    game.cornerGuide = s.cornerGuide ?? true;
     if (params.get('autodrive') === '1') game.autoDrive = true;
     if (params.get('timescale')) game.timeScale = Math.max(0.1, Math.min(20, Number(params.get('timescale')) || 1));
     gameHolder.game = game;
@@ -50,7 +51,7 @@ function GameBridge() {
       }
       if (e.type === 'finish') app.set({ result: e.result, screen: 'results' });
     });
-    void game.load(s.timeOfDay).catch((err) => {
+    void game.load(currentCourseId(), s.timeOfDay).catch((err) => {
       console.error(err);
       app().set({ loading: { progress: 0, label: `読み込みに失敗しました: ${String(err)}` } });
     });

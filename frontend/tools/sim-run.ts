@@ -1,7 +1,7 @@
 // Headless simulation: AI drivers run the full course on the real vehicle
 // physics. Used for tuning and as a drivability check of the course.
 import { Track } from '../src/game/track/Track';
-import { OBORO_DOWNHILL } from '../src/game/track/courseDesign';
+import { COURSES, type CourseId } from '../src/game/track/courses';
 import { PhysicsWorld, PHYSICS_DT, initRapier } from '../src/game/vehicle/PhysicsWorld';
 import { VehicleSim, emptyInput } from '../src/game/vehicle/VehicleSim';
 import { CAR_SPECS, type CarId } from '../src/game/vehicle/carSpecs';
@@ -9,7 +9,9 @@ import { AIDriver, AI_PROFILES, type AILevel } from '../src/game/ai/AIDriver';
 import { RacingLine } from '../src/game/ai/RacingLine';
 
 await initRapier();
-const track = new Track(OBORO_DOWNHILL);
+const course = COURSES[(process.env.COURSE ?? 'oboro-downhill') as CourseId];
+const track = new Track(course.design);
+console.log('course', course.id, 'length', track.length.toFixed(0));
 const line = new RacingLine(track);
 const pairs = process.argv[2] === 'rivals'
   ? ([['hayate', 'rookie'], ['raijin', 'ace'], ['shiden', 'legend']] as [CarId, AILevel][])
@@ -21,6 +23,7 @@ for (const [car, level] of pairs) {
     const start = track.pointAt(track.startS - 12);
     const v = new VehicleSim(physics, CAR_SPECS[car], start, track.headingAt(track.startS - 12));
     v.gripScale = Number(process.env.GRIP ?? 1);
+    v.powerScale = Number(process.env.POWER ?? 1);
     const ai = new AIDriver(track, line, AI_PROFILES[level]);
     ai.calibrate(v);
     const input = emptyInput();

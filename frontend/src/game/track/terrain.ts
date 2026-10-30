@@ -1,5 +1,6 @@
-import { clamp, fbm, lerp, ridged, smoothstep } from '../util/math';
+import { clamp, fbm, lerp, smoothstep } from '../util/math';
 import { DS, Track } from './Track';
+import type { Landform } from './landforms';
 
 export interface HeightGrid {
   x0: number;
@@ -16,44 +17,18 @@ export interface HeightGrid {
 export interface TerrainData {
   near: HeightGrid;
   far: HeightGrid;
-  /** approximate sea coast z (varies with x) */
-  coastZ: (x: number) => number;
+  landform: Landform;
   heightAt: (x: number, z: number) => number;
   /** horizontal distance to the road centerline (near region only, else large) */
   roadDistAt: (x: number, z: number) => number;
 }
 
-export const SEA_LEVEL = 0;
 /** Region where the road carves the terrain (m around the centerline). */
 const ROAD_INFLUENCE = 320;
 
-export const coastZ = (x: number) => 1950 + 160 * fbm(x / 900 + 3.1, 0.7, 3);
-
-/** Large-scale landform without the road: mountains north, bay to the south. */
-export function baseHeight(x: number, z: number): number {
-  // one smooth profile: steady mountain slope easing into the coastal plain
-  const slope = 470 - (z + 700) * 0.22;
-  let h = lerp(slope, 6, smoothstep(150, 1350, z));
-  const coast = coastZ(x);
-  h -= 32 * smoothstep(coast - 120, coast + 260, z);
-
-  const mountain = smoothstep(1350, 300, z);
-  // spurs and gullies running down the slope
-  h += fbm(x / 520 + 11.3, z / 900 - 4.2, 4) * 70 * mountain;
-  h += fbm(x / 210 - 2.7, z / 210 + 8.1, 4) * 22 * mountain;
-  // jagged peaks to the north
-  h += ridged(x / 760 + 5.1, z / 760 - 1.4, 5) * 330 * smoothstep(-300, -1500, z);
-  // distant headlands east/west of the bay
-  h += ridged(x / 600, z / 600 + 9.0, 4) * 220 * smoothstep(1900, 3400, Math.abs(x - 900)) * smoothstep(800, 2400, z);
-  // small undulation on the coastal plain
-  h += fbm(x / 140, z / 140, 3) * 2.5 * (1 - mountain);
-  return h;
-}
-
 /** Medium/fine relief, attenuated next to the road. */
-export function detailHeight(x: number, z: number): number {
-  const mountain = smoothstep(1350, 300, z);
-  return (fbm(x / 160 + 4.4, z / 160 - 1.9, 4) * 9 + fbm(x / 45, z / 45, 3) * 2.2) * mountain;
+function detailHeight(lf: Landform, x: number, z: number): number {
+  return (fbm(x / 160 + 4.4, z / 160 - 1.9, 4) * 9 + fbm(x / 45, z / 45, 3) * 2.2) * lf.relief(x, z);
 }
 
 interface RoadSample {
@@ -66,12 +41,17 @@ interface RoadSample {
   /** hillside gradient (height change per metre) used to tilt the local terrain plane */
   gx: number;
   gz: number;
+  /** 0..1: the road runs along a crest, so the ground falls away on both sides */
+  ridge: number;
 }
 
 /** Steepness of the hillside the road is cut into, per zone. */
-const SLOPE: Partial<Record<string, number>> = { vista: 1.0, hairpins: 0.62, start: 0.38, forest: 0.58, rockshed: 0.95, bridge: 0.3, finish: 0.4 };
+const SLOPE: Partial<Record<string, number>> = {
+  vista: 1.0, hairpins: 0.62, start: 0.38, forest: 0.58, rockshed: 0.95, bridge: 0.3, finish: 0.4, crest: 0.08, lakeside: 0.5,
+};
 
-function roadSamples(track: Track, spacing: number): RoadSample[] {
+function roadSamples(track: Track, lf: Landform, spacing: number): RoadSample[] {
+  const baseHeight = (x: number, z: number) => lf.base(x, z);
   const out: RoadSample[] = [];
   for (let i = 0; i < track.count; i += spacing) {
     const x = track.pos[i * 3], z = track.pos[i * 3 + 2];
@@ -83,7 +63,8 @@ function roadSamples(track: Track, spacing: number): RoadSample[] {
     const steep = SLOPE[track.zone[i] ?? ''] ?? 0.55;
     gx = (gx / len) * steep;
     gz = (gz / len) * steep;
-    out.push({ x, y: track.pos[i * 3 + 1], z, halfW: track.width[i] / 2, bridge: track.zone[i] === 'bridge', index: i, gx, gz });
+    const ridge = track.zone[i] === 'crest' ? 1 : track.zone[i] === 'start' && lf.treeLine < 1000 ? 0.7 : 0;
+    out.push({ x, y: track.pos[i * 3 + 1], z, halfW: track.width[i] / 2, bridge: track.zone[i] === 'bridge', index: i, gx, gz, ridge });
   }
   // smooth the gradients along the road so the hillside doesn't twist abruptly
   for (let pass = 0; pass < 3; pass++) {
@@ -101,10 +82,11 @@ function roadSamples(track: Track, spacing: number): RoadSample[] {
  * legs sit on a consistent hillside), then the road corridor is cut/filled
  * with embankments. The bridge zone is never filled, leaving a gorge.
  */
-export function buildTerrain(track: Track, opts: { nearCell?: number; farCell?: number } = {}): TerrainData {
+export function buildTerrain(track: Track, lf: Landform, opts: { nearCell?: number; farCell?: number } = {}): TerrainData {
   const nearCell = opts.nearCell ?? 4;
   const farCell = opts.farCell ?? 24;
-  const coarse = roadSamples(track, 8);
+  const coarse = roadSamples(track, lf, 8);
+  const baseHeight = (x: number, z: number) => lf.base(x, z);
 
   // gorge under the bridge: a valley line through the bridge midpoint
   const bridgeRanges = track.zoneRanges('bridge');
@@ -161,7 +143,9 @@ export function buildTerrain(track: Track, opts: { nearCell?: number; farCell?: 
           const w = ((s.bridge ? 0.05 : 1) * taper) / (d2 + 400);
           // each sample contributes a tilted plane: the road is cut into a hillside
           const along = 120 * Math.tanh((dx * s.gx + dz * s.gz) / Math.max(Math.hypot(s.gx, s.gz), 1e-6) / 120);
-          const rise = along * Math.hypot(s.gx, s.gz);
+          let rise = along * Math.hypot(s.gx, s.gz);
+          // crest roads: the ground drops away on both sides
+          if (s.ridge > 0) rise -= s.ridge * 0.36 * Math.min(Math.sqrt(d2), 160) * smoothstep(8, 30, Math.sqrt(d2));
           wSum += w;
           hSum += w * (s.y + rise);
         }
@@ -169,7 +153,7 @@ export function buildTerrain(track: Track, opts: { nearCell?: number; farCell?: 
     out.dist = Infinity;
     out.roadY = 0;
     out.idx = -1;
-    if (!bestS) return base + detailHeight(x, z);
+    if (!bestS) return base + detailHeight(lf, x, z);
 
     // refine distance against the dense centerline around the nearest coarse sample
     let bestD = Infinity, bestI = bestS.index;
@@ -190,7 +174,7 @@ export function buildTerrain(track: Track, opts: { nearCell?: number; farCell?: 
     const roadField = wSum > 0 ? hSum / wSum : base;
     const influence = smoothstep(ROAD_INFLUENCE * 0.85, 120, dist);
     const noiseAtten = smoothstep(14, 90, dist);
-    let h = lerp(base + detailHeight(x, z) * noiseAtten, roadField, influence * 0.92);
+    let h = lerp(base + detailHeight(lf, x, z) * noiseAtten, roadField, influence * 0.92);
     h += fbm(x / 120 - 7.7, z / 120 + 3.3, 3) * 7 * noiseAtten * influence;
     h -= gorgeDepth(x, z, out.roadY) * influence;
     return h;
@@ -245,7 +229,8 @@ export function buildTerrain(track: Track, opts: { nearCell?: number; farCell?: 
   const near: HeightGrid = { x0: nx0, z0: nz0, cell: nearCell, nx: nnx, nz: nnz, heights: nearH, roadDist: nearD };
 
   // ---- far grid (pure landform; dips below the near grid so the near mesh wins)
-  const fx0 = -4800, fz0 = -4200;
+  const cxm = (minX + maxX) / 2, czm = (minZ + maxZ) / 2;
+  const fx0 = Math.floor((cxm - 5600) / farCell) * farCell, fz0 = Math.floor((czm - 5200) / farCell) * farCell;
   const fnx = Math.ceil(11200 / farCell) + 1;
   const fnz = Math.ceil(10400 / farCell) + 1;
   const farH = new Float32Array(fnx * fnz);
@@ -254,7 +239,11 @@ export function buildTerrain(track: Track, opts: { nearCell?: number; farCell?: 
     const z = fz0 + j * farCell;
     for (let i = 0; i < fnx; i++) {
       const x = fx0 + i * farCell;
-      let h = baseHeight(x, z) + detailHeight(x, z);
+      let h = baseHeight(x, z) + detailHeight(lf, x, z);
+      // sink the landscape towards the grid edges so the horizon never shows a cut-off cliff
+      const edge = Math.min(i, fnx - 1 - i, j, fnz - 1 - j) * farCell;
+      const floor = lf.waterLevel !== null ? lf.waterLevel - 30 : Math.min(h, 120);
+      h = lerp(Math.min(h, floor), h, smoothstep(0, 1600, edge));
       const inside = x > nx0 + farCell && x < nearX1 - farCell && z > nz0 + farCell && z < nearZ1 - farCell;
       if (inside) h -= 30;
       farH[j * fnx + i] = h;
@@ -276,7 +265,7 @@ export function buildTerrain(track: Track, opts: { nearCell?: number; farCell?: 
   return {
     near,
     far,
-    coastZ,
+    landform: lf,
     heightAt: (x, z) => (inNear(x, z) ? sample(near, nearH, x, z) : sample(far, farH, x, z)),
     roadDistAt: (x, z) => (inNear(x, z) ? sample(near, nearD, x, z) : 1e6),
   };

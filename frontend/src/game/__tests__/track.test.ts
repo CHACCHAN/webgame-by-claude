@@ -2,6 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { Track } from '../track/Track';
 import { OBORO_DOWNHILL } from '../track/courseDesign';
 import { buildTerrain } from '../track/terrain';
+import { BAY } from '../track/landforms';
+import { findCorners } from '../track/corners';
+import { COURSES, COURSE_ORDER } from '../track/courses';
 
 const track = new Track(OBORO_DOWNHILL);
 
@@ -35,13 +38,31 @@ describe('Track', () => {
   });
 
   it('carves the terrain just below the road surface', () => {
-    const terrain = buildTerrain(track);
+    const terrain = buildTerrain(track, BAY);
     for (let s = 20; s < track.length; s += 97) {
       if (track.zoneAt(s) === 'bridge') continue;
       const p = track.pointAt(s);
       const h = terrain.heightAt(p.x, p.z);
       expect(h).toBeLessThan(p.y);
       expect(p.y - h).toBeLessThan(3);
+    }
+  });
+});
+
+describe('corner detection (pace notes and roadside signs)', () => {
+  it('finds every authored hairpin once, in order, with the right direction', () => {
+    const t = new Track(OBORO_DOWNHILL);
+    const hairpins = findCorners(t).filter((c) => c.kind === 'hairpin');
+    // the ladder: R26, L24, R27, L23
+    expect(hairpins.map((c) => c.dir)).toEqual([-1, 1, -1, 1]);
+    for (let i = 1; i < hairpins.length; i++) expect(hairpins[i].start).toBeGreaterThan(hairpins[i - 1].end);
+    for (const c of hairpins) expect(c.minRadius).toBeLessThan(30);
+  });
+
+  it('every course has bends worth a call before them', () => {
+    for (const id of COURSE_ORDER) {
+      const corners = findCorners(new Track(COURSES[id].design));
+      expect(corners.filter((c) => c.kind !== 'medium').length).toBeGreaterThanOrEqual(2);
     }
   });
 });

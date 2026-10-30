@@ -2,7 +2,6 @@
 import type { CarId } from '../game/vehicle/carSpecs';
 import type { EncodedGhost } from '../game/race/Ghost';
 
-export const TRACK_ID = 'oboro-downhill';
 export const CLIENT_VERSION = '1.0.0';
 const BASE = (import.meta.env.VITE_API_BASE as string | undefined) ?? '/api';
 const TOKEN_KEY = 'touge-player';
@@ -113,18 +112,18 @@ export const api = {
     return p;
   },
 
-  leaderboard: (carId?: CarId | null, limit = 50) =>
+  leaderboard: (trackId: string, carId?: CarId | null, limit = 50) =>
     request<{ entries: LeaderboardEntry[] }>(
-      `/tracks/${TRACK_ID}/leaderboard?limit=${limit}${carId ? `&car_id=${carId}` : ''}`,
+      `/tracks/${trackId}/leaderboard?limit=${limit}${carId ? `&car_id=${carId}` : ''}`,
     ).then((r) => r.entries),
 
   submitRun(
     player: StoredPlayer,
-    run: { car_id: CarId; mode: string; time_ms: number; sector_ms: number[]; rival_level?: string; rival_won?: boolean; ghost?: EncodedGhost },
+    run: { track_id: string; car_id: CarId; mode: string; time_ms: number; sector_ms: number[]; rival_level?: string; rival_won?: boolean; ghost?: EncodedGhost },
   ) {
     return request<SubmitResult>(
       '/runs',
-      { method: 'POST', body: JSON.stringify({ track_id: TRACK_ID, client_version: CLIENT_VERSION, ...run }) },
+      { method: 'POST', body: JSON.stringify({ client_version: CLIENT_VERSION, ...run }) },
       player.token,
     );
   },
@@ -132,8 +131,24 @@ export const api = {
   ghost: (runId: number) => request<GhostResponse>(`/runs/${runId}/ghost`),
 };
 
-// -------- local personal bests (work offline too)
-const LOCAL_BEST = 'touge-local-best';
+// -------- local personal bests (work offline too), per course
+const LEGACY_TRACK = 'oboro-downhill';
+const readJson = <T,>(key: string, legacy?: string): T | null => {
+  try {
+    const raw = localStorage.getItem(key) ?? (legacy ? localStorage.getItem(legacy) : null);
+    return raw ? (JSON.parse(raw) as T) : null;
+  } catch {
+    return null;
+  }
+};
+const writeJson = (key: string, v: unknown) => {
+  try {
+    localStorage.setItem(key, JSON.stringify(v));
+  } catch {
+    /* storage unavailable or full */
+  }
+};
+
 export interface LocalBest {
   carId: CarId;
   timeMs: number;
@@ -142,44 +157,25 @@ export interface LocalBest {
   date: string;
 }
 
-export function loadLocalBest(): LocalBest | null {
-  try {
-    const raw = localStorage.getItem(LOCAL_BEST);
-    return raw ? (JSON.parse(raw) as LocalBest) : null;
-  } catch {
-    return null;
-  }
+export function loadLocalBest(trackId: string): LocalBest | null {
+  return readJson<LocalBest>(`touge-local-best:${trackId}`, trackId === LEGACY_TRACK ? 'touge-local-best' : undefined);
 }
 
-export function saveLocalBest(b: LocalBest) {
-  try {
-    localStorage.setItem(LOCAL_BEST, JSON.stringify(b));
-  } catch {
-    /* ignore quota errors */
-  }
+export function saveLocalBest(trackId: string, b: LocalBest) {
+  writeJson(`touge-local-best:${trackId}`, b);
 }
 
-// -------- per-car personal bests (times only)
-const CAR_BESTS = 'touge-car-bests';
-export function loadCarBests(): Partial<Record<CarId, number>> {
-  try {
-    return JSON.parse(localStorage.getItem(CAR_BESTS) ?? '{}');
-  } catch {
-    return {};
-  }
+export function loadCarBests(trackId: string): Partial<Record<CarId, number>> {
+  return readJson(`touge-car-bests:${trackId}`, trackId === LEGACY_TRACK ? 'touge-car-bests' : undefined) ?? {};
 }
 
-/** Store a time; returns the previous best for that car (null if none). */
-export function saveCarBest(car: CarId, timeMs: number): number | null {
-  const all = loadCarBests();
+/** Store a time; returns the previous best for that car on that course (null if none). */
+export function saveCarBest(trackId: string, car: CarId, timeMs: number): number | null {
+  const all = loadCarBests(trackId);
   const prev = all[car] ?? null;
   if (prev === null || timeMs < prev) {
     all[car] = timeMs;
-    try {
-      localStorage.setItem(CAR_BESTS, JSON.stringify(all));
-    } catch {
-      /* ignore */
-    }
+    writeJson(`touge-car-bests:${trackId}`, all);
   }
   return prev;
 }

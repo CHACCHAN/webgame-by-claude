@@ -220,6 +220,23 @@ kbd {
 @keyframes pop { 0% { transform: scale(1.8); opacity: 0; } 15% { transform: scale(1); opacity: 1; } 80% { opacity: 1; } 100% { transform: scale(0.9); opacity: 0.2; } }
 .phase-racing .countdown { opacity: 0 !important; }
 .wrong-way { position: absolute; top: 40%; width: 100%; text-align: center; font-family: var(--font-jp); font-weight: 700; font-size: 34px; color: var(--bad); opacity: 0; transition: opacity 0.3s; letter-spacing: 0.1em; }
+.corner-note { position: absolute; top: 132px; left: 50%; display: flex; align-items: center; gap: 14px; padding: 8px 26px 8px 14px; opacity: 0; transform: translate(-50%, -8px) scale(0.96); transition: opacity 0.18s, transform 0.18s; pointer-events: none;
+  background: linear-gradient(90deg, rgba(8, 10, 16, 0), rgba(8, 10, 16, 0.78) 18%, rgba(8, 10, 16, 0.78) 82%, rgba(8, 10, 16, 0)); }
+.corner-note.show { opacity: 1; transform: translate(-50%, 0) scale(1); }
+.corner-note.show .cn-sign { animation: cn-pulse 0.42s ease-out 3; }
+.cn-sign { width: 58px; height: 58px; filter: drop-shadow(0 0 10px rgba(255, 190, 40, 0.55)); }
+.cn-plate { fill: #f2c21a; }
+.cn-rim { fill: none; stroke: #111; stroke-width: 3.5; }
+.cn-arrow { display: none; }
+.cn-arrow path { fill: none; stroke: #111; stroke-width: 7.5; }
+.cn-arrow polygon { fill: #111; }
+.corner-note[data-kind='hairpin'] .cn-hairpin, .corner-note[data-kind='tight'] .cn-tight, .corner-note[data-kind='medium'] .cn-medium { display: inline; }
+.corner-note[data-dir='right'] .cn-arrow { transform: translateX(100px) scaleX(-1); }
+.cn-text b { display: block; font-family: var(--font-jp); font-weight: 800; font-size: 30px; line-height: 1.05; color: #ffd24a; letter-spacing: 0.06em; text-shadow: 0 0 14px rgba(255, 170, 30, 0.45); }
+.cn-text small { display: block; font-weight: 700; font-size: 12px; letter-spacing: 0.35em; color: var(--muted); }
+.cn-dist { min-width: 64px; font-weight: 700; font-size: 26px; font-variant-numeric: tabular-nums; color: #fff; text-align: right; }
+.corner-note[data-kind='hairpin'] .cn-text b { color: #ff8a3a; text-shadow: 0 0 16px rgba(255, 110, 30, 0.6); }
+@keyframes cn-pulse { 0% { transform: scale(1.18); } 100% { transform: scale(1); } }
 .drift { position: absolute; bottom: 120px; left: 50%; transform: translateX(-50%); text-align: center; opacity: 0; transition: opacity 0.25s; }
 .drift span { display: block; letter-spacing: 0.45em; font-weight: 700; color: var(--accent); font-size: 14px; }
 .drift b { font-size: 42px; line-height: 1; }
@@ -287,6 +304,9 @@ kbd {
   .rival-card { min-height: 0; }
   .hide-sm { display: none; }
   .hud-time { font-size: 30px; }
+  .corner-note { top: 104px; }
+  .cn-sign { width: 46px; height: 46px; }
+  .cn-text b { font-size: 24px; }
   .tach { width: 160px; height: 160px; }
   .minimap { width: 150px; height: 96px; }
   .arrow.right { right: 3vw; top: auto; bottom: 6vh; }
@@ -339,3 +359,65 @@ kbd {
 .car-record b { font-family: var(--font-en); font-size: 18px; }
 .medal-dot { margin-left: 8px; font-family: var(--font-en); font-weight: 700; font-size: 11px; letter-spacing: 0.15em; }
 .no-webgl { position: fixed; inset: 0; display: grid; place-items: center; text-align: center; padding: 24px; line-height: 2; color: var(--text); background: var(--bg); }
+
+/* ---------------------------------------------------------- boot video */
+.boot-video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0.42; filter: saturate(0.85) blur(1.5px); }
+.boot .boot-art { opacity: 0.18; }
+.boot::after { content: ''; position: absolute; inset: 0; pointer-events: none; background: radial-gradient(ellipse at 50% 55%, rgba(5, 7, 12, 0.15), rgba(5, 7, 12, 0.85)); }
+.boot > * { z-index: 1; }
+.boot > .boot-video, .boot > .boot-art { z-index: 0; }
+
+/* ---------------------------------------------------------- courses */
+.courses { background: radial-gradient(ellipse at 50% 60%, rgba(4, 6, 12, 0.5), rgba(4, 6, 12, 0.93)); }
+.course-cards { position: absolute; inset: 15vh 4vw auto; display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+.course-card { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--panel); backdrop-filter: blur(8px); cursor: pointer;
+  transition: transform 0.2s, border-color 0.2s, box-shadow 0.2s; animation: slideUp 0.5s ease both; }
+.course-card:nth-child(2) { animation-delay: 0.08s; }
+.course-card:nth-child(3) { animation-delay: 0.16s; }
+.course-card.active { transform: translateY(-8px); border-color: var(--accent); box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 138, 42, 0.35); }
+.cc-art { position: relative; height: 180px; background: #0a1020 center / cover no-repeat; }
+.cc-art::after { content: ''; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(5, 8, 14, 0.25), rgba(5, 8, 14, 0.75)); }
+.course-map { position: absolute; inset: 6px; width: calc(100% - 12px); height: calc(100% - 12px); z-index: 1; }
+.cm-shadow { fill: none; stroke: rgba(0, 0, 0, 0.7); stroke-width: 7; stroke-linecap: round; stroke-linejoin: round; }
+.cm-line { fill: none; stroke: #ffd08a; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; filter: drop-shadow(0 0 4px rgba(255, 160, 60, 0.8)); }
+.cm-start { fill: #7dffb0; }
+.cm-end { fill: #fff; }
+.cc-body { padding: 16px 18px 18px; }
+.cc-en { font-family: var(--font-en); font-weight: 700; letter-spacing: 0.25em; font-size: 12px; color: var(--accent); }
+.cc-name { font-family: var(--font-logo); font-weight: 800; font-size: 34px; line-height: 1.2; }
+.cc-tag { color: var(--accent-2); font-size: 13px; font-weight: 700; margin-top: 2px; }
+.course-card p { color: #c3cad8; font-size: 13px; line-height: 1.7; min-height: 66px; }
+.cc-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.cc-stats span { font-family: var(--font-en); font-weight: 700; font-size: 16px; border-left: 2px solid var(--accent); padding-left: 8px; }
+.cc-stats small { display: block; font-size: 10px; letter-spacing: 0.18em; color: var(--muted); }
+.course-tabs button { font-family: var(--font-jp); }
+.course-loading .cl-en { font-family: var(--font-en); font-weight: 700; letter-spacing: 0.5em; color: var(--accent); font-size: 14px; padding-left: 0.5em; }
+.course-loading .cl-name { font-family: var(--font-logo); font-weight: 800; font-size: clamp(56px, 9vw, 110px); line-height: 1.1; text-shadow: 0 0 40px rgba(255, 150, 70, 0.35), 0 4px 30px rgba(0, 0, 0, 0.8); }
+.course-loading .cl-tag { color: #d9d2c4; letter-spacing: 0.2em; }
+.course-loading .boot-art { opacity: 0.5; mask-image: none; background-size: cover; background-position: center; }
+
+/* ---------------------------------------------------------- portraits */
+.portrait img { width: 100%; height: 100%; object-fit: cover; object-position: 50% 12%; display: block; }
+.portrait.missing .silhouette { width: 100%; height: 100%;
+  background: radial-gradient(circle at 50% 30%, rgba(255, 255, 255, 0.16) 0 17%, transparent 18%),
+    radial-gradient(ellipse at 50% 92%, rgba(255, 255, 255, 0.12) 0 42%, transparent 43%), linear-gradient(180deg, #1a2234, #0b0f18); }
+.rival-card { padding: 0; overflow: hidden; display: flex; flex-direction: column; }
+.rival-card .portrait { height: 260px; position: relative;
+  background: radial-gradient(ellipse at 50% 70%, rgba(255, 138, 42, 0.18), transparent 70%), linear-gradient(180deg, #0d1424, #070a12);
+  mask-image: linear-gradient(180deg, #000 70%, transparent 100%); }
+.rival-card .portrait img { object-fit: contain; object-position: 50% 0; transform: scale(1.02); transition: transform 0.4s ease; }
+.rival-card.active .portrait img { transform: scale(1.08); }
+.rival-card.legend .portrait { background: radial-gradient(ellipse at 50% 70%, rgba(180, 210, 255, 0.2), transparent 70%), linear-gradient(180deg, #0d1424, #070a12); }
+.rc-body { padding: 4px 22px 22px; }
+.versus .vs-portrait { width: 46px; height: 46px; border-radius: 50%; overflow: hidden; border: 2px solid rgba(255, 255, 255, 0.35); flex-shrink: 0; background: #0b0f18; }
+.versus .vs-portrait img { object-fit: cover; object-position: 50% 8%; transform: scale(1.6); transform-origin: 50% 18%; }
+
+@media (max-height: 860px) {
+  .rival-card .portrait { height: 200px; }
+  .cc-art { height: 140px; }
+  .course-cards { inset: 13vh 4vw auto; }
+  .course-card p { min-height: 0; }
+}
+@media (max-width: 760px) {
+  .course-cards { grid-template-columns: 1fr; overflow-y: auto; bottom: 60px; }
+}

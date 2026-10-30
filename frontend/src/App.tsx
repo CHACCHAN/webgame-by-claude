@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { GameCanvas, gameHolder } from './ui/GameCanvas';
 import { useApp } from './store/app';
 import { useSettings } from './store/settings';
-import { BootScreen, ControlsScreen, GarageScreen, ModesScreen, RivalsScreen, TitleScreen } from './ui/screens/Menus';
+import { BootScreen, ControlsScreen, CourseLoadingScreen, CoursesScreen, GarageScreen, ModesScreen, RivalsScreen, TitleScreen } from './ui/screens/Menus';
 import { LeaderboardScreen } from './ui/screens/Leaderboard';
 import { SettingsScreen } from './ui/screens/Settings';
 import { ReplayOverlay, ResultsScreen } from './ui/screens/Results';
@@ -72,6 +72,8 @@ export function App() {
         {screen === 'boot' && <BootScreen />}
         {screen === 'title' && <TitleScreen />}
         {screen === 'modes' && <ModesScreen />}
+        {screen === 'courses' && <CoursesScreen />}
+        {screen === 'loading' && <CourseLoadingScreen />}
         {screen === 'garage' && <GarageScreen />}
         {screen === 'rivals' && <RivalsScreen />}
         {screen === 'leaderboard' && <LeaderboardScreen />}

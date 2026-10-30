@@ -3,7 +3,7 @@ import type { CarId } from '../game/vehicle/carSpecs';
 import type { AILevel } from '../game/ai/AIDriver';
 import type { GamePhase, RaceMode, RaceResult } from '../game/Game';
 
-export type Screen = 'boot' | 'title' | 'modes' | 'garage' | 'rivals' | 'leaderboard' | 'settings' | 'controls' | 'race' | 'results' | 'replay';
+export type Screen = 'boot' | 'title' | 'modes' | 'garage' | 'rivals' | 'leaderboard' | 'settings' | 'controls' | 'race' | 'results' | 'replay' | 'courses' | 'loading';
 
 export interface GhostChoice {
   runId: number | 'local';
@@ -22,6 +22,8 @@ interface AppState {
   carColor: string | null;
   rivalLevel: AILevel;
   ghostChoice: GhostChoice | null;
+  /** screen to open once a course switch has finished loading */
+  afterLoad: Screen;
   result: RaceResult | null;
   paused: boolean;
   go: (s: Screen) => void;
@@ -38,6 +40,7 @@ export const useApp = create<AppState>((set, get) => ({
   carColor: null,
   rivalLevel: 'rookie',
   ghostChoice: null,
+  afterLoad: 'garage',
   result: null,
   paused: false,
   go: (s) => set({ prevScreen: get().screen, screen: s }),

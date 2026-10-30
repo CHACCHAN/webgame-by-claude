@@ -28,16 +28,8 @@ function tileNoise(x: number, y: number, period: number, octaves = 4) {
   return (a * (1 - fx) + b * fx) * (1 - fy) + (c * (1 - fx) + d * fx) * fy;
 }
 
-/**
- * Road albedo: asphalt with aggregate and wear, white edge lines and an
- * orange no-overtaking centre line. u spans the road width, the tile covers
- * 8 m along the road.
- */
-export function makeRoadTexture(): THREE.Texture {
-  const W = 512, H = 1024;
-  const [c, g] = canvas(W, H);
+function paintNoiseAsphalt(g: CanvasRenderingContext2D, W: number, H: number, r: () => number) {
   const img = g.createImageData(W, H);
-  const r = rng(42);
   for (let y = 0; y < H; y++) {
     for (let x = 0; x < W; x++) {
       const n = tileNoise(x / 40, y / 40, W / 40, 4) * 0.5 + tileNoise(x / 6, y / 6, W / 6, 2) * 0.35;
@@ -54,6 +46,55 @@ export function makeRoadTexture(): THREE.Texture {
     }
   }
   g.putImageData(img, 0, 0);
+}
+
+/**
+ * Scanned asphalt tiled at real scale (4 tiles across the ~11 m wide u range,
+ * 3 along the 8 m tile), then darker patching and lighter, polished wheel tracks.
+ */
+function paintPhotoAsphalt(g: CanvasRenderingContext2D, photo: CanvasImageSource, W: number, H: number) {
+  const pw = (photo as HTMLImageElement).width || 1024, ph = (photo as HTMLImageElement).height || 1024;
+  const pat = g.createPattern(photo, 'repeat')!;
+  pat.setTransform(new DOMMatrix().scale(W / 4 / pw, H / 3 / ph));
+  g.fillStyle = pat;
+  g.fillRect(0, 0, W, H);
+  const N = 128;
+  const [pc, pg] = canvas(N, N);
+  const patch = pg.createImageData(N, N);
+  const [tc, tg] = canvas(N, N);
+  const tracks = tg.createImageData(N, N);
+  for (let y = 0; y < N; y++)
+    for (let x = 0; x < N; x++) {
+      const o = (y * N + x) * 4;
+      const n = tileNoise(x / 16, y / 16, N / 16, 4);
+      const v = 255 * Math.min(1, 0.8 + n * 0.35);
+      patch.data[o] = patch.data[o + 1] = patch.data[o + 2] = v;
+      patch.data[o + 3] = 255;
+      const u = x / N;
+      const t = Math.exp(-(((u - 0.3) * 9) ** 2)) + Math.exp(-(((u - 0.7) * 9) ** 2));
+      tracks.data[o] = tracks.data[o + 1] = tracks.data[o + 2] = 255;
+      tracks.data[o + 3] = 255 * t * 0.07;
+    }
+  pg.putImageData(patch, 0, 0);
+  tg.putImageData(tracks, 0, 0);
+  g.globalCompositeOperation = 'multiply';
+  g.drawImage(pc, 0, 0, W, H);
+  g.globalCompositeOperation = 'screen';
+  g.drawImage(tc, 0, 0, W, H);
+  g.globalCompositeOperation = 'source-over';
+}
+
+/**
+ * Road albedo: asphalt with aggregate and wear, white edge lines and an
+ * orange no-overtaking centre line. u spans the road width, the tile covers
+ * 8 m along the road.
+ */
+export function makeRoadTexture(photo?: CanvasImageSource | null): THREE.Texture {
+  const W = photo ? 1024 : 512, H = 1024;
+  const [c, g] = canvas(W, H);
+  const r = rng(42);
+  if (photo) paintPhotoAsphalt(g, photo, W, H);
+  else paintNoiseAsphalt(g, W, H, r);
 
   // markings (road u in [0,1] maps to width incl. shoulders)
   const line = (u0: number, u1: number, color: string, dash?: [number, number]) => {
@@ -152,40 +193,51 @@ export function makeGroundNormal(): THREE.Texture {
 }
 
 /** Concrete with a lattice of slope-protection frames (法枠). */
-export function makeConcreteTexture(lattice: boolean): THREE.Texture {
-  const W = 256;
+export function makeConcreteTexture(lattice: boolean, photo?: CanvasImageSource | null): THREE.Texture {
+  const W = photo ? 512 : 256;
   const [c, g] = canvas(W, W);
-  const img = g.createImageData(W, W);
   const r = rng(77);
-  for (let y = 0; y < W; y++)
-    for (let x = 0; x < W; x++) {
-      const n = tileNoise(x / 20, y / 20, W / 20, 4);
-      const v = 150 + n * 30 + (r() - 0.5) * 20 - (y / W) * 18;
-      const o = (y * W + x) * 4;
-      img.data[o] = v;
-      img.data[o + 1] = v * 0.99;
-      img.data[o + 2] = v * 0.95;
-      img.data[o + 3] = 255;
-    }
-  g.putImageData(img, 0, 0);
+  if (photo) {
+    g.drawImage(photo, 0, 0, W, W);
+    // weathering: darker towards the foot of the wall
+    const grad = g.createLinearGradient(0, 0, 0, W);
+    grad.addColorStop(0, 'rgba(0,0,0,0)');
+    grad.addColorStop(1, 'rgba(20,22,16,0.22)');
+    g.fillStyle = grad;
+    g.fillRect(0, 0, W, W);
+  } else {
+    const img = g.createImageData(W, W);
+    for (let y = 0; y < W; y++)
+      for (let x = 0; x < W; x++) {
+        const n = tileNoise(x / 20, y / 20, W / 20, 4);
+        const v = 150 + n * 30 + (r() - 0.5) * 20 - (y / W) * 18;
+        const o = (y * W + x) * 4;
+        img.data[o] = v;
+        img.data[o + 1] = v * 0.99;
+        img.data[o + 2] = v * 0.95;
+        img.data[o + 3] = 255;
+      }
+    g.putImageData(img, 0, 0);
+  }
+  const q = W / 2;
   if (lattice) {
     g.fillStyle = 'rgba(40,52,30,0.55)';
     for (let i = 0; i < 2; i++)
-      for (let j = 0; j < 2; j++) g.fillRect(i * 128 + 14, j * 128 + 14, 100, 100);
+      for (let j = 0; j < 2; j++) g.fillRect(i * q + q * 0.11, j * q + q * 0.11, q * 0.78, q * 0.78);
     g.strokeStyle = 'rgba(255,255,255,0.12)';
-    g.lineWidth = 4;
+    g.lineWidth = W / 64;
     for (let i = 0; i <= 2; i++) {
       g.beginPath();
-      g.moveTo(i * 128, 0);
-      g.lineTo(i * 128, W);
-      g.moveTo(0, i * 128);
-      g.lineTo(W, i * 128);
+      g.moveTo(i * q, 0);
+      g.lineTo(i * q, W);
+      g.moveTo(0, i * q);
+      g.lineTo(W, i * q);
       g.stroke();
     }
   }
   // streaks
   g.fillStyle = 'rgba(30,30,28,0.08)';
-  for (let i = 0; i < 24; i++) g.fillRect(r() * W, 0, 2 + r() * 4, W);
+  for (let i = 0; i < 24; i++) g.fillRect(r() * W, 0, (2 + r() * 4) * (W / 256), W);
   return finish(c, true);
 }
 

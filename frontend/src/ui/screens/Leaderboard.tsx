@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
 import { useApp } from '../../store/app';
-import { useMenuInput } from '../useMenuInput';
+import { useMenuInput, hoverSelect } from '../useMenuInput';
 import { api, loadLocalBest, loadPlayer, type LeaderboardEntry } from '../../api/client';
 import { CAR_ORDER, CAR_SPECS, type CarId } from '../../game/vehicle/carSpecs';
 import { formatTime } from '../format';
+import { COURSES, COURSE_ORDER, type CourseId } from '../../game/track/courses';
+import { currentCourseId } from '../../store/settings';
 import { Hint } from './Menus';
 import { sfx } from '../sfx';
 
@@ -14,21 +16,23 @@ export function LeaderboardScreen() {
   const [error, setError] = useState<string | null>(null);
   const [sel, setSel] = useState(0);
   const me = loadPlayer();
-  const local = loadLocalBest();
   const ghostMode = mode === 'ghost';
+  // ghost battles use the loaded course; the ranking can browse every course
+  const [course, setCourse] = useState<CourseId>(currentCourseId());
+  const local = loadLocalBest(course);
 
   useEffect(() => {
     let alive = true;
     setEntries(null);
     setError(null);
     api
-      .leaderboard(filter)
+      .leaderboard(course, filter)
       .then((e) => alive && setEntries(e))
       .catch((e) => alive && setError(e.message));
     return () => {
       alive = false;
     };
-  }, [filter]);
+  }, [filter, course]);
 
   const filters: (CarId | null)[] = [null, ...CAR_ORDER];
   const rows = entries ?? [];
@@ -58,7 +62,7 @@ export function LeaderboardScreen() {
     if (a === 'confirm' && ghostMode && selectable[sel]) challenge(selectable[sel]);
     if (a === 'back') {
       sfx.back();
-      go('modes');
+      go(ghostMode ? 'courses' : 'modes');
     }
   });
 
@@ -66,8 +70,17 @@ export function LeaderboardScreen() {
     <div className="screen panel-screen">
       <div className="panel wide leaderboard">
         <div className="panel-title">
-          {ghostMode ? 'GHOST BATTLE' : 'RANKING'} <small>{ghostMode ? '挑戦するゴーストを選択' : '朧峠ダウンヒル オンラインランキング'}</small>
+          {ghostMode ? 'GHOST BATTLE' : 'RANKING'} <small>{COURSES[course].name} ・ {ghostMode ? '挑戦するゴーストを選択' : 'オンラインランキング'}</small>
         </div>
+        {!ghostMode && (
+          <div className="tabs course-tabs">
+            {COURSE_ORDER.map((c) => (
+              <button key={c} className={c === course ? 'on' : ''} onClick={() => { setCourse(c); setSel(0); }}>
+                {COURSES[c].name}
+              </button>
+            ))}
+          </div>
+        )}
         <div className="tabs">
           {filters.map((f) => (
             <button key={f ?? 'all'} className={f === filter ? 'on' : ''} onClick={() => { setFilter(f); setSel(0); }}>
@@ -97,7 +110,7 @@ export function LeaderboardScreen() {
                   const idx = selectable.indexOf(e);
                   const active = ghostMode && idx === sel;
                   return (
-                    <tr key={e.run_id} className={`${active ? 'active' : ''} ${me && e.player_id === me.id ? 'me' : ''} rank-${e.rank}`} onMouseEnter={() => idx >= 0 && setSel(idx)}>
+                    <tr key={e.run_id} className={`${active ? 'active' : ''} ${me && e.player_id === me.id ? 'me' : ''} rank-${e.rank}`} {...hoverSelect(() => idx >= 0 && setSel(idx))}>
                       <td className="rank">{e.rank}</td>
                       <td className="name">{e.player_name}{e.is_bot && <span className="bot">CPU</span>}</td>
                       <td>{CAR_SPECS[e.car_id]?.name ?? e.car_id}</td>

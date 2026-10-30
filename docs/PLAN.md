@@ -15,6 +15,14 @@ Summit start (pass sign, LED lamps) → fast sweepers → **vista**: cliff-side 
 final hairpin → finish. 4 timing sectors. Authored as straights/arcs + grade in `track/courseDesign.ts`;
 curvature/grade smoothed; road widened in hairpins; banking from curvature.
 
+## More courses (added at the owner's request; built to keep growing)
+- **霧降湖 KIRIFURI LAKESIDE** (2.60 km): caldera rim → cedar forest and a hairpin pair → fast lakeside run with
+  the moon on the water → hot-spring town finish.
+- **天狼スカイライン TENROU SKYLINE** (2.37 km): flat-out crest sweepers past wind turbines under the stars → a
+  4-hairpin ladder down the south face.
+- A course is data: design + `Landform` (`track/landforms.ts`) + rivals, medals, music, art in
+  `track/courses.ts`, plus an entry in the backend `config/game.php` and CPU ghosts (`npm run seed:bots`).
+
 ## Technical design
 - **Terrain**: road-first. Road heights are interpolated into the hillside (IDW within 320 m) blended with a
   large-scale landform (mountains north, coastal plain, sea); road corridor cut/filled with embankments; gorge

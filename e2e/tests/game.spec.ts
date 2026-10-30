@@ -57,6 +57,8 @@ test('time attack: full autodriven run, results and online submission', async ({
   await waitForTitle(page);
   await page.keyboard.press('Enter');
   await page.keyboard.press('Enter'); // TIME ATTACK
+  await expect(page.locator('.course-card.active')).toContainText('OBORO PASS');
+  await page.keyboard.press('Enter'); // default course
   await expect(page.locator('.car-name')).toHaveText('HAYATE TR-S');
   await page.locator('.cta', { hasText: 'この車で出走' }).click();
   await expect(page.locator('.hud')).toBeVisible();
@@ -80,6 +82,7 @@ test('ghost battle against a CPU ghost', async ({ page }) => {
   await waitForTitle(page);
   await page.keyboard.press('Enter');
   await page.locator('.menu-list li', { hasText: 'GHOST BATTLE' }).click();
+  await page.locator('.course-card', { hasText: 'OBORO PASS' }).click();
   const row = page.locator('.lb-table tbody tr', { hasText: '朧' });
   await row.locator('button', { hasText: '挑戦' }).click();
   await page.locator('.cta', { hasText: 'この車で出走' }).click();
@@ -94,6 +97,7 @@ test('rival battle starts with an AI opponent and can be paused', async ({ page 
   await waitForTitle(page);
   await page.keyboard.press('Enter');
   await page.locator('.menu-list li', { hasText: 'RIVAL BATTLE' }).click();
+  await page.locator('.course-card', { hasText: 'OBORO PASS' }).click();
   await page.locator('.cta', { hasText: 'ライバルを選ぶ' }).click();
   await page.locator('.rival-card.ace').click();
   await expect(page.locator('.versus')).toContainText('高嶺 遼');
@@ -107,4 +111,31 @@ test('rival battle starts with an AI opponent and can be paused', async ({ page 
   expect(t2).toBeCloseTo(t1, 2);
   await page.keyboard.press('Escape');
   await expect(page.locator('.pause-title')).toBeHidden();
+});
+
+test('course select switches to another mountain and its own rivals', async ({ page }) => {
+  const errors = await prepare(page);
+  await page.goto('/');
+  await waitForTitle(page);
+  await page.keyboard.press('Enter');
+  await page.locator('.menu-list li', { hasText: 'RIVAL BATTLE' }).click();
+  await expect(page.locator('.course-card')).toHaveCount(3);
+  await page.keyboard.press('ArrowRight');
+  await expect(page.locator('.course-card.active')).toContainText('KIRIFURI LAKESIDE');
+  await page.keyboard.press('Enter');
+  // the world is rebuilt behind the course loading screen, then the garage opens
+  await expect(page.locator('.cta', { hasText: 'ライバルを選ぶ' })).toBeVisible({ timeout: 180_000 });
+  const world = await page.evaluate(() => {
+    const g = (window as any).__game;
+    return { id: g.course.id, length: g.track.length, lamps: g.scenery.lamps.length };
+  });
+  expect(world.id).toBe('kirifuri-lakeside');
+  expect(world.length).toBeGreaterThan(2500);
+  expect(world.lamps).toBeGreaterThan(20);
+  await page.locator('.cta', { hasText: 'ライバルを選ぶ' }).click();
+  await expect(page.locator('.rival-card.rookie')).toContainText('椎名 ほのか');
+  // the choice is remembered for the next session
+  const stored = await page.evaluate(() => JSON.parse(localStorage.getItem('touge-settings')!).state.courseId);
+  expect(stored).toBe('kirifuri-lakeside');
+  expect(errors).toEqual([]);
 });

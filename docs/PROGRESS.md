@@ -2,6 +2,39 @@
 
 Newest first. "Verified" means actually executed in this environment; anything else is marked as unverified.
 
+## Session 2 (2026-10-30, continued)
+
+### Done & verified
+- **3 courses** (owner request): 朧峠 (bay, 3.11 km), 霧降湖 (caldera lake, 2.60 km), 天狼スカイライン (ridge,
+  2.37 km). Each course = turtle-style design + `Landform` (base terrain, water, towns, moon direction, cloud
+  level, features such as the ferris wheel, onsen town, wind turbines) + its own rivals, medals, music and art
+  (`track/courses.ts`, `track/landforms.ts`). Course select screen with route maps, length/drop/best; course
+  switching rebuilds the world behind a loading screen; per-course local bests, leaderboards and CPU ghosts.
+- Headless sim: all 3 cars × 3 AI levels finish courses 2 and 3 with 0 respawns; medals derived from those laps.
+  Legend cars on the new courses run a tuned engine (power 1.18) so the legend stays distinct.
+- Backend: 3 tracks in `config/game.php`, CPU ghosts regenerated for all courses (oboro 7, kirifuri 6, tenrou 6
+  seeded runs, checked via the API after `docker compose up --build`); 9 backend tests pass in Docker.
+- Owner assets integrated (menu/race BGM with loop points, finish jingle, boot loop video, 朧峠 rival portraits,
+  key art, `og:image`); ledger in ASSETS.md.
+- Photo textures (ambientCG, CC0) for asphalt (albedo + full-res normal/roughness at real scale), ground,
+  rock and concrete, with the procedural textures kept as fallback. Screenshots checked dry and wet.
+- **Corner pace notes** (owner idea): a few seconds before every tight bend a warning sign (hairpin / sharp /
+  bend, left/right, distance countdown) appears top-centre with 1–3 warning beeps; medium bends are only called
+  when arriving too fast. Toggle in settings (コーナー予告). Verified in an autodriven race screenshot
+  (「右ヘアピン 90m」) and unit tests (`findCorners`).
+- Bugs found & fixed: every sample of a constant-radius bend counted as a corner peak, stacking dozens of
+  chevrons/warning/speed signs at each hairpin (now one sign group per bend, shared detector); far-terrain edge
+  cliffs; the sky below the horizon showed through past the terrain edge as an orange slab on the ridge course
+  (sky now fades to fogged ground below the horizon + a fogged ground skirt); lake normal-map tiling.
+- GPU resource leaks on course switch / time-of-day change found via `renderer.info.memory` (counts grew on
+  every switch): undisposed instanced-mesh buffers, shadow-map render targets, environment-map render targets
+  and the temporary meshes used to bake them. After the fix, switching back and forth returns to identical
+  counts (e.g. 朧峠 63 geometries / 23 textures every time). Found because the E2E course-switch test hit
+  shader link failures late in a long-lived browser.
+- Keyboard selection on menus could be overridden by the synthetic mouse events browsers send when a screen
+  appears under a resting cursor; hover-to-select now ignores events without movement.
+- vitest 15 tests pass; E2E now covers course select and course switching (8 tests).
+
 ## Session 1 (2026-10-30)
 
 ### Environment survey
@@ -61,8 +94,7 @@ Newest first. "Verified" means actually executed in this environment; anything e
 - Performance: unmeasured on a real GPU. Tree LOD and quality presets exist; ~1.2 M triangles at low.
 
 ## Known issues / next
-- Real-GPU performance pass (frame time budget, shadow map cost, draw calls).
-- Optional owner-provided assets (docs/ASSET_REQUESTS.md): race/menu BGM and a key art image.
-- Car models could be replaced by artist GLBs following the contract in docs/ASSETS.md.
-- Engine sound is synthesised and unverified by ear in this environment.
-- Touch controls (mobile) are not implemented (PC is the target).
+- Real-GPU performance pass (frame time budget, shadow map cost, draw calls) — still unmeasured. Known
+  candidate: lamp posts are individual meshes (~650 draw calls on 朧峠 before culling) and could be instanced.
+- Owner assets requested for courses 2/3 (docs/ASSET_REQUESTS.md): six rival portraits, two course key arts,
+  two race BGMs, optional defeat jingle. Fallbacks: silhouettes, 

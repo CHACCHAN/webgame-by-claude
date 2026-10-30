@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { Track } from './track/Track';
-import { OBORO_DOWNHILL } from './track/courseDesign';
+import { COURSES, type CourseId, type CourseInfo } from './track/courses';
 import { buildTerrain, type TerrainData } from './track/terrain';
 import { PhysicsWorld, PHYSICS_DT, initRapier } from './vehicle/PhysicsWorld';
 import { VehicleSim, emptyInput, type AssistLevel, type VehicleInput } from './vehicle/VehicleSim';
@@ -11,6 +11,8 @@ import { buildScenery, type SceneryResult } from './render/TrackScenery';
 import { buildEnvironment, type EnvironmentRig, type TimeOfDay } from './render/Environment';
 import { CarVisual } from './render/CarVisual';
 import { loadCarTemplates } from './render/carAssets';
+import { loadSurfaceTextures } from './render/surfaceTextures';
+import { findCorners, type Corner, type CornerKind } from './track/corners';
 import { ChaseCamera } from './camera/ChaseCamera';
 import { InputManager } from './input/Input';
 import { TireSmoke, SkidMarks } from './fx/TireEffects';
@@ -28,6 +30,7 @@ export interface QualitySettings {
   shadowMapSize: number;
   treeDensity: number;
   headlightShadows: boolean;
+  photoTextures: boolean;
 }
 
 export interface RaceConfig {
@@ -38,6 +41,7 @@ export interface RaceConfig {
 }
 
 export interface RaceResult {
+  trackId: CourseId;
   mode: RaceMode;
   carId: CarId;
   timeMs: number;
@@ -74,6 +78,8 @@ export interface HudState {
   boost: number;
   turbo: boolean;
   sectorFlashT: number;
+  /** pace note for the next tight bend; null when none is close */
+  corner: { dir: 1 | -1; kind: CornerKind; dist: number; seq: number } | null;
 }
 
 type Listener = (e: GameEvent) => void;
@@ -114,6 +120,7 @@ export class Game {
   rain = new Rain();
   /** tyre grip multiplier from the weather (wet roads) */
   weatherGrip = 1;
+  course!: CourseInfo;
   private dryMaterials: { road?: { roughness: number; color: THREE.Color; normal: number; env: number }; terrain?: number } = {};
 
   phase: GamePhase = 'loading';
@@ -121,7 +128,7 @@ export class Game {
   hud: HudState = {
     speedKmh: 0, rpm: 0, redline: 8000, gear: 1, raceTime: 0, countdown: 0, splits: [], lastSplitDelta: null, lastSplitIndex: -1,
     progress: 0, rivalProgress: null, ghostProgress: null, position: 1, gapMeters: 0, wrongWay: false, driftCombo: 0, driftScore: 0,
-    boost: 0, turbo: false, sectorFlashT: 0,
+    boost: 0, turbo: false, sectorFlashT: 0, corner: null,
   };
 
   private listeners = new Set<Listener>();
@@ -159,6 +166,11 @@ export class Game {
   assist: AssistLevel = 1;
   autoShift = true;
   showGhost = true;
+  /** HUD pace notes + warning beeps before tight bends */
+  cornerGuide = true;
+  corners: Corner[] = [];
+  private cornerIdx = 0;
+  private warnedCorner = -1;
   /** debug/testing: let an AI drive the player car and speed up simulated time */
   autoDrive = false;
   timeScale = 1;
@@ -186,26 +198,12 @@ export class Game {
     await new Promise((r) => setTimeout(r, 0));
   }
 
-  async load(timeOfDay: TimeOfDay) {
+  async load(courseId: CourseId, timeOfDay: TimeOfDay) {
     this.timeOfDay = timeOfDay;
     await this.yieldFrame(0.05, '物理エンジンを初期化中');
     await initRapier();
     await this.yieldFrame(0.08, '車両モデルを読み込み中');
-    await loadCarTemplates(['hayate', 'raijin', 'shiden']);
-    await this.yieldFrame(0.12, 'コースを測量中');
-    this.track = new Track(OBORO_DOWNHILL);
-    this.line = new RacingLine(this.track);
-    await this.yieldFrame(0.25, '山の地形を生成中');
-    this.terrain = buildTerrain(this.track);
-    await this.yieldFrame(0.5, '道路と森を配置中');
-    this.physics = new PhysicsWorld(this.track);
-    this.scenery = buildScenery(this.track, this.terrain, { treeDensity: this.quality.treeDensity, shadows: this.quality.shadows });
-    this.root.add(this.scenery.group);
-    await this.yieldFrame(0.75, '夜景を灯しています');
-    this.env = buildEnvironment(this.terrain);
-    this.root.add(this.env.group);
-    this.env.key.castShadow = this.quality.shadows;
-    this.env.key.shadow.mapSize.set(this.quality.shadowMapSize, this.quality.shadowMapSize);
+    await Promise.all([loadCarTemplates(['hayate', 'raijin', 'shiden']), loadSurfaceTextures()]);
     this.root.add(this.smoke.points, this.skids.mesh, this.rain.mesh);
     // pooled lights for nearby street lamps
     for (let i = 0; i < 6; i++) {
@@ -214,12 +212,71 @@ export class Game {
       this.root.add(l);
     }
     this.scene.add(this.root);
-    this.applyTimeOfDay(timeOfDay);
     this.chase = new ChaseCamera(this.camera, (x, z) => this.terrain.heightAt(x, z));
+    await this.buildWorld(courseId);
+    this.startAttract();
+  }
+
+  /** Tear down the current course and build another one. */
+  async switchCourse(courseId: CourseId) {
+    if (this.course?.id === courseId) return;
+    this.clearRace();
+    this.setPhase('loading');
+    this.disposeWorld();
+    await this.buildWorld(courseId);
+  }
+
+  private async buildWorld(courseId: CourseId) {
+    const course = COURSES[courseId];
+    this.course = course;
+    await this.yieldFrame(0.12, `${course.name} を測量中`);
+    this.track = new Track(course.design);
+    this.corners = findCorners(this.track);
+    this.line = new RacingLine(this.track);
+    await this.yieldFrame(0.25, '山の地形を生成中');
+    this.terrain = buildTerrain(this.track, course.landform);
+    await this.yieldFrame(0.5, '道路と森を配置中');
+    this.physics = new PhysicsWorld(this.track);
+    this.scenery = buildScenery(this.track, this.terrain, { treeDensity: this.quality.treeDensity, shadows: this.quality.shadows, photoTextures: this.quality.photoTextures });
+    this.root.add(this.scenery.group);
+    await this.yieldFrame(0.75, '夜景を灯しています');
+    this.env = buildEnvironment(this.terrain);
+    this.root.add(this.env.group);
+    this.env.key.castShadow = this.quality.shadows;
+    this.env.key.shadow.mapSize.set(this.quality.shadowMapSize, this.quality.shadowMapSize);
+    this.dryMaterials = {};
+    this.applyTimeOfDay(this.timeOfDay);
+    this.chase.reset();
     await this.yieldFrame(0.92, 'シェーダーを準備中');
     this.renderer.compile(this.scene, this.camera);
     await this.yieldFrame(1, '準備完了');
-    this.startAttract();
+  }
+
+  private disposeWorld() {
+    if (!this.scenery) return;
+    for (const g of [this.scenery.group, this.env.group]) {
+      this.root.remove(g);
+      const textures = new Set<THREE.Texture>();
+      g.traverse((o) => {
+        // shadow map render targets and per-instance buffers are not freed with the geometry
+        (o as THREE.DirectionalLight).shadow?.dispose();
+        if ((o as THREE.InstancedMesh).isInstancedMesh) (o as THREE.InstancedMesh).dispose();
+        const m = o as THREE.Mesh;
+        if (!m.geometry) return;
+        m.geometry.dispose();
+        for (const mat of Array.isArray(m.material) ? m.material : [m.material]) {
+          if (!mat) continue;
+          for (const v of Object.values(mat)) if (v instanceof THREE.Texture) textures.add(v);
+          const uniforms = (mat as THREE.ShaderMaterial).uniforms;
+          if (uniforms) for (const u of Object.values(uniforms)) if (u.value instanceof THREE.Texture) textures.add(u.value);
+          mat.dispose();
+        }
+      });
+      textures.forEach((t) => t.dispose());
+    }
+    this.env.dispose();
+    this.scene.environment = null;
+    this.physics.dispose();
   }
 
   applyTimeOfDay(tod: TimeOfDay) {
@@ -388,9 +445,9 @@ export class Game {
     this.player = this.createRacer(cfg.carId, gridS, lane, { headlights: true });
     this.player.sim.autoShift = this.autoShift;
     if (cfg.mode === 'rival' && cfg.rivalLevel) {
-      const rivalCar: CarId = cfg.rivalLevel === 'rookie' ? 'hayate' : cfg.rivalLevel === 'ace' ? 'raijin' : 'shiden';
-      const color = cfg.rivalLevel === 'legend' ? '#e9e9ea' : cfg.rivalLevel === 'ace' ? '#0c0c0e' : '#f2b705';
-      this.rival = this.createRacer(rivalCar, gridS, -2.0, { ai: cfg.rivalLevel, headlights: true, color });
+      const rival = this.course.rivals[cfg.rivalLevel];
+      this.rival = this.createRacer(rival.car, gridS, -2.0, { ai: cfg.rivalLevel, headlights: true, color: rival.color });
+      this.rival.sim.powerScale = rival.power ?? 1;
     }
     if (cfg.ghost && (cfg.mode === 'ghost' || this.showGhost)) {
       const spec = CAR_SPECS[cfg.ghost.carId];
@@ -408,6 +465,9 @@ export class Game {
     this.hud.lastSplitIndex = -1;
     this.hud.driftScore = 0;
     this.hud.driftCombo = 0;
+    this.hud.corner = null;
+    this.cornerIdx = 0;
+    this.warnedCorner = -1;
     this.hud.turbo = CAR_SPECS[cfg.carId].engine.turbo;
     this.hud.redline = CAR_SPECS[cfg.carId].engine.redline;
     this.topSpeed = 0;
@@ -415,7 +475,7 @@ export class Game {
     this.accumulator = 0;
     this.paused = false;
     if (this.audio) {
-      void this.audio.playMusic('bgm_race');
+      void this.audio.playMusic(this.course.music, 'bgm_race');
       const spec = CAR_SPECS[cfg.carId];
       this.audio.engine('player', spec.engine.cylinders, spec.engine.turbo);
       if (this.rival) this.audio.engine('rival', this.rival.sim.spec.engine.cylinders, this.rival.sim.spec.engine.turbo);
@@ -638,6 +698,7 @@ export class Game {
       const wrong = pl.sim.forward.dot(_f) < -0.3 && pl.sim.speed > 4;
       this.wrongWayT = wrong ? this.wrongWayT + dt : 0;
       this.hud.wrongWay = this.wrongWayT > 1.2;
+      this.updateCornerGuide(s, pl.sim.speed);
       // drift scoring
       const drifting = Math.abs(pl.sim.slipAngle) > 0.2 && pl.sim.speed > 12 && !pl.sim.airborne;
       if (drifting) {
@@ -672,13 +733,41 @@ export class Game {
     } else this.hud.ghostProgress = null;
   }
 
+  /** Shows the next tight bend a couple of seconds before its entry (until its apex) and beeps once. */
+  private updateCornerGuide(s: number, speed: number) {
+    const cs = this.corners;
+    while (this.cornerIdx > 0 && cs[this.cornerIdx - 1].apex >= s) this.cornerIdx--;
+    while (this.cornerIdx < cs.length && cs[this.cornerIdx].apex < s) this.cornerIdx++;
+    const c = cs[this.cornerIdx];
+    this.hud.corner = null;
+    if (!c || !this.cornerGuide) return;
+    const dist = c.start - s;
+    const lookahead = clamp(speed * 2.6, 45, 150);
+    // medium bends only deserve a call when arriving faster than they can be taken
+    const relevant = c.kind !== 'medium' || speed > Math.sqrt(9.81 * c.minRadius) * 1.05 || this.warnedCorner === this.cornerIdx;
+    if (dist > lookahead || !relevant) return;
+    this.hud.corner = { dir: c.dir, kind: c.kind, dist: Math.max(0, dist), seq: this.cornerIdx };
+    if (this.warnedCorner !== this.cornerIdx) {
+      this.warnedCorner = this.cornerIdx;
+      this.audio?.cornerWarning(c.kind);
+    }
+  }
+
   private finishRace() {
     const pl = this.player!;
-    this.audio?.chime([784, 988, 1175, 1568], 0.11);
+    this.hud.corner = null;
+    if (this.audio) {
+      const a = this.audio;
+      a.stopMusic(0.8);
+      const lost = !!this.rival?.finished && this.rival.finishTime < pl.finishTime;
+      if (lost) void a.playJingle('jingle_lose').then((ok) => ok || a.chime([659, 587, 494, 440], 0.16));
+      else void a.playJingle('jingle_finish').then((ok) => ok || a.chime([784, 988, 1175, 1568], 0.11));
+    }
     if (this.hud.driftCombo > 30) this.hud.driftScore += Math.round(this.hud.driftCombo);
     this.hud.driftCombo = 0;
     const rivalTime = this.rival?.finished ? this.rival.finishTime : undefined;
     const result: RaceResult = {
+      trackId: this.course.id,
       mode: this.config!.mode,
       carId: this.config!.carId,
       timeMs: Math.round(pl.finishTime * 1000),

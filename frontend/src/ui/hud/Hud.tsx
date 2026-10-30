@@ -3,10 +3,13 @@ import { gameHolder } from '../GameCanvas';
 import { useApp } from '../../store/app';
 import { useSettings } from '../../store/settings';
 import { formatTime, AI_LEVEL_LABEL } from '../format';
-import { useMenuInput } from '../useMenuInput';
+import { useMenuInput, hoverSelect } from '../useMenuInput';
 import { startRaceFromState } from '../screens/Menus';
 import { sfx } from '../sfx';
-import { AI_PROFILES } from '../../game/ai/AIDriver';
+import { COURSES } from '../../game/track/courses';
+import { currentCourseId } from '../../store/settings';
+import { Portrait } from '../screens/Menus';
+import type { HudState } from '../../game/Game';
 
 const TACH_START = 135, TACH_SWEEP = 270;
 const polar = (cx: number, cy: number, r: number, deg: number) => {
@@ -18,6 +21,33 @@ const arc = (cx: number, cy: number, r: number, a0: number, a1: number) => {
   const [x1, y1] = polar(cx, cy, r, a1);
   return `M${x0},${y0} A${r},${r} 0 ${a1 - a0 > 180 ? 1 : 0} 1 ${x1},${y1}`;
 };
+
+const CORNER_LABEL = { hairpin: ['ヘアピン', 'HAIRPIN'], tight: ['急カーブ', 'SHARP'], medium: ['カーブ', 'BEND'] } as const;
+
+/** Pace note for the next tight bend (DOM updated directly every frame). */
+function updateCornerNote(el: HTMLDivElement | null, c: HudState['corner']) {
+  if (!el) return;
+  if (!c) {
+    el.classList.remove('show');
+    return;
+  }
+  const key = `${c.seq}`;
+  if (el.dataset.seq !== key) {
+    el.dataset.seq = key;
+    el.dataset.kind = c.kind;
+    el.dataset.dir = c.dir > 0 ? 'left' : 'right';
+    const [jp, en] = CORNER_LABEL[c.kind];
+    const side = c.dir > 0 ? '左' : '右';
+    el.querySelector('.cn-text b')!.textContent = `${side}${jp}`;
+    el.querySelector('.cn-text small')!.textContent = `${en} ${c.dir > 0 ? 'LEFT' : 'RIGHT'}`;
+    el.classList.remove('show');
+    void el.offsetWidth;
+  }
+  el.classList.add('show');
+  const d = el.querySelector('.cn-dist')!;
+  const txt = c.dist > 8 ? `${Math.round(c.dist / 10) * 10}m` : '';
+  if (d.textContent !== txt) d.textContent = txt;
+}
 
 export function Hud() {
   const { mode, rivalLevel, ghostChoice, phase } = useApp();
@@ -39,6 +69,7 @@ export function Hud() {
     fps: useRef<HTMLDivElement>(null),
     delta: useRef<HTMLDivElement>(null),
     lines: useRef<HTMLCanvasElement>(null),
+    corner: useRef<HTMLDivElement>(null),
   };
   const [redline, setRedline] = useState(8000);
   const [turbo, setTurbo] = useState(false);
@@ -115,6 +146,7 @@ export function Hud() {
         }
       }
       if (r.wrong.current) r.wrong.current.style.opacity = h.wrongWay ? '1' : '0';
+      updateCornerNote(r.corner.current, h.corner);
       if (r.drift.current) {
         const show = h.driftCombo > 20;
         r.drift.current.style.opacity = show ? '1' : '0';
@@ -234,9 +266,10 @@ export function Hud() {
         {mode === 'rival' && (
           <div className="versus">
             <div className="pos lead" ref={refs.pos}>1ST</div>
+            <Portrait src={COURSES[currentCourseId()].rivals[rivalLevel].portrait} className="vs-portrait" />
             <div className="vs-info">
               <small>VS {AI_LEVEL_LABEL[rivalLevel]}</small>
-              <b>{AI_PROFILES[rivalLevel].name}</b>
+              <b>{COURSES[currentCourseId()].rivals[rivalLevel].name}</b>
               <span ref={refs.gap}>+0 m</span>
             </div>
           </div>
@@ -254,6 +287,29 @@ export function Hud() {
       </div>
       <div className="countdown" ref={refs.countdown} />
       <div className="wrong-way" ref={refs.wrong}>逆走中 ― WRONG WAY</div>
+      <div className="corner-note" ref={refs.corner}>
+        <svg viewBox="0 0 100 100" className="cn-sign">
+          <polygon points="50,3 97,50 50,97 3,50" className="cn-plate" />
+          <polygon points="50,10 90,50 50,90 10,50" className="cn-rim" />
+          <g className="cn-arrow cn-hairpin">
+            <path d="M61 76 V46 A11 11 0 0 0 39 46 V60" />
+            <polygon points="30,58 48,58 39,72" />
+          </g>
+          <g className="cn-arrow cn-tight">
+            <path d="M60 76 V44 H42" />
+            <polygon points="44,34 28,44 44,54" />
+          </g>
+          <g className="cn-arrow cn-medium">
+            <path d="M58 76 V58 Q58 40 40 36" />
+            <polygon points="43,27 28,35 42,45" />
+          </g>
+        </svg>
+        <div className="cn-text">
+          <b />
+          <small />
+        </div>
+        <div className="cn-dist" />
+      </div>
       <div className="drift" ref={refs.drift}>
         <span>DRIFT</span>
         <b>+0</b>
@@ -310,7 +366,7 @@ export function PauseMenu() {
         <div className="pause-title">PAUSE</div>
         <ul className="menu-list compact">
           {items.map((it, i) => (
-            <li key={it.label} className={i === sel ? 'active' : ''} onMouseEnter={() => setSel(i)} onClick={() => { sfx.confirm(); it.action(); }}>
+            <li key={it.label} className={i === sel ? 'active' : ''} {...hoverSelect(() => setSel(i))} onClick={() => { sfx.confirm(); it.action(); }}>
               <span className="mi-jp big">{it.label}</span>
             </li>
           ))}

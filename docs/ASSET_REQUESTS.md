@@ -1,128 +1,158 @@
 # 外部素材の制作依頼（オーナー様向け）
 
-ゲームは素材なしでも完全に動作します。いただいた素材は、こちらで組み込み・音量調整・記録を行います。
-画像は ChatGPT、音楽と動画は Gemini での生成を想定しています。完成したファイルはこの会話に直接アップロードしてください。
+ゲームは素材がなくても完全に動作します（肖像はシルエット、BGM は共通曲、キーアートは共通画像で代替）。
+画像は ChatGPT、音楽は Gemini での生成を想定しています。完成したファイルはこの会話に直接アップロードしてください。
+
+## 受け取り済み（第 1 弾）
+`bgm_menu.mp3` / `bgm_race.mp3` / `jingle_finish.mp3` / `loading_loop.mp4` / 朧峠のライバル肖像 ×3 / キービジュアル。
+組み込み済みです。加工内容は `docs/ASSETS.md` に記録しています。
+
+## 第 2 弾：霧降湖・天狼スカイライン用（まとめて生成できます）
 
 | # | 素材 | 依頼先 | ファイル名 | 使う場所 | 優先度 |
 |---|---|---|---|---|---|
-| 1 | レース BGM | Gemini | `bgm_race.mp3` | レース中 | 高 |
-| 2 | メニュー BGM | Gemini | `bgm_menu.mp3` | タイトル・メニュー | 高 |
-| 3 | ライバル肖像 ×3 | ChatGPT | `rival_rookie.png` `rival_ace.png` `rival_legend.png` | ライバル選択画面、バトル中の HUD | 高 |
-| 4 | キービジュアル | ChatGPT | `keyart.png` | ロード画面、SNS 共有用サムネイル | 中 |
-| 5 | ゴール時ジングル | Gemini | `jingle_finish.mp3` | ゴール直後の結果画面 | 中 |
-| 6 | ロード画面ループ動画 | Gemini | `loading_loop.mp4` | ロード画面の背景（無音・暗めに表示） | 低（任意） |
+| 1 | ライバル肖像 ×6 | ChatGPT | `kirifuri_rookie.png` `kirifuri_ace.png` `kirifuri_legend.png` `tenrou_rookie.png` `tenrou_ace.png` `tenrou_legend.png` | ライバル選択、バトル中 HUD | 高 |
+| 2 | コースキーアート ×2 | ChatGPT | `course_kirifuri.png` `course_tenrou.png` | コース選択カード、ロード画面 | 高 |
+| 3 | レース BGM ×2 | Gemini | `bgm_race_kirifuri.mp3` `bgm_race_tenrou.mp3` | 各コースのレース中 | 中 |
+| 4 | 敗北ジングル | Gemini | `jingle_lose.mp3` | ライバルに負けたときの結果画面 | 低（任意） |
 
 共通の注意：既存作品（特定のアニメ・漫画・ゲーム・実在の曲や車種）に似せないため、プロンプトには作品名・曲名・車名を入れていません。
-生成サービスの利用規約で商用利用やクレジット表記の条件がある場合は、受け渡し時に教えてください。
+第 1 弾のキービジュアルの車は実在の 80 年代クーペに近く見えるため、今回のキーアートは「車を描かず、テールランプの光跡だけ」にしています。
 
 ---
 
-## 1. レース BGM（Gemini）
-- 形式：MP3 または WAV。長さはできれば 2 分以上。短い場合（30 秒程度）でもループ再生するので使えます
-- ボーカルなし（インストゥルメンタル）
-
-```
-Create an original instrumental track for a night mountain-road racing game.
-Eurobeat-inspired high-energy dance music, 155 BPM, driving four-on-the-floor kick,
-punchy octave synth bassline, bright detuned supersaw lead with a catchy heroic hook,
-fast synth arpeggios and orchestral stabs, a dramatic key change in the last chorus.
-Mood: racing downhill through hairpins at 2 a.m., adrenaline and speed.
-No vocals, no spoken words. Clean modern mix with strong low end.
-Structure that loops well: short intro, build-up, big chorus, breakdown, final chorus.
-```
-
-## 2. メニュー BGM（Gemini）
-- 形式：MP3 または WAV。1 分 30 秒以上が理想（短くても可）
-
-```
-Create an original mellow instrumental track for the title screen of a night-time
-Japanese mountain pass racing game. Late-night city pop meets synthwave, 92 BPM,
-warm electric piano chords, soft slap bass, gated-reverb drums, airy analog pads and a
-gentle nostalgic synth lead. Mood: looking down at the glittering lights of a harbour
-city from a quiet mountain pass at 2 a.m., calm with a hint of anticipation.
-No vocals. Smooth, loop-friendly ending.
-```
-
-## 3. ライバル肖像 ×3（ChatGPT）
+## 1. ライバル肖像 ×6（ChatGPT）
 - 形式：PNG、**背景透過**、縦長 1024×1536（2:3）
-- 同じ会話の中で 3 枚続けて生成すると絵柄が揃います。まず共通スタイルを送り、続けて 1 人ずつ依頼してください
+- 第 1 弾と絵柄を揃えるため、**第 1 弾と同じ会話の続きで**生成するのが理想です。別の会話で作る場合は、
+  第 1 弾の肖像を 1 枚添付して「この絵柄に合わせて」と伝えてから共通スタイルを送ってください
 
 **共通スタイル（最初に送る）**
 ```
-I will ask for three character portraits for an original Japanese street-racing game.
-Keep the same art style for all three: semi-realistic anime illustration, cinematic night
+I will ask for six more character portraits for the same original Japanese street-racing game.
+Keep exactly the same art style as before: semi-realistic anime illustration, cinematic night
 lighting with cool blue rim light and warm orange sodium-lamp key light, upper body,
 three-quarter view, sharp clean linework, painterly shading. Transparent background,
 PNG, portrait 1024x1536. No text, no logos, no car brand emblems. The characters must be
 original and must not resemble any existing anime, manga or game character.
 ```
 
-**ROOKIE：森 健太（rival_rookie.png）**
+**霧降湖 ROOKIE：椎名 ほのか（kirifuri_rookie.png）**
 ```
-Character 1: Kenta Mori, 19-year-old rookie street racer. Earnest and slightly nervous
-smile, messy short dark-brown hair, freckles, oversized mustard-yellow hoodie under an
-open grey work jacket, holding a pair of cheap driving gloves. Youthful, likeable,
-determined eyes. Transparent background.
-```
-
-**LOCAL ACE：高嶺 遼（rival_ace.png）**
-```
-Character 2: Ryo Takamine, 26-year-old local ace of the mountain pass. Calm, confident,
-slightly cocky half-smile, short undercut black hair with a small scar on the eyebrow,
-navy mechanic's jumpsuit unzipped to the waist with sleeves tied, black t-shirt, a car
-key on a red cord around his fingers. Sharp, focused eyes. Transparent background.
+Character: Honoka Shiina, 20-year-old woman who delivers goods for her family's hot-spring inn
+by the lake and has no idea how fast she is. Cheerful, slightly surprised smile, shoulder-length
+chestnut hair in a low ponytail with loose strands, a lemon-yellow fleece jacket over an
+indigo inn happi coat with a plain white pattern, a small wooden delivery crate under one arm.
+Faint lake mist around her. Transparent background.
 ```
 
-**LEGEND：朧（rival_legend.png）**
+**霧降湖 LOCAL ACE：九条 迅（kirifuri_ace.png）**
 ```
-Character 3: "Oboro", a mysterious legendary night driver rumoured to be a ghost.
-Ageless, androgynous, long silver-white hair moving as if in wind, pale skin, face half
-hidden in shadow so only one calm pale-grey eye is visible, long off-white coat with a
-high collar, faint mist curling around the shoulders. Quiet, unsettling, elegant.
-Transparent background.
-```
-
-## 4. キービジュアル（ChatGPT）
-- 形式：PNG、背景透過なし、横長（1536×1024 などの最大サイズで。こちらで 16:9 に切り出します）
-
-```
-Cinematic wide landscape illustration. A winding Japanese mountain pass road at 2 a.m.:
-a tight hairpin bend in the foreground lined with white guardrails, orange sodium street
-lamps and yellow chevron signs, dark cedar forest on steep slopes. Far below on the left,
-a harbour city glitters with thousands of warm lights along a bay; a full moon hangs over
-the sea with a silver reflection. A single generic 1980s Japanese sports coupe (not any
-real brand or model, no logos, no readable text) drifts through the hairpin, red
-taillights leaving long light trails and a faint plume of tyre smoke. Deep blue night
-palette with warm orange accents, light haze, photorealistic concept art, dramatic
-composition. No text, no watermark, no people.
+Character: Jin Kujo, 28-year-old owner of a small tuning shop by a caldera lake. Cool,
+analytical expression with a faint confident smile, swept-back dark hair with one loose strand,
+thin rectangular glasses, deep wine-red mechanic's jacket with the sleeves pushed up, forearms
+with light grease marks, holding a torque wrench resting on his shoulder. Transparent background.
 ```
 
-## 5. ゴール時ジングル（Gemini）
-- 形式：MP3 または WAV、5〜8 秒、ループしない
+**霧降湖 LEGEND：霧姫（kirifuri_legend.png）**
+```
+Character: "Kirihime", a mysterious legendary female night driver who appears only on foggy
+nights over the lake. Ageless and elegant, long straight blue-black hair, pale silver-blue eyes,
+calm unreadable expression, a long pale grey-blue coat with a high collar over a dark turtleneck,
+thin wisps of fog flowing around her as if she brought it with her, a single faint red glow
+reflected in her eyes like distant taillights. Quiet, cold, beautiful. Transparent background.
+```
+
+**天狼スカイライン ROOKIE：大河内 拓也（tenrou_rookie.png）**
+```
+Character: Takuya Okochi, 20-year-old second-year member of a university motor club, a
+theory-first driver with little real experience. Serious, studious face with an eager look,
+short neat black hair, round glasses, a royal-blue club windbreaker over a grey hoodie,
+holding a small notebook full of handwritten lap notes and a pencil. Transparent background.
+```
+
+**天狼スカイライン LOCAL ACE：真壁 冴子（tenrou_ace.png）**
+```
+Character: Saeko Makabe, 34-year-old former rally driver. Sharp, fearless expression with a
+knowing half-smile, short tousled ash-brown hair, a white racing jacket with plain blue and
+red stripes and no logos, worn leather gloves, an open-face helmet held under one arm, a thin
+scar on the chin. Strong, composed presence. Transparent background.
+```
+
+**天狼スカイライン LEGEND：天狼（tenrou_legend.png）**
+```
+Character: "Tenrou", a silent legendary night driver known as the wolf of the ridge.
+Late 30s, tall and lean, long black hair tied back loosely, a scar across the left cheek,
+piercing pale gold eyes, a dark charcoal long coat with a high collar, a faint silver-grey
+fur trim, cold wind blowing his hair. Few words, overwhelming presence, calm like a wolf.
+Starlight reflections on the coat. Transparent background.
+```
+
+## 2. コースキーアート ×2（ChatGPT）
+- 形式：PNG、背景透過なし、横長 1536×1024（こちらで切り出します）
+
+**霧降湖（course_kirifuri.png）**
+```
+Cinematic wide landscape illustration at 2 a.m. A winding mountain road descends through a
+dark cedar forest towards a calm caldera lake. A full moon hangs over the rim mountains and
+lays a long silver reflection on the still water; thin bands of mist float over the lake
+surface. On the far shore, a small Japanese hot-spring town glows with warm lantern and window
+lights and rising steam. Orange sodium street lamps and white guardrails line the lakeside
+road, and a long-exposure red taillight trail curves along it (no car visible). Deep blue and
+silver palette with warm amber accents, photorealistic concept art, dramatic composition.
+No text, no watermark, no people, no cars.
+```
+
+**天狼スカイライン（course_tenrou.png）**
+```
+Cinematic wide landscape illustration at night. A two-lane skyline road runs along the crest
+of a long grassy mountain ridge under a brilliant starry sky with the Milky Way. A row of
+modern wind turbines stands along the ridge, each with a blinking red aviation light. Far
+below and far away, the orange glow of a large city spreads across the plain to the horizon.
+In the foreground the road drops off the ridge into a ladder of tight hairpin bends lit by
+orange street lamps, with a long-exposure red taillight trail sweeping through them (no car
+visible). Cool, windswept atmosphere, deep navy and violet palette with orange accents,
+photorealistic concept art. No text, no watermark, no people, no cars.
+```
+
+## 3. レース BGM ×2（Gemini）
+- 形式：MP3 または WAV、ボーカルなし、できれば 2 分以上（短くてもループします）
+
+**霧降湖（bgm_race_kirifuri.mp3）**
+```
+Create an original instrumental track for a night mountain-road racing game, course set by a
+misty caldera lake under the moon. Eurobeat-inspired dance music, 150 BPM, minor key, driving
+four-on-the-floor kick and octave synth bass, a haunting lead melody played on a koto-like
+plucked synth and a breathy bamboo-flute-like synth, shimmering arpeggios, a soaring
+supersaw chorus. Mood: mysterious, elegant and fast, chasing a ghostly car through fog.
+No vocals, no spoken words. Clean modern mix. Loop-friendly structure: short intro,
+build-up, chorus, breakdown, final chorus.
+```
+
+**天狼スカイライン（bgm_race_tenrou.mp3）**
+```
+Create an original instrumental track for a night mountain-road racing game, course set on a
+high ridge road under the stars with wind turbines. Fast trance-eurobeat, 160 BPM, heroic
+major-key hook, huge detuned supersaw leads, galloping bassline, rolling toms and orchestral
+brass stabs, a wide open euphoric chorus and a tense breakdown with wind-like noise sweeps
+before the final drop. Mood: flat out at full speed along the skyline, then diving into the
+hairpins. No vocals, no spoken words. Loop-friendly structure.
+```
+
+## 4. 敗北ジングル（Gemini・任意）
+- 形式：MP3 または WAV、4〜6 秒、ループしない
 
 ```
-Create a short original victory jingle, 6 seconds long, for crossing the finish line in a
-night racing game. Bright supersaw synth fanfare over a big drum fill, rising arpeggio,
-ending on a strong sustained major chord with a reverb tail. Energetic and triumphant,
-in the style of 90s arcade racing games. No vocals.
-```
-
-## 6. ロード画面ループ動画（Gemini・任意）
-- 形式：MP4、16:9、8 秒程度。音声は使いません（無音で再生）
-- 注意：実写風の映像はゲーム本編（3DCG）と質感が異なるため、暗くぼかして背景にだけ使います
-
-```
-Slow cinematic aerial drone shot at night, gliding over a winding mountain road with
-hairpin bends lit by orange street lamps, dark cedar forest on the slopes, and a glowing
-harbour city with thousands of lights along a bay far below under a full moon. Light
-mist in the valleys. Smooth, steady camera motion that could loop. No cars in close-up,
-no people, no text, no logos. Deep blue and amber colour palette, 16:9.
+Create a short original "race lost" sting, 5 seconds long, for a night racing game.
+A descending minor-key synth phrase over a soft drum hit, ending on an unresolved, lingering
+pad chord with a long reverb tail. Bittersweet rather than comic: "next time I'll catch you".
+In the style of 90s arcade racing games. No vocals.
 ```
 
 ---
 
 ## 受け取り後の作業（こちらで実施）
-1. 形式変換・最適化（WebP / Opus などに圧縮）と配置
-2. ライバル肖像をライバル選択カードとバトル中 HUD に組み込み、ゴール時ジングルを結果画面に追加
-3. 出典（サービス名・生成日）とライセンス条件を `docs/ASSETS.md` に記録
-4. 音量バランスの調整と、E2E テストを含む動作確認
+1. 形式変換・最適化（WebP、MP3 の音量正規化）と配置。肖像は `public/img/rivals/<コース>-<レベル>.webp`、
+   キーアートは `public/img/courses/<コース>.webp`
+2. BGM のループ位置の設定（`AudioEngine.ts` の MUSIC 表）
+3. 出典（サービス名・生成日）と加工内容を `docs/ASSETS.md` に記録
+4. 動作確認（E2E テストを含む）

@@ -36,6 +36,7 @@ class GameApiTest extends TestCase
         $this->getJson('/api/health')->assertOk()->assertJson(['status' => 'ok', 'database' => 'ok']);
         $this->getJson('/api/content')->assertOk()
             ->assertJsonPath('tracks.0.id', 'oboro-downhill')
+            ->assertJsonCount(3, 'tracks')
             ->assertJsonCount(3, 'cars');
     }
 
@@ -101,6 +102,8 @@ class GameApiTest extends TestCase
         $this->assertCount(1, $raijin);
 
         $this->getJson('/api/tracks/nowhere/leaderboard')->assertNotFound();
+        // leaderboards are per course
+        $this->assertSame([], $this->getJson('/api/tracks/tenrou-skyline/leaderboard')->json('entries'));
     }
 
     public function test_rank_reflects_other_players(): void

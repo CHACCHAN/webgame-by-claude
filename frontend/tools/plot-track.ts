@@ -2,9 +2,10 @@
 // layout problems (legs that come too close to each other).
 import { writeFileSync } from 'node:fs';
 import { Track } from '../src/game/track/Track';
-import { OBORO_DOWNHILL } from '../src/game/track/courseDesign';
+import { OBORO_DOWNHILL, KIRIFURI_LAKESIDE, TENROU_SKYLINE } from '../src/game/track/courseDesign';
 
-const t = new Track(OBORO_DOWNHILL);
+const designs = { oboro: OBORO_DOWNHILL, kirifuri: KIRIFURI_LAKESIDE, tenrou: TENROU_SKYLINE };
+const t = new Track(designs[(process.argv[3] ?? 'oboro') as keyof typeof designs]);
 const out = process.argv[2] ?? 'track.svg';
 let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity, minY = Infinity, maxY = -Infinity;
 for (let i = 0; i < t.count; i++) {
@@ -22,7 +23,7 @@ for (let i = 0; i < t.count - 1; i += 2) {
   const y = t.pos[i * 3 + 1];
   const c = Math.round(((y - minY) / (maxY - minY)) * 255);
   const zone = t.zone[i];
-  const col = zone === 'bridge' ? '#4af' : zone === 'rockshed' ? '#fa4' : `rgb(${c},${255 - c},120)`;
+  const col = zone === 'bridge' ? '#4af' : zone === 'rockshed' ? '#fa4' : zone === 'lakeside' ? '#0ff' : zone === 'crest' ? '#f0f' : `rgb(${c},${255 - c},120)`;
   svg += `<line x1="${px(t.pos[i * 3])}" y1="${pz(t.pos[i * 3 + 2])}" x2="${px(t.pos[i * 3 + 6])}" y2="${pz(t.pos[i * 3 + 8])}" stroke="${col}" stroke-width="${t.width[i] * scale}"/>`;
 }
 for (let s = 0; s < t.length; s += 250) {

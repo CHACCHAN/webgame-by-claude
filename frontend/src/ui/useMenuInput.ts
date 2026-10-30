@@ -59,3 +59,13 @@ export function useMenuInput(handler: (a: MenuAction) => void, enabled = true) {
     };
   }, [enabled]);
 }
+
+/**
+ * Hover-to-select props. Browsers send synthetic mouse events when a new screen appears under a
+ * resting cursor; those carry no movement and are ignored so they cannot override keyboard choices.
+ */
+export const hoverSelect = (select: () => void) => ({
+  onMouseMove: (e: { movementX: number; movementY: number }) => {
+    if (e.movementX !== 0 || e.movementY !== 0) select();
+  },
+});

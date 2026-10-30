@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useApp } from '../../store/app';
 import { useSettings, type QualityLevel } from '../../store/settings';
-import { useMenuInput } from '../useMenuInput';
+import { useMenuInput, hoverSelect } from '../useMenuInput';
 import { gameHolder } from '../GameCanvas';
 import type { TimeOfDay } from '../../game/render/Environment';
 import { Hint } from './Menus';
@@ -41,6 +41,7 @@ export function SettingsScreen() {
     { label: '運転アシスト', value: ['オフ', '標準', '強'][s.assist], note: 'カウンターステア補助・スピン防止', change: (d) => { const v = ((s.assist + d + 3) % 3) as 0 | 1 | 2; s.set({ assist: v }); if (game) game.assist = v; } },
     { label: 'トランスミッション', value: s.autoShift ? 'オートマチック' : 'マニュアル (E/Q)', change: () => { s.set({ autoShift: !s.autoShift }); if (game) game.autoShift = !s.autoShift; } },
     { label: 'ゴースト表示（タイムアタック）', value: s.showGhost ? 'オン' : 'オフ', change: () => { s.set({ showGhost: !s.showGhost }); if (game) game.showGhost = !s.showGhost; } },
+    { label: 'コーナー予告', value: s.cornerGuide ? 'オン' : 'オフ', note: '急カーブの手前で標識と警告音を出します', change: () => { s.set({ cornerGuide: !s.cornerGuide }); if (game) game.cornerGuide = !s.cornerGuide; } },
     { label: 'マスター音量', value: pct(s.masterVolume), change: (d) => s.set({ masterVolume: step(s.masterVolume, d) }) },
     { label: '効果音', value: pct(s.sfxVolume), change: (d) => s.set({ sfxVolume: step(s.sfxVolume, d) }) },
     { label: '音楽', value: pct(s.musicVolume), change: (d) => s.set({ musicVolume: step(s.musicVolume, d) }) },
@@ -59,7 +60,7 @@ export function SettingsScreen() {
         <div className="panel-title">SETTINGS <small>設定</small></div>
         <ul className="settings-list">
           {rows.map((r, i) => (
-            <li key={r.label} className={i === sel ? 'active' : ''} onMouseEnter={() => setSel(i)}>
+            <li key={r.label} className={i === sel ? 'active' : ''} {...hoverSelect(() => setSel(i))}>
               <div className="sl-label">
                 {r.label}
                 {r.note && <small>{r.note}</small>}

@@ -1,5 +1,21 @@
 import { clamp } from '../util/math';
 
+interface LoopConfig {
+  volume: number;
+  /** where each repeat starts (s): skip quiet intros */
+  loopFrom: number;
+  /** where the crossfade into the next repeat begins (s): before fade-outs */
+  loopAt?: number;
+  xfade: number;
+  fadeIn: number;
+}
+const DEFAULT_LOOP: LoopConfig = { volume: 0.6, loopFrom: 0, xfade: 3, fadeIn: 1.5 };
+/** Per-track loop points, measured from the delivered files' loudness envelopes. */
+const MUSIC: Record<string, Partial<LoopConfig>> = {
+  bgm_menu: { volume: 0.7, loopFrom: 0, loopAt: 149, xfade: 4 },
+  bgm_race: { volume: 0.5, loopFrom: 39, loopAt: 164.5, xfade: 1.5, fadeIn: 0.8 },
+};
+
 /** Synthesised engine/tyre/wind audio built with WebAudio nodes only. */
 export class EngineSound {
   private ctx: AudioContext;
@@ -289,61 +305,134 @@ export class AudioEngine {
     o.stop(t + dur + 0.02);
   }
 
+  /** Pace-note beeps before a bend: one for a medium corner, two for a tight one, three for a hairpin. */
+  cornerWarning(kind: 'hairpin' | 'tight' | 'medium') {
+    const n = kind === 'hairpin' ? 3 : kind === 'tight' ? 2 : 1;
+    const freq = kind === 'medium' ? 784 : 988;
+    const t0 = this.ctx.currentTime + 0.01;
+    for (let i = 0; i < n; i++) {
+      const t = t0 + i * 0.13;
+      const o = this.ctx.createOscillator();
+      o.type = 'square';
+      o.frequency.value = freq;
+      const lp = this.ctx.createBiquadFilter();
+      lp.type = 'lowpass';
+      lp.frequency.value = 2400;
+      const g = this.ctx.createGain();
+      g.gain.setValueAtTime(0, t);
+      g.gain.linearRampToValueAtTime(0.16, t + 0.008);
+      g.gain.setValueAtTime(0.16, t + 0.07);
+      g.gain.exponentialRampToValueAtTime(0.001, t + 0.11);
+      o.connect(lp).connect(g).connect(this.sfx);
+      o.start(t);
+      o.stop(t + 0.13);
+    }
+  }
+
   chime(notes: number[], spacing = 0.09) {
     notes.forEach((n, i) => setTimeout(() => this.beep(n, 0.35, 'triangle', 0.18), i * spacing * 1000));
   }
 
-  private tracks = new Map<string, AudioBuffer | null>();
-  private current: { name: string; src: AudioBufferSourceNode; gain: GainNode } | null = null;
+  private tracks = new Map<string, Promise<AudioBuffer | null>>();
+  private current: { name: string; voices: { src: AudioBufferSourceNode; gain: GainNode }[]; timer: number } | null = null;
 
-  /** Load an optional music file; resolves to null when it is not shipped. */
-  private async loadTrack(name: string): Promise<AudioBuffer | null> {
-    if (this.tracks.has(name)) return this.tracks.get(name)!;
-    let buf: AudioBuffer | null = null;
-    try {
-      const res = await fetch(`/audio/${name}.mp3`);
-      const type = res.headers.get('content-type') ?? '';
-      if (res.ok && !type.includes('text/html')) buf = await this.ctx.decodeAudioData(await res.arrayBuffer());
-    } catch {
-      buf = null;
+  /** Load an optional audio file from /audio; resolves to null when it is not shipped. */
+  private loadTrack(name: string): Promise<AudioBuffer | null> {
+    let p = this.tracks.get(name);
+    if (!p) {
+      p = (async () => {
+        try {
+          const res = await fetch(`/audio/${name}.mp3`);
+          const type = res.headers.get('content-type') ?? '';
+          if (!res.ok || type.includes('text/html')) return null;
+          return await this.ctx.decodeAudioData(await res.arrayBuffer());
+        } catch {
+          return null;
+        }
+      })();
+      this.tracks.set(name, p);
     }
-    this.tracks.set(name, buf);
-    return buf;
+    return p;
+  }
+
+  /** Warm the decode cache (call during loading screens). */
+  preload(...names: string[]) {
+    for (const n of names) void this.loadTrack(n);
   }
 
   /**
-   * Play a looping music track (crossfade). Falls back to the synthesised pad for
-   * the menu theme when no file is present; races are silent music-wise then.
+   * Play a looping music track. Instead of a hard loop, each pass crossfades into
+   * the next one at the track's loop point, which hides intros, fade-outs and MP3
+   * padding. Falls back to the synthesised pad for menus when no file exists.
    */
-  async playMusic(name: 'bgm_menu' | 'bgm_race' | null) {
+  async playMusic(name: string | null, fallback?: string) {
     if (this.current?.name === name) return;
-    const t = this.ctx.currentTime;
-    if (this.current) {
-      const old = this.current;
-      old.gain.gain.setTargetAtTime(0, t, 0.6);
-      setTimeout(() => old.src.stop(), 3000);
-      this.current = null;
-    }
-    if (!name) {
-      this.stopAmbient();
-      return;
-    }
-    const buf = await this.loadTrack(name);
+    this.stopMusic(1.2);
+    if (!name) return;
+    let buf = await this.loadTrack(name);
+    if (!buf && fallback) buf = await this.loadTrack(fallback);
+    if (this.current) return; // another track was requested meanwhile
     if (!buf) {
-      if (name === 'bgm_menu') this.startAmbient();
-      else this.stopAmbient();
+      if (name.startsWith('bgm_menu')) this.startAmbient();
       return;
     }
     this.stopAmbient();
+    const cfg = { ...DEFAULT_LOOP, ...(MUSIC[name] ?? (fallback ? MUSIC[fallback] : undefined) ?? {}) };
+    const loopAt = Math.min(cfg.loopAt ?? buf.duration - 3, buf.duration - cfg.xfade);
+    const state = { name, voices: [] as { src: AudioBufferSourceNode; gain: GainNode }[], timer: 0 };
+    this.current = state;
+    const voice = (when: number, offset: number, fadeIn: number) => {
+      const src = this.ctx.createBufferSource();
+      src.buffer = buf!;
+      const gain = this.ctx.createGain();
+      gain.gain.setValueAtTime(0, when);
+      gain.gain.linearRampToValueAtTime(cfg.volume, when + fadeIn);
+      src.connect(gain).connect(this.music);
+      src.start(when, offset);
+      state.voices.push({ src, gain });
+      // schedule the crossfade into the next pass
+      const passEnd = when + (loopAt - offset);
+      const lead = Math.max(0.1, passEnd - this.ctx.currentTime - 1.5);
+      state.timer = window.setTimeout(() => {
+        if (this.current !== state) return;
+        gain.gain.setValueAtTime(cfg.volume, passEnd);
+        gain.gain.linearRampToValueAtTime(0, passEnd + cfg.xfade);
+        src.stop(passEnd + cfg.xfade + 0.05);
+        state.voices = state.voices.filter((v) => v.src !== src);
+        voice(passEnd, cfg.loopFrom, cfg.xfade);
+      }, lead * 1000);
+    };
+    voice(this.ctx.currentTime + 0.05, 0, cfg.fadeIn);
+  }
+
+  stopMusic(fade = 1) {
+    const cur = this.current;
+    if (!cur) {
+      this.stopAmbient();
+      return;
+    }
+    this.current = null;
+    clearTimeout(cur.timer);
+    const t = this.ctx.currentTime;
+    for (const v of cur.voices) {
+      v.gain.gain.cancelScheduledValues(t);
+      v.gain.gain.setValueAtTime(v.gain.gain.value, t);
+      v.gain.gain.linearRampToValueAtTime(0, t + fade);
+      v.src.stop(t + fade + 0.05);
+    }
+  }
+
+  /** One-shot music sting (e.g. crossing the finish line). */
+  async playJingle(name: string, volume = 0.8) {
+    const buf = await this.loadTrack(name);
+    if (!buf) return false;
     const src = this.ctx.createBufferSource();
     src.buffer = buf;
-    src.loop = true;
-    const gain = this.ctx.createGain();
-    gain.gain.setValueAtTime(0, this.ctx.currentTime);
-    gain.gain.linearRampToValueAtTime(name === 'bgm_race' ? 0.55 : 0.7, this.ctx.currentTime + 1.5);
-    src.connect(gain).connect(this.music);
+    const g = this.ctx.createGain();
+    g.gain.value = volume;
+    src.connect(g).connect(this.music);
     src.start();
-    this.current = { name, src, gain };
+    return true;
   }
 
   /** Slow evolving pad for menus (no assets needed). */

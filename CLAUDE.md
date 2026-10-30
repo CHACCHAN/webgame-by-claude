@@ -27,8 +27,9 @@ running log of what is done, verified and pending. `docs/PLAN.md` holds the desi
   Docker Hub rate-limits: `/etc/docker/daemon.json` → `{"registry-mirrors":["https://mirror.gcr.io"]}`.
 - TLS is intercepted by a proxy: put its CA into `docker/certs/*.crt` (gitignored) before `docker compose build`
   (`cp /root/.ccr/ca-bundle.crt docker/certs/proxy-ca.crt`).
-- Asset sites (polyhaven, kenney, sketchfab, ambientcg, jsdelivr) are blocked; npm, packagist, pypi,
-  raw.githubusercontent.com and Ubuntu apt work. Hence procedural assets (see docs/ASSETS.md).
+- npm, packagist, pypi, raw.githubusercontent.com, Ubuntu apt and ambientcg.com (CC0 textures) work;
+  dl.polyhaven.org, kenney, sketchfab and jsdelivr are blocked. Most assets are procedural; photo textures
+  in `public/textures/` and owner-supplied images/music are listed in docs/ASSETS.md.
 - Headless Chromium renders WebGL with SwiftShader (~1–6 fps): use quality `low` for automated UI checks and
   the Node headless sim for driving/physics checks. Never `pkill -f` a pattern contained in your own command line.
 
@@ -36,6 +37,8 @@ running log of what is done, verified and pending. `docs/PLAN.md` holds the desi
 - Cars load from `frontend/public/models/cars/*.glb` at runtime. After editing `CarModel.ts`, rebuild and run
   `npm run assets:cars` (with `vite preview` on :4173 and `PW_MODULE=<path to playwright>`), or delete the GLBs
   to fall back to the procedural builder.
+- Courses live in `track/courses.ts` (design + `Landform` from `track/landforms.ts` + rivals, medals, music, art).
+  After changing a course design, regenerate the CPU ghosts (`npm run seed:bots`) and re-check medals with the sim.
 - Race timing/splits/AI run per physics step (`Game.raceStep`, `driveAI`); keep frame-time logic out of timing.
 
 ## Conventions

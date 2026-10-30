@@ -1,13 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import { useApp } from '../../store/app';
-import { useMenuInput } from '../useMenuInput';
+import { useMenuInput, hoverSelect } from '../useMenuInput';
 import { gameHolder } from '../GameCanvas';
 import { api, loadLocalBest, loadPlayer, saveCarBest, saveLocalBest, type SubmitResult } from '../../api/client';
 import { MEDAL_LABEL, medalFor } from '../../game/race/medals';
 import { encodeGhost, type EncodedGhost } from '../../game/race/Ghost';
 import type { RaceResult } from '../../game/Game';
 import { CAR_SPECS } from '../../game/vehicle/carSpecs';
-import { AI_PROFILES } from '../../game/ai/AIDriver';
+import { COURSES } from '../../game/track/courses';
 import { formatTime } from '../format';
 import { startRaceFromState } from './Menus';
 import { sfx } from '../sfx';
@@ -42,18 +42,18 @@ export function ResultsScreen() {
       return;
     }
     encoded.current = encodeGhost(result.ghost);
-    const prevCarBest = saveCarBest(result.carId, result.timeMs);
-    const before = prevCarBest === null ? null : medalFor(result.carId, prevCarBest);
-    const now = medalFor(result.carId, result.timeMs);
+    const prevCarBest = saveCarBest(result.trackId, result.carId, result.timeMs);
+    const before = prevCarBest === null ? null : medalFor(result.trackId, result.carId, prevCarBest);
+    const now = medalFor(result.trackId, result.carId, result.timeMs);
     const rank = { gold: 3, silver: 2, bronze: 1 } as const;
     medalNew.set(result, !!now && (before === null || rank[now] > rank[before]));
-    const prev = loadLocalBest();
+    const prev = loadLocalBest(result.trackId);
     const isNew = !prev || result.timeMs < prev.timeMs;
     setLocalPB({ isNew, prev: prev?.timeMs ?? null });
     memo.set(result, { submit: { kind: 'idle' }, localPB: { isNew, prev: prev?.timeMs ?? null }, encoded: encoded.current });
     if (isNew) {
       void encoded.current.then((ghost) =>
-        saveLocalBest({ carId: result.carId, timeMs: result.timeMs, splits: result.splitsMs, ghost, date: new Date().toISOString() }),
+        saveLocalBest(result.trackId, { carId: result.carId, timeMs: result.timeMs, splits: result.splitsMs, ghost, date: new Date().toISOString() }),
       );
     }
     if (loadPlayer()) void send(loadPlayer()!.name);
@@ -68,6 +68,7 @@ export function ResultsScreen() {
       const player = await api.ensurePlayer(playerName.trim() || '名無しの走り屋');
       const ghost = await encoded.current!;
       const res = await api.submitRun(player, {
+        track_id: result.trackId,
         car_id: result.carId,
         mode: result.mode,
         time_ms: result.timeMs,
@@ -116,14 +117,14 @@ export function ResultsScreen() {
             <div className="verdict finish">FINISH</div>
           )}
           <div className="results-sub">
-            朧峠ダウンヒル ・ {CAR_SPECS[result.carId].name}
-            {result.rivalLevel && ` ・ VS ${AI_PROFILES[result.rivalLevel].name}`}
+            {COURSES[result.trackId].name} ・ {CAR_SPECS[result.carId].name}
+            {result.rivalLevel && ` ・ VS ${COURSES[result.trackId].rivals[result.rivalLevel].name}`}
           </div>
         </div>
         <div className="results-time">{formatTime(result.timeMs)}</div>
-        {medalFor(result.carId, result.timeMs) && (
-          <div className={`medal medal-${medalFor(result.carId, result.timeMs)}`}>
-            ● {MEDAL_LABEL[medalFor(result.carId, result.timeMs)!]}
+        {medalFor(result.trackId, result.carId, result.timeMs) && (
+          <div className={`medal medal-${medalFor(result.trackId, result.carId, result.timeMs)}`}>
+            ● {MEDAL_LABEL[medalFor(result.trackId, result.carId, result.timeMs)!]}
             {medalNew.get(result) && <em> 獲得！</em>}
           </div>
         )}
@@ -180,7 +181,7 @@ export function ResultsScreen() {
         </div>
         <div className="results-actions">
           {actions.map((a, i) => (
-            <button key={a.label} className={`cta small ${i === sel ? 'focus' : ''}`} onMouseEnter={() => setSel(i)} onClick={() => { sfx.confirm(); a.action(); }}>
+            <button key={a.label} className={`cta small ${i === sel ? 'focus' : ''}`} {...hoverSelect(() => setSel(i))} onClick={() => { sfx.confirm(); a.action(); }}>
               {a.label}
             </button>
           ))}

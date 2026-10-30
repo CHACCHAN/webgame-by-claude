@@ -2,8 +2,9 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { Track } from '../track/Track';
 import type { TerrainData, HeightGrid } from '../track/terrain';
+import type { Landform } from '../track/landforms';
 import { buildRoadGeometry, classifySides, SHOULDER } from '../track/roadGeometry';
-import { clamp, fbm, noise2, rng, smoothstep } from '../util/math';
+import { clamp, fbm, lerp, noise2, rng, smoothstep } from '../util/math';
 import {
   makeAsphaltNormal,
   makeConcreteTexture,
@@ -13,6 +14,8 @@ import {
   makeSignTexture,
   makeVendingTexture,
 } from './textures';
+import { surfaceImage as photoImage, surfaceTexture as photoTexture, type SurfaceName } from './surfaceTextures';
+import { findCorners } from '../track/corners';
 
 export interface Lamp {
   position: THREE.Vector3;
@@ -38,6 +41,7 @@ const LED = new THREE.Color('#e4ecff');
 export interface SceneryQuality {
   treeDensity: number;
   shadows: boolean;
+  photoTextures: boolean;
 }
 
 /** Builds every static mesh along and around the course. */
@@ -46,17 +50,25 @@ export function buildScenery(track: Track, terrain: TerrainData, quality: Scener
   group.name = 'scenery';
   const sides = classifySides(track, terrain);
   const nightEmissive: THREE.MeshStandardMaterial[] = [];
+  const surfaceImage = (n: SurfaceName) => (quality.photoTextures ? photoImage(n) : null);
+  const surfaceTexture = (n: SurfaceName, srgb: boolean) => (quality.photoTextures ? photoTexture(n, srgb) : null);
 
   // ------------------------------------------------------------------ road
-  const roadTex = makeRoadTexture();
+  // scanned asphalt when available (normal/roughness at full resolution, 2.7 m tiles)
+  const roadTex = makeRoadTexture(surfaceImage('asphalt_albedo'));
   roadTex.repeat.set(1, 1 / 8);
-  const asphaltN = makeAsphaltNormal();
-  asphaltN.repeat.set(3, 1 / 2.4);
+  const photoN = surfaceTexture('asphalt_normal', false);
+  const asphaltN = photoN ?? makeAsphaltNormal();
+  if (photoN) asphaltN.repeat.set(4, 3 / 8);
+  else asphaltN.repeat.set(3, 1 / 2.4);
+  const asphaltR = surfaceTexture('asphalt_rough', false);
+  asphaltR?.repeat.copy(asphaltN.repeat);
   const roadMaterial = new THREE.MeshStandardMaterial({
     map: roadTex,
     normalMap: asphaltN,
-    normalScale: new THREE.Vector2(0.6, 0.6),
-    roughness: 0.78,
+    normalScale: new THREE.Vector2(photoN ? 1 : 0.6, photoN ? 1 : 0.6),
+    roughnessMap: asphaltR,
+    roughness: asphaltR ? 1 : 0.78,
     metalness: 0.0,
     envMapIntensity: 0.6,
   });
@@ -66,8 +78,8 @@ export function buildScenery(track: Track, terrain: TerrainData, quality: Scener
   group.add(road);
 
   // --------------------------------------------------------------- terrain
-  const detail = makeGroundDetail();
-  const groundN = makeGroundNormal();
+  const detail = surfaceTexture('ground_detail', true) ?? makeGroundDetail();
+  const groundN = surfaceTexture('ground_normal', false) ?? makeGroundNormal();
   const terrainMat = new THREE.MeshStandardMaterial({
     vertexColors: true,
     map: detail,
@@ -90,9 +102,11 @@ export function buildScenery(track: Track, terrain: TerrainData, quality: Scener
   // ------------------------------------------------------- roadside items
   const steel = new THREE.MeshStandardMaterial({ color: '#e9ebe8', metalness: 0.55, roughness: 0.38, side: THREE.DoubleSide });
   const postMat = new THREE.MeshStandardMaterial({ color: '#c9ccc8', metalness: 0.5, roughness: 0.45 });
-  const concreteMat = new THREE.MeshStandardMaterial({ map: makeConcreteTexture(false), roughness: 0.9 });
-  const latticeTex = makeConcreteTexture(true);
-  const latticeMat = new THREE.MeshStandardMaterial({ map: latticeTex, roughness: 0.92, side: THREE.DoubleSide });
+  const concretePhoto = surfaceImage('concrete_albedo');
+  const concreteN = surfaceTexture('concrete_normal', false);
+  const concreteMat = new THREE.MeshStandardMaterial({ map: makeConcreteTexture(false, concretePhoto), normalMap: concreteN, roughness: 0.9 });
+  const latticeTex = makeConcreteTexture(true, concretePhoto);
+  const latticeMat = new THREE.MeshStandardMaterial({ map: latticeTex, normalMap: concreteN, roughness: 0.92, side: THREE.DoubleSide });
 
   const railGeos: THREE.BufferGeometry[] = [];
   const curbGeos: THREE.BufferGeometry[] = [];
@@ -186,7 +200,9 @@ export function buildScenery(track: Track, terrain: TerrainData, quality: Scener
   // ------------------------------------------------------------- trees
   const trees = buildTrees(terrain, quality.treeDensity);
   group.add(trees);
-  group.add(buildClutter(track, terrain, quality.treeDensity));
+  group.add(buildClutter(track, terrain, quality.treeDensity, surfaceTexture));
+  const turbines = buildTurbines(terrain);
+  group.add(turbines.group);
 
   return {
     group,
@@ -194,8 +210,9 @@ export function buildScenery(track: Track, terrain: TerrainData, quality: Scener
     roadMaterial,
     nightEmissive,
     lightmapMats,
-    update(_time, cameraPos) {
+    update(time, cameraPos) {
       updateTreeLods(trees, cameraPos);
+      for (const r of turbines.rotors) r.rotation.z = time * 0.9 + r.userData.phase;
     },
   };
 }
@@ -300,6 +317,7 @@ function gridGeometry(g: HeightGrid, terrain: TerrainData, near: boolean) {
   const grass = new THREE.Color('#2f4a22'), forest = new THREE.Color('#1c2e17'), rock = new THREE.Color('#4f4c47');
   const soil = new THREE.Color('#3b3a2c'), urban = new THREE.Color('#2b2b29'), sand = new THREE.Color('#8a7d63');
   const seabed = new THREE.Color('#1b2a2c'), cut = new THREE.Color('#5a5850'), gravel = new THREE.Color('#57544e');
+  const meadow = new THREE.Color('#5d6b35');
   for (let vi = 0; vi < nx * nz; vi++) {
     const x = pos.getX(vi), y = pos.getY(vi), z = pos.getZ(vi);
     const ny = nor.getY(vi);
@@ -313,10 +331,13 @@ function gridGeometry(g: HeightGrid, terrain: TerrainData, near: boolean) {
       c.lerp(cut, smoothstep(30, 8, d) * smoothstep(0.9, 0.6, ny) * 0.8);
       c.lerp(gravel, smoothstep(8.5, 6.5, d) * 0.85);
     }
-    const coast = terrain.coastZ(x);
-    c.lerp(urban, smoothstep(1050, 1300, z) * smoothstep(coast + 20, coast - 60, z));
-    c.lerp(sand, smoothstep(2.5, 0.5, y) * smoothstep(1200, 1500, z));
-    c.lerp(seabed, smoothstep(-0.5, -4, y));
+    const lf = terrain.landform;
+    c.lerp(meadow, smoothstep(lf.treeLine - 25, lf.treeLine + 35, y) * (1 - steep) * 0.85);
+    c.lerp(urban, cityWeight(lf, x, z) * 0.9);
+    if (lf.waterLevel !== null) {
+      c.lerp(sand, smoothstep(lf.waterLevel + 2.5, lf.waterLevel + 0.5, y) * 0.8);
+      c.lerp(seabed, smoothstep(lf.waterLevel - 0.5, lf.waterLevel - 4, y));
+    }
     colors[vi * 3] = c.r;
     colors[vi * 3 + 1] = c.g;
     colors[vi * 3 + 2] = c.b;
@@ -615,16 +636,14 @@ function buildSigns(track: Track, sides: ReturnType<typeof classifySides>, group
     group.add(plate);
   };
 
-  // chevrons on the outside of tight corners
-  for (let i = 30; i < track.count - 30; i++) {
-    const k = track.curvature[i];
-    if (Math.abs(k) < 1 / 40) continue;
-    if (Math.abs(k) < Math.abs(track.curvature[i - 1]) || Math.abs(k) < Math.abs(track.curvature[i + 1])) continue;
-    const outside = k > 0 ? 1 : -1;
-    for (const o of [-14, -6, 2]) signAt(i + o, outside, k > 0 ? mats.chevronL : mats.chevronR, 0.75, 0.9, outside * 0.5);
-    // warning sign before the corner
-    signAt(i - 70, -outside, mats.hairpin, 0.8, 1.8);
-    if (Math.abs(k) > 1 / 30) signAt(i - 95, -outside, mats.speed, 0.7, 1.8);
+  // one sign group per tight bend: chevrons along the outside, warning and speed signs before the entry
+  for (const c of findCorners(track, 40)) {
+    if (c.start < 30 || c.end > track.count - 30) continue;
+    const outside = c.dir;
+    const n = clamp(Math.round((c.end - c.start) / 10), 2, 7);
+    for (let m = 0; m < n; m++) signAt(lerp(c.start, c.end, (m + 0.5) / n), outside, c.dir > 0 ? mats.chevronL : mats.chevronR, 0.75, 0.9, outside * 0.5);
+    signAt(c.start - 45, -outside, mats.hairpin, 0.8, 1.8);
+    if (c.minRadius < 30) signAt(c.start - 65, -outside, mats.speed, 0.7, 1.8);
   }
   // pass name board at the summit
   signAt(18, sides.right.valley[18] ? -1 : 1, mats.kanban, 1.6, 1.4);
@@ -701,6 +720,19 @@ function buildSigns(track: Track, sides: ReturnType<typeof classifySides>, group
 }
 
 /** Japanese cedar style conifers, instanced in spatial chunks for culling. */
+/** 0..1 how much (x, z) lies inside one of the landform's towns. */
+function cityWeight(lf: Landform, x: number, z: number) {
+  let w = 0;
+  for (const c of lf.cities) {
+    const ca = Math.cos(c.angle), sa = Math.sin(c.angle);
+    const dx = x - c.x, dz = z - c.z;
+    const ax = dx * ca + dz * sa, az = -dx * sa + dz * ca;
+    const d = Math.sqrt((ax / c.rx) ** 2 + (az / c.rz) ** 2);
+    w = Math.max(w, smoothstep(1.05, 0.8, d));
+  }
+  return w;
+}
+
 function buildTrees(terrain: TerrainData, density: number) {
   const group = new THREE.Group();
   group.name = 'trees';
@@ -710,9 +742,13 @@ function buildTrees(terrain: TerrainData, density: number) {
   const CHUNK = 320;
   const chunks = new Map<string, THREE.Matrix4[]>();
   const colors = new Map<string, THREE.Color[]>();
+  const lf = terrain.landform;
   const add = (x: number, z: number, scale: number) => {
     const y = terrain.heightAt(x, z);
-    if (y < 3) return;
+    if (lf.waterLevel !== null && y < lf.waterLevel + 3) return;
+    // thinning out towards the tree line, none above it
+    if (y > lf.treeLine + noise2(x / 90, z / 90) * 40) return;
+    if (lf.relief(x, z) < 0.25 || cityWeight(lf, x, z) > 0.2) return;
     // slope check
     const dx = terrain.heightAt(x + 3, z) - terrain.heightAt(x - 3, z);
     const dz = terrain.heightAt(x, z + 3) - terrain.heightAt(x, z - 3);
@@ -741,13 +777,12 @@ function buildTrees(terrain: TerrainData, density: number) {
     // clearings via noise; denser near the road for that tunnel-of-trees feeling
     const n = noise2(x / 140, z / 140);
     if (n < -0.25 && d > 40) continue;
-    if (z > 1100) continue;
     add(x, z, (8 + r() * 9) / 14);
   }
   // far mountains
   const farCount = Math.round(9000 * density);
   for (let k = 0; k < farCount; k++) {
-    const x = -2500 + r() * 6500, z = -2600 + r() * 3800;
+    const x = g.x0 - 2200 + r() * (x1 - g.x0 + 4400), z = g.z0 - 2200 + r() * (z1 - g.z0 + 4400);
     if (x > g.x0 && x < x1 && z > g.z0 && z < z1) continue;
     if (noise2(x / 300, z / 300) < -0.2) continue;
     add(x, z, (12 + r() * 10) / 14);
@@ -836,7 +871,12 @@ function treeGeometry() {
 }
 
 /** Bushes and rocks scattered along the road for a less sterile roadside. */
-function buildClutter(track: Track, terrain: TerrainData, density: number) {
+function buildClutter(
+  track: Track,
+  terrain: TerrainData,
+  density: number,
+  surfaceTexture: (n: SurfaceName, srgb: boolean) => THREE.Texture | null,
+) {
   const group = new THREE.Group();
   group.name = 'clutter';
   const r = rng(77);
@@ -852,7 +892,14 @@ function buildClutter(track: Track, terrain: TerrainData, density: number) {
   for (let i = 0; i < rp.count; i++) rp.setY(i, rp.getY(i) * 0.6);
   rockGeo.computeVertexNormals();
   const bushMat = new THREE.MeshStandardMaterial({ color: '#2c4422', roughness: 0.95, flatShading: true });
-  const rockMat = new THREE.MeshStandardMaterial({ color: '#6b665e', roughness: 0.9, flatShading: true });
+  const rockAlbedo = surfaceTexture('rock_albedo', true);
+  const rockMat = new THREE.MeshStandardMaterial({
+    color: rockAlbedo ? '#ffffff' : '#6b665e',
+    map: rockAlbedo,
+    normalMap: surfaceTexture('rock_normal', false),
+    roughness: 0.9,
+    flatShading: true,
+  });
   const bushes: THREE.Matrix4[] = [], rocks: THREE.Matrix4[] = [];
   const bushCol: THREE.Color[] = [];
   const p = new THREE.Vector3();
@@ -893,4 +940,40 @@ function buildClutter(track: Track, terrain: TerrainData, density: number) {
   rockMesh.computeBoundingSphere();
   group.add(bushMesh, rockMesh);
   return group;
+}
+
+/** Wind turbines on the skyline ridge (rotors animate in Scenery.update). */
+function buildTurbines(terrain: TerrainData) {
+  const group = new THREE.Group();
+  group.name = 'turbines';
+  const rotors: THREE.Object3D[] = [];
+  const mat = new THREE.MeshStandardMaterial({ color: '#d9dde2', roughness: 0.55, metalness: 0.2 });
+  const towerGeo = new THREE.CylinderGeometry(1.1, 2.0, 60, 12).translate(0, 30, 0);
+  const nacelleGeo = new THREE.BoxGeometry(2.4, 2.4, 7).translate(0, 0, -1.5);
+  const bladeGeo = new THREE.BoxGeometry(0.8, 26, 0.25).translate(0, 13.5, 0);
+  for (const [x, z] of terrain.landform.features.turbines ?? []) {
+    if (terrain.roadDistAt(x, z) < 45) continue;
+    const y = terrain.heightAt(x, z) - 1;
+    const t = new THREE.Group();
+    t.position.set(x, y, z);
+    t.rotation.y = 0.6;
+    const tower = new THREE.Mesh(towerGeo, mat);
+    tower.castShadow = true;
+    t.add(tower);
+    const nacelle = new THREE.Mesh(nacelleGeo, mat);
+    nacelle.position.y = 61;
+    t.add(nacelle);
+    const rotor = new THREE.Group();
+    rotor.position.set(0, 61, 2.4);
+    rotor.userData.phase = Math.random() * 6;
+    for (let k = 0; k < 3; k++) {
+      const b = new THREE.Mesh(bladeGeo, mat);
+      b.rotation.z = (k / 3) * Math.PI * 2;
+      rotor.add(b);
+    }
+    t.add(rotor);
+    rotors.push(rotor);
+    group.add(t);
+  }
+  return { group, rotors };
 }

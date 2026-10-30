@@ -3,6 +3,7 @@ import { persist } from 'zustand/middleware';
 import type { TimeOfDay } from '../game/render/Environment';
 import type { AssistLevel } from '../game/vehicle/VehicleSim';
 import type { QualitySettings } from '../game/Game';
+import { COURSES, DEFAULT_COURSE, type CourseId } from '../game/track/courses';
 
 export type QualityLevel = 'low' | 'medium' | 'high' | 'ultra';
 
@@ -16,7 +17,9 @@ export interface Settings {
   assist: AssistLevel;
   autoShift: boolean;
   showGhost: boolean;
+  cornerGuide: boolean;
   showFps: boolean;
+  courseId: CourseId;
   set: (patch: Partial<Omit<Settings, 'set'>>) => void;
 }
 
@@ -32,7 +35,9 @@ export const useSettings = create<Settings>()(
       assist: 1,
       autoShift: true,
       showGhost: true,
+      cornerGuide: true,
       showFps: false,
+      courseId: DEFAULT_COURSE,
       set: (patch) => set(patch),
     }),
     { name: 'touge-settings', version: 1 },
@@ -44,16 +49,24 @@ export interface QualityProfile extends QualitySettings {
   bloom: boolean;
   smaa: boolean;
   extraFx: boolean;
+  /** scanned asphalt/ground/rock/concrete textures (procedural fallbacks when off) */
+  photoTextures: boolean;
 }
 
 export function qualityProfile(level: QualityLevel, scale: number): QualityProfile {
   const dpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
   const base: Record<QualityLevel, QualityProfile> = {
-    low: { pixelRatio: 0.75, shadows: false, shadowMapSize: 1024, treeDensity: 0.45, headlightShadows: false, bloom: false, smaa: false, extraFx: false },
-    medium: { pixelRatio: 1, shadows: true, shadowMapSize: 1024, treeDensity: 0.7, headlightShadows: false, bloom: true, smaa: true, extraFx: false },
-    high: { pixelRatio: Math.min(dpr, 1.5), shadows: true, shadowMapSize: 2048, treeDensity: 1, headlightShadows: true, bloom: true, smaa: true, extraFx: true },
-    ultra: { pixelRatio: Math.min(dpr, 2), shadows: true, shadowMapSize: 4096, treeDensity: 1.35, headlightShadows: true, bloom: true, smaa: true, extraFx: true },
+    low: { pixelRatio: 0.75, shadows: false, shadowMapSize: 1024, treeDensity: 0.45, headlightShadows: false, bloom: false, smaa: false, extraFx: false, photoTextures: false },
+    medium: { pixelRatio: 1, shadows: true, shadowMapSize: 1024, treeDensity: 0.7, headlightShadows: false, bloom: true, smaa: true, extraFx: false, photoTextures: true },
+    high: { pixelRatio: Math.min(dpr, 1.5), shadows: true, shadowMapSize: 2048, treeDensity: 1, headlightShadows: true, bloom: true, smaa: true, extraFx: true, photoTextures: true },
+    ultra: { pixelRatio: Math.min(dpr, 2), shadows: true, shadowMapSize: 4096, treeDensity: 1.35, headlightShadows: true, bloom: true, smaa: true, extraFx: true, photoTextures: true },
   };
   const p = base[level];
   return { ...p, pixelRatio: p.pixelRatio * scale };
+}
+
+/** The selected course, falling back to the default for unknown stored ids. */
+export function currentCourseId(): CourseId {
+  const id = useSettings.getState().courseId;
+  return id in COURSES ? id : DEFAULT_COURSE;
 }

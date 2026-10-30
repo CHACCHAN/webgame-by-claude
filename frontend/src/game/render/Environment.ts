@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import type { TerrainData } from '../track/terrain';
-import { fbm, rng, smoothstep } from '../util/math';
+import { rng } from '../util/math';
 import { makeGlowTexture } from './textures';
 
 export type TimeOfDay = 'night' | 'rain' | 'dawn';
@@ -121,7 +121,7 @@ void main() {
 }`;
 
 const skyFrag = /* glsl */ `
-uniform vec3 uZenith, uHorizon, uGlow, uCloudColor, uKeyDir, uKeyColor, uCityDir;
+uniform vec3 uZenith, uHorizon, uGlow, uCloudColor, uKeyDir, uKeyColor, uCityDir, uGround;
 uniform float uCityGlow, uStars, uTime, uClouds, uIsSun, uDisc, uOvercast;
 varying vec3 vDir;
 float hash(vec3 p) { p = fract(p * 0.3183099 + 0.1); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
@@ -140,7 +140,8 @@ void main() {
   // light pollution from the city below
   vec3 flatDir = normalize(vec3(d.x, 0.0, d.z) + 1e-5);
   float cityA = max(dot(flatDir, uCityDir), 0.0);
-  col += uGlow * pow(cityA, 2.5) * exp(-max(h + 0.02, 0.0) * 10.0) * uCityGlow;
+  // strongest right at the horizon line, fading both upwards and below it (seen past the terrain edge)
+  col += uGlow * pow(cityA, 2.5) * exp(-max(h + 0.02, 0.0) * 10.0) * smoothstep(-0.16, -0.02, h) * uCityGlow;
   // key light glow (sun at dawn) and disc (moon/sun)
   float kd = max(dot(d, uKeyDir), 0.0);
   col += uKeyColor * (pow(kd, 8.0) * 0.25 + pow(kd, 64.0) * 0.5) * (0.15 + uIsSun * 0.85);
@@ -171,6 +172,8 @@ void main() {
     float lit = 0.5 + 0.5 * pow(kd, 4.0);
     col = mix(col, uCloudColor * lit, c * uClouds * smoothstep(0.0, 0.18, h));
   }
+  // below the horizon the dome stands in for distant, fogged ground (past the edge of the terrain)
+  col = mix(col, uGround, smoothstep(-0.004, -0.03, h));
   gl_FragColor = vec4(col, 1.0);
   #include <tonemapping_fragment>
   #include <colorspace_fragment>
@@ -190,11 +193,15 @@ export interface EnvironmentRig {
   apply(tod: TimeOfDay, scene: THREE.Scene, renderer: THREE.WebGLRenderer): void;
   update(time: number, focus: THREE.Vector3): void;
   buildEnvMap(renderer: THREE.WebGLRenderer): THREE.Texture;
+  /** frees the reflection environment's render target */
+  dispose(): void;
 }
 
 export function buildEnvironment(terrain: TerrainData): EnvironmentRig {
   const group = new THREE.Group();
   group.name = 'environment';
+
+  let envRT: THREE.WebGLRenderTarget | null = null;
 
   // ---- sky dome
   const skyUniforms: Record<string, THREE.IUniform> = {
@@ -204,8 +211,9 @@ export function buildEnvironment(terrain: TerrainData): EnvironmentRig {
     uCloudColor: { value: new THREE.Color() },
     uKeyDir: { value: new THREE.Vector3() },
     uKeyColor: { value: new THREE.Color() },
-    uCityDir: { value: new THREE.Vector3(0.1, 0, 1).normalize() },
+    uCityDir: { value: new THREE.Vector3(...terrain.landform.cityGlowDir).normalize() },
     uCityGlow: { value: 1 },
+    uGround: { value: new THREE.Color() },
     uStars: { value: 1 },
     uTime: { value: 0 },
     uClouds: { value: 0.4 },
@@ -241,7 +249,6 @@ export function buildEnvironment(terrain: TerrainData): EnvironmentRig {
 
   // ---- sea
   const seaNormal = makeWaveNormal();
-  seaNormal.repeat.set(220, 220);
   const seaMat = new THREE.MeshStandardMaterial({
     color: '#04101c',
     roughness: 0.12,
@@ -250,14 +257,29 @@ export function buildEnvironment(terrain: TerrainData): EnvironmentRig {
     normalScale: new THREE.Vector2(0.35, 0.35),
     envMapIntensity: 1.2,
   });
-  const sea = new THREE.Mesh(new THREE.PlaneGeometry(26000, 16000).rotateX(-Math.PI / 2), seaMat);
-  sea.position.set(900, 0.2, 7000);
+  const lf = terrain.landform;
+  const wdef = lf.water ?? { x: 0, z: 0, w: 1, d: 1 };
+  const sea = new THREE.Mesh(new THREE.PlaneGeometry(wdef.w, wdef.d).rotateX(-Math.PI / 2), seaMat);
+  sea.position.set(wdef.x, (lf.waterLevel ?? -1000) + 0.2, wdef.z);
+  sea.visible = lf.waterLevel !== null;
+  seaNormal.repeat.set(wdef.w / 28, wdef.d / 28);
   sea.receiveShadow = false;
   group.add(sea);
 
+  // ---- ground skirt: a fogged plane just under the lowest terrain so the sky never shows below the
+  // horizon past the edge of the far terrain grid (dry and lake landscapes; the bay has its sea)
+  const far = terrain.far;
+  let lowest = Infinity;
+  for (let k = 0; k < far.heights.length; k++) lowest = Math.min(lowest, far.heights[k]);
+  const skirtMat = new THREE.MeshBasicMaterial({ color: '#000000', fog: true });
+  const skirt = new THREE.Mesh(new THREE.PlaneGeometry(80000, 80000).rotateX(-Math.PI / 2), skirtMat);
+  skirt.position.set(far.x0 + (far.nx * far.cell) / 2, lowest - 4, far.z0 + (far.nz * far.cell) / 2);
+  skirt.visible = !lf.water || lf.water.w < 20000;
+  group.add(skirt);
+
   // ---- sea of clouds (dawn): a coarse heightmap lets the layer thin out softly where
   // the mountainside rises into it instead of cutting hard lines across the slopes
-  const HM = 256, hx0 = -4800, hz0 = -4200, hSpan = 11200;
+  const HM = 256, hx0 = terrain.far.x0, hz0 = terrain.far.z0, hSpan = Math.max(terrain.far.nx, terrain.far.nz) * terrain.far.cell;
   const hData = new Float32Array(HM * HM);
   for (let j = 0; j < HM; j++)
     for (let i = 0; i < HM; i++) hData[j * HM + i] = terrain.heightAt(hx0 + (i / (HM - 1)) * hSpan, hz0 + (j / (HM - 1)) * hSpan);
@@ -277,7 +299,7 @@ export function buildEnvironment(terrain: TerrainData): EnvironmentRig {
       {
         uTime: { value: 0 }, uColor: { value: new THREE.Color('#fff0e6') }, uShade: { value: new THREE.Color('#8a90a8') },
         uSun: { value: new THREE.Vector3() }, uOpacity: { value: 1 },
-        uHeight: { value: heightTex }, uHeightBox: { value: new THREE.Vector3(hx0, hz0, hSpan) }, uLayer: { value: 150 },
+        uHeight: { value: heightTex }, uHeightBox: { value: new THREE.Vector3(hx0, hz0, hSpan) }, uLayer: { value: lf.cloudLevel },
       },
     ]),
     vertexShader: /* glsl */ `
@@ -317,7 +339,7 @@ export function buildEnvironment(terrain: TerrainData): EnvironmentRig {
       }`,
   });
   const cloudSea = new THREE.Mesh(new THREE.PlaneGeometry(30000, 30000, 1, 1).rotateX(-Math.PI / 2), cloudMat);
-  cloudSea.position.set(900, 150, 3000);
+  cloudSea.position.set(terrain.near.x0 + (terrain.near.nx * terrain.near.cell) / 2, lf.cloudLevel, terrain.near.z0 + (terrain.near.nz * terrain.near.cell) / 2);
   cloudSea.renderOrder = 2;
   group.add(cloudSea);
 
@@ -337,12 +359,13 @@ export function buildEnvironment(terrain: TerrainData): EnvironmentRig {
     cloudSea,
     preset: PRESETS.night,
     apply(tod, scene, renderer) {
-      const p = PRESETS[tod];
+      const p = { ...PRESETS[tod] };
+      if (tod !== 'dawn') p.keyDir = new THREE.Vector3(...lf.moonDir).normalize();
       rig.preset = p;
       skyUniforms.uZenith.value.set(p.zenith);
       skyUniforms.uHorizon.value.set(p.horizon);
       skyUniforms.uGlow.value.set(p.glow);
-      skyUniforms.uCityGlow.value = p.cityGlow;
+      skyUniforms.uCityGlow.value = p.cityGlow * (lf.cityGlow ?? 1);
       skyUniforms.uStars.value = p.stars;
       skyUniforms.uClouds.value = p.clouds;
       skyUniforms.uCloudColor.value.set(p.cloudColor);
@@ -357,6 +380,8 @@ export function buildEnvironment(terrain: TerrainData): EnvironmentRig {
       hemi.groundColor.set(p.hemiGround);
       hemi.intensity = p.hemiIntensity;
       fog.color.set(p.fog);
+      skirtMat.color.set(p.fog);
+      skyUniforms.uGround.value.set(p.fog);
       fog.density = p.fogDensity;
       scene.fog = fog;
       renderer.toneMappingExposure = p.exposure;
@@ -396,7 +421,19 @@ export function buildEnvironment(terrain: TerrainData): EnvironmentRig {
       const pmrem = new THREE.PMREMGenerator(renderer);
       const rt = pmrem.fromScene(envScene, 0.02, 1, 12000);
       pmrem.dispose();
+      envScene.traverse((o) => {
+        if (o === skyClone || !(o as THREE.Mesh).isMesh) return;
+        (o as THREE.Mesh).geometry.dispose();
+      });
+      lampMat.dispose();
+      (ground.material as THREE.Material).dispose();
+      envRT?.dispose();
+      envRT = rt;
       return rt.texture;
+    },
+    dispose() {
+      envRT?.dispose();
+      envRT = null;
     },
   };
   return rig;
@@ -433,6 +470,7 @@ function makeWaveNormal() {
 
 /** Thousands of glowing points: streets, homes, downtown towers, harbour, traffic. */
 function buildCityLights(terrain: TerrainData) {
+  const lf = terrain.landform;
   const r = rng(99);
   const pos: number[] = [], col: number[] = [], size: number[] = [], anim: number[] = [];
   const c = new THREE.Color();
@@ -444,63 +482,77 @@ function buildCityLights(terrain: TerrainData) {
   };
   const sodium = new THREE.Color('#ff9a3c'), warm = new THREE.Color('#ffd29a'), cool = new THREE.Color('#d6e6ff');
   const green = new THREE.Color('#9dffc8'), red = new THREE.Color('#ff2a1a'), neon = [new THREE.Color('#ff4fb0'), new THREE.Color('#4fd0ff'), new THREE.Color('#ffe14f')];
-  const centerX = 900, centerZ = 1650;
-  const ground = (x: number, z: number) => Math.max(terrain.heightAt(x, z), 0.5) + 1.5;
-  // street grid (slightly rotated)
-  const ang = 0.18;
-  const ca = Math.cos(ang), sa = Math.sin(ang);
-  for (let gx = -2400; gx <= 2600; gx += 110) {
-    for (let t = -900; t <= 1100; t += 16) {
-      for (const [ax, az] of [[gx, t], [t * 2.2, gx * 0.45]] as const) {
-        const x = centerX + ax * ca - az * sa, z = centerZ + ax * sa + az * ca;
-        if (z < 1150 || z > terrain.coastZ(x) - 15) continue;
-        if (r() < 0.15) continue;
-        push(x, ground(x, z), z, sodium, 2.6);
+  const water = lf.waterLevel;
+  const ground = (x: number, z: number) => Math.max(terrain.heightAt(x, z), water ?? -1e9) + 1.5;
+  const dry = (x: number, z: number) => water === null || terrain.heightAt(x, z) > water + 1.2;
+  // keep lights off steep mountainsides
+  const flat = (x: number, z: number) =>
+    Math.abs(terrain.heightAt(x + 8, z) - terrain.heightAt(x - 8, z)) + Math.abs(terrain.heightAt(x, z + 8) - terrain.heightAt(x, z - 8)) < 9;
+
+  for (const city of lf.cities) {
+    const ca = Math.cos(city.angle), sa = Math.sin(city.angle);
+    const inside = (ax: number, az: number) => (ax / city.rx) ** 2 + (az / city.rz) ** 2 < 1;
+    const toWorld = (ax: number, az: number) => [city.x + ax * ca - az * sa, city.z + ax * sa + az * ca] as const;
+    // street grid
+    const span = Math.max(city.rx, city.rz);
+    for (let g = -span; g <= span; g += 110) {
+      for (let t = -span; t <= span; t += 16) {
+        for (const [ax, az] of [[g, t], [t, g * 0.45]] as const) {
+          if (!inside(ax, az) || r() < 0.15) continue;
+          const [x, z] = toWorld(ax, az);
+          if (!dry(x, z) || !flat(x, z)) continue;
+          push(x, ground(x, z), z, sodium, 2.6);
+        }
+      }
+    }
+    // homes and buildings: density falls off from the centre
+    const count = Math.round(26000 * city.density);
+    for (let k = 0; k < count; k++) {
+      const ax = (r() * 2 - 1) * city.rx, az = (r() * 2 - 1) * city.rz;
+      if (!inside(ax, az)) continue;
+      const [x, z] = toWorld(ax, az);
+      if (!dry(x, z) || !flat(x, z)) continue;
+      const d = Math.hypot(ax / city.rx, az / city.rz);
+      if (r() > Math.exp(-d * 2.6) + 0.1) continue;
+      const pick = r();
+      c.copy(pick < 0.55 ? warm : pick < 0.85 ? cool : green).multiplyScalar(0.6 + r() * 0.6);
+      const towerH = d < 0.2 && r() < 0.35 * city.downtown ? r() * 70 : 0;
+      const y = ground(x, z) + towerH;
+      push(x, y, z, c, 1.6 + r());
+      if (towerH > 20) {
+        for (let h = 6; h < towerH; h += 4 + r() * 4) push(x + (r() - 0.5) * 6, ground(x, z) + h, z + (r() - 0.5) * 6, c, 1.4);
+        if (towerH > 50) push(x, y + 3, z, red, 3, 2);
+      }
+      if (d < 0.15 && r() < 0.04 * city.downtown) push(x, y + 2, z, neon[Math.floor(r() * 3)], 3.2);
+    }
+  }
+  const coast = lf.features.coast;
+  if (coast) {
+    // coastal highway with moving traffic (anim ±1 = moving along x)
+    for (let x = -3000; x < 4500; x += 9) {
+      const z = coast(x) - 40;
+      push(x, 6, z, sodium, 2.4);
+      if (r() < 0.35) push(x, 4.5, z + 3, new THREE.Color('#fff5e0'), 2.2, 1 + r() * 0.5);
+      if (r() < 0.35) push(x, 4.5, z - 3, new THREE.Color('#ff3020'), 2.0, -1 - r() * 0.5);
+    }
+    if (lf.features.ships) {
+      for (let i = 0; i < 18; i++) {
+        const x = -1500 + r() * 5000, z = coast(x) + 300 + r() * 2500;
+        push(x, 4, z, warm, 3.2);
+        push(x + 8, 6, z, red, 2.4, 2);
       }
     }
   }
-  // homes and buildings: density falls off from the centre
-  for (let k = 0; k < 26000; k++) {
-    const x = centerX + (r() - 0.5) * 5200, z = 1150 + r() * 950;
-    if (z > terrain.coastZ(x) - 10) continue;
-    const d = Math.hypot((x - centerX) / 1.8, z - centerZ);
-    if (r() > Math.exp(-d / 900) + 0.1) continue;
-    const pick = r();
-    c.copy(pick < 0.55 ? warm : pick < 0.85 ? cool : green).multiplyScalar(0.6 + r() * 0.6);
-    const towerH = d < 500 && r() < 0.35 ? r() * 70 : 0;
-    const y = ground(x, z) + towerH;
-    push(x, y, z, c, 1.6 + r());
-    if (towerH > 20) {
-      // window column
-      for (let h = 6; h < towerH; h += 4 + r() * 4) push(x + (r() - 0.5) * 6, ground(x, z) + h, z + (r() - 0.5) * 6, c, 1.4);
-      if (towerH > 50) push(x, y + 3, z, red, 3, 2); // aviation light (blink)
-    }
-    if (d < 350 && r() < 0.04) push(x, y + 2, z, neon[Math.floor(r() * 3)], 3.2);
+  const fw = lf.features.ferrisWheel;
+  if (fw) {
+    for (let i = 0; i < 64; i++) push(fw[0], 45, fw[1], neon[i % 3], 3.2, 3 + i / 64);
   }
-  // coastal highway with moving traffic (anim 1 = moving along x)
-  for (let x = -3000; x < 4500; x += 9) {
-    const z = terrain.coastZ(x) - 40;
-    push(x, 6, z, sodium, 2.4);
-    if (r() < 0.35) push(x, 4.5, z + 3, new THREE.Color('#fff5e0'), 2.2, 1 + r() * 0.5);
-    if (r() < 0.35) push(x, 4.5, z - 3, new THREE.Color('#ff3020'), 2.0, -1 - r() * 0.5);
-  }
-  // ferris wheel
-  const fwX = 1350, fwZ = terrain.coastZ(1350) - 70;
-  for (let i = 0; i < 64; i++) {
-    const a = (i / 64) * Math.PI * 2;
-    push(fwX + Math.cos(a) * 35, 45 + Math.sin(a) * 35, fwZ, neon[i % 3], 3.2, 3 + i / 64);
-  }
-  // ships
-  for (let i = 0; i < 18; i++) {
-    const x = -1500 + r() * 5000, z = terrain.coastZ(x) + 300 + r() * 2500;
-    push(x, 4, z, warm, 3.2);
-    push(x + 8, 6, z, red, 2.4, 2);
-  }
-  // antenna towers on the mountains
-  for (const [x, z] of [[-900, -1500], [1700, -1300], [2600, -600]]) {
+  // antenna towers and wind turbines carry blinking aviation lights
+  for (const [x, z] of lf.features.towers) {
     const y = terrain.heightAt(x, z);
     for (let h = 0; h < 4; h++) push(x, y + 15 + h * 18, z, red, 3.8, 2);
   }
+  for (const [x, z] of lf.features.turbines ?? []) push(x, terrain.heightAt(x, z) + 63, z, red, 3.4, 2);
 
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
@@ -511,10 +563,13 @@ function buildCityLights(terrain: TerrainData) {
     transparent: true,
     depthWrite: false,
     blending: THREE.AdditiveBlending,
-    uniforms: { uTime: { value: 0 }, uIntensity: { value: 1 }, uMap: { value: makeGlowTexture() }, uPixelRatio: { value: 1 } },
+    uniforms: {
+      uTime: { value: 0 }, uIntensity: { value: 1 }, uMap: { value: makeGlowTexture() }, uPixelRatio: { value: 1 },
+      uFerris: { value: new THREE.Vector3(fw?.[0] ?? 0, 45, fw?.[1] ?? 0) },
+    },
     vertexShader: /* glsl */ `
       attribute float size; attribute float anim; attribute vec3 color;
-      uniform float uTime, uPixelRatio;
+      uniform float uTime, uPixelRatio; uniform vec3 uFerris;
       varying vec3 vColor; varying float vFade;
       void main() {
         vec3 p = position;
@@ -522,8 +577,7 @@ function buildCityLights(terrain: TerrainData) {
         if (anim >= 3.0) {
           // ferris wheel rotation
           float a = (anim - 3.0) * 6.2831 + uTime * 0.05;
-          vec3 c = vec3(1350.0, 45.0, p.z);
-          p = c + vec3(cos(a), sin(a), 0.0) * 35.0;
+          p = uFerris + vec3(cos(a), sin(a), 0.0) * 35.0;
         } else if (anim >= 2.0) {
           blink = step(0.5, fract(uTime * 0.5 + p.x * 0.01));
         } else if (abs(anim) >= 1.0) {
@@ -548,7 +602,5 @@ function buildCityLights(terrain: TerrainData) {
   const pts = new THREE.Points(geo, mat);
   pts.frustumCulled = false;
   pts.name = 'city';
-  void fbm;
-  void smoothstep;
   return pts;
 }
