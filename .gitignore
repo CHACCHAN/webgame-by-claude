@@ -1,0 +1,10 @@
+node_modules/
+dist/
+.env
+*.log
+.DS_Store
+/frontend/test-results/
+/e2e/test-results/
+/e2e/playwright-report/
+/docker/certs/*.crt
+/docker/certs/*.pem

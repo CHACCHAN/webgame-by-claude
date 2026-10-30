@@ -1,0 +1,320 @@
+import * as THREE from 'three';
+import { fbm, noise2, rng } from '../util/math';
+
+/** Canvas helpers for procedurally generated textures (browser only). */
+function canvas(w: number, h: number) {
+  const c = document.createElement('canvas');
+  c.width = w;
+  c.height = h;
+  return [c, c.getContext('2d')!] as const;
+}
+
+function finish(c: HTMLCanvasElement, srgb: boolean, repeat = true) {
+  const t = new THREE.CanvasTexture(c);
+  if (srgb) t.colorSpace = THREE.SRGBColorSpace;
+  if (repeat) t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.anisotropy = 8;
+  t.generateMipmaps = true;
+  t.minFilter = THREE.LinearMipmapLinearFilter;
+  return t;
+}
+
+/** Tileable value via wrapping the noise domain on a torus-like scheme. */
+function tileNoise(x: number, y: number, period: number, octaves = 4) {
+  // blend 4 samples so the texture tiles seamlessly
+  const fx = x / period, fy = y / period;
+  const a = fbm(x, y, octaves), b = fbm(x - period, y, octaves);
+  const c = fbm(x, y - period, octaves), d = fbm(x - period, y - period, octaves);
+  return (a * (1 - fx) + b * fx) * (1 - fy) + (c * (1 - fx) + d * fx) * fy;
+}
+
+/**
+ * Road albedo: asphalt with aggregate and wear, white edge lines and an
+ * orange no-overtaking centre line. u spans the road width, the tile covers
+ * 8 m along the road.
+ */
+export function makeRoadTexture(): THREE.Texture {
+  const W = 512, H = 1024;
+  const [c, g] = canvas(W, H);
+  const img = g.createImageData(W, H);
+  const r = rng(42);
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      const n = tileNoise(x / 40, y / 40, W / 40, 4) * 0.5 + tileNoise(x / 6, y / 6, W / 6, 2) * 0.35;
+      // worn wheel tracks are slightly lighter & smoother
+      const u = x / W;
+      const track = Math.exp(-(((u - 0.3) * 9) ** 2)) + Math.exp(-(((u - 0.7) * 9) ** 2));
+      let v = 58 + n * 22 + track * 9 + (r() - 0.5) * 26;
+      if (r() < 0.012) v += 40 * r(); // light aggregate
+      const o = (y * W + x) * 4;
+      img.data[o] = v;
+      img.data[o + 1] = v;
+      img.data[o + 2] = v + 3;
+      img.data[o + 3] = 255;
+    }
+  }
+  g.putImageData(img, 0, 0);
+
+  // markings (road u in [0,1] maps to width incl. shoulders)
+  const line = (u0: number, u1: number, color: string, dash?: [number, number]) => {
+    g.fillStyle = color;
+    const x0 = u0 * W, x1 = u1 * W;
+    if (!dash) g.fillRect(x0, 0, x1 - x0, H);
+    else for (let y = 0; y < H; y += dash[0] + dash[1]) g.fillRect(x0, y, x1 - x0, dash[0]);
+  };
+  line(0.055, 0.07, 'rgba(235,235,228,0.92)');
+  line(0.93, 0.945, 'rgba(235,235,228,0.92)');
+  line(0.488, 0.512, 'rgba(236,160,40,0.95)');
+  // wear on the paint
+  const wear = g.getImageData(0, 0, W, H);
+  for (let y = 0; y < H; y++)
+    for (let x = 0; x < W; x++) {
+      const o = (y * W + x) * 4;
+      const n = noise2(x / 9, y / 9) * 0.5 + 0.5;
+      if (wear.data[o] > 120 && n < 0.32) {
+        const k = 0.55;
+        wear.data[o] *= k;
+        wear.data[o + 1] *= k;
+        wear.data[o + 2] *= k;
+      }
+    }
+  g.putImageData(wear, 0, 0);
+  // tar seams
+  g.strokeStyle = 'rgba(20,20,22,0.55)';
+  g.lineWidth = 3;
+  for (let i = 0; i < 6; i++) {
+    g.beginPath();
+    let x = r() * W, y = r() * H;
+    g.moveTo(x, y);
+    for (let k = 0; k < 8; k++) {
+      x += (r() - 0.5) * 80;
+      y += r() * 60;
+      g.lineTo(x, y);
+    }
+    g.stroke();
+  }
+  return finish(c, true);
+}
+
+/** Normal map from a height function (tileable). */
+function normalFromHeight(W: number, H: number, height: (x: number, y: number) => number, strength: number) {
+  const [c, g] = canvas(W, H);
+  const hts = new Float32Array(W * H);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) hts[y * W + x] = height(x, y);
+  const img = g.createImageData(W, H);
+  for (let y = 0; y < H; y++)
+    for (let x = 0; x < W; x++) {
+      const l = hts[y * W + ((x - 1 + W) % W)], rr = hts[y * W + ((x + 1) % W)];
+      const u = hts[((y - 1 + H) % H) * W + x], d = hts[((y + 1) % H) * W + x];
+      let nx = (l - rr) * strength, ny = (u - d) * strength;
+      const nz = 1;
+      const len = Math.hypot(nx, ny, nz);
+      nx /= len;
+      ny /= len;
+      const o = (y * W + x) * 4;
+      img.data[o] = (nx * 0.5 + 0.5) * 255;
+      img.data[o + 1] = (ny * 0.5 + 0.5) * 255;
+      img.data[o + 2] = (nz / len) * 255;
+      img.data[o + 3] = 255;
+    }
+  g.putImageData(img, 0, 0);
+  return finish(c, false);
+}
+
+export function makeAsphaltNormal(): THREE.Texture {
+  const r = rng(9);
+  const grain = new Float32Array(256 * 256).map(() => r());
+  return normalFromHeight(256, 256, (x, y) => grain[y * 256 + x] * 0.6 + tileNoise(x / 10, y / 10, 25.6, 3) * 0.8, 1.6);
+}
+
+/** Greyscale detail for terrain (multiplied with vertex colours). */
+export function makeGroundDetail(): THREE.Texture {
+  const W = 256;
+  const [c, g] = canvas(W, W);
+  const img = g.createImageData(W, W);
+  const r = rng(5);
+  for (let y = 0; y < W; y++)
+    for (let x = 0; x < W; x++) {
+      const n = tileNoise(x / 16, y / 16, W / 16, 4) * 0.5 + 0.5;
+      const v = 150 + n * 90 + (r() - 0.5) * 40;
+      const o = (y * W + x) * 4;
+      img.data[o] = v;
+      img.data[o + 1] = v;
+      img.data[o + 2] = v;
+      img.data[o + 3] = 255;
+    }
+  g.putImageData(img, 0, 0);
+  return finish(c, true);
+}
+
+export function makeGroundNormal(): THREE.Texture {
+  return normalFromHeight(256, 256, (x, y) => tileNoise(x / 12, y / 12, 256 / 12, 4) + tileNoise(x / 3, y / 3, 256 / 3, 2) * 0.3, 2.2);
+}
+
+/** Concrete with a lattice of slope-protection frames (法枠). */
+export function makeConcreteTexture(lattice: boolean): THREE.Texture {
+  const W = 256;
+  const [c, g] = canvas(W, W);
+  const img = g.createImageData(W, W);
+  const r = rng(77);
+  for (let y = 0; y < W; y++)
+    for (let x = 0; x < W; x++) {
+      const n = tileNoise(x / 20, y / 20, W / 20, 4);
+      const v = 150 + n * 30 + (r() - 0.5) * 20 - (y / W) * 18;
+      const o = (y * W + x) * 4;
+      img.data[o] = v;
+      img.data[o + 1] = v * 0.99;
+      img.data[o + 2] = v * 0.95;
+      img.data[o + 3] = 255;
+    }
+  g.putImageData(img, 0, 0);
+  if (lattice) {
+    g.fillStyle = 'rgba(40,52,30,0.55)';
+    for (let i = 0; i < 2; i++)
+      for (let j = 0; j < 2; j++) g.fillRect(i * 128 + 14, j * 128 + 14, 100, 100);
+    g.strokeStyle = 'rgba(255,255,255,0.12)';
+    g.lineWidth = 4;
+    for (let i = 0; i <= 2; i++) {
+      g.beginPath();
+      g.moveTo(i * 128, 0);
+      g.lineTo(i * 128, W);
+      g.moveTo(0, i * 128);
+      g.lineTo(W, i * 128);
+      g.stroke();
+    }
+  }
+  // streaks
+  g.fillStyle = 'rgba(30,30,28,0.08)';
+  for (let i = 0; i < 24; i++) g.fillRect(r() * W, 0, 2 + r() * 4, W);
+  return finish(c, true);
+}
+
+/** Soft round sprite used for lights, smoke and city glows. */
+export function makeGlowTexture(): THREE.Texture {
+  const W = 128;
+  const [c, g] = canvas(W, W);
+  const grad = g.createRadialGradient(W / 2, W / 2, 0, W / 2, W / 2, W / 2);
+  grad.addColorStop(0, 'rgba(255,255,255,1)');
+  grad.addColorStop(0.18, 'rgba(255,255,255,0.75)');
+  grad.addColorStop(0.45, 'rgba(255,255,255,0.18)');
+  grad.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = grad;
+  g.fillRect(0, 0, W, W);
+  return finish(c, false, false);
+}
+
+export function makeSmokeTexture(): THREE.Texture {
+  const W = 128;
+  const [c, g] = canvas(W, W);
+  const img = g.createImageData(W, W);
+  for (let y = 0; y < W; y++)
+    for (let x = 0; x < W; x++) {
+      const dx = (x - W / 2) / (W / 2), dy = (y - W / 2) / (W / 2);
+      const d = Math.sqrt(dx * dx + dy * dy);
+      const n = fbm(x / 18, y / 18, 4) * 0.5 + 0.5;
+      const a = Math.max(0, 1 - d) ** 1.6 * (0.55 + n * 0.6);
+      const o = (y * W + x) * 4;
+      img.data[o] = 255;
+      img.data[o + 1] = 255;
+      img.data[o + 2] = 255;
+      img.data[o + 3] = Math.min(255, a * 255);
+    }
+  g.putImageData(img, 0, 0);
+  return finish(c, false, false);
+}
+
+/** Simple sign face textures drawn on a canvas. */
+export function makeSignTexture(kind: 'chevronL' | 'chevronR' | 'hairpin' | 'speed40' | 'start' | 'finish' | 'kanban'): THREE.Texture {
+  const [c, g] = canvas(256, 256);
+  if (kind === 'chevronL' || kind === 'chevronR') {
+    g.fillStyle = '#f2c21a';
+    g.fillRect(0, 0, 256, 256);
+    g.fillStyle = '#111';
+    for (let i = 0; i < 2; i++) {
+      const x = 40 + i * 90;
+      g.beginPath();
+      if (kind === 'chevronL') {
+        g.moveTo(x + 60, 30);
+        g.lineTo(x, 128);
+        g.lineTo(x + 60, 226);
+        g.lineTo(x + 100, 226);
+        g.lineTo(x + 40, 128);
+        g.lineTo(x + 100, 30);
+      } else {
+        g.moveTo(x + 40, 30);
+        g.lineTo(x + 100, 128);
+        g.lineTo(x + 40, 226);
+        g.lineTo(x, 226);
+        g.lineTo(x + 60, 128);
+        g.lineTo(x, 30);
+      }
+      g.fill();
+    }
+  } else if (kind === 'hairpin') {
+    g.fillStyle = '#f2c21a';
+    g.save();
+    g.translate(128, 128);
+    g.rotate(Math.PI / 4);
+    g.fillRect(-88, -88, 176, 176);
+    g.strokeStyle = '#111';
+    g.lineWidth = 8;
+    g.strokeRect(-80, -80, 160, 160);
+    g.restore();
+    g.strokeStyle = '#111';
+    g.lineWidth = 16;
+    g.beginPath();
+    g.moveTo(100, 190);
+    g.lineTo(100, 110);
+    g.arc(128, 110, 28, Math.PI, 0);
+    g.lineTo(156, 170);
+    g.stroke();
+    g.fillStyle = '#111';
+    g.beginPath();
+    g.moveTo(140, 165);
+    g.lineTo(172, 165);
+    g.lineTo(156, 195);
+    g.fill();
+  } else if (kind === 'speed40') {
+    g.fillStyle = '#fff';
+    g.beginPath();
+    g.arc(128, 128, 120, 0, Math.PI * 2);
+    g.fill();
+    g.strokeStyle = '#d0141b';
+    g.lineWidth = 26;
+    g.beginPath();
+    g.arc(128, 128, 104, 0, Math.PI * 2);
+    g.stroke();
+    g.fillStyle = '#1d3f9a';
+    g.font = 'bold 110px sans-serif';
+    g.textAlign = 'center';
+    g.textBaseline = 'middle';
+    g.fillText('40', 128, 134);
+  } else if (kind === 'kanban') {
+    g.fillStyle = '#1d4f8f';
+    g.fillRect(0, 0, 256, 256);
+    g.strokeStyle = '#fff';
+    g.lineWidth = 6;
+    g.strokeRect(8, 8, 240, 240);
+    g.fillStyle = '#fff';
+    g.font = 'bold 64px sans-serif';
+    g.textAlign = 'center';
+    g.fillText('朧峠', 128, 100);
+    g.font = 'bold 30px sans-serif';
+    g.fillText('OBORO PASS', 128, 150);
+    g.fillText('標高 452m', 128, 200);
+  } else {
+    g.fillStyle = kind === 'start' ? '#101418' : '#101418';
+    g.fillRect(0, 0, 256, 256);
+    const sq = 32;
+    for (let y = 0; y < 2; y++)
+      for (let x = 0; x < 8; x++) {
+        g.fillStyle = (x + y) % 2 ? '#fff' : '#111';
+        g.fillRect(x * sq, 190 + y * sq - 30, sq, sq);
+      }
+    g.fillStyle = '#fff';
+    g.font = 'bold 84px sans-serif';
+    g.textAlign = 'center';
+    g.fillText(kind === 'start' ? 'START' : 'GOAL', 128, 120);
+  }
+  return finish(c, true, false);
+}

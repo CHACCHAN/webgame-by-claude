@@ -1,0 +1,160 @@
+import { useEffect, useRef, useState } from 'react';
+import { useApp } from '../../store/app';
+import { useMenuInput } from '../useMenuInput';
+import { gameHolder } from '../GameCanvas';
+import { api, loadLocalBest, loadPlayer, saveLocalBest, type SubmitResult } from '../../api/client';
+import { encodeGhost, type EncodedGhost } from '../../game/race/Ghost';
+import { CAR_SPECS } from '../../game/vehicle/carSpecs';
+import { AI_PROFILES } from '../../game/ai/AIDriver';
+import { formatTime } from '../format';
+import { startRaceFromState } from './Menus';
+import { sfx } from '../sfx';
+
+type SubmitState = { kind: 'idle' } | { kind: 'need-name' } | { kind: 'sending' } | { kind: 'done'; res: SubmitResult } | { kind: 'error'; msg: string };
+
+export function ResultsScreen() {
+  const { result, go, set, ghostChoice } = useApp();
+  const [submit, setSubmit] = useState<SubmitState>({ kind: 'idle' });
+  const [name, setName] = useState(() => loadPlayer()?.name ?? '');
+  const [localPB, setLocalPB] = useState<{ isNew: boolean; prev: number | null }>({ isNew: false, prev: null });
+  const [sel, setSel] = useState(0);
+  const encoded = useRef<Promise<EncodedGhost> | null>(null);
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    const t = setTimeout(() => setVisible(true), 900);
+    return () => clearTimeout(t);
+  }, []);
+
+  useEffect(() => {
+    if (!result) return;
+    encoded.current = encodeGhost(result.ghost);
+    const prev = loadLocalBest();
+    const isNew = !prev || result.timeMs < prev.timeMs;
+    setLocalPB({ isNew, prev: prev?.timeMs ?? null });
+    if (isNew) {
+      void encoded.current.then((ghost) =>
+        saveLocalBest({ carId: result.carId, timeMs: result.timeMs, splits: result.splitsMs, ghost, date: new Date().toISOString() }),
+      );
+    }
+    if (loadPlayer()) void send(loadPlayer()!.name);
+    else setSubmit({ kind: 'need-name' });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [result]);
+
+  async function send(playerName: string) {
+    if (!result) return;
+    setSubmit({ kind: 'sending' });
+    try {
+      const player = await api.ensurePlayer(playerName.trim() || '名無しの走り屋');
+      const ghost = await encoded.current!;
+      const res = await api.submitRun(player, {
+        car_id: result.carId,
+        mode: result.mode,
+        time_ms: result.timeMs,
+        sector_ms: result.splitsMs,
+        rival_level: result.rivalLevel,
+        rival_won: result.rivalWon,
+        ghost,
+      });
+      setSubmit({ kind: 'done', res });
+      if (res.is_personal_best) gameHolder.game?.audio?.chime([1046, 1318, 1568, 2093], 0.09);
+    } catch (e) {
+      setSubmit({ kind: 'error', msg: (e as Error).message });
+    }
+  }
+
+  const actions = [
+    { label: 'リトライ', action: () => void startRaceFromState() },
+    { label: 'ランキング', action: () => { gameHolder.game?.startAttract(); set({ mode: 'time_attack' }); go('leaderboard'); } },
+    { label: '車両選択', action: () => go('garage') },
+    { label: 'メニュー', action: () => { gameHolder.game?.startAttract(); go('modes'); } },
+  ];
+  useMenuInput((a) => {
+    if (a === 'left') { setSel((s) => (s + actions.length - 1) % actions.length); sfx.move(); }
+    if (a === 'right') { setSel((s) => (s + 1) % actions.length); sfx.move(); }
+    if (a === 'confirm') { sfx.confirm(); actions[sel].action(); }
+  }, submit.kind !== 'need-name');
+
+  if (!result) return null;
+  const won = result.rivalLevel ? result.rivalWon === false : null;
+  const sectors = result.splitsMs.map((s, i) => s - (i ? result.splitsMs[i - 1] : 0));
+  const ghostDelta = result.mode === 'ghost' && ghostChoice ? result.timeMs - ghostChoice.timeMs : null;
+
+  return (
+    <div className={`screen results ${visible ? 'in' : ''}`}>
+      <div className="results-card">
+        <div className="results-head">
+          {result.rivalLevel ? (
+            <div className={`verdict ${won ? 'win' : 'lose'}`}>{won ? 'YOU WIN' : 'YOU LOSE'}</div>
+          ) : (
+            <div className="verdict finish">FINISH</div>
+          )}
+          <div className="results-sub">
+            朧峠ダウンヒル ・ {CAR_SPECS[result.carId].name}
+            {result.rivalLevel && ` ・ VS ${AI_PROFILES[result.rivalLevel].name}`}
+          </div>
+        </div>
+        <div className="results-time">{formatTime(result.timeMs)}</div>
+        {localPB.isNew && <div className="badge-pb">NEW PERSONAL BEST{localPB.prev !== null && ` (${formatTime(result.timeMs - localPB.prev, { sign: true })})`}</div>}
+        {ghostDelta !== null && (
+          <div className={`ghost-delta ${ghostDelta <= 0 ? 'faster' : 'slower'}`}>
+            👻 {ghostChoice!.label} {ghostDelta <= 0 ? 'に勝利' : 'に届かず'} {formatTime(ghostDelta, { sign: true })}
+          </div>
+        )}
+        {result.rivalTimeMs !== undefined && (
+          <div className="rival-time">ライバル: {formatTime(result.rivalTimeMs)}</div>
+        )}
+        <div className="results-grid">
+          {sectors.map((s, i) => (
+            <div key={i} className="cell">
+              <small>SECTOR {i + 1}</small>
+              <b>{formatTime(s).replace(/^0:/, '')}</b>
+            </div>
+          ))}
+          <div className="cell">
+            <small>TOP SPEED</small>
+            <b>{result.topSpeedKmh} km/h</b>
+          </div>
+          <div className="cell">
+            <small>DRIFT</small>
+            <b>{result.driftScore.toLocaleString()} pt</b>
+          </div>
+        </div>
+        <div className="online">
+          {submit.kind === 'need-name' && (
+            <form
+              className="name-form"
+              onSubmit={(e) => {
+                e.preventDefault();
+                void send(name);
+              }}
+            >
+              <label>ランキング登録名（16文字まで）</label>
+              <div>
+                <input autoFocus maxLength={16} value={name} placeholder="名無しの走り屋" onChange={(e) => setName(e.target.value)} />
+                <button className="mini" type="submit">登録</button>
+                <button className="mini ghost" type="button" onClick={() => setSubmit({ kind: 'idle' })}>登録しない</button>
+              </div>
+            </form>
+          )}
+          {submit.kind === 'sending' && <div className="online-msg">記録を送信中…</div>}
+          {submit.kind === 'done' && (
+            <div className="online-msg ok">
+              ONLINE RANK <b>#{submit.res.rank}</b> / {submit.res.total_players}
+              {submit.res.is_personal_best ? <em>オンライン自己ベスト更新！</em> : <em>自己ベスト {formatTime(submit.res.previous_best_ms)}</em>}
+            </div>
+          )}
+          {submit.kind === 'error' && <div className="online-msg err">送信できませんでした：{submit.msg}（記録はこの端末に保存されています）</div>}
+        </div>
+        <div className="results-actions">
+          {actions.map((a, i) => (
+            <button key={a.label} className={`cta small ${i === sel ? 'focus' : ''}`} onMouseEnter={() => setSel(i)} onClick={() => { sfx.confirm(); a.action(); }}>
+              {a.label}
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
