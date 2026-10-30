@@ -318,3 +318,31 @@ export function makeSignTexture(kind: 'chevronL' | 'chevronR' | 'hairpin' | 'spe
   }
   return finish(c, true, false);
 }
+
+/** Front panel of a drinks vending machine (自動販売機). */
+export function makeVendingTexture(seed: number): THREE.Texture {
+  const [c, g] = canvas(128, 256);
+  const r = rng(seed);
+  const body = ['#d8262c', '#1f5fb5', '#f2f2f2'][seed % 3];
+  g.fillStyle = body;
+  g.fillRect(0, 0, 128, 256);
+  // lit display window with rows of bottles/cans
+  g.fillStyle = '#fdfbf2';
+  g.fillRect(8, 10, 112, 130);
+  for (let row = 0; row < 3; row++) {
+    for (let k = 0; k < 6; k++) {
+      g.fillStyle = `hsl(${Math.floor(r() * 360)}, ${50 + r() * 40}%, ${35 + r() * 30}%)`;
+      g.fillRect(12 + k * 18, 16 + row * 42, 12, 28);
+      g.fillStyle = '#e8402a';
+      g.fillRect(12 + k * 18, 46 + row * 42, 12, 4);
+    }
+  }
+  g.fillStyle = '#222';
+  g.fillRect(20, 150, 88, 26);
+  g.fillStyle = '#7dffb0';
+  g.font = 'bold 16px sans-serif';
+  g.fillText('つめた〜い', 26, 168);
+  g.fillStyle = '#111';
+  g.fillRect(14, 210, 100, 30);
+  return finish(c, true, false);
+}

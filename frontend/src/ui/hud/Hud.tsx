@@ -38,6 +38,7 @@ export function Hud() {
     boost: useRef<HTMLDivElement>(null),
     fps: useRef<HTMLDivElement>(null),
     delta: useRef<HTMLDivElement>(null),
+    lines: useRef<HTMLCanvasElement>(null),
   };
   const [redline, setRedline] = useState(8000);
   const [turbo, setTurbo] = useState(false);
@@ -86,6 +87,7 @@ export function Hud() {
 
     let raf = 0;
     let lastSplits = -1;
+    const streaks = Array.from({ length: 46 }, () => ({ a: Math.random() * Math.PI * 2, r: Math.random(), v: 0.6 + Math.random() }));
     let frames = 0, fpsT = performance.now();
     const loop = () => {
       const h = game.hud;
@@ -135,6 +137,32 @@ export function Hud() {
           r.delta.current.className = `split-flash ${d === null ? '' : d <= 0 ? 'faster' : 'slower'}`;
           void r.delta.current.offsetWidth;
           r.delta.current.classList.add('show');
+        }
+      }
+      // speed lines towards the screen edges at high speed
+      const lc = r.lines.current;
+      if (lc) {
+        if (lc.width !== lc.clientWidth || lc.height !== lc.clientHeight) {
+          lc.width = lc.clientWidth;
+          lc.height = lc.clientHeight;
+        }
+        const w = lc.width, hh = lc.height;
+        const lg = lc.getContext('2d')!;
+        lg.clearRect(0, 0, w, hh);
+        const k = Math.max(0, Math.min(1, (h.speedKmh - 115) / 110));
+        if (k > 0) {
+          const cx = w / 2, cy = hh * 0.46, R = Math.hypot(w, hh) / 2;
+          lg.lineWidth = 1.5;
+          for (const st of streaks) {
+            st.r += st.v * 0.045 * (0.5 + k);
+            if (st.r > 1) { st.r = 0.55; st.a = Math.random() * Math.PI * 2; }
+            const r0 = R * st.r, r1 = r0 + R * 0.12 * k * st.v;
+            lg.strokeStyle = `rgba(220,230,255,${(0.05 + 0.13 * k) * (st.r - 0.5) * 2})`;
+            lg.beginPath();
+            lg.moveTo(cx + Math.cos(st.a) * r0, cy + Math.sin(st.a) * r0 * 0.75);
+            lg.lineTo(cx + Math.cos(st.a) * r1, cy + Math.sin(st.a) * r1 * 0.75);
+            lg.stroke();
+          }
         }
       }
       // minimap
@@ -196,6 +224,7 @@ export function Hud() {
 
   return (
     <div className={`hud phase-${phase}`}>
+      <canvas className="speedlines" ref={refs.lines} />
       <div className="hud-tl">
         <div className="hud-label">TIME</div>
         <div className="hud-time" ref={refs.time}>0:00.000</div>

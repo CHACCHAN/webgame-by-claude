@@ -3,7 +3,7 @@ import type { CarId } from '../game/vehicle/carSpecs';
 import type { AILevel } from '../game/ai/AIDriver';
 import type { GamePhase, RaceMode, RaceResult } from '../game/Game';
 
-export type Screen = 'boot' | 'title' | 'modes' | 'garage' | 'rivals' | 'leaderboard' | 'settings' | 'controls' | 'race' | 'results';
+export type Screen = 'boot' | 'title' | 'modes' | 'garage' | 'rivals' | 'leaderboard' | 'settings' | 'controls' | 'race' | 'results' | 'replay';
 
 export interface GhostChoice {
   runId: number | 'local';

@@ -23,11 +23,24 @@ function GameBridge() {
     const s = useSettings.getState();
     const profile = qualityProfile(s.quality, s.resolutionScale);
     const game = new Game(gl, scene, camera as THREE.PerspectiveCamera, profile);
+    const params = new URLSearchParams(location.search);
     game.assist = s.assist;
     game.autoShift = s.autoShift;
     game.showGhost = s.showGhost;
+    if (params.get('autodrive') === '1') game.autoDrive = true;
+    if (params.get('timescale')) game.timeScale = Math.max(0.1, Math.min(20, Number(params.get('timescale')) || 1));
     gameHolder.game = game;
     window.__game = game;
+    if (params.get('export') === '1') {
+      // dev hook for tools/export-cars: returns a GLB as base64
+      (window as unknown as Record<string, unknown>).__exportCar = async (id: 'hayate' | 'raijin' | 'shiden') => {
+        const { exportCarGLB } = await import('../game/render/carAssets');
+        const buf = new Uint8Array(await exportCarGLB(id));
+        let bin = '';
+        for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode(...buf.subarray(i, i + 0x8000));
+        return btoa(bin);
+      };
+    }
     game.on((e) => {
       const app = useApp.getState();
       if (e.type === 'loading') app.set({ loading: { progress: e.progress, label: e.label } });

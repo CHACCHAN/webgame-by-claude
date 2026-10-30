@@ -217,14 +217,30 @@ export function buildEnvironment(terrain: TerrainData): EnvironmentRig {
   sea.receiveShadow = false;
   group.add(sea);
 
-  // ---- sea of clouds (dawn)
+  // ---- sea of clouds (dawn): a coarse heightmap lets the layer thin out softly where
+  // the mountainside rises into it instead of cutting hard lines across the slopes
+  const HM = 256, hx0 = -4800, hz0 = -4200, hSpan = 11200;
+  const hData = new Float32Array(HM * HM);
+  for (let j = 0; j < HM; j++)
+    for (let i = 0; i < HM; i++) hData[j * HM + i] = terrain.heightAt(hx0 + (i / (HM - 1)) * hSpan, hz0 + (j / (HM - 1)) * hSpan);
+  // half floats are linearly filterable on every WebGL2 device (full floats need an extension)
+  const hHalf = new Uint16Array(hData.length);
+  for (let k = 0; k < hData.length; k++) hHalf[k] = THREE.DataUtils.toHalfFloat(hData[k]);
+  const heightTex = new THREE.DataTexture(hHalf, HM, HM, THREE.RedFormat, THREE.HalfFloatType);
+  heightTex.magFilter = THREE.LinearFilter;
+  heightTex.minFilter = THREE.LinearFilter;
+  heightTex.needsUpdate = true;
   const cloudMat = new THREE.ShaderMaterial({
     transparent: true,
     depthWrite: false,
     fog: true,
     uniforms: THREE.UniformsUtils.merge([
       THREE.UniformsLib.fog,
-      { uTime: { value: 0 }, uColor: { value: new THREE.Color('#fff0e6') }, uShade: { value: new THREE.Color('#8a90a8') }, uSun: { value: new THREE.Vector3() }, uOpacity: { value: 1 } },
+      {
+        uTime: { value: 0 }, uColor: { value: new THREE.Color('#fff0e6') }, uShade: { value: new THREE.Color('#8a90a8') },
+        uSun: { value: new THREE.Vector3() }, uOpacity: { value: 1 },
+        uHeight: { value: heightTex }, uHeightBox: { value: new THREE.Vector3(hx0, hz0, hSpan) }, uLayer: { value: 150 },
+      },
     ]),
     vertexShader: /* glsl */ `
       varying vec3 vWorld;
@@ -237,7 +253,8 @@ export function buildEnvironment(terrain: TerrainData): EnvironmentRig {
         #include <fog_vertex>
       }`,
     fragmentShader: /* glsl */ `
-      uniform float uTime, uOpacity; uniform vec3 uColor, uShade, uSun;
+      uniform float uTime, uOpacity, uLayer; uniform vec3 uColor, uShade, uSun, uHeightBox;
+      uniform sampler2D uHeight;
       varying vec3 vWorld;
       #include <fog_pars_fragment>
       float hash2(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
@@ -249,6 +266,9 @@ export function buildEnvironment(terrain: TerrainData): EnvironmentRig {
         float n = fbm(uv);
         float n2 = fbm(uv * 3.0 + 7.0);
         float density = smoothstep(0.32, 0.62, n * 0.8 + n2 * 0.3);
+        vec2 huv = (vWorld.xz - uHeightBox.xy) / uHeightBox.z;
+        float ground = texture2D(uHeight, huv).r;
+        density *= smoothstep(-5.0, 45.0, uLayer - ground);
         // fake lighting: crests catch the low sun
         float crest = smoothstep(0.45, 0.9, n2);
         vec3 col = mix(uShade, uColor, 0.35 + crest * 0.65);

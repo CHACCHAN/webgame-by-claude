@@ -4,6 +4,7 @@ import { useMenuInput } from '../useMenuInput';
 import { gameHolder } from '../GameCanvas';
 import { api, loadLocalBest, loadPlayer, saveLocalBest, type SubmitResult } from '../../api/client';
 import { encodeGhost, type EncodedGhost } from '../../game/race/Ghost';
+import type { RaceResult } from '../../game/Game';
 import { CAR_SPECS } from '../../game/vehicle/carSpecs';
 import { AI_PROFILES } from '../../game/ai/AIDriver';
 import { formatTime } from '../format';
@@ -11,6 +12,9 @@ import { startRaceFromState } from './Menus';
 import { sfx } from '../sfx';
 
 type SubmitState = { kind: 'idle' } | { kind: 'need-name' } | { kind: 'sending' } | { kind: 'done'; res: SubmitResult } | { kind: 'error'; msg: string };
+
+/** Per-result state survives the screen being re-mounted (e.g. after watching the replay). */
+const memo = new WeakMap<RaceResult, { submit: SubmitState; localPB: { isNew: boolean; prev: number | null }; encoded: Promise<EncodedGhost> }>();
 
 export function ResultsScreen() {
   const { result, go, set, ghostChoice } = useApp();
@@ -28,10 +32,18 @@ export function ResultsScreen() {
 
   useEffect(() => {
     if (!result) return;
+    const cached = memo.get(result);
+    if (cached) {
+      encoded.current = cached.encoded;
+      setSubmit(cached.submit);
+      setLocalPB(cached.localPB);
+      return;
+    }
     encoded.current = encodeGhost(result.ghost);
     const prev = loadLocalBest();
     const isNew = !prev || result.timeMs < prev.timeMs;
     setLocalPB({ isNew, prev: prev?.timeMs ?? null });
+    memo.set(result, { submit: { kind: 'idle' }, localPB: { isNew, prev: prev?.timeMs ?? null }, encoded: encoded.current });
     if (isNew) {
       void encoded.current.then((ghost) =>
         saveLocalBest({ carId: result.carId, timeMs: result.timeMs, splits: result.splitsMs, ghost, date: new Date().toISOString() }),
@@ -64,8 +76,14 @@ export function ResultsScreen() {
     }
   }
 
+  useEffect(() => {
+    const m = result && memo.get(result);
+    if (m) m.submit = submit;
+  }, [submit, result]);
+
   const actions = [
     { label: 'リトライ', action: () => void startRaceFromState() },
+    { label: 'リプレイ', action: () => { if (result) { gameHolder.game?.startReplay(result); go('replay'); } } },
     { label: 'ランキング', action: () => { gameHolder.game?.startAttract(); set({ mode: 'time_attack' }); go('leaderboard'); } },
     { label: '車両選択', action: () => go('garage') },
     { label: 'メニュー', action: () => { gameHolder.game?.startAttract(); go('modes'); } },
@@ -155,6 +173,31 @@ export function ResultsScreen() {
           ))}
         </div>
       </div>
+    </div>
+  );
+}
+
+export function ReplayOverlay() {
+  const go = useApp((s) => s.go);
+  const timeRef = useRef<HTMLSpanElement>(null);
+  useEffect(() => {
+    let raf = 0;
+    const loop = () => {
+      if (timeRef.current) timeRef.current.textContent = formatTime((gameHolder.game?.replayTime ?? 0) * 1000);
+      raf = requestAnimationFrame(loop);
+    };
+    raf = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(raf);
+  }, []);
+  useMenuInput((a) => {
+    if (a === 'back' || a === 'confirm') { sfx.back(); go('results'); }
+  });
+  return (
+    <div className="screen replay" onClick={() => go('results')}>
+      <div className="replay-tag"><i /> REPLAY <span ref={timeRef} /></div>
+      <div className="letterbox top" />
+      <div className="letterbox bottom" />
+      <div className="replay-hint">Esc / Enter / クリック：結果に戻る</div>
     </div>
   );
 }

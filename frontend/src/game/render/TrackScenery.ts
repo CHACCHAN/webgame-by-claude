@@ -11,6 +11,7 @@ import {
   makeGroundNormal,
   makeRoadTexture,
   makeSignTexture,
+  makeVendingTexture,
 } from './textures';
 
 export interface Lamp {
@@ -26,6 +27,8 @@ export interface SceneryResult {
   roadMaterial: THREE.MeshStandardMaterial;
   /** emissive materials that should brighten at night */
   nightEmissive: THREE.MeshStandardMaterial[];
+  /** materials carrying the baked lamp lightmap (scaled with lamp state) */
+  lightmapMats: THREE.MeshStandardMaterial[];
   update(time: number, cameraPos: THREE.Vector3): void;
 }
 
@@ -168,9 +171,17 @@ export function buildScenery(track: Track, terrain: TerrainData, quality: Scener
   // ------------------------------------------------------------- lamps
   placeLamps(track, sides, lamps);
   buildLampMeshes(track, lamps, group, nightEmissive);
+  // baked pools of lamp light on the road and the ground around it
+  const roadLightmap = bakeRoadLightmap(track, lamps, road.geometry);
+  roadMaterial.lightMap = roadLightmap;
+  roadMaterial.lightMapIntensity = 17;
+  terrainMat.lightMap = bakeTerrainLightmap(terrain.near, lamps);
+  terrainMat.lightMapIntensity = 13;
+  const lightmapMats = [roadMaterial, terrainMat];
 
   // ------------------------------------------------------------- signs
   buildSigns(track, sides, group);
+  nightEmissive.push(...nightEmissiveSigns);
 
   // ------------------------------------------------------------- trees
   const trees = buildTrees(terrain, quality.treeDensity);
@@ -182,8 +193,83 @@ export function buildScenery(track: Track, terrain: TerrainData, quality: Scener
     lamps,
     roadMaterial,
     nightEmissive,
-    update() {},
+    lightmapMats,
+    update(_time, cameraPos) {
+      updateTreeLods(trees, cameraPos);
+    },
   };
+}
+
+/** Soft pool of light under a lamp head at height h: roughly cos³ falloff. */
+function lampPool(dx: number, dy: number, dz: number) {
+  const d2 = dx * dx + dy * dy + dz * dz;
+  const h = Math.max(dy, 0.5);
+  const cos = h / Math.sqrt(d2);
+  return (cos * cos * cos * 55) / (d2 + 4);
+}
+
+function bakeRoadLightmap(track: Track, lamps: Lamp[], geo: THREE.BufferGeometry) {
+  const rows = geo.userData.lightmapRows as number;
+  const step = geo.userData.lightmapStep as number;
+  const W = 16;
+  const data = new Uint8Array(W * rows * 4);
+  const sorted = [...lamps].sort((a, b) => a.s - b.s);
+  const p = new THREE.Vector3();
+  for (let r = 0; r < rows; r++) {
+    const i = Math.min(r * step, track.count - 1);
+    const hw = track.width[i] / 2 + SHOULDER;
+    const near = sorted.filter((l) => Math.abs(l.s - i) < 70);
+    for (let c = 0; c < W; c++) {
+      const lat = -hw - 0.6 + ((c + 0.5) / W) * 2 * (hw + 0.6);
+      track.pointAt(i, lat, p);
+      let rr = 0, gg = 0, bb = 0;
+      for (const l of near) {
+        const k = lampPool(l.position.x - p.x, l.position.y - p.y, l.position.z - p.z);
+        rr += l.color.r * k;
+        gg += l.color.g * k;
+        bb += l.color.b * k;
+      }
+      const o = (r * W + c) * 4;
+      data[o] = Math.min(255, rr * 255);
+      data[o + 1] = Math.min(255, gg * 255);
+      data[o + 2] = Math.min(255, bb * 255);
+      data[o + 3] = 255;
+    }
+  }
+  const tex = new THREE.DataTexture(data, W, rows, THREE.RGBAFormat);
+  tex.channel = 1;
+  tex.magFilter = THREE.LinearFilter;
+  tex.minFilter = THREE.LinearFilter;
+  tex.needsUpdate = true;
+  return tex;
+}
+
+function bakeTerrainLightmap(g: HeightGrid, lamps: Lamp[]) {
+  const { nx, nz, cell, x0, z0, heights } = g;
+  const data = new Uint8Array(nx * nz * 4);
+  const R = 40;
+  for (const l of lamps) {
+    const ci = Math.round((l.position.x - x0) / cell), cj = Math.round((l.position.z - z0) / cell);
+    const span = Math.ceil(R / cell);
+    for (let j = Math.max(0, cj - span); j <= Math.min(nz - 1, cj + span); j++)
+      for (let i = Math.max(0, ci - span); i <= Math.min(nx - 1, ci + span); i++) {
+        const x = x0 + i * cell, z = z0 + j * cell;
+        const dy = l.position.y - heights[j * nx + i];
+        if (dy < 0) continue;
+        const k = lampPool(l.position.x - x, dy, l.position.z - z);
+        const o = (j * nx + i) * 4;
+        data[o] = Math.min(255, data[o] + l.color.r * k * 255);
+        data[o + 1] = Math.min(255, data[o + 1] + l.color.g * k * 255);
+        data[o + 2] = Math.min(255, data[o + 2] + l.color.b * k * 255);
+      }
+  }
+  for (let k = 3; k < data.length; k += 4) data[k] = 255;
+  const tex = new THREE.DataTexture(data, nx, nz, THREE.RGBAFormat);
+  tex.channel = 1;
+  tex.magFilter = THREE.LinearFilter;
+  tex.minFilter = THREE.LinearFilter;
+  tex.needsUpdate = true;
+  return tex;
 }
 
 // --------------------------------------------------------------------------
@@ -193,6 +279,8 @@ function gridGeometry(g: HeightGrid, terrain: TerrainData, near: boolean) {
   geo.rotateX(-Math.PI / 2);
   const pos = geo.getAttribute('position') as THREE.BufferAttribute;
   const uv = geo.getAttribute('uv') as THREE.BufferAttribute;
+  const uv1 = new THREE.BufferAttribute(new Float32Array(nx * nz * 2), 2);
+  geo.setAttribute('uv1', uv1);
   // PlaneGeometry rows go from +z to -z after rotation; map to grid rows
   for (let j = 0; j < nz; j++) {
     for (let i = 0; i < nx; i++) {
@@ -201,6 +289,7 @@ function gridGeometry(g: HeightGrid, terrain: TerrainData, near: boolean) {
       const z = z0 + j * cell;
       pos.setXYZ(vi, x, heights[j * nx + i], z);
       uv.setXY(vi, x / 7, z / 7);
+      uv1.setXY(vi, (i + 0.5) / nx, (j + 0.5) / nz);
     }
   }
   // (rows now run towards +z, which keeps PlaneGeometry's winding facing +y)
@@ -495,7 +584,11 @@ function buildLampMeshes(track: Track, lamps: Lamp[], group: THREE.Group, nightE
   inst(ceilingGeo, sodiumMat, ceiling);
 }
 
+const nightEmissiveSigns: THREE.MeshStandardMaterial[] = [];
+const vendingLight = new THREE.PointLight('#e8f4ff', 9, 14, 1.6);
+
 function buildSigns(track: Track, sides: ReturnType<typeof classifySides>, group: THREE.Group) {
+  group.add(vendingLight);
   const postMat = new THREE.MeshStandardMaterial({ color: '#9aa0a6', metalness: 0.6, roughness: 0.4 });
   const mats = {
     chevronL: new THREE.MeshStandardMaterial({ map: makeSignTexture('chevronL'), roughness: 0.35, emissive: '#ffffff', emissiveIntensity: 0.06 }),
@@ -535,6 +628,28 @@ function buildSigns(track: Track, sides: ReturnType<typeof classifySides>, group
   }
   // pass name board at the summit
   signAt(18, sides.right.valley[18] ? -1 : 1, mats.kanban, 1.6, 1.4);
+
+  // a row of glowing vending machines on the summit shoulder
+  {
+    const i = 12;
+    const side = sides.right.valley[i] ? -1 : 1;
+    const yaw = track.heading[i] + (side > 0 ? -Math.PI / 2 : Math.PI / 2);
+    for (let k = 0; k < 3; k++) {
+      track.pointAt(i + k * 1.1, side * (track.width[i] / 2 + SHOULDER + 1.6), p);
+      const face = new THREE.MeshStandardMaterial({ map: makeVendingTexture(k), emissive: '#ffffff', emissiveIntensity: 1.6, roughness: 0.4 });
+      face.emissiveMap = face.map;
+      const bodyMat = new THREE.MeshStandardMaterial({ color: ['#c8242a', '#1f5fb5', '#e6e6e6'][k], roughness: 0.5 });
+      const vm = new THREE.Mesh(new THREE.BoxGeometry(1.0, 1.85, 0.75), [bodyMat, bodyMat, bodyMat, bodyMat, face, bodyMat]);
+      vm.position.set(p.x, p.y + 0.93, p.z);
+      vm.rotation.y = yaw;
+      vm.castShadow = true;
+      group.add(vm);
+      nightEmissiveSigns.push(face);
+    }
+    // the machines light their surroundings
+    track.pointAt(i + 1, side * (track.width[i] / 2 + SHOULDER), p);
+    vendingLight.position.set(p.x, p.y + 1.4, p.z);
+  }
 
   // start & finish gantries
   for (const [s, mat] of [[track.startS, mats.start], [track.finishS, mats.finish]] as const) {
@@ -637,19 +752,44 @@ function buildTrees(terrain: TerrainData, density: number) {
     if (noise2(x / 300, z / 300) < -0.2) continue;
     add(x, z, (12 + r() * 10) / 14);
   }
+  // two levels of detail per chunk; Scenery.update() picks one by camera distance
+  const farGeo = new THREE.ConeGeometry(2.0, 12.5, 6, 1, true).translate(0, 8.2, 0);
+  const farColors = new Float32Array(farGeo.getAttribute('position').count * 3);
+  for (let i = 0; i < farColors.length; i += 3) farColors.set([0.13, 0.2, 0.11], i);
+  farGeo.setAttribute('color', new THREE.BufferAttribute(farColors, 3));
+  const lods: { near: THREE.InstancedMesh; far: THREE.InstancedMesh; center: THREE.Vector3 }[] = [];
   for (const [key, list] of chunks) {
-    const mesh = new THREE.InstancedMesh(geo, mat, list.length);
     const cols = colors.get(key)!;
-    list.forEach((m, i) => {
-      mesh.setMatrixAt(i, m);
-      mesh.setColorAt(i, cols[i]);
-    });
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
-    mesh.computeBoundingSphere();
-    group.add(mesh);
+    const make = (g: THREE.BufferGeometry, shadow: boolean) => {
+      const mesh = new THREE.InstancedMesh(g, mat, list.length);
+      list.forEach((m, i) => {
+        mesh.setMatrixAt(i, m);
+        mesh.setColorAt(i, cols[i]);
+      });
+      mesh.castShadow = shadow;
+      mesh.receiveShadow = shadow;
+      mesh.computeBoundingSphere();
+      group.add(mesh);
+      return mesh;
+    };
+    const near = make(geo, true);
+    const far = make(farGeo, false);
+    far.visible = false;
+    lods.push({ near, far, center: near.boundingSphere!.center.clone() });
   }
+  group.userData.lods = lods;
   return group;
+}
+
+/** Switch tree chunks between the detailed and the impostor mesh. */
+export function updateTreeLods(trees: THREE.Object3D, camera: THREE.Vector3) {
+  const lods = trees.userData.lods as { near: THREE.InstancedMesh; far: THREE.InstancedMesh; center: THREE.Vector3 }[];
+  for (const l of lods) {
+    const d = l.center.distanceTo(camera);
+    const near = d < 560;
+    l.near.visible = near;
+    l.far.visible = !near;
+  }
 }
 
 function treeGeometry() {
@@ -668,14 +808,14 @@ function treeGeometry() {
   };
   const trunk = new THREE.CylinderGeometry(0.12, 0.22, 4, 5).translate(0, 2, 0);
   parts.push(colorize(trunk.toNonIndexed(), new THREE.Color('#3a2a1c')));
-  const layers = 5;
+  const layers = 4;
   for (let l = 0; l < layers; l++) {
     const t = l / (layers - 1);
-    const radius = 2.1 * (1 - t * 0.78);
-    const h = 4.2 * (1 - t * 0.35);
-    const y = 2.2 + l * 2.4;
+    const radius = 2.2 * (1 - t * 0.75);
+    const h = 4.8 * (1 - t * 0.35);
+    const y = 2.2 + l * 3.0;
     // star-shaped cone for a jagged silhouette
-    const cone = new THREE.ConeGeometry(radius, h, 10, 1, true);
+    const cone = new THREE.ConeGeometry(radius, h, 8, 1, true);
     const pos = cone.getAttribute('position');
     for (let i = 0; i < pos.count; i++) {
       const yy = pos.getY(i);

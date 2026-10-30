@@ -23,6 +23,21 @@ generated procedurally in code (original work of this project, same licence as t
 | Fonts: Zen Kaku Gothic New, Shippori Mincho, Rajdhani | npm `@fontsource/*` | Google Fonts via Fontsource | SIL OFL 1.1 | Bundled, unmodified |
 | Libraries | `frontend/package.json`, `backend/composer.json` | three.js (MIT), React (MIT), R3F (MIT), postprocessing (Zlib), Rapier (Apache-2.0), zustand (MIT), Laravel (MIT) | See packages | |
 
+## 3D model pipeline (glTF / GLB)
+1. Cars are authored procedurally (`buildProceduralCar`).
+2. `tools/export-cars.cjs` exports them to GLB through a headless browser (three.js GLTFExporter).
+3. `npm run assets:cars` optimises them with the glTF-Transform CLI (dedup, weld, meshopt compression).
+4. At runtime `loadCarTemplates()` loads `public/models/cars/<id>.glb`; if a file is missing or broken the
+   procedural builder is used instead.
+
+**Replacing a car with an artist-made model** — export a GLB that follows this contract:
+- metres, +Z = forward, +Y = up, ground at y = 0, origin between the axles;
+- a node `body` (pitch/roll is applied to it) and wheel pivots `wheel_fl`, `wheel_fr`, `wheel_rl`, `wheel_rr`
+  placed at the wheel centres, each with a child `spin_*` holding the rotating parts;
+- optional empties `anchor_headlight_0..n`, `anchor_taillight_0..n`, `anchor_exhaust`, `headlight_target`;
+- material names `paint`, `accent`, `glass`, `trim`, `chrome`, `headlight`, `taillight`, `tire`, `rim`, `brake`
+  (these are swapped for tweakable runtime materials: paint colour, light emission).
+
 ## Requested external assets
-None yet. Requests to the owner (ChatGPT/Gemini generated art/music) will be listed here with the prompt,
-file name, usage and licence notes once delivered.
+See `docs/ASSET_REQUESTS.md` (race BGM, menu BGM, loading key art). Not delivered yet; the game falls back to
+a synthesised ambient pad and the live 3D scene.

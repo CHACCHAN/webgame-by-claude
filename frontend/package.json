@@ -8,9 +8,14 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "typecheck": "tsc -b",
-    "test": "vitest run"
+    "test": "vitest run",
+    "assets:cars": "node tools/export-cars.cjs ${EXPORT_BASE:-http://localhost:4173} public/models/cars/raw && for c in hayate raijin shiden; do gltf-transform dedup public/models/cars/raw/$c.glb public/models/cars/raw/$c.dedup.glb && gltf-transform meshopt public/models/cars/raw/$c.dedup.glb public/models/cars/$c.glb; done && rm -rf public/models/cars/raw",
+    "sim": "tsx tools/sim-run.ts",
+    "handling": "tsx tools/handling-test.ts",
+    "seed:bots": "tsx tools/gen-bot-ghosts.ts"
   },
   "devDependencies": {
+    "@gltf-transform/cli": "^4.5.1",
     "@types/node": "^26.6.6",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",

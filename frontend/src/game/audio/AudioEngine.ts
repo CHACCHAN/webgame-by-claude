@@ -271,6 +271,59 @@ export class AudioEngine {
     notes.forEach((n, i) => setTimeout(() => this.beep(n, 0.35, 'triangle', 0.18), i * spacing * 1000));
   }
 
+  private tracks = new Map<string, AudioBuffer | null>();
+  private current: { name: string; src: AudioBufferSourceNode; gain: GainNode } | null = null;
+
+  /** Load an optional music file; resolves to null when it is not shipped. */
+  private async loadTrack(name: string): Promise<AudioBuffer | null> {
+    if (this.tracks.has(name)) return this.tracks.get(name)!;
+    let buf: AudioBuffer | null = null;
+    try {
+      const res = await fetch(`/audio/${name}.mp3`);
+      const type = res.headers.get('content-type') ?? '';
+      if (res.ok && !type.includes('text/html')) buf = await this.ctx.decodeAudioData(await res.arrayBuffer());
+    } catch {
+      buf = null;
+    }
+    this.tracks.set(name, buf);
+    return buf;
+  }
+
+  /**
+   * Play a looping music track (crossfade). Falls back to the synthesised pad for
+   * the menu theme when no file is present; races are silent music-wise then.
+   */
+  async playMusic(name: 'bgm_menu' | 'bgm_race' | null) {
+    if (this.current?.name === name) return;
+    const t = this.ctx.currentTime;
+    if (this.current) {
+      const old = this.current;
+      old.gain.gain.setTargetAtTime(0, t, 0.6);
+      setTimeout(() => old.src.stop(), 3000);
+      this.current = null;
+    }
+    if (!name) {
+      this.stopAmbient();
+      return;
+    }
+    const buf = await this.loadTrack(name);
+    if (!buf) {
+      if (name === 'bgm_menu') this.startAmbient();
+      else this.stopAmbient();
+      return;
+    }
+    this.stopAmbient();
+    const src = this.ctx.createBufferSource();
+    src.buffer = buf;
+    src.loop = true;
+    const gain = this.ctx.createGain();
+    gain.gain.setValueAtTime(0, this.ctx.currentTime);
+    gain.gain.linearRampToValueAtTime(name === 'bgm_race' ? 0.55 : 0.7, this.ctx.currentTime + 1.5);
+    src.connect(gain).connect(this.music);
+    src.start();
+    this.current = { name, src, gain };
+  }
+
   /** Slow evolving pad for menus (no assets needed). */
   startAmbient() {
     if (this.musicNodes.length) return;

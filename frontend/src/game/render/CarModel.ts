@@ -83,7 +83,7 @@ export interface CarMaterials {
 }
 
 export function createCarMaterials(spec: CarSpec, bodyColor = spec.colors.body): CarMaterials {
-  return {
+  const mats: CarMaterials = {
     paint: new THREE.MeshPhysicalMaterial({
       color: bodyColor,
       metalness: 0.45,
@@ -111,6 +111,66 @@ export function createCarMaterials(spec: CarSpec, bodyColor = spec.colors.body):
     rim: new THREE.MeshStandardMaterial({ color: '#b9bcc2', metalness: 0.95, roughness: 0.22 }),
     brake: new THREE.MeshStandardMaterial({ color: '#c41d14', roughness: 0.4, metalness: 0.3 }),
   };
+  // material names are the contract for GLB models (see docs/ASSETS.md)
+  for (const [k, m] of Object.entries(mats)) m.name = k;
+  return mats;
+}
+
+const WHEEL_NAMES = ['wheel_fl', 'wheel_fr', 'wheel_rl', 'wheel_rr'];
+
+/**
+ * Build a rig from a GLB template. Contract: metres, +Z forward, ground at y = 0,
+ * a node "body", wheel pivots "wheel_fl|fr|rl|rr" (each with a child "spin_*"),
+ * optional empties "anchor_headlight_*", "anchor_taillight_*", "anchor_exhaust",
+ * and materials named after the CarMaterials keys (paint, glass, headlight, ...).
+ */
+export function rigFromTemplate(template: THREE.Object3D, spec: CarSpec, opts: { bodyColor?: string } = {}): CarRig {
+  const root = template.clone(true) as THREE.Group;
+  root.name = `car-${spec.id}`;
+  const fresh = createCarMaterials(spec, opts.bodyColor);
+  const byName = fresh as unknown as Record<string, THREE.Material>;
+  const cloned = new Map<THREE.Material, THREE.Material>();
+  root.traverse((o) => {
+    const m = o as THREE.Mesh;
+    if (!m.isMesh) return;
+    const swap = (mat: THREE.Material) => {
+      if (byName[mat.name]) {
+        // keep the GLB textures but take over the shared, tweakable material
+        const target = byName[mat.name] as THREE.MeshStandardMaterial;
+        const src = mat as THREE.MeshStandardMaterial;
+        if (src.map && !target.map) target.map = src.map;
+        return target;
+      }
+      if (!cloned.has(mat)) cloned.set(mat, mat.clone());
+      return cloned.get(mat)!;
+    };
+    m.material = Array.isArray(m.material) ? m.material.map(swap) : swap(m.material);
+  });
+  const body = (root.getObjectByName('body') as THREE.Group) ?? root;
+  const wheels = WHEEL_NAMES.map((n) => {
+    const pivot = root.getObjectByName(n) as THREE.Group;
+    const spin = (pivot?.getObjectByName(n.replace('wheel', 'spin')) as THREE.Group) ?? pivot;
+    return { pivot, spin };
+  });
+  const anchors = { exhaust: new THREE.Vector3(), headlights: [] as THREE.Vector3[], taillights: [] as THREE.Vector3[] };
+  root.updateMatrixWorld(true);
+  root.traverse((o) => {
+    if (o.name.startsWith('anchor_headlight')) anchors.headlights.push(o.position.clone());
+    if (o.name.startsWith('anchor_taillight')) anchors.taillights.push(o.position.clone());
+    if (o.name === 'anchor_exhaust') anchors.exhaust.copy(o.position);
+  });
+  const target = root.getObjectByName('headlight_target') ?? new THREE.Object3D();
+  if (!target.parent) root.add(target);
+  return { root, body, wheels, materials: fresh, headlightTargets: [target], anchors };
+}
+
+/** Optional GLB car models (public/models/cars/<id>.glb); procedural cars are the fallback. */
+const templates = new Map<string, THREE.Object3D>();
+export function registerCarTemplate(id: string, scene: THREE.Object3D) {
+  templates.set(id, scene);
+}
+export function carTemplate(id: string) {
+  return templates.get(id) ?? null;
 }
 
 interface LoftOptions {
@@ -157,7 +217,8 @@ function loft(opts: LoftOptions): THREE.BufferGeometry {
       groups[m].push(a, c, b, b, c, d);
     }
   }
-  const capMat = opts.materialOf(opts.stations[0], 3);
+  // end caps (nose / tail panel) take the body colour of the upper side
+  const capMat = opts.materialOf(opts.stations[0], halfLen - 3);
   const cap = (ring: number[], flip: boolean, z: number) => {
     // fan from the ring centroid
     let cx = 0, cy = 0;
@@ -205,12 +266,19 @@ export interface CarRig {
   anchors: { exhaust: THREE.Vector3; headlights: THREE.Vector3[]; taillights: THREE.Vector3[] };
 }
 
-export function buildCar(spec: CarSpec, opts: { bodyColor?: string } = {}): CarRig {
+export function buildCar(spec: CarSpec, opts: { bodyColor?: string; procedural?: boolean } = {}): CarRig {
+  const tpl = opts.procedural ? null : carTemplate(spec.id);
+  if (tpl) return rigFromTemplate(tpl, spec, opts);
+  return buildProceduralCar(spec, opts);
+}
+
+export function buildProceduralCar(spec: CarSpec, opts: { bodyColor?: string } = {}): CarRig {
   const st = STYLES[spec.id];
   const mats = createCarMaterials(spec, opts.bodyColor);
   const root = new THREE.Group();
   root.name = `car-${spec.id}`;
   const body = new THREE.Group();
+  body.name = 'body';
   root.add(body);
 
   const W = st.halfWidth;
@@ -518,6 +586,9 @@ export function buildCar(spec: CarSpec, opts: { bodyColor?: string } = {}): CarR
       cal.position.set((left ? -1 : 1) * 0.04, r * 0.32, front ? -0.08 : 0.08);
       pivot.add(cal);
       root.add(pivot);
+      const wn = WHEEL_NAMES[wheels.length];
+      pivot.name = wn;
+      spin.name = wn.replace('wheel', 'spin');
       wheels.push({ pivot, spin });
     }
   }
@@ -525,6 +596,17 @@ export function buildCar(spec: CarSpec, opts: { bodyColor?: string } = {}): CarR
   // headlight beam targets (for spotlights)
   const headlightTargets: THREE.Object3D[] = [];
   const target = new THREE.Object3D();
+  target.name = 'headlight_target';
+  // named empties so GLB exports keep the effect anchors
+  const anchorNode = (name: string, v: THREE.Vector3) => {
+    const o = new THREE.Object3D();
+    o.name = name;
+    o.position.copy(v);
+    body.add(o);
+  };
+  anchors.headlights.forEach((v, i) => anchorNode(`anchor_headlight_${i}`, v));
+  anchors.taillights.forEach((v, i) => anchorNode(`anchor_taillight_${i}`, v));
+  anchorNode('anchor_exhaust', anchors.exhaust);
   target.position.set(0, 0, st.front + 30);
   root.add(target);
   headlightTargets.push(target);

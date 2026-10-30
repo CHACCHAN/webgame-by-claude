@@ -21,6 +21,7 @@ export function BootScreen() {
   const p = loading?.progress ?? 0;
   return (
     <div className="screen boot">
+      <div className="boot-art" />
       <div className="boot-mark">
         <div className="logo-kanji">峠</div>
         <div className="logo-sub">TOUGE NOCTURNE</div>
@@ -38,7 +39,7 @@ export function TitleScreen() {
   const go = useApp((s) => s.go);
   const start = () => {
     const a = gameHolder.game?.initAudio();
-    a?.startAmbient();
+    void a?.playMusic('bgm_menu');
     sfx.confirm();
     go('modes');
   };
@@ -91,6 +92,7 @@ export function ModesScreen() {
   });
   useEffect(() => {
     if (gameHolder.game && gameHolder.game.phase !== 'attract') gameHolder.game.startAttract();
+    void gameHolder.game?.audio?.playMusic('bgm_menu');
   }, []);
   return (
     <div className="screen menu-screen">

@@ -10,6 +10,7 @@ import { AIDriver, AI_PROFILES, type AILevel } from './ai/AIDriver';
 import { buildScenery, type SceneryResult } from './render/TrackScenery';
 import { buildEnvironment, type EnvironmentRig, type TimeOfDay } from './render/Environment';
 import { CarVisual } from './render/CarVisual';
+import { loadCarTemplates } from './render/carAssets';
 import { ChaseCamera } from './camera/ChaseCamera';
 import { InputManager } from './input/Input';
 import { TireSmoke, SkidMarks } from './fx/TireEffects';
@@ -18,7 +19,7 @@ import { GhostPlayer, GhostRecorder, type GhostData } from './race/Ghost';
 import { clamp, damp, lerp, smoothstep } from './util/math';
 import type { TrackProjection } from './track/Track';
 
-export type GamePhase = 'loading' | 'attract' | 'garage' | 'countdown' | 'racing' | 'finished';
+export type GamePhase = 'loading' | 'attract' | 'garage' | 'countdown' | 'racing' | 'finished' | 'replay';
 export type RaceMode = 'time_attack' | 'rival' | 'ghost';
 
 export interface QualitySettings {
@@ -43,6 +44,8 @@ export interface RaceResult {
   rivalLevel?: AILevel;
   rivalWon?: boolean;
   rivalTimeMs?: number;
+  rivalCarId?: CarId;
+  rivalGhost?: GhostData;
   ghost: GhostData;
   topSpeedKmh: number;
   driftScore: number;
@@ -118,11 +121,20 @@ export class Game {
   private listeners = new Set<Listener>();
   private accumulator = 0;
   private time = 0;
+  /** advances only with physics steps: race timing is independent of the frame rate */
+  private simTime = 0;
   private player: Racer | null = null;
   private rival: Racer | null = null;
   private attractCar: Racer | null = null;
   private ghost: { player: GhostPlayer; visual: CarVisual; label: string; splits?: number[] } | null = null;
   private recorder = new GhostRecorder();
+  private rivalRecorder = new GhostRecorder();
+  private replay: {
+    cars: { player: GhostPlayer; visual: CarVisual; wheelRot: number; last: THREE.Vector3 }[];
+    t: number;
+    duration: number;
+    proj: TrackProjection;
+  } | null = null;
   private config: RaceConfig | null = null;
   private countdownT = 0;
   private raceStartTime = 0;
@@ -138,6 +150,9 @@ export class Game {
   assist: AssistLevel = 1;
   autoShift = true;
   showGhost = true;
+  /** debug/testing: let an AI drive the player car and speed up simulated time */
+  autoDrive = false;
+  timeScale = 1;
 
   constructor(
     readonly renderer: THREE.WebGLRenderer,
@@ -166,6 +181,8 @@ export class Game {
     this.timeOfDay = timeOfDay;
     await this.yieldFrame(0.05, '物理エンジンを初期化中');
     await initRapier();
+    await this.yieldFrame(0.08, '車両モデルを読み込み中');
+    await loadCarTemplates(['hayate', 'raijin', 'shiden']);
     await this.yieldFrame(0.12, 'コースを測量中');
     this.track = new Track(OBORO_DOWNHILL);
     this.line = new RacingLine(this.track);
@@ -203,6 +220,10 @@ export class Game {
     this.scene.environment = envMap;
     this.scene.background = null;
     const lamps = this.env.preset.lampsOn;
+    for (const m of this.scenery.lightmapMats) {
+      m.userData.baseLightMap ??= m.lightMapIntensity;
+      m.lightMapIntensity = (m.userData.baseLightMap as number) * lamps;
+    }
     for (const m of this.scenery.nightEmissive) {
       m.userData.baseIntensity ??= m.emissiveIntensity;
       m.emissiveIntensity = (m.userData.baseIntensity as number) * lamps;
@@ -273,6 +294,13 @@ export class Game {
       this.garageCar.dispose();
       this.garageCar = null;
     }
+    if (this.replay) {
+      for (const c of this.replay.cars) {
+        this.root.remove(c.visual.root);
+        c.visual.dispose();
+      }
+      this.replay = null;
+    }
     this.smoke.clear();
     this.skids.clear();
     this.audio?.removeAllEngines();
@@ -332,6 +360,7 @@ export class Game {
     }
     this.bestSplits = cfg.ghost?.splits ?? null;
     this.recorder.reset();
+    this.rivalRecorder.reset();
     this.countdownT = 3.999;
     this.hud.raceTime = 0;
     this.hud.splits = [];
@@ -346,7 +375,7 @@ export class Game {
     this.accumulator = 0;
     this.paused = false;
     if (this.audio) {
-      this.audio.stopAmbient();
+      void this.audio.playMusic('bgm_race');
       const spec = CAR_SPECS[cfg.carId];
       this.audio.engine('player', spec.engine.cylinders, spec.engine.turbo);
       if (this.rival) this.audio.engine('rival', this.rival.sim.spec.engine.cylinders, this.rival.sim.spec.engine.turbo);
@@ -367,7 +396,7 @@ export class Game {
   // ------------------------------------------------------------- loop
   update(dtRaw: number) {
     if (this.phase === 'loading') return;
-    const dt = Math.min(dtRaw, 0.1);
+    const dt = Math.min(dtRaw, 0.1) * this.timeScale;
     this.time += dt;
 
     if (this.input.menuPressed('camera')) this.chase.cycle();
@@ -377,6 +406,7 @@ export class Game {
     }
     this.updateVisuals(dt);
     this.env.update(this.time, this.camera.position);
+    this.scenery.update(this.time, this.camera.position);
     this.updateLampLights();
   }
 
@@ -389,8 +419,9 @@ export class Game {
     // ---- input / AI
     if (this.player) {
       if (phase === 'racing') {
-        if (this.player.finished) this.autopilot(this.player, dt);
-        else {
+        if (this.player.finished || this.autoDrive) {
+          // AI-controlled player (after the finish, or autodrive testing) — see driveAI
+        } else {
           this.input.poll(dt, this.player.input);
           if (this.input.menuPressed('reset')) this.respawn(this.player);
         }
@@ -401,29 +432,16 @@ export class Game {
         this.player.input.brake = 1;
         this.player.input.steer = 0;
         this.player.input.handbrake = true;
-      } else if (phase === 'finished') this.autopilot(this.player, dt);
-    }
-    for (const r of [this.rival, this.attractCar]) {
-      if (!r || !r.ai) continue;
-      if (phase === 'countdown') {
-        r.input.throttle = 0.3;
-        r.input.brake = 1;
-        r.input.handbrake = true;
-        continue;
-      }
-      if (this.player && r === this.rival) r.ai.opponent = { s: this.player.proj.s, lateral: this.player.proj.lateral };
-      r.ai.update(r.sim, dt, r.input);
-      if (r.finished) {
-        r.input.throttle = 0;
-        r.input.brake = 0.4;
       }
     }
 
-    // ---- fixed-step physics
+    // ---- fixed-step physics (AI and race timing run per step, independent of frame rate)
     this.accumulator += dt;
     let steps = 0;
     const racers = this.racers();
-    while (this.accumulator >= PHYSICS_DT && steps < 8) {
+    const maxSteps = 8 * Math.ceil(this.timeScale);
+    while (this.accumulator >= PHYSICS_DT && steps < maxSteps) {
+      this.driveAI(phase);
       for (const r of racers) {
         if (!r.ai) r.sim.assist = this.assist;
         r.sim.input = r.input;
@@ -431,10 +449,12 @@ export class Game {
       }
       this.physics.step();
       for (const r of racers) r.sim.postStep(PHYSICS_DT);
+      this.simTime += PHYSICS_DT;
+      if (this.phase === 'racing' || this.phase === 'finished') this.raceStep();
       this.accumulator -= PHYSICS_DT;
       steps++;
     }
-    if (steps === 8) this.accumulator = 0;
+    if (steps === maxSteps) this.accumulator = 0;
 
     // ---- race logic
     for (const r of racers) this.trackRacer(r, dt);
@@ -444,6 +464,39 @@ export class Game {
       this.attractCar.sim.reset(this.track.pointAt(this.track.startS - 10), this.track.headingAt(this.track.startS - 10), 0);
       this.attractCar.proj.index = -1;
     }
+  }
+
+  /** AI inputs, evaluated every physics step. */
+  private driveAI(phase: GamePhase) {
+    const dt = PHYSICS_DT;
+    const pl = this.player;
+    if (pl && (phase === 'racing' || phase === 'finished')) {
+      if (pl.finished) this.autopilot(pl, dt);
+      else if (this.autoDrive) this.autoDriver(pl, dt);
+    }
+    for (const r of [this.rival, this.attractCar]) {
+      if (!r || !r.ai) continue;
+      if (phase === 'countdown') {
+        r.input.throttle = 0.3;
+        r.input.brake = 1;
+        r.input.handbrake = true;
+        continue;
+      }
+      if (pl && r === this.rival) r.ai.opponent = { s: pl.proj.s, lateral: pl.proj.lateral };
+      r.ai.update(r.sim, dt, r.input);
+      if (r.finished) {
+        r.input.throttle = 0;
+        r.input.brake = 0.4;
+      }
+    }
+  }
+
+  private autoDriver(r: Racer, dt: number) {
+    if (!r.ai) {
+      r.ai = new AIDriver(this.track, this.line, AI_PROFILES.ace, 11);
+      r.ai.calibrate(r.sim);
+    }
+    r.ai.update(r.sim, dt, r.input);
   }
 
   private autopilot(r: Racer, dt: number) {
@@ -486,40 +539,59 @@ export class Game {
     if (now !== prev && now >= 1 && now <= 3) this.audio?.beep(660, 0.18, 'square', 0.18);
     if (this.countdownT <= 0) {
       this.audio?.beep(1320, 0.5, 'square', 0.22);
-      this.raceStartTime = this.time;
+      this.raceStartTime = this.simTime;
       this.hud.countdown = 0;
       this.setPhase('racing');
+    }
+  }
+
+  /** Per physics step: projection, recording, sector splits and finish detection. */
+  private raceStep() {
+    const pl = this.player;
+    if (!pl) return;
+    const raceTime = this.simTime - this.raceStartTime;
+    const p = pl.sim.position;
+    pl.proj = this.track.project(p.x, p.y, p.z, pl.proj.index, pl.proj);
+    if (this.rival) {
+      const rp = this.rival.sim.position;
+      this.rival.proj = this.track.project(rp.x, rp.y, rp.z, this.rival.proj.index, this.rival.proj);
+      if (!this.rival.finished && this.rival.proj.s >= this.track.finishS) {
+        this.rival.finished = true;
+        this.rival.finishTime = raceTime;
+      }
+    }
+    if (pl.finished) return;
+    this.recorder.sample(raceTime, pl.sim.position, pl.sim.quaternion, pl.sim.wheels[0].steer);
+    if (this.rival && !this.rival.finished) this.rivalRecorder.sample(raceTime, this.rival.sim.position, this.rival.sim.quaternion, this.rival.sim.wheels[0].steer);
+    const s = pl.proj.s;
+    const next = this.hud.splits.length;
+    if (next < this.track.sectorSplits.length && s >= this.track.sectorSplits[next]) {
+      const ms = Math.round(raceTime * 1000);
+      this.hud.splits.push(ms);
+      const ref = this.bestSplits?.[next];
+      this.hud.lastSplitDelta = ref ? ms - ref : null;
+      this.hud.lastSplitIndex = next;
+      this.hud.sectorFlashT = this.time;
+      this.emit({ type: 'sector', index: next, timeMs: ms, deltaMs: this.hud.lastSplitDelta });
+      if (next < this.track.sectorSplits.length - 1) this.audio?.chime([880, 1320]);
+    }
+    if (s >= this.track.finishS && this.hud.splits.length >= this.track.sectorSplits.length) {
+      pl.finished = true;
+      pl.finishTime = raceTime;
+      this.finishRace();
     }
   }
 
   private updateRace(dt: number) {
     const pl = this.player;
     if (!pl) return;
-    const raceTime = pl.finished ? pl.finishTime : this.time - this.raceStartTime;
+    const raceTime = pl.finished ? pl.finishTime : this.simTime - this.raceStartTime;
     this.hud.raceTime = raceTime;
     const s = pl.proj.s;
     this.hud.progress = clamp((s - this.track.startS) / (this.track.finishS - this.track.startS), 0, 1);
     this.topSpeed = Math.max(this.topSpeed, pl.sim.speed * 3.6);
 
     if (!pl.finished) {
-      this.recorder.sample(raceTime, pl.sim.position, pl.sim.quaternion, pl.sim.wheels[0].steer);
-      // sector splits
-      const next = this.hud.splits.length;
-      if (next < this.track.sectorSplits.length && s >= this.track.sectorSplits[next]) {
-        const ms = Math.round(raceTime * 1000);
-        this.hud.splits.push(ms);
-        const ref = this.bestSplits?.[next];
-        this.hud.lastSplitDelta = ref ? ms - ref : null;
-        this.hud.lastSplitIndex = next;
-        this.hud.sectorFlashT = this.time;
-        this.emit({ type: 'sector', index: next, timeMs: ms, deltaMs: this.hud.lastSplitDelta });
-        if (next < this.track.sectorSplits.length - 1) this.audio?.chime([880, 1320]);
-      }
-      if (s >= this.track.finishS && this.hud.splits.length >= this.track.sectorSplits.length) {
-        pl.finished = true;
-        pl.finishTime = raceTime;
-        this.finishRace();
-      }
       // wrong way
       this.track.getFwd(pl.proj.index, _f);
       const wrong = pl.sim.forward.dot(_f) < -0.3 && pl.sim.speed > 4;
@@ -541,10 +613,6 @@ export class Game {
     if (this.rival) {
       const rs = this.rival.proj.s;
       this.hud.rivalProgress = clamp((rs - this.track.startS) / (this.track.finishS - this.track.startS), 0, 1);
-      if (!this.rival.finished && rs >= this.track.finishS) {
-        this.rival.finished = true;
-        this.rival.finishTime = this.time - this.raceStartTime;
-      }
       const ahead = pl.finished
         ? !this.rival.finished || pl.finishTime <= this.rival.finishTime
         : this.rival.finished
@@ -556,8 +624,7 @@ export class Game {
 
     if (this.ghost) {
       const gp = this.ghost.player;
-      const t = raceTime;
-      const pose = gp.pose(t, _v, _q);
+      const pose = gp.pose(raceTime, _v, _q);
       const gs = this.track.project(_v.x, _v.y, _v.z).s;
       this.hud.ghostProgress = clamp((gs - this.track.startS) / (this.track.finishS - this.track.startS), 0, 1);
       if (pose.done) this.ghost.visual.root.visible = false;
@@ -579,6 +646,8 @@ export class Game {
       rivalWon: this.rival ? !(rivalTime === undefined || pl.finishTime <= rivalTime) : undefined,
       rivalTimeMs: rivalTime !== undefined ? Math.round(rivalTime * 1000) : undefined,
       ghost: this.recorder.data(),
+      rivalCarId: this.rival?.sim.spec.id,
+      rivalGhost: this.rival ? this.rivalRecorder.data() : undefined,
       topSpeedKmh: Math.round(this.topSpeed),
       driftScore: this.hud.driftScore,
     };
@@ -596,7 +665,7 @@ export class Game {
       if (!this.paused) this.emitTyreFx(r, dt);
     }
     if (this.ghost && (this.phase === 'racing' || this.phase === 'finished' || this.phase === 'countdown')) {
-      const t = this.phase === 'countdown' ? 0 : this.player?.finished ? this.player.finishTime : this.time - this.raceStartTime;
+      const t = this.phase === 'countdown' ? 0 : this.player?.finished ? this.player.finishTime : this.simTime - this.raceStartTime;
       const pose = this.ghost.player.pose(t, _v, _q);
       // ghost frames store the body origin; the visual expects ground-relative pose
       this.ghost.visual.syncFromPose({ position: _v, quaternion: _q, steer: pose.steer }, dt);
@@ -610,7 +679,8 @@ export class Game {
     this.smoke.setViewportHeight(this.renderer.domElement.height);
 
     // ---- camera
-    if (this.phase === 'attract' && this.attractCar) this.cinematicCamera(dt, this.attractCar);
+    if (this.phase === 'attract' && this.attractCar) this.cinematicCamera(dt, this.attractCar.visual.root, this.attractCar.proj.s);
+    else if (this.phase === 'replay' && this.replay) this.updateReplay(dt);
     else if (this.phase === 'garage' && this.garageCar) this.garageCamera(dt);
     else if (this.player) {
       const sim = this.player.sim;
@@ -671,17 +741,62 @@ export class Game {
     });
   }
 
-  private cinematicCamera(dt: number, r: Racer) {
+  /** Cinematic replay of a finished race from the recorded ghost data. */
+  startReplay(result: RaceResult) {
+    this.clearRace();
+    const entries: [CarId, GhostData][] = [[result.carId, result.ghost]];
+    if (result.rivalGhost && result.rivalCarId) entries.push([result.rivalCarId, result.rivalGhost]);
+    const cars = entries.map(([carId, data], i) => {
+      const spec = CAR_SPECS[carId];
+      const visual = new CarVisual(spec, {
+        headlights: true,
+        shadows: this.quality.shadows,
+        rideHeight: 0.16 + spec.size.height / 2,
+        bodyColor: i === 1 ? '#e9e9ea' : undefined,
+      });
+      visual.setHeadlights(this.env.preset.lampsOn > 0.5 ? 1 : 0.6);
+      this.root.add(visual.root);
+      return { player: new GhostPlayer(data), visual, wheelRot: 0, last: new THREE.Vector3() };
+    });
+    this.replay = { cars, t: 0, duration: cars[0].player.duration, proj: { index: -1, s: 0, lateral: 0, height: 0 } };
+    this.cinematic.shot = 0;
+    this.cinematic.t = 6.5;
+    this.setPhase('replay');
+  }
+
+  private updateReplay(dt: number) {
+    const rp = this.replay!;
+    rp.t += dt;
+    if (rp.t > rp.duration + 1.5) {
+      rp.t = 0;
+      rp.proj.index = -1;
+    }
+    rp.cars.forEach((c, i) => {
+      const pose = c.player.pose(rp.t, _v, _q);
+      const moved = c.last.lengthSq() > 0 ? _v.distanceTo(c.last) : 0;
+      c.wheelRot += moved / 0.3;
+      c.last.copy(_v);
+      c.visual.syncFromPose({ position: _v, quaternion: _q, steer: pose.steer, wheelRotations: [c.wheelRot, c.wheelRot, c.wheelRot, c.wheelRot] }, dt);
+      if (i === 0) rp.proj = this.track.project(_v.x, _v.y, _v.z, rp.proj.index, rp.proj);
+    });
+    this.cinematicCamera(dt, rp.cars[0].visual.root, rp.proj.s);
+  }
+
+  get replayTime() {
+    return this.replay?.t ?? 0;
+  }
+
+  private cinematicCamera(dt: number, root: THREE.Object3D, trackS: number) {
     const c = this.cinematic;
     c.t += dt;
-    const car = r.visual.root.position;
-    const fwd = _f.set(0, 0, 1).applyQuaternion(r.visual.root.quaternion);
+    const car = root.position;
+    const fwd = _f.set(0, 0, 1).applyQuaternion(root.quaternion);
     const shots = 4;
     if (c.t > 7) {
       c.t = 0;
       c.shot = (c.shot + 1) % shots;
       // trackside anchor for the static shot: ahead of the car
-      const s = r.proj.s + 70;
+      const s = trackS + 70;
       this.track.pointAt(s, (this.track.widthAt(s) / 2 + 4) * (c.shot % 2 ? 1 : -1), c.anchor);
       c.anchor.y += 2.2;
     }
@@ -699,7 +814,7 @@ export class Game {
       }
       case 1: {
         // trackside pan
-        if (c.anchor.lengthSq() === 0) this.track.pointAt(r.proj.s + 70, 8, c.anchor);
+        if (c.anchor.lengthSq() === 0) this.track.pointAt(trackS + 70, 8, c.anchor);
         cam.position.copy(c.anchor);
         cam.lookAt(car.x, car.y + 0.6, car.z);
         fov = clamp(40 - c.anchor.distanceTo(car) * 0.1, 18, 40);
@@ -775,7 +890,7 @@ export class Game {
       l.position.copy(lamp.position);
       l.color.copy(lamp.color);
       // fade by distance so swapping lights never pops
-      l.intensity = 340 * lampsOn * smoothstep(260, 120, Math.sqrt(b.d));
+      l.intensity = 170 * lampsOn * smoothstep(200, 90, Math.sqrt(b.d));
     });
   }
 

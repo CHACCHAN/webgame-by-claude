@@ -45,6 +45,18 @@ TLS を検査するプロキシの内側でビルドする場合は、そのプ�
 - `e2e/` — Playwright E2E テスト
 - `docs/` — 設計（PLAN）、進捗（PROGRESS）、素材台帳（ASSETS）
 
+## 開発者向けツール（`frontend/` で実行）
+
+| コマンド | 内容 |
+|---|---|
+| `npm test` | ユニットテスト（コース形状・ゴーストの圧縮・車両挙動・AI の完走） |
+| `npm run sim` | AI ドライバーで全車種・全難易度をヘッドレス走行させ、タイムと事故を集計 |
+| `npm run handling` | 加速・制動・旋回・ドリフト保持などの操縦性テスト |
+| `npm run seed:bots` | CPU ドライバーの記録とゴーストを生成（Laravel のシーダーが読み込む） |
+| `npm run assets:cars` | 車両モデルを GLB に書き出し、glTF-Transform で最適化（`vite preview` 起動中に実行） |
+
+デバッグ用 URL パラメータ：`?autodrive=1`（AI が自車を運転）、`?timescale=4`（時間を加速）。
+
 ## 動作環境・性能について
 
 PC の Chrome / Edge / Firefox の最新版を対象とし、1080p・60fps を目標にしています。

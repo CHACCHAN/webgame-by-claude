@@ -62,6 +62,8 @@ export function buildRoadGeometry(track: Track): BufferGeometry {
   const pos = new Float32Array(rows * cols * 3);
   const nor = new Float32Array(rows * cols * 3);
   const uv = new Float32Array(rows * cols * 2);
+  // lightmap coordinates: x across the full cross-section, y along the road (row)
+  const uv1 = new Float32Array(rows * cols * 2);
   const p = new Vector3(), up = new Vector3();
   for (let r = 0; r < rows; r++) {
     const i = Math.min(r * STEP, track.count - 1);
@@ -92,6 +94,8 @@ export function buildRoadGeometry(track: Track): BufferGeometry {
       nor[o + 1] = up.y;
       nor[o + 2] = up.z;
       uv[(r * cols + c) * 2] = u;
+      uv1[(r * cols + c) * 2] = (lat + hw + 0.6) / (2 * (hw + 0.6));
+      uv1[(r * cols + c) * 2 + 1] = (r + 0.5) / rows;
       uv[(r * cols + c) * 2 + 1] = i;
     }
   }
@@ -106,6 +110,9 @@ export function buildRoadGeometry(track: Track): BufferGeometry {
   g.setAttribute('position', new BufferAttribute(pos, 3));
   g.setAttribute('normal', new BufferAttribute(nor, 3));
   g.setAttribute('uv', new BufferAttribute(uv, 2));
+  g.setAttribute('uv1', new BufferAttribute(uv1, 2));
+  g.userData.lightmapRows = rows;
+  g.userData.lightmapStep = STEP;
   g.setIndex(idx);
   return g;
 }

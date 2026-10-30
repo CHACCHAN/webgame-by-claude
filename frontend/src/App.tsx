@@ -5,7 +5,7 @@ import { useSettings } from './store/settings';
 import { BootScreen, ControlsScreen, GarageScreen, ModesScreen, RivalsScreen, TitleScreen } from './ui/screens/Menus';
 import { LeaderboardScreen } from './ui/screens/Leaderboard';
 import { SettingsScreen } from './ui/screens/Settings';
-import { ResultsScreen } from './ui/screens/Results';
+import { ReplayOverlay, ResultsScreen } from './ui/screens/Results';
 import { Hud, PauseMenu } from './ui/hud/Hud';
 
 export function App() {
@@ -64,7 +64,7 @@ export function App() {
     return () => clearInterval(id);
   }, []);
 
-  const inRace = screen === 'race' || screen === 'results';
+  const inRace = screen === 'race' || (screen === 'results' && phase !== 'replay');
   return (
     <div className={`app screen-${screen}`}>
       <GameCanvas />
@@ -79,6 +79,7 @@ export function App() {
         {screen === 'controls' && <ControlsScreen />}
         {inRace && (phase === 'countdown' || phase === 'racing' || phase === 'finished') && <Hud key={String(gameHolder.game?.currentConfig?.carId) + phase.length} />}
         {screen === 'results' && <ResultsScreen />}
+        {screen === 'replay' && <ReplayOverlay />}
         {screen === 'race' && paused && <PauseMenu />}
       </div>
     </div>
