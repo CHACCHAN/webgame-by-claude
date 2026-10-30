@@ -292,7 +292,7 @@ export class VehicleSim {
     // ---------------- steering
     const steerTarget = clamp(inp.steer, -1, 1);
     const returning = Math.abs(steerTarget) < Math.abs(this.steerSmoothed);
-    const steerRate = returning ? 7 : 4.2;
+    const steerRate = returning ? 8 : 5.5;
     const ds = clamp(steerTarget - this.steerSmoothed, -steerRate * dt, steerRate * dt);
     this.steerSmoothed += ds;
     const speedFactor = lerp(1, 0.32, smoothstep(6, 46, planarSpeed));

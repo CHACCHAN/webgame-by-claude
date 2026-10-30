@@ -497,6 +497,24 @@ export function buildProceduralCar(spec: CarSpec, opts: { bodyColor?: string } =
     mglass.rotation.y = Math.PI;
     body.add(mglass);
   }
+  // door shut lines and handles: tiny details that read as "real car" at a glance
+  const seamMat = new THREE.MeshBasicMaterial({ color: '#050506' });
+  const doorFront = axleF - archR - 0.06;
+  const doorRear = mix(st.roofFront, st.roofRear, 0.48) - (spec.id === 'raijin' ? 0.9 : 0.05);
+  for (const side of [1, -1]) {
+    for (const z of spec.id === 'raijin' ? [doorFront, mix(doorFront, doorRear, 0.52), doorRear] : [doorFront, doorRear]) {
+      const top = topAt(z) - 0.03;
+      const bot = archHeight(z) + 0.1;
+      const seam = new THREE.Mesh(new THREE.BoxGeometry(0.006, top - bot, 0.008), seamMat);
+      seam.position.set(side * (planWidth(z) + 0.002), (top + bot) / 2, z);
+      body.add(seam);
+    }
+    const hz = doorRear + 0.18;
+    const handle = new THREE.Mesh(new THREE.BoxGeometry(0.012, 0.025, 0.14), mats.trim);
+    handle.position.set(side * (planWidth(hz) + 0.004), Math.min(st.shoulder, topAt(hz)) - 0.08, hz);
+    body.add(handle);
+  }
+
   // grille + front lip
   const grille = new THREE.Mesh(new THREE.BoxGeometry(W * 0.9, 0.12, 0.04), mats.trim);
   grille.position.set(0, st.bottom + 0.2, st.front - 0.03);

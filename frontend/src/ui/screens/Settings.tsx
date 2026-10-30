@@ -3,6 +3,7 @@ import { useApp } from '../../store/app';
 import { useSettings, type QualityLevel } from '../../store/settings';
 import { useMenuInput } from '../useMenuInput';
 import { gameHolder } from '../GameCanvas';
+import type { TimeOfDay } from '../../game/render/Environment';
 import { Hint } from './Menus';
 import { sfx } from '../sfx';
 
@@ -28,10 +29,11 @@ export function SettingsScreen() {
     { label: 'グラフィック品質', value: qLabel[s.quality], note: '影・木の密度・ポストエフェクト', change: (d) => { s.set({ quality: cycle(qualities, s.quality, d) }); setNeedsReload(true); } },
     { label: '解像度スケール', value: pct(s.resolutionScale), change: (d) => s.set({ resolutionScale: step(s.resolutionScale, d, 0.1, 0.5, 1) }) },
     {
-      label: '時間帯',
-      value: s.timeOfDay === 'night' ? '深夜（夜景）' : '夜明け（雲海）',
-      change: () => {
-        const tod = s.timeOfDay === 'night' ? 'dawn' : 'night';
+      label: '時間帯・天候',
+      value: { night: '深夜（夜景）', rain: '深夜（雨）', dawn: '夜明け（雲海）' }[s.timeOfDay],
+      note: '雨の日は路面が滑りやすくなります',
+      change: (d) => {
+        const tod = cycle<TimeOfDay>(['night', 'rain', 'dawn'], s.timeOfDay, d);
         s.set({ timeOfDay: tod });
         game?.applyTimeOfDay(tod);
       },

@@ -208,6 +208,28 @@ export class AudioEngine {
     this.wind.filter.frequency.setTargetAtTime(300 + speed * 18, t, 0.1);
   }
 
+  private rainGain: GainNode | null = null;
+  /** Rain ambience: hiss + low rumble from filtered noise. */
+  setRain(level: number) {
+    if (!this.rainGain) {
+      const src = this.ctx.createBufferSource();
+      src.buffer = this.noise;
+      src.loop = true;
+      const hp = this.ctx.createBiquadFilter();
+      hp.type = 'bandpass';
+      hp.frequency.value = 5200;
+      hp.Q.value = 0.5;
+      const lp = this.ctx.createBiquadFilter();
+      lp.type = 'lowpass';
+      lp.frequency.value = 9000;
+      this.rainGain = this.ctx.createGain();
+      this.rainGain.gain.value = 0;
+      src.connect(hp).connect(lp).connect(this.rainGain).connect(this.sfx);
+      src.start();
+    }
+    this.rainGain.gain.setTargetAtTime(level * 0.16, this.ctx.currentTime, 0.5);
+  }
+
   silenceDriving() {
     const t = this.ctx.currentTime;
     this.squeal.gain.gain.setTargetAtTime(0, t, 0.05);

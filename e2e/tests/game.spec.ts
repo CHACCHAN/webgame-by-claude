@@ -31,9 +31,9 @@ test('menu navigation, settings persistence and controls screen', async ({ page 
   const tod = page.locator('.settings-list li', { hasText: '時間帯' });
   await expect(tod).toContainText('深夜');
   await tod.locator('button[aria-label="increase"]').click();
-  await expect(tod).toContainText('夜明け');
+  await expect(tod).toContainText('雨');
   const stored = await page.evaluate(() => JSON.parse(localStorage.getItem('touge-settings')!).state.timeOfDay);
-  expect(stored).toBe('dawn');
+  expect(stored).toBe('rain');
   await page.keyboard.press('Escape');
   await page.locator('.menu-list li', { hasText: 'CONTROLS' }).click();
   await expect(page.locator('.controls-table')).toContainText('サイドブレーキ');

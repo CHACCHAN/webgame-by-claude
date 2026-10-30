@@ -76,7 +76,7 @@ export class InputManager {
     const down = this.isDown('ArrowDown', 'KeyS');
     const target = (right ? 1 : 0) - (left ? 1 : 0);
     // keys ramp the steering; releasing returns faster
-    const rate = target === 0 ? 6 : Math.sign(target) !== Math.sign(this.steerKey) ? 9 : 3.2;
+    const rate = target === 0 ? 7 : Math.sign(target) !== Math.sign(this.steerKey) ? 10 : 4.6;
     this.steerKey = clamp(this.steerKey + clamp(target - this.steerKey, -rate * dt, rate * dt), -1, 1);
     this.throttleKey = clamp(this.throttleKey + (up ? 8 : -12) * dt, 0, 1);
     this.brakeKey = clamp(this.brakeKey + (down ? 10 : -14) * dt, 0, 1);

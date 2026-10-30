@@ -158,3 +158,28 @@ export function saveLocalBest(b: LocalBest) {
     /* ignore quota errors */
   }
 }
+
+// -------- per-car personal bests (times only)
+const CAR_BESTS = 'touge-car-bests';
+export function loadCarBests(): Partial<Record<CarId, number>> {
+  try {
+    return JSON.parse(localStorage.getItem(CAR_BESTS) ?? '{}');
+  } catch {
+    return {};
+  }
+}
+
+/** Store a time; returns the previous best for that car (null if none). */
+export function saveCarBest(car: CarId, timeMs: number): number | null {
+  const all = loadCarBests();
+  const prev = all[car] ?? null;
+  if (prev === null || timeMs < prev) {
+    all[car] = timeMs;
+    try {
+      localStorage.setItem(CAR_BESTS, JSON.stringify(all));
+    } catch {
+      /* ignore */
+    }
+  }
+  return prev;
+}

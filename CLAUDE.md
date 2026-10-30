@@ -32,6 +32,12 @@ running log of what is done, verified and pending. `docs/PLAN.md` holds the desi
 - Headless Chromium renders WebGL with SwiftShader (~1–6 fps): use quality `low` for automated UI checks and
   the Node headless sim for driving/physics checks. Never `pkill -f` a pattern contained in your own command line.
 
+## Gotchas
+- Cars load from `frontend/public/models/cars/*.glb` at runtime. After editing `CarModel.ts`, rebuild and run
+  `npm run assets:cars` (with `vite preview` on :4173 and `PW_MODULE=<path to playwright>`), or delete the GLBs
+  to fall back to the procedural builder.
+- Race timing/splits/AI run per physics step (`Game.raceStep`, `driveAI`); keep frame-time logic out of timing.
+
 ## Conventions
 - Units: meters, seconds, radians. +Y up, +Z south (towards the bay). Heading 0 = +Z; car local +Z forward, +X left.
 - Physics fixed step 120 Hz (`PHYSICS_DT`); visuals interpolate. Vehicle forces are applied as impulses.

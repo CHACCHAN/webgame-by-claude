@@ -56,7 +56,7 @@ export class AIDriver {
   calibrate(vehicle: VehicleSim) {
     vehicle.gripDriver = true;
     vehicle.assist = 2;
-    const grip = Math.min(vehicle.spec.gripFront, vehicle.spec.gripRear) * 9.81;
+    const grip = Math.min(vehicle.spec.gripFront, vehicle.spec.gripRear) * vehicle.gripScale * 9.81;
     this.speeds = this.line.speedProfile(grip * this.profile.gripUse, grip * this.profile.brakeUse, 50, 62);
   }
 

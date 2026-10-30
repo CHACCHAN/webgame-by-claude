@@ -3,7 +3,7 @@ import type { TerrainData } from '../track/terrain';
 import { fbm, rng, smoothstep } from '../util/math';
 import { makeGlowTexture } from './textures';
 
-export type TimeOfDay = 'night' | 'dawn';
+export type TimeOfDay = 'night' | 'rain' | 'dawn';
 
 interface Preset {
   zenith: string;
@@ -26,6 +26,11 @@ interface Preset {
   clouds: number;
   cloudColor: string;
   seaOfClouds: number;
+  /** 0..1 rain intensity (wet roads, rain streaks, spray, less grip) */
+  rain: number;
+  /** moon/sun disc visibility */
+  disc: number;
+  overcast: number;
 }
 
 export const PRESETS: Record<TimeOfDay, Preset> = {
@@ -50,6 +55,34 @@ export const PRESETS: Record<TimeOfDay, Preset> = {
     clouds: 0.35,
     cloudColor: '#26324a',
     seaOfClouds: 0,
+    rain: 0,
+    disc: 1,
+    overcast: 0,
+  },
+  rain: {
+    zenith: '#05080d',
+    horizon: '#1a2230',
+    glow: '#ff9a50',
+    cityGlow: 0.85,
+    fog: '#121a26',
+    fogDensity: 0.0011,
+    keyColor: '#8fa3c8',
+    keyIntensity: 0.5,
+    keyDir: new THREE.Vector3(0.38, 0.5, 0.78).normalize(),
+    hemiSky: '#37465f',
+    hemiGround: '#121519',
+    hemiIntensity: 0.95,
+    stars: 0,
+    exposure: 1.2,
+    lampsOn: 1,
+    cityLights: 0.8,
+    sea: '#050b12',
+    clouds: 1,
+    cloudColor: '#1c2433',
+    seaOfClouds: 0,
+    rain: 1,
+    disc: 0,
+    overcast: 1,
   },
   dawn: {
     zenith: '#2f5c96',
@@ -72,6 +105,9 @@ export const PRESETS: Record<TimeOfDay, Preset> = {
     clouds: 0.5,
     cloudColor: '#f6c8a8',
     seaOfClouds: 1,
+    rain: 0,
+    disc: 1,
+    overcast: 0,
   },
 };
 
@@ -86,7 +122,7 @@ void main() {
 
 const skyFrag = /* glsl */ `
 uniform vec3 uZenith, uHorizon, uGlow, uCloudColor, uKeyDir, uKeyColor, uCityDir;
-uniform float uCityGlow, uStars, uTime, uClouds, uIsSun;
+uniform float uCityGlow, uStars, uTime, uClouds, uIsSun, uDisc, uOvercast;
 varying vec3 vDir;
 float hash(vec3 p) { p = fract(p * 0.3183099 + 0.1); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
 float hash2(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
@@ -112,7 +148,7 @@ void main() {
   vec3 discCol = mix(vec3(1.0, 0.97, 0.9) * 2.6, vec3(1.0, 0.85, 0.6) * 9.0, uIsSun);
   // subtle craters on the moon
   float crater = (1.0 - uIsSun) * (vnoise(d.xy * 900.0) * 0.25);
-  col = mix(col, discCol * (1.0 - crater), disc);
+  col = mix(col, discCol * (1.0 - crater), disc * uDisc);
   // stars
   if (uStars > 0.0 && h > 0.0) {
     vec3 sp = d * 320.0;
@@ -131,7 +167,7 @@ void main() {
   // thin clouds
   if (h > 0.0 && uClouds > 0.0) {
     vec2 uv = d.xz / (h + 0.12) * 1.4 + vec2(uTime * 0.004, 0.0);
-    float c = smoothstep(0.52, 0.85, fbm(uv));
+    float c = smoothstep(0.52 - uOvercast * 0.45, 0.85 - uOvercast * 0.3, fbm(uv));
     float lit = 0.5 + 0.5 * pow(kd, 4.0);
     col = mix(col, uCloudColor * lit, c * uClouds * smoothstep(0.0, 0.18, h));
   }
@@ -174,6 +210,8 @@ export function buildEnvironment(terrain: TerrainData): EnvironmentRig {
     uTime: { value: 0 },
     uClouds: { value: 0.4 },
     uIsSun: { value: 0 },
+    uDisc: { value: 1 },
+    uOvercast: { value: 0 },
   };
   const sky = new THREE.Mesh(
     new THREE.SphereGeometry(9000, 48, 24),
@@ -311,6 +349,8 @@ export function buildEnvironment(terrain: TerrainData): EnvironmentRig {
       skyUniforms.uKeyDir.value.copy(p.keyDir);
       skyUniforms.uKeyColor.value.set(p.keyColor);
       skyUniforms.uIsSun.value = tod === 'dawn' ? 1 : 0;
+      skyUniforms.uDisc.value = p.disc;
+      skyUniforms.uOvercast.value = p.overcast;
       key.color.set(p.keyColor);
       key.intensity = p.keyIntensity;
       hemi.color.set(p.hemiSky);

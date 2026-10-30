@@ -14,6 +14,7 @@ import { loadCarTemplates } from './render/carAssets';
 import { ChaseCamera } from './camera/ChaseCamera';
 import { InputManager } from './input/Input';
 import { TireSmoke, SkidMarks } from './fx/TireEffects';
+import { Rain } from './fx/Rain';
 import { AudioEngine } from './audio/AudioEngine';
 import { GhostPlayer, GhostRecorder, type GhostData } from './race/Ghost';
 import { clamp, damp, lerp, smoothstep } from './util/math';
@@ -95,6 +96,7 @@ interface Racer {
 }
 
 const _v = new THREE.Vector3(), _q = new THREE.Quaternion(), _f = new THREE.Vector3();
+const _zero = new THREE.Vector3();
 
 export class Game {
   readonly root = new THREE.Group();
@@ -109,6 +111,10 @@ export class Game {
   chase!: ChaseCamera;
   smoke = new TireSmoke();
   skids = new SkidMarks(8);
+  rain = new Rain();
+  /** tyre grip multiplier from the weather (wet roads) */
+  weatherGrip = 1;
+  private dryMaterials: { road?: { roughness: number; color: THREE.Color; normal: number; env: number }; terrain?: number } = {};
 
   phase: GamePhase = 'loading';
   paused = false;
@@ -197,7 +203,7 @@ export class Game {
     this.root.add(this.env.group);
     this.env.key.castShadow = this.quality.shadows;
     this.env.key.shadow.mapSize.set(this.quality.shadowMapSize, this.quality.shadowMapSize);
-    this.root.add(this.smoke.points, this.skids.mesh);
+    this.root.add(this.smoke.points, this.skids.mesh, this.rain.mesh);
     // pooled lights for nearby street lamps
     for (let i = 0; i < 6; i++) {
       const l = new THREE.PointLight('#ffa850', 0, 42, 1.7);
@@ -228,11 +234,29 @@ export class Game {
       m.userData.baseIntensity ??= m.emissiveIntensity;
       m.emissiveIntensity = (m.userData.baseIntensity as number) * lamps;
     }
-    this.smoke.setColor(tod === 'night' ? '#7d8794' : '#d9d4cf');
+    this.smoke.setColor(tod === 'dawn' ? '#d9d4cf' : tod === 'rain' ? '#9aa6b4' : '#7d8794');
+    // wet roads: glossy, darker asphalt and slicker terrain; less tyre grip
+    const wet = this.env.preset.rain;
+    const road = this.scenery.roadMaterial;
+    this.dryMaterials.road ??= { roughness: road.roughness, color: road.color.clone(), normal: road.normalScale.x, env: road.envMapIntensity };
+    const dry = this.dryMaterials.road;
+    road.roughness = lerp(dry.roughness, 0.16, wet);
+    road.color.copy(dry.color).multiplyScalar(lerp(1, 0.6, wet));
+    road.normalScale.setScalar(lerp(dry.normal, 0.25, wet));
+    road.envMapIntensity = lerp(dry.env, 1.8, wet);
+    const terrain = this.scenery.lightmapMats[1];
+    this.dryMaterials.terrain ??= terrain.roughness;
+    terrain.roughness = lerp(this.dryMaterials.terrain, 0.62, wet);
+    this.rain.setIntensity(wet);
+    this.weatherGrip = lerp(1, 0.86, wet);
+    this.audio?.setRain(wet);
   }
 
   initAudio() {
-    if (!this.audio) this.audio = new AudioEngine();
+    if (!this.audio) {
+      this.audio = new AudioEngine();
+      if (this.env) this.audio.setRain(this.env.preset.rain);
+    }
     this.audio.resume();
     return this.audio;
   }
@@ -243,6 +267,7 @@ export class Game {
     const p = this.track.pointAt(s, lateral);
     const sim = new VehicleSim(this.physics, spec, p, this.track.headingAt(s));
     sim.assist = this.assist;
+    sim.gripScale = this.weatherGrip;
     const visual = new CarVisual(spec, {
       headlights: opts.headlights,
       shadows: this.quality.shadows,
@@ -316,6 +341,7 @@ export class Game {
   startAttract() {
     this.clearRace();
     this.attractCar = this.createRacer('shiden', this.track.startS - 10, 0, { ai: 'legend', headlights: true });
+    // open on the slow orbit at the summit, then cycle through the other shots
     this.cinematic.shot = 0;
     this.cinematic.t = 0;
     this.setPhase('attract');
@@ -406,6 +432,7 @@ export class Game {
     }
     this.updateVisuals(dt);
     this.env.update(this.time, this.camera.position);
+    this.rain.update(this.time, this.camera.position, this.player?.sim.velocity ?? _zero);
     this.scenery.update(this.time, this.camera.position);
     this.updateLampLights();
   }
@@ -728,8 +755,12 @@ export class Game {
   private emitTyreFx(r: Racer, dt: number) {
     const sim = r.sim;
     const isPlayer = r === this.player;
+    const wet = this.env.preset.rain;
     sim.wheels.forEach((w, i) => {
       const id = (isPlayer ? 0 : 4) + i;
+      if (wet > 0 && w.grounded && !w.front && sim.speed > 9 && Math.random() < wet * (sim.speed / 45) * 14 * dt) {
+        this.smoke.emit(w.contactPoint, sim.velocity, 0.45);
+      }
       if (!w.grounded || w.skid < 0.25) {
         this.skids.break(id);
         return;

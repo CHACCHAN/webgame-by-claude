@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { useApp } from '../../store/app';
 import { useMenuInput } from '../useMenuInput';
 import { gameHolder } from '../GameCanvas';
-import { api, loadLocalBest, loadPlayer, saveLocalBest, type SubmitResult } from '../../api/client';
+import { api, loadLocalBest, loadPlayer, saveCarBest, saveLocalBest, type SubmitResult } from '../../api/client';
+import { MEDAL_LABEL, medalFor } from '../../game/race/medals';
 import { encodeGhost, type EncodedGhost } from '../../game/race/Ghost';
 import type { RaceResult } from '../../game/Game';
 import { CAR_SPECS } from '../../game/vehicle/carSpecs';
@@ -15,6 +16,7 @@ type SubmitState = { kind: 'idle' } | { kind: 'need-name' } | { kind: 'sending' 
 
 /** Per-result state survives the screen being re-mounted (e.g. after watching the replay). */
 const memo = new WeakMap<RaceResult, { submit: SubmitState; localPB: { isNew: boolean; prev: number | null }; encoded: Promise<EncodedGhost> }>();
+const medalNew = new WeakMap<RaceResult, boolean>();
 
 export function ResultsScreen() {
   const { result, go, set, ghostChoice } = useApp();
@@ -40,6 +42,11 @@ export function ResultsScreen() {
       return;
     }
     encoded.current = encodeGhost(result.ghost);
+    const prevCarBest = saveCarBest(result.carId, result.timeMs);
+    const before = prevCarBest === null ? null : medalFor(result.carId, prevCarBest);
+    const now = medalFor(result.carId, result.timeMs);
+    const rank = { gold: 3, silver: 2, bronze: 1 } as const;
+    medalNew.set(result, !!now && (before === null || rank[now] > rank[before]));
     const prev = loadLocalBest();
     const isNew = !prev || result.timeMs < prev.timeMs;
     setLocalPB({ isNew, prev: prev?.timeMs ?? null });
@@ -114,6 +121,12 @@ export function ResultsScreen() {
           </div>
         </div>
         <div className="results-time">{formatTime(result.timeMs)}</div>
+        {medalFor(result.carId, result.timeMs) && (
+          <div className={`medal medal-${medalFor(result.carId, result.timeMs)}`}>
+            ● {MEDAL_LABEL[medalFor(result.carId, result.timeMs)!]}
+            {medalNew.get(result) && <em> 獲得！</em>}
+          </div>
+        )}
         {localPB.isNew && <div className="badge-pb">NEW PERSONAL BEST{localPB.prev !== null && ` (${formatTime(result.timeMs - localPB.prev, { sign: true })})`}</div>}
         {ghostDelta !== null && (
           <div className={`ghost-delta ${ghostDelta <= 0 ? 'faster' : 'slower'}`}>

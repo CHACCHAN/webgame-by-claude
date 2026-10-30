@@ -5,7 +5,8 @@ import { useMenuInput } from '../useMenuInput';
 import { CAR_ORDER, CAR_SPECS } from '../../game/vehicle/carSpecs';
 import { AI_PROFILES, type AILevel } from '../../game/ai/AIDriver';
 import { decodeGhost } from '../../game/race/Ghost';
-import { api, loadLocalBest } from '../../api/client';
+import { api, loadCarBests, loadLocalBest } from '../../api/client';
+import { MEDAL_LABEL, medalFor, nextTarget } from '../../game/race/medals';
 import { formatTime } from '../format';
 import { sfx } from '../sfx';
 
@@ -205,6 +206,7 @@ export function GarageScreen() {
           <div><small>WEIGHT</small><b>{spec.mass} kg</b></div>
           <div><small>REDLINE</small><b>{spec.engine.redline} rpm</b></div>
         </div>
+        <CarRecord id={id} />
         <div className="colors">
           {palette.map((c) => (
             <button key={c} className={c === color ? 'swatch on' : 'swatch'} style={{ background: c }} onClick={() => set({ carColor: c })} aria-label={`color ${c}`} />
@@ -231,10 +233,10 @@ export function RivalsScreen() {
     legend: '夜明け前にだけ現れるという白い影。誰も、その背中に追いついたことがない。',
   };
   const car: Record<AILevel, string> = { rookie: 'HAYATE TR-S', ace: 'RAIJIN GT-X', legend: 'SHIDEN RS' };
-  const start = () => {
-    set({ rivalLevel: levels[i] });
+  const start = (level: AILevel = levels[i]) => {
+    set({ rivalLevel: level });
     sfx.confirm();
-    startRaceFromState(levels[i]);
+    void startRaceFromState(level);
   };
   useMenuInput((a) => {
     if (a === 'left' || a === 'up') { setI((x) => (x + 2) % 3); sfx.move(); }
@@ -249,7 +251,7 @@ export function RivalsScreen() {
         {levels.map((l, k) => {
           const p = AI_PROFILES[l];
           return (
-            <div key={l} className={`rival-card ${l} ${k === i ? 'active' : ''}`} onMouseEnter={() => setI(k)} onClick={() => { setI(k); start(); }}>
+            <div key={l} className={`rival-card ${l} ${k === i ? 'active' : ''}`} onMouseEnter={() => setI(k)} onClick={() => { setI(k); start(l); }}>
               <div className="rc-level">{['★', '★★', '★★★'][k]}</div>
               <div className="rc-title">{p.title}</div>
               <div className="rc-name">{p.name}</div>
@@ -339,4 +341,27 @@ export function ControlsScreen() {
 export function useLocalBestLabel() {
   const lb = loadLocalBest();
   return lb ? `${formatTime(lb.timeMs)} (${CAR_SPECS[lb.carId].name})` : null;
+}
+
+function CarRecord({ id }: { id: (typeof CAR_ORDER)[number] }) {
+  const best = loadCarBests()[id] ?? null;
+  const medal = best !== null ? medalFor(id, best) : null;
+  const next = nextTarget(id, best);
+  return (
+    <div className="car-record">
+      <div>
+        <small>PERSONAL BEST</small>
+        <b>{best !== null ? formatTime(best) : '--:--.---'}</b>
+        {medal && <span className={`medal-dot medal-${medal}`}>{MEDAL_LABEL[medal]}</span>}
+      </div>
+      <div>
+        <small>NEXT TARGET</small>
+        {next ? (
+          <b className={`medal-${next.medal}`}>{MEDAL_LABEL[next.medal]} {formatTime(next.timeMs)}</b>
+        ) : (
+          <b className="medal-gold">COMPLETE</b>
+        )}
+      </div>
+    </div>
+  );
 }
