@@ -39,6 +39,12 @@ Newest first. "Verified" means actually executed in this environment; anything e
   portraits load (768×1152) on the 天狼 rival screen, the course card shows the art, all three audio files decode.
 - 霧降湖 rival portraits ×3 and key art re-sent one by one and integrated (all 9 rivals and 3 course arts now in
   place); checked on the course select, course loading and 霧降湖 rival screens.
+- Quality review at the High preset (driving views on all courses, rain, dawn, car close-up). Weakest items were the
+  low-poly vegetation and the car bodies. Reworked: trees are now layered cedars (trunk + 7 drooping, ragged tiers,
+  procedural alpha-tested branch/needle texture, volume-style normals, darker inner tiers) with a darker far LOD;
+  rocks and bushes are smooth noise-displaced lumps (rocks with the scanned texture, sunk into the ground). Found &
+  fixed: the canvas foliage texture was mapped upside down (flipY). Before/after screenshots checked.
+  Still the main gap: procedural car bodies look boxy in close-ups (needs a dedicated modelling pass or artist GLBs).
 - Fixed: the end of this log had been cut off by a write while the disk was full; the known-issues list is restored.
 - Bug found & fixed: on 天狼 the garage camera dipped into the steep bank beside the start and glided in from the
   title camera through the hill (rival select showed the road from underneath). The camera and its glide are now

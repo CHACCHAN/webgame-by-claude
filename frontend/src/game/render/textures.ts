@@ -241,6 +241,61 @@ export function makeConcreteTexture(lattice: boolean, photo?: CanvasImageSource 
   return finish(c, true);
 }
 
+/**
+ * Conifer foliage atlas. u 0..0.875: sprays of drooping branchlets with needles on a transparent
+ * background (v = 0 at the trunk, 1 at the ragged branch tips, cut out with alphaTest);
+ * u 0.9..1: opaque white so trunks and distant trees show only their vertex colours.
+ */
+export function makeFoliageTexture(): THREE.Texture {
+  const W = 512, H = 256, FW = W * 0.875;
+  const [c, g] = canvas(W, H);
+  const r = rng(31);
+  g.lineCap = 'round';
+  // dense inner mass so the crown reads as solid near the trunk
+  const grad = g.createLinearGradient(0, 0, 0, H);
+  grad.addColorStop(0, 'rgba(34,52,30,1)');
+  grad.addColorStop(0.4, 'rgba(40,60,34,0.95)');
+  grad.addColorStop(0.55, 'rgba(40,60,34,0)');
+  g.fillStyle = grad;
+  g.fillRect(0, 0, FW, H);
+  // branchlets: a stem from the inner part outwards (down the texture) with needles on both sides
+  // only some branchlets reach the tips, so the alpha cut-out leaves a ragged, see-through edge
+  for (let k = 0; k < 260; k++) {
+    let x = 6 + r() * (FW - 12), y = r() * H * 0.3;
+    const len = H * (0.3 + r() ** 1.6 * 0.7);
+    const dir = (r() - 0.5) * 0.5;
+    const shade = 0.75 + r() * 0.5;
+    const steps = 14;
+    for (let i = 0; i < steps; i++) {
+      const nx = x + Math.sin(dir + i * 0.03) * (len / steps) * 0.4;
+      const ny = y + len / steps;
+      const t = i / steps;
+      const col = `rgb(${Math.round(38 * shade + t * 22)},${Math.round(62 * shade + t * 34)},${Math.round(32 * shade + t * 14)})`;
+      g.strokeStyle = col;
+      g.lineWidth = 2.2 * (1 - t * 0.6);
+      g.beginPath(); g.moveTo(x, y); g.lineTo(nx, ny); g.stroke();
+      // needles
+      g.lineWidth = 1.1;
+      const nl = 11 * (1 - t * 0.4);
+      for (const side of [-1, 1]) {
+        g.beginPath();
+        g.moveTo(nx, ny);
+        g.lineTo(nx + side * nl * (0.7 + r() * 0.5), ny + nl * (0.25 + r() * 0.35));
+        g.stroke();
+      }
+      x = Math.min(FW - 3, Math.max(3, nx));
+      y = ny;
+      if (y > H - 3) break;
+    }
+  }
+  g.fillStyle = '#ffffff';
+  g.fillRect(W * 0.9, 0, W * 0.1, H);
+  const t = finish(c, true, false);
+  t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
+  t.flipY = false; // v grows down the canvas: trunk side at v = 0, ragged tips at v = 1
+  return t;
+}
+
 /** Soft round sprite used for lights, smoke and city glows. */
 export function makeGlowTexture(): THREE.Texture {
   const W = 128;

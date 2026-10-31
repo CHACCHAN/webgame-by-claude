@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { Track } from '../track/Track';
 import type { TerrainData, HeightGrid } from '../track/terrain';
 import type { Landform } from '../track/landforms';
@@ -11,6 +11,7 @@ import {
   makeGroundDetail,
   makeGroundNormal,
   makeRoadTexture,
+  makeFoliageTexture,
   makeSignTexture,
   makeVendingTexture,
 } from './textures';
@@ -737,7 +738,15 @@ function buildTrees(terrain: TerrainData, density: number) {
   const group = new THREE.Group();
   group.name = 'trees';
   const geo = treeGeometry();
-  const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.92, metalness: 0, envMapIntensity: 0.25 });
+  const mat = new THREE.MeshStandardMaterial({
+    vertexColors: true,
+    map: makeFoliageTexture(),
+    alphaTest: 0.5,
+    side: THREE.DoubleSide,
+    roughness: 0.9,
+    metalness: 0,
+    envMapIntensity: 0.2,
+  });
   const r = rng(2024);
   const CHUNK = 320;
   const chunks = new Map<string, THREE.Matrix4[]>();
@@ -788,10 +797,7 @@ function buildTrees(terrain: TerrainData, density: number) {
     add(x, z, (12 + r() * 10) / 14);
   }
   // two levels of detail per chunk; Scenery.update() picks one by camera distance
-  const farGeo = new THREE.ConeGeometry(2.0, 12.5, 6, 1, true).translate(0, 8.2, 0);
-  const farColors = new Float32Array(farGeo.getAttribute('position').count * 3);
-  for (let i = 0; i < farColors.length; i += 3) farColors.set([0.13, 0.2, 0.11], i);
-  farGeo.setAttribute('color', new THREE.BufferAttribute(farColors, 3));
+  const farGeo = farTreeGeometry();
   const lods: { near: THREE.InstancedMesh; far: THREE.InstancedMesh; center: THREE.Vector3 }[] = [];
   for (const [key, list] of chunks) {
     const cols = colors.get(key)!;
@@ -827,46 +833,133 @@ export function updateTreeLods(trees: THREE.Object3D, camera: THREE.Vector3) {
   }
 }
 
-function treeGeometry() {
-  const parts: THREE.BufferGeometry[] = [];
-  const colorize = (g: THREE.BufferGeometry, c: THREE.Color, jitter = 0) => {
-    const n = g.getAttribute('position').count;
-    const arr = new Float32Array(n * 3);
-    for (let i = 0; i < n; i++) {
-      const k = 1 + (Math.sin(i * 12.9898) * 43758.5453 % 1) * jitter;
-      arr[i * 3] = c.r * k;
-      arr[i * 3 + 1] = c.g * k;
-      arr[i * 3 + 2] = c.b * k;
-    }
-    g.setAttribute('color', new THREE.BufferAttribute(arr, 3));
-    return g;
-  };
-  const trunk = new THREE.CylinderGeometry(0.12, 0.22, 4, 5).translate(0, 2, 0);
-  parts.push(colorize(trunk.toNonIndexed(), new THREE.Color('#3a2a1c')));
-  const layers = 4;
-  for (let l = 0; l < layers; l++) {
-    const t = l / (layers - 1);
-    const radius = 2.2 * (1 - t * 0.75);
-    const h = 4.8 * (1 - t * 0.35);
-    const y = 2.2 + l * 3.0;
-    // star-shaped cone for a jagged silhouette
-    const cone = new THREE.ConeGeometry(radius, h, 8, 1, true);
-    const pos = cone.getAttribute('position');
-    for (let i = 0; i < pos.count; i++) {
-      const yy = pos.getY(i);
-      if (yy < 0) {
-        const k = i % 2 === 0 ? 1 : 0.72;
-        pos.setX(i, pos.getX(i) * k);
-        pos.setZ(i, pos.getZ(i) * k);
-        pos.setY(i, yy - (i % 2) * 0.3);
-      }
-    }
-    cone.translate(0, y + h / 2, 0);
-    cone.computeVertexNormals();
-    parts.push(colorize(cone.toNonIndexed(), new THREE.Color('#25381f').multiplyScalar(0.85 + t * 0.25), 0.15));
+/** Builds an indexed mesh from vertex streams (position, soft "volume" normal, colour, uv). */
+class MeshBuilder {
+  pos: number[] = [];
+  nrm: number[] = [];
+  col: number[] = [];
+  uv: number[] = [];
+  idx: number[] = [];
+  vert(x: number, y: number, z: number, nx: number, ny: number, nz: number, c: THREE.Color, k: number, u: number, v: number) {
+    const l = Math.hypot(nx, ny, nz) || 1;
+    this.pos.push(x, y, z);
+    this.nrm.push(nx / l, ny / l, nz / l);
+    this.col.push(c.r * k, c.g * k, c.b * k);
+    this.uv.push(u, v);
+    return this.pos.length / 3 - 1;
   }
-  const g = mergeGeometries(parts);
+  build() {
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(this.pos, 3));
+    g.setAttribute('normal', new THREE.Float32BufferAttribute(this.nrm, 3));
+    g.setAttribute('color', new THREE.Float32BufferAttribute(this.col, 3));
+    g.setAttribute('uv', new THREE.Float32BufferAttribute(this.uv, 2));
+    g.setIndex(this.idx);
+    return g;
+  }
+}
+
+/**
+ * Japanese cedar: a straight trunk and drooping, ragged tiers that shrink towards the top. Normals
+ * point away from the crown axis so the foliage shades like a volume instead of flat facets; the
+ * inside of each tier and the lower tiers are darker. Foliage uses the alpha-tested branch texture.
+ */
+function treeGeometry() {
+  const b = new MeshBuilder();
+  const r = rng(7);
+  const bark = new THREE.Color('#3b2b1f');
+  const leaf = new THREE.Color(1, 1, 1);
+  const TS = 6;
+  const trunk: number[][] = [];
+  for (let i = 0; i <= TS; i++) {
+    const a = (i / TS) * Math.PI * 2, cx = Math.cos(a), cz = Math.sin(a);
+    trunk.push([b.vert(cx * 0.32, -0.6, cz * 0.32, cx, 0, cz, bark, 0.8, 0.95, 0.5), b.vert(cx * 0.1, 11, cz * 0.1, cx, 0, cz, bark, 1, 0.95, 0.5)]);
+  }
+  for (let i = 0; i < TS; i++) b.idx.push(trunk[i][0], trunk[i][1], trunk[i + 1][0], trunk[i][1], trunk[i + 1][1], trunk[i + 1][0]);
+  const N = 7, M = 11;
+  for (let l = 0; l < N; l++) {
+    const t = l / (N - 1);
+    const R = lerp(2.6, 0.55, Math.pow(t, 0.9));
+    const tierH = lerp(3.0, 1.5, t);
+    const apexY = lerp(2.6 + tierH, 14.4, t);
+    const ringY = apexY - tierH;
+    const shade = lerp(0.62, 1.12, t);
+    const phase = r() * Math.PI * 2;
+    const rad: number[] = [], droop: number[] = [];
+    for (let i = 0; i < M; i++) {
+      rad.push(R * (i % 2 === 0 ? 1 : 0.76) * (0.82 + r() * 0.36));
+      droop.push(tierH * (0.2 + r() * 0.3));
+    }
+    const apex = b.vert(0, apexY, 0, 0, 1, 0, leaf, shade * 0.45, 0.4375, 0);
+    const mids: number[] = [], tips: number[] = [];
+    for (let i = 0; i <= M; i++) {
+      const ii = i % M;
+      const a = phase + (i / M) * Math.PI * 2, cx = Math.cos(a), cz = Math.sin(a);
+      const u = (i / M) * 0.85;
+      mids.push(b.vert(cx * rad[ii] * 0.55, lerp(apexY, ringY, 0.45), cz * rad[ii] * 0.55, cx, 0.7, cz, leaf, shade * 0.75, u, 0.5));
+      tips.push(b.vert(cx * rad[ii], ringY - droop[ii], cz * rad[ii], cx, 0.3, cz, leaf, shade * 1.1, u, 1));
+    }
+    for (let i = 0; i < M; i++) {
+      b.idx.push(apex, mids[i + 1], mids[i]);
+      b.idx.push(mids[i], mids[i + 1], tips[i + 1], mids[i], tips[i + 1], tips[i]);
+    }
+  }
+  return b.build();
+}
+
+/** Distant cedar: two ragged tiers, untextured and dark, so far slopes read as forest, not specks. */
+function farTreeGeometry() {
+  const b = new MeshBuilder();
+  const green = new THREE.Color('#1a2c16');
+  const M = 8;
+  for (const [y0, y1, R, k] of [[2.5, 9.5, 2.4, 0.75], [7.5, 14.6, 1.5, 0.95]] as const) {
+    const apex = b.vert(0, y1, 0, 0, 1, 0, green, k * 0.8, 0.95, 0.5);
+    const ring: number[] = [];
+    for (let i = 0; i <= M; i++) {
+      const a = (i / M) * Math.PI * 2, cx = Math.cos(a), cz = Math.sin(a);
+      const rr = R * (i % 2 === 0 ? 1 : 0.8);
+      ring.push(b.vert(cx * rr, y0, cz * rr, cx, 0.45, cz, green, k, 0.95, 0.5));
+    }
+    for (let i = 0; i < M; i++) b.idx.push(apex, ring[i + 1], ring[i]);
+  }
+  return b.build();
+}
+
+/**
+ * Smooth, noise-displaced lump for rocks (flattened, planar-mapped for the scanned texture) and
+ * bushes (rounder, with soft outward normals and darker undersides).
+ */
+function lumpGeometry(seed: number, amount: number, kind: 'rock' | 'bush') {
+  let g: THREE.BufferGeometry = new THREE.IcosahedronGeometry(1, kind === 'rock' ? 2 : 2);
+  g.deleteAttribute('normal');
+  g.deleteAttribute('uv');
+  g = mergeVertices(g);
+  const pos = g.getAttribute('position') as THREE.BufferAttribute;
+  const uv: number[] = [], col: number[] = [];
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
+    const n = fbm(x * 1.3 + seed, z * 1.3 - y * 0.9, 3) + noise2(x * 3.1 - y * 2.3, z * 3.1 + seed) * 0.35;
+    let k = 1 + n * amount;
+    if (kind === 'rock') k *= 1 - 0.18 * Math.max(0, y); // flatter tops
+    const yy = kind === 'bush' ? Math.max(-0.25, y) : y;
+    pos.setXYZ(i, x * k, yy * k * (kind === 'rock' ? 0.7 : 0.8), z * k);
+    uv.push((x + z * 0.6) * 0.8, (y + x * 0.3) * 0.8);
+    const ao = 0.55 + 0.45 * smoothstep(-0.6, 0.7, y);
+    col.push(ao, ao, ao);
+  }
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
   g.computeVertexNormals();
+  if (kind === 'bush') {
+    // blend towards the outward direction for a soft, foliage-like volume
+    const nrm = g.getAttribute('normal') as THREE.BufferAttribute;
+    const v = new THREE.Vector3(), o = new THREE.Vector3();
+    for (let i = 0; i < nrm.count; i++) {
+      o.set(pos.getX(i), pos.getY(i) * 0.6 + 0.2, pos.getZ(i)).normalize();
+      v.set(nrm.getX(i), nrm.getY(i), nrm.getZ(i)).lerp(o, 0.6).normalize();
+      nrm.setXYZ(i, v.x, v.y, v.z);
+    }
+  }
   return g;
 }
 
@@ -880,28 +973,20 @@ function buildClutter(
   const group = new THREE.Group();
   group.name = 'clutter';
   const r = rng(77);
-  const bushGeo = new THREE.IcosahedronGeometry(1, 1);
-  const bp = bushGeo.getAttribute('position');
-  for (let i = 0; i < bp.count; i++) {
-    const k = 0.8 + noise2(bp.getX(i) * 3, bp.getZ(i) * 3) * 0.35;
-    bp.setXYZ(i, bp.getX(i) * k, Math.max(-0.2, bp.getY(i)) * k * 0.75, bp.getZ(i) * k);
-  }
-  bushGeo.computeVertexNormals();
-  const rockGeo = new THREE.DodecahedronGeometry(1, 0);
-  const rp = rockGeo.getAttribute('position');
-  for (let i = 0; i < rp.count; i++) rp.setY(i, rp.getY(i) * 0.6);
-  rockGeo.computeVertexNormals();
-  const bushMat = new THREE.MeshStandardMaterial({ color: '#2c4422', roughness: 0.95, flatShading: true });
+  const bushGeo = lumpGeometry(11, 0.32, 'bush');
+  const rockGeo = lumpGeometry(5, 0.22, 'rock');
+  const bushMat = new THREE.MeshStandardMaterial({ color: '#2c4422', vertexColors: true, roughness: 0.95, envMapIntensity: 0.2 });
   const rockAlbedo = surfaceTexture('rock_albedo', true);
   const rockMat = new THREE.MeshStandardMaterial({
+    vertexColors: true,
     color: rockAlbedo ? '#ffffff' : '#6b665e',
     map: rockAlbedo,
     normalMap: surfaceTexture('rock_normal', false),
-    roughness: 0.9,
-    flatShading: true,
+    roughness: 0.88,
+    envMapIntensity: 0.4,
   });
   const bushes: THREE.Matrix4[] = [], rocks: THREE.Matrix4[] = [];
-  const bushCol: THREE.Color[] = [];
+  const bushCol: THREE.Color[] = [], rockCol: THREE.Color[] = [];
   const p = new THREE.Vector3();
   const q = new THREE.Quaternion();
   const count = Math.round(9000 * density);
@@ -919,7 +1004,8 @@ function buildClutter(
     q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), r() * 6.28);
     if (steep > 0.9 || r() < 0.18) {
       const sc = 0.3 + r() * 0.9;
-      rocks.push(new THREE.Matrix4().compose(new THREE.Vector3(p.x, y + sc * 0.15, p.z), q, new THREE.Vector3(sc * (1 + r()), sc, sc * (1 + r() * 0.5))));
+      rocks.push(new THREE.Matrix4().compose(new THREE.Vector3(p.x, y - sc * 0.18, p.z), q, new THREE.Vector3(sc * (1 + r()), sc * (0.55 + r() * 0.35), sc * (1 + r() * 0.5))));
+      rockCol.push(new THREE.Color().setHSL(0.08 + r() * 0.05, 0.05 + r() * 0.08, 0.6 + r() * 0.3));
     } else {
       const sc = 0.5 + r() * 1.1;
       bushes.push(new THREE.Matrix4().compose(new THREE.Vector3(p.x, y, p.z), q, new THREE.Vector3(sc * (0.8 + r() * 0.6), sc, sc)));
@@ -934,7 +1020,10 @@ function buildClutter(
   bushMesh.receiveShadow = true;
   bushMesh.computeBoundingSphere();
   const rockMesh = new THREE.InstancedMesh(rockGeo, rockMat, rocks.length);
-  rocks.forEach((m, i) => rockMesh.setMatrixAt(i, m));
+  rocks.forEach((m, i) => {
+    rockMesh.setMatrixAt(i, m);
+    rockMesh.setColorAt(i, rockCol[i]);
+  });
   rockMesh.castShadow = true;
   rockMesh.receiveShadow = true;
   rockMesh.computeBoundingSphere();
