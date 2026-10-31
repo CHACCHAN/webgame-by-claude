@@ -37,6 +37,9 @@ Newest first. "Verified" means actually executed in this environment; anything e
 - Owner assets batch 2: 天狼 rival portraits + key art, race BGMs for 霧降湖/天狼 (loop points from spectral
   matching of "end of chorus" moments), defeat jingle (final phrase of the delivered track). Checked in the browser:
   portraits load (768×1152) on the 天狼 rival screen, the course card shows the art, all three audio files decode.
+- 霧降湖 rival portraits ×3 and key art re-sent one by one and integrated (all 9 rivals and 3 course arts now in
+  place); checked on the course select, course loading and 霧降湖 rival screens.
+- Fixed: the end of this log had been cut off by a write while the disk was full; the known-issues list is restored.
 - Bug found & fixed: on 天狼 the garage camera dipped into the steep bank beside the start and glided in from the
   title camera through the hill (rival select showed the road from underneath). The camera and its glide are now
   kept above ground, and the camera side is chosen by a sight-line test (uphill side kept on all three courses).
@@ -102,5 +105,7 @@ Newest first. "Verified" means actually executed in this environment; anything e
 ## Known issues / next
 - Real-GPU performance pass (frame time budget, shadow map cost, draw calls) — still unmeasured. Known
   candidate: lamp posts are individual meshes (~650 draw calls on 朧峠 before culling) and could be instanced.
-- Owner assets requested for courses 2/3 (docs/ASSET_REQUESTS.md): six rival portraits, two course key arts,
-  two race BGMs, optional defeat jingle. Fallbacks: silhouettes, 
+- The delivered 朧峠 key art's coupe resembles a real 1980s car; replacing it is recommended before a public release.
+- Car models could be replaced by artist GLBs following the contract in docs/ASSETS.md.
+- Engine sound, corner warning beeps and the music loop points are unverified by ear in this environment.
+- Touch controls (mobile) are not implemented (PC is the target).
