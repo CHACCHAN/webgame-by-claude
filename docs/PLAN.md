@@ -23,6 +23,12 @@ curvature/grade smoothed; road widened in hairpins; banking from curvature.
 - A course is data: design + `Landform` (`track/landforms.ts`) + rivals, medals, music, art in
   `track/courses.ts`, plus an entry in the backend `config/game.php` and CPU ghosts (`npm run seed:bots`).
 
+## Online battle (added at the owner's request)
+Up to 3 players per room (4-character code). Laravel API for the lobby (create/join/leave, car choice, host start with a
+server-chosen green-light time, finish times, rematch) with server-side limits; Laravel Reverb presence channel per room
+for live car states (client events) and room updates. Remote cars are visual only (no contact), interpolated 120 ms in
+the past. Each client times itself; the race clock never runs slower than the wall clock since the green light.
+
 ## Technical design
 - **Terrain**: road-first. Road heights are interpolated into the hillside (IDW within 320 m) blended with a
   large-scale landform (mountains north, coastal plain, sea); road corridor cut/filled with embankments; gorge

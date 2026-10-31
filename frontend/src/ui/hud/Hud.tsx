@@ -10,6 +10,8 @@ import { COURSES } from '../../game/track/courses';
 import { currentCourseId } from '../../store/settings';
 import { Portrait } from '../screens/Menus';
 import type { HudState } from '../../game/Game';
+import { leaveRoom } from '../../store/online';
+import { SLOT_COLORS } from '../../game/net/RemoteRacers';
 
 const TACH_START = 135, TACH_SWEEP = 270;
 const polar = (cx: number, cy: number, r: number, deg: number) => {
@@ -49,6 +51,40 @@ function updateCornerNote(el: HTMLDivElement | null, c: HudState['corner']) {
   if (d.textContent !== txt) d.textContent = txt;
 }
 
+/** Online battle order (built with DOM nodes: player names are user input). */
+function updateStandings(el: HTMLOListElement | null, rows: HudState['online']) {
+  if (!el) return;
+  const list = rows ?? [];
+  const lead = list.find((r) => r.finMs === null)?.s ?? 0;
+  const cells = list.map((r, k) => [
+    String(k + 1),
+    r.name,
+    r.finMs !== null ? formatTime(r.finMs) : r.lost ? '通信切断' : k === 0 || r.s >= lead ? '' : `-${Math.round(lead - r.s)} m`,
+    SLOT_COLORS[r.slot % SLOT_COLORS.length],
+    r.me ? 'me' : '',
+  ]);
+  const key = JSON.stringify(cells);
+  if (el.dataset.key === key) return;
+  el.dataset.key = key;
+  el.replaceChildren(
+    ...cells.map(([pos, name, info, color, cls]) => {
+      const li = document.createElement('li');
+      li.className = cls;
+      const p = document.createElement('span');
+      p.className = 'pos';
+      p.textContent = pos;
+      const chip = document.createElement('i');
+      chip.style.background = color;
+      const b = document.createElement('b');
+      b.textContent = name;
+      const em = document.createElement('em');
+      em.textContent = info;
+      li.append(p, chip, b, em);
+      return li;
+    }),
+  );
+}
+
 export function Hud() {
   const { mode, rivalLevel, ghostChoice, phase } = useApp();
   const showFps = useSettings((s) => s.showFps);
@@ -70,6 +106,7 @@ export function Hud() {
     delta: useRef<HTMLDivElement>(null),
     lines: useRef<HTMLCanvasElement>(null),
     corner: useRef<HTMLDivElement>(null),
+    standings: useRef<HTMLOListElement>(null),
   };
   const [redline, setRedline] = useState(8000);
   const [turbo, setTurbo] = useState(false);
@@ -147,6 +184,7 @@ export function Hud() {
       }
       if (r.wrong.current) r.wrong.current.style.opacity = h.wrongWay ? '1' : '0';
       updateCornerNote(r.corner.current, h.corner);
+      updateStandings(r.standings.current, h.online);
       if (r.drift.current) {
         const show = h.driftCombo > 20;
         r.drift.current.style.opacity = show ? '1' : '0';
@@ -274,6 +312,7 @@ export function Hud() {
             </div>
           </div>
         )}
+        {mode === 'online' && <ol className="online-standings" ref={refs.standings} />}
         {mode === 'ghost' && ghostChoice && (
           <div className="ghost-tag">
             👻 VS {ghostChoice.label} <b>{formatTime(ghostChoice.timeMs)}</b>
@@ -348,12 +387,18 @@ export function PauseMenu() {
     gameHolder.game?.setPaused(false);
     set({ paused: false });
   };
-  const items = [
+  const online = useApp.getState().mode === 'online';
+  const items = online
+    ? [
+        { label: 'レースに戻る', action: resume },
+        { label: 'リタイアしてルームを出る', action: () => { set({ paused: false }); void leaveRoom(); gameHolder.game?.startAttract(); go('online'); } },
+      ]
+    : [
     { label: 'レースに戻る', action: resume },
     { label: 'リスタート', action: () => { gameHolder.game?.setPaused(false); set({ paused: false }); void startRaceFromState(); } },
     { label: '車両選択へ', action: () => { gameHolder.game?.setPaused(false); set({ paused: false }); go('garage'); } },
     { label: 'メインメニューへ', action: () => { gameHolder.game?.setPaused(false); set({ paused: false }); gameHolder.game?.startAttract(); go('modes'); } },
-  ];
+      ];
   useMenuInput((a) => {
     if (a === 'up') { setSel((s) => (s + items.length - 1) % items.length); sfx.move(); }
     if (a === 'down') { setSel((s) => (s + 1) % items.length); sfx.move(); }

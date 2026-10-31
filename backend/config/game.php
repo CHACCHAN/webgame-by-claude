@@ -41,6 +41,16 @@ return [
 
     'modes' => ['time_attack', 'rival', 'ghost'],
 
+    // Online battle rooms
+    'online' => [
+        'max_players' => 3,
+        'min_players_to_start' => 2,
+        // the green light is this far after the host presses start (countdown on every client)
+        'start_delay_ms' => 6_000,
+        // rooms idle longer than this are removed when new rooms are created
+        'room_ttl_minutes' => 120,
+    ],
+
     // Ghost recordings: max decoded payload size (bytes) and sampling bounds.
     'ghost' => [
         'max_base64_length' => 2_000_000,

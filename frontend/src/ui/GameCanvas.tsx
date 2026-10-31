@@ -49,7 +49,7 @@ function GameBridge() {
         app.set({ phase: e.phase });
         if (e.phase === 'attract' && app.screen === 'boot') app.set({ screen: 'title', loading: null });
       }
-      if (e.type === 'finish') app.set({ result: e.result, screen: 'results' });
+      if (e.type === 'finish') app.set({ result: e.result, screen: e.result.mode === 'online' ? 'onlineResults' : 'results', paused: false });
     });
     void game.load(currentCourseId(), s.timeOfDay).catch((err) => {
       console.error(err);

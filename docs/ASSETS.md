@@ -22,7 +22,7 @@ still blocked, so Poly Haven files cannot be fetched. Every photo texture has a 
 | City lights, traffic, ferris wheel | `Environment.ts` | Points shader | Project | |
 | Engine / tyre / wind / UI sounds, menu pad | `src/game/audio/AudioEngine.ts` | WebAudio synthesis | Project | No samples |
 | Fonts: Zen Kaku Gothic New, Shippori Mincho, Rajdhani | npm `@fontsource/*` | Google Fonts via Fontsource | SIL OFL 1.1 | Bundled, unmodified |
-| Libraries | `frontend/package.json`, `backend/composer.json` | three.js (MIT), React (MIT), R3F (MIT), postprocessing (Zlib), Rapier (Apache-2.0), zustand (MIT), Laravel (MIT) | See packages | |
+| Libraries | `frontend/package.json`, `backend/composer.json` | three.js (MIT), React (MIT), R3F (MIT), postprocessing (Zlib), Rapier (Apache-2.0), zustand (MIT), pusher-js (MIT), Laravel (MIT), Laravel Reverb (MIT) | See packages | |
 
 ## 3D model pipeline (glTF / GLB)
 1. Cars are authored procedurally (`buildProceduralCar`).

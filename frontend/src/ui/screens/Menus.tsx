@@ -85,6 +85,7 @@ export function ModesScreen() {
     { id: 'ta', label: 'TIME ATTACK', jp: 'タイムアタック', desc: '峠を全開で駆け下り、自己ベストとメダル、オンラインランキング上位を狙う。', action: () => { set({ mode: 'time_attack', ghostChoice: null, afterLoad: 'garage' }); go('courses'); } },
     { id: 'rival', label: 'RIVAL BATTLE', jp: 'ライバルバトル', desc: '峠に棲む走り屋と1対1のダウンヒルバトル。先にゴールした方が勝ち。', action: () => { set({ mode: 'rival', ghostChoice: null, afterLoad: 'garage' }); go('courses'); } },
     { id: 'ghost', label: 'GHOST BATTLE', jp: 'ゴーストバトル', desc: 'ランキング上位者や自己ベストの走りを半透明のゴーストで再現。その背中を追え。', action: () => { set({ mode: 'ghost', afterLoad: 'leaderboard' }); go('courses'); } },
+    { id: 'online', label: 'ONLINE BATTLE', jp: 'オンライン対戦', desc: '最大3人でルームを作って同時にダウンヒル。ルームコードを友達に伝えて一緒に走ろう。', action: () => { set({ mode: 'online', ghostChoice: null }); go('online'); } },
     { id: 'rank', label: 'RANKING', jp: 'ランキング', desc: 'オンラインランキングを確認する。', action: () => { set({ mode: 'time_attack' }); go('leaderboard'); } },
     { id: 'settings', label: 'SETTINGS', jp: '設定', desc: 'グラフィック品質、時間帯、サウンド、運転アシスト。', action: () => go('settings') },
     { id: 'controls', label: 'CONTROLS', jp: '操作方法', desc: 'キーボード / ゲームパッドの操作を確認する。', action: () => go('controls') },

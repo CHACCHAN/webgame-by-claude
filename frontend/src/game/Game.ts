@@ -13,6 +13,10 @@ import { CarVisual } from './render/CarVisual';
 import { loadCarTemplates } from './render/carAssets';
 import { loadSurfaceTextures } from './render/surfaceTextures';
 import { findCorners, type Corner, type CornerKind } from './track/corners';
+import { RemoteRacers, SLOT_COLORS, type NetState, type Peer } from './net/RemoteRacers';
+
+/** lateral grid positions of the (up to three) online racers, by slot */
+const ONLINE_LANES = [-2.7, 2.7, 0];
 import { ChaseCamera } from './camera/ChaseCamera';
 import { InputManager } from './input/Input';
 import { TireSmoke, SkidMarks } from './fx/TireEffects';
@@ -23,7 +27,7 @@ import { clamp, damp, lerp, smoothstep } from './util/math';
 import type { TrackProjection } from './track/Track';
 
 export type GamePhase = 'loading' | 'attract' | 'garage' | 'countdown' | 'racing' | 'finished' | 'replay';
-export type RaceMode = 'time_attack' | 'rival' | 'ghost';
+export type RaceMode = 'time_attack' | 'rival' | 'ghost' | 'online';
 
 export interface QualitySettings {
   shadows: boolean;
@@ -31,6 +35,7 @@ export interface QualitySettings {
   treeDensity: number;
   headlightShadows: boolean;
   photoTextures: boolean;
+  treeLod: number;
 }
 
 export interface RaceConfig {
@@ -38,6 +43,8 @@ export interface RaceConfig {
   carId: CarId;
   rivalLevel?: AILevel;
   ghost?: { data: GhostData; label: string; carId: CarId; timeMs: number; splits?: number[] } | null;
+  /** online battle: shared green light (performance.now() ms), this client's grid slot, the others */
+  online?: { startAt: number; slot: number; peers: Peer[] };
 }
 
 export interface RaceResult {
@@ -80,6 +87,8 @@ export interface HudState {
   sectorFlashT: number;
   /** pace note for the next tight bend; null when none is close */
   corner: { dir: 1 | -1; kind: CornerKind; dist: number; seq: number } | null;
+  /** online battle standings, leader first */
+  online: { id: number; name: string; slot: number; me: boolean; s: number; finMs: number | null; lost: boolean }[] | null;
 }
 
 type Listener = (e: GameEvent) => void;
@@ -128,7 +137,7 @@ export class Game {
   hud: HudState = {
     speedKmh: 0, rpm: 0, redline: 8000, gear: 1, raceTime: 0, countdown: 0, splits: [], lastSplitDelta: null, lastSplitIndex: -1,
     progress: 0, rivalProgress: null, ghostProgress: null, position: 1, gapMeters: 0, wrongWay: false, driftCombo: 0, driftScore: 0,
-    boost: 0, turbo: false, sectorFlashT: 0, corner: null,
+    boost: 0, turbo: false, sectorFlashT: 0, corner: null, online: null,
   };
 
   private listeners = new Set<Listener>();
@@ -169,6 +178,11 @@ export class Game {
   /** HUD pace notes + warning beeps before tight bends */
   cornerGuide = true;
   corners: Corner[] = [];
+  /** other players' cars in an online battle */
+  remotes!: RemoteRacers;
+  /** id of the local player in an online battle */
+  onlineSelfId = 0;
+  private rideHeights = new Map<CarId, number>();
   private cornerIdx = 0;
   private warnedCorner = -1;
   /** debug/testing: let an AI drive the player car and speed up simulated time */
@@ -205,6 +219,7 @@ export class Game {
     await this.yieldFrame(0.08, '車両モデルを読み込み中');
     await Promise.all([loadCarTemplates(['hayate', 'raijin', 'shiden']), loadSurfaceTextures()]);
     this.root.add(this.smoke.points, this.skids.mesh, this.rain.mesh);
+    this.remotes = new RemoteRacers(this.root, (id) => this.rideHeightOf(id), false);
     // pooled lights for nearby street lamps
     for (let i = 0; i < 6; i++) {
       const l = new THREE.PointLight('#ffa850', 0, 42, 1.7);
@@ -237,7 +252,7 @@ export class Game {
     this.terrain = buildTerrain(this.track, course.landform);
     await this.yieldFrame(0.5, '道路と森を配置中');
     this.physics = new PhysicsWorld(this.track);
-    this.scenery = buildScenery(this.track, this.terrain, { treeDensity: this.quality.treeDensity, shadows: this.quality.shadows, photoTextures: this.quality.photoTextures });
+    this.scenery = buildScenery(this.track, this.terrain, { treeDensity: this.quality.treeDensity, shadows: this.quality.shadows, photoTextures: this.quality.photoTextures, treeLod: this.quality.treeLod });
     this.root.add(this.scenery.group);
     await this.yieldFrame(0.75, '夜景を灯しています');
     this.env = buildEnvironment(this.terrain);
@@ -322,6 +337,18 @@ export class Game {
   }
 
   // ------------------------------------------------------------- racers
+  /** Static ride height of a car model (for visual-only cars such as remote players). */
+  private rideHeightOf(carId: CarId) {
+    let h = this.rideHeights.get(carId);
+    if (h === undefined) {
+      const tmp = new VehicleSim(this.physics, CAR_SPECS[carId], new THREE.Vector3(0, -500, 0), 0);
+      h = tmp.rideHeight;
+      tmp.dispose();
+      this.rideHeights.set(carId, h);
+    }
+    return h;
+  }
+
   private createRacer(carId: CarId, s: number, lateral: number, opts: { ai?: AILevel; headlights: boolean; color?: string }): Racer {
     const spec = CAR_SPECS[carId];
     const p = this.track.pointAt(s, lateral);
@@ -365,6 +392,8 @@ export class Game {
   }
 
   private clearRace() {
+    this.remotes?.clear();
+    this.hud.online = null;
     this.removeRacer(this.player);
     this.removeRacer(this.rival);
     this.removeRacer(this.attractCar);
@@ -457,8 +486,18 @@ export class Game {
     this.clearRace();
     this.config = cfg;
     const gridS = this.track.startS - 6;
-    const lane = cfg.mode === 'rival' ? 2.0 : 0;
-    this.player = this.createRacer(cfg.carId, gridS, lane, { headlights: true });
+    const lane = cfg.online ? ONLINE_LANES[cfg.online.slot % ONLINE_LANES.length] : cfg.mode === 'rival' ? 2.0 : 0;
+    this.player = this.createRacer(cfg.carId, gridS, lane, {
+      headlights: true,
+      color: cfg.online ? SLOT_COLORS[cfg.online.slot % SLOT_COLORS.length] : undefined,
+    });
+    if (cfg.online) {
+      this.remotes.setPeers(cfg.online.peers, (slot) => ({
+        position: this.track.pointAt(gridS, ONLINE_LANES[slot % ONLINE_LANES.length]),
+        heading: this.track.headingAt(gridS),
+      }));
+      this.remotes.setHeadlights(this.env.preset.lampsOn > 0.5 ? 1 : 0.6);
+    }
     this.player.sim.autoShift = this.autoShift;
     if (cfg.mode === 'rival' && cfg.rivalLevel) {
       const rival = this.course.rivals[cfg.rivalLevel];
@@ -474,8 +513,9 @@ export class Game {
     this.bestSplits = cfg.ghost?.splits ?? null;
     this.recorder.reset();
     this.rivalRecorder.reset();
-    this.countdownT = 3.999;
+    this.countdownT = cfg.online ? (cfg.online.startAt - performance.now()) / 1000 : 3.999;
     this.hud.raceTime = 0;
+    this.hud.online = null;
     this.hud.splits = [];
     this.hud.lastSplitDelta = null;
     this.hud.lastSplitIndex = -1;
@@ -650,13 +690,15 @@ export class Game {
 
   private updateCountdown(dt: number) {
     const prev = Math.ceil(this.countdownT);
-    this.countdownT -= dt;
+    const online = this.config?.online;
+    // online: everybody's lights follow the server's start time, not their own frame clock
+    this.countdownT = online ? (online.startAt - performance.now()) / 1000 : this.countdownT - dt;
     const now = Math.ceil(this.countdownT);
     this.hud.countdown = Math.max(0, this.countdownT);
     if (now !== prev && now >= 1 && now <= 3) this.audio?.beep(660, 0.18, 'square', 0.18);
     if (this.countdownT <= 0) {
       this.audio?.beep(1320, 0.5, 'square', 0.22);
-      this.raceStartTime = this.simTime;
+      this.raceStartTime = this.simTime + (online ? this.countdownT : 0);
       this.hud.countdown = 0;
       this.setPhase('racing');
     }
@@ -666,7 +708,7 @@ export class Game {
   private raceStep() {
     const pl = this.player;
     if (!pl) return;
-    const raceTime = this.simTime - this.raceStartTime;
+    const raceTime = this.raceClock();
     const p = pl.sim.position;
     pl.proj = this.track.project(p.x, p.y, p.z, pl.proj.index, pl.proj);
     if (this.rival) {
@@ -702,7 +744,7 @@ export class Game {
   private updateRace(dt: number) {
     const pl = this.player;
     if (!pl) return;
-    const raceTime = pl.finished ? pl.finishTime : this.simTime - this.raceStartTime;
+    const raceTime = pl.finished ? pl.finishTime : this.raceClock();
     this.hud.raceTime = raceTime;
     const s = pl.proj.s;
     this.hud.progress = clamp((s - this.track.startS) / (this.track.finishS - this.track.startS), 0, 1);
@@ -715,6 +757,9 @@ export class Game {
       this.wrongWayT = wrong ? this.wrongWayT + dt : 0;
       this.hud.wrongWay = this.wrongWayT > 1.2;
       this.updateCornerGuide(s, pl.sim.speed);
+    }
+    if (this.config?.online) this.updateOnlineStandings();
+    if (!pl.finished) {
       // drift scoring
       const drifting = Math.abs(pl.sim.slipAngle) > 0.2 && pl.sim.speed > 12 && !pl.sim.airborne;
       if (drifting) {
@@ -749,6 +794,51 @@ export class Game {
     } else this.hud.ghostProgress = null;
   }
 
+  /**
+   * Race time of the local player. Online, a client whose frame rate drops runs its physics in slow
+   * motion; taking the wall clock since the shared green light as a floor keeps that from paying off.
+   */
+  private raceClock() {
+    const sim = this.simTime - this.raceStartTime;
+    const online = this.config?.online;
+    return online ? Math.max(sim, (performance.now() - online.startAt) / 1000) : sim;
+  }
+
+  /** Snapshot of the local car for the other players (online battles). */
+  netState(): NetState | null {
+    const pl = this.player;
+    if (!pl || !this.config?.online || (this.phase !== 'countdown' && this.phase !== 'racing' && this.phase !== 'finished')) return null;
+    const p = pl.sim.position, q = pl.sim.quaternion;
+    const r = (v: number, k = 1000) => Math.round(v * k) / k;
+    const st: NetState = {
+      t: Math.round(performance.now()),
+      p: [r(p.x), r(p.y), r(p.z)],
+      q: [r(q.x, 1e4), r(q.y, 1e4), r(q.z, 1e4), r(q.w, 1e4)],
+      v: r(pl.sim.forwardSpeed, 100),
+      st: r(pl.sim.wheels[0]?.steer ?? 0, 1e3),
+      s: r(pl.proj.s, 10),
+      br: pl.sim.input.brake > 0.2 ? 1 : 0,
+    };
+    if (pl.finished) st.fin = Math.round(pl.finishTime * 1000);
+    return st;
+  }
+
+  /** Live order of an online battle: finishers by time, then by distance covered. */
+  private updateOnlineStandings() {
+    const pl = this.player;
+    if (!pl || !this.config?.online) return;
+    const now = performance.now();
+    const rows = [
+      { id: this.onlineSelfId, name: 'YOU', slot: this.config.online.slot, me: true, s: pl.proj.s, finMs: pl.finished ? Math.round(pl.finishTime * 1000) : null, lost: false },
+      ...this.remotes.standings().map((r) => ({ id: r.id, name: r.name, slot: r.slot, me: false, s: r.s, finMs: r.fin, lost: r.lastHeard > 0 && now - r.lastHeard > 5000 })),
+    ];
+    rows.sort((a, b) => {
+      if (a.finMs !== null || b.finMs !== null) return (a.finMs ?? Infinity) - (b.finMs ?? Infinity);
+      return b.s - a.s;
+    });
+    this.hud.online = rows;
+  }
+
   /** Shows the next tight bend a couple of seconds before its entry (until its apex) and beeps once. */
   private updateCornerGuide(s: number, speed: number) {
     const cs = this.corners;
@@ -775,7 +865,9 @@ export class Game {
     if (this.audio) {
       const a = this.audio;
       a.stopMusic(0.8);
-      const lost = !!this.rival?.finished && this.rival.finishTime < pl.finishTime;
+      const lost = this.config?.online
+        ? this.remotes.standings().some((r) => r.fin !== null && r.fin < pl.finishTime * 1000)
+        : !!this.rival?.finished && this.rival.finishTime < pl.finishTime;
       if (lost) void a.playJingle('jingle_lose').then((ok) => ok || a.chime([659, 587, 494, 440], 0.16));
       else void a.playJingle('jingle_finish').then((ok) => ok || a.chime([784, 988, 1175, 1568], 0.11));
     }
@@ -820,6 +912,9 @@ export class Game {
         const d = this.player.sim.position.distanceTo(_v);
         this.ghost.visual.setGhostOpacity(lerp(0.05, 0.24, smoothstep(2, 10, d)));
       }
+    }
+    if (this.config?.online && (this.phase === 'countdown' || this.phase === 'racing' || this.phase === 'finished')) {
+      this.remotes.update(performance.now(), dt);
     }
     if (!this.paused) this.smoke.update(dt);
     this.smoke.setViewportHeight(this.renderer.domElement.height);

@@ -38,6 +38,13 @@ class MetaController extends Controller
 
         $cars = collect(config('game.cars'))->map(fn ($c, $id) => ['id' => $id] + $c)->values();
 
-        return response()->json(['version' => config('game.version'), 'tracks' => $tracks, 'cars' => $cars]);
+        // the Pusher-protocol app key is public by design (the secret stays on the server)
+        $realtime = [
+            'enabled' => config('broadcasting.default') === 'reverb',
+            'key' => config('broadcasting.connections.reverb.key'),
+            'max_players' => (int) config('game.online.max_players'),
+        ];
+
+        return response()->json(['version' => config('game.version'), 'tracks' => $tracks, 'cars' => $cars, 'realtime' => $realtime]);
     }
 }

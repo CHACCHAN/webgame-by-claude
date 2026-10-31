@@ -82,6 +82,32 @@ function savePlayer(p: StoredPlayer) {
   }
 }
 
+export interface RoomMember {
+  id: number;
+  name: string;
+  car_id: CarId;
+  slot: number;
+  finish_ms: number | null;
+}
+
+export interface RoomState {
+  code: string;
+  track_id: string;
+  status: 'waiting' | 'racing' | 'finished';
+  race_no: number;
+  host_id: number;
+  start_at_ms: number | null;
+  server_time_ms: number;
+  max_players: number;
+  players: RoomMember[];
+}
+
+export interface RealtimeInfo {
+  enabled: boolean;
+  key: string | null;
+  max_players: number;
+}
+
 export const api = {
   health: () => request<{ status: string; database: string; version: string }>('/health'),
 
@@ -111,6 +137,27 @@ export const api = {
     savePlayer(p);
     return p;
   },
+
+  realtime: () => request<{ realtime?: RealtimeInfo }>('/content').then((r) => r.realtime ?? { enabled: false, key: null, max_players: 3 }),
+
+  rooms: {
+    create: (p: StoredPlayer, trackId: string, carId: CarId) =>
+      request<RoomState>('/rooms', { method: 'POST', body: JSON.stringify({ track_id: trackId, car_id: carId }) }, p.token),
+    get: (p: StoredPlayer, code: string) => request<RoomState>(`/rooms/${encodeURIComponent(code)}`, {}, p.token),
+    join: (p: StoredPlayer, code: string, carId: CarId) =>
+      request<RoomState>(`/rooms/${encodeURIComponent(code)}/join`, { method: 'POST', body: JSON.stringify({ car_id: carId }) }, p.token),
+    setCar: (p: StoredPlayer, code: string, carId: CarId) =>
+      request<RoomState>(`/rooms/${encodeURIComponent(code)}/me`, { method: 'PATCH', body: JSON.stringify({ car_id: carId }) }, p.token),
+    leave: (p: StoredPlayer, code: string) => request<{ left: boolean }>(`/rooms/${encodeURIComponent(code)}/leave`, { method: 'POST' }, p.token),
+    start: (p: StoredPlayer, code: string) => request<RoomState>(`/rooms/${encodeURIComponent(code)}/start`, { method: 'POST' }, p.token),
+    finish: (p: StoredPlayer, code: string, raceNo: number, timeMs: number) =>
+      request<RoomState>(`/rooms/${encodeURIComponent(code)}/finish`, { method: 'POST', body: JSON.stringify({ race_no: raceNo, time_ms: timeMs }) }, p.token),
+    rematch: (p: StoredPlayer, code: string) => request<RoomState>(`/rooms/${encodeURIComponent(code)}/rematch`, { method: 'POST' }, p.token),
+  },
+
+  /** Signed authorization for the room's presence channel (Pusher protocol, served by Laravel). */
+  channelAuth: (p: StoredPlayer, socketId: string, channelName: string) =>
+    request<{ auth: string; channel_data: string }>('/broadcasting/auth', { method: 'POST', body: JSON.stringify({ socket_id: socketId, channel_name: channelName }) }, p.token),
 
   leaderboard: (trackId: string, carId?: CarId | null, limit = 50) =>
     request<{ entries: LeaderboardEntry[] }>(

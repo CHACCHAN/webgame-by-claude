@@ -421,3 +421,62 @@ kbd {
 @media (max-width: 760px) {
   .course-cards { grid-template-columns: 1fr; overflow-y: auto; bottom: 60px; }
 }
+
+/* ---------------------------------------------------------------- online battle */
+.online-lobby, .online-room, .online-results { background: linear-gradient(90deg, rgba(3, 5, 10, 0.2), rgba(3, 5, 10, 0.78) 48%); }
+.online-lobby .crumb, .online-room .crumb, .online-results .crumb { top: 7vh; }
+.ol-panel { position: absolute; right: 5vw; top: 14vh; width: min(560px, 90vw); max-height: 78vh; overflow: auto; padding: 24px 26px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 10px; backdrop-filter: blur(6px); display: flex; flex-direction: column; gap: 18px; }
+.ol-section { display: flex; flex-direction: column; gap: 10px; }
+.ol-section label { font-family: var(--font-en); font-weight: 700; letter-spacing: 0.2em; font-size: 12px; color: var(--accent); text-transform: uppercase; }
+.ol-row { display: flex; gap: 10px; }
+.ol-panel input { flex: 1; min-width: 0; padding: 10px 14px; border-radius: 4px; border: 1px solid var(--line); background: rgba(0, 0, 0, 0.35); color: var(--text); font: inherit; font-size: 17px; }
+.ol-panel input:focus { outline: none; border-color: var(--accent); }
+.ol-code { font-family: var(--font-en) !important; font-weight: 700; letter-spacing: 0.35em; text-transform: uppercase; }
+.ol-me b { font-size: 24px; }
+.ol-cars, .ol-courses { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip { padding: 8px 14px; border-radius: 20px; border: 1px solid var(--line); background: rgba(255, 255, 255, 0.04); font-family: var(--font-en); font-weight: 700; letter-spacing: 0.06em; font-size: 14px; }
+.ol-courses .chip { font-family: var(--font-jp); letter-spacing: 0.02em; }
+.chip.on { background: var(--accent); color: #1a0e02; border-color: var(--accent); }
+.chip:disabled { opacity: 0.45; cursor: default; }
+.ol-split { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; padding-top: 6px; border-top: 1px solid var(--line); }
+.ol-create { align-self: flex-start; }
+.ol-error { color: var(--bad); font-weight: 700; }
+.ol-code-big { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px 0 14px; border-bottom: 1px solid var(--line); }
+.ol-code-big small { font-family: var(--font-en); letter-spacing: 0.3em; color: var(--muted); font-weight: 700; }
+.ol-code-big b { font-family: var(--font-en); font-size: 64px; line-height: 1; letter-spacing: 0.25em; padding-left: 0.25em; color: #fff; text-shadow: 0 0 24px rgba(255, 138, 42, 0.45); }
+.ol-code-big span { color: var(--muted); font-size: 14px; }
+.ol-slots, .ol-standings { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.ol-slots li, .ol-standings li { display: flex; align-items: center; gap: 12px; padding: 11px 14px; border-radius: 6px; background: rgba(255, 255, 255, 0.04); border: 1px solid var(--line); }
+.ol-slots li.me, .ol-standings li.me { border-color: rgba(255, 138, 42, 0.6); }
+.ol-slots li.empty { opacity: 0.55; border-style: dashed; }
+.ol-slots i, .ol-standings i { width: 10px; height: 26px; border-radius: 3px; flex: none; }
+.ol-slots b, .ol-standings b { font-size: 18px; }
+.ol-slots span, .ol-standings .car { color: var(--muted); font-family: var(--font-en); font-weight: 700; letter-spacing: 0.06em; font-size: 13px; }
+.ol-slots em { margin-left: auto; font-style: normal; font-family: var(--font-en); font-weight: 700; font-size: 12px; letter-spacing: 0.15em; padding: 2px 8px; border-radius: 3px; background: rgba(255, 255, 255, 0.1); }
+.ol-slots em + em { margin-left: 0; }
+.ol-slots em.you { background: var(--accent); color: #1a0e02; }
+.ol-actions { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.ol-waiting { color: var(--accent-2); font-weight: 700; animation: pulse 1.6s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: 0.45; } }
+.rt-badge { margin-left: 12px; padding: 2px 8px; border-radius: 3px; font-size: 11px; letter-spacing: 0.15em; background: rgba(255, 255, 255, 0.1); color: var(--muted); }
+.rt-badge.live { background: rgba(89, 240, 160, 0.18); color: var(--good); }
+.rt-badge.failed { background: rgba(255, 138, 42, 0.16); color: var(--accent); }
+.ol-headline { font-family: var(--font-en); font-weight: 700; font-size: 40px; letter-spacing: 0.08em; text-align: center; }
+.ol-standings .pos { font-family: var(--font-en); font-weight: 700; font-size: 26px; width: 26px; text-align: center; }
+.ol-standings .time { margin-left: auto; font-family: var(--font-en); font-weight: 700; font-size: 20px; font-variant-numeric: tabular-nums; }
+.ol-mine { color: var(--muted); }
+.ol-mine b { color: var(--text); font-family: var(--font-en); font-size: 20px; }
+/* in-race standings */
+.online-standings { list-style: none; margin: 0; padding: 8px 12px; min-width: 240px; background: rgba(5, 8, 14, 0.62); border: 1px solid var(--line); border-radius: 8px; display: flex; flex-direction: column; gap: 4px; }
+.online-standings li { display: flex; align-items: center; gap: 9px; font-weight: 700; }
+.online-standings li.me b { color: var(--accent); }
+.online-standings .pos { font-family: var(--font-en); font-size: 20px; width: 18px; text-align: center; }
+.online-standings i { width: 6px; height: 18px; border-radius: 2px; }
+.online-standings b { font-size: 15px; max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.online-standings em { margin-left: auto; font-style: normal; font-family: var(--font-en); font-size: 14px; color: var(--muted); font-variant-numeric: tabular-nums; }
+@media (max-width: 760px) {
+  .ol-panel { right: 4vw; left: 4vw; width: auto; top: 12vh; }
+  .ol-split { grid-template-columns: 1fr; }
+  .ol-code-big b { font-size: 48px; }
+}

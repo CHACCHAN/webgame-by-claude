@@ -51,15 +51,17 @@ export interface QualityProfile extends QualitySettings {
   extraFx: boolean;
   /** scanned asphalt/ground/rock/concrete textures (procedural fallbacks when off) */
   photoTextures: boolean;
+  /** distance (m) up to which tree chunks use the detailed cedar mesh */
+  treeLod: number;
 }
 
 export function qualityProfile(level: QualityLevel, scale: number): QualityProfile {
   const dpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
   const base: Record<QualityLevel, QualityProfile> = {
-    low: { pixelRatio: 0.75, shadows: false, shadowMapSize: 1024, treeDensity: 0.45, headlightShadows: false, bloom: false, smaa: false, extraFx: false, photoTextures: false },
-    medium: { pixelRatio: 1, shadows: true, shadowMapSize: 1024, treeDensity: 0.7, headlightShadows: false, bloom: true, smaa: true, extraFx: false, photoTextures: true },
-    high: { pixelRatio: Math.min(dpr, 1.5), shadows: true, shadowMapSize: 2048, treeDensity: 1, headlightShadows: true, bloom: true, smaa: true, extraFx: true, photoTextures: true },
-    ultra: { pixelRatio: Math.min(dpr, 2), shadows: true, shadowMapSize: 4096, treeDensity: 1.35, headlightShadows: true, bloom: true, smaa: true, extraFx: true, photoTextures: true },
+    low: { pixelRatio: 0.75, shadows: false, shadowMapSize: 1024, treeDensity: 0.45, headlightShadows: false, bloom: false, smaa: false, extraFx: false, photoTextures: false, treeLod: 240 },
+    medium: { pixelRatio: 1, shadows: true, shadowMapSize: 1024, treeDensity: 0.7, headlightShadows: false, bloom: true, smaa: true, extraFx: false, photoTextures: true, treeLod: 380 },
+    high: { pixelRatio: Math.min(dpr, 1.5), shadows: true, shadowMapSize: 2048, treeDensity: 1, headlightShadows: true, bloom: true, smaa: true, extraFx: true, photoTextures: true, treeLod: 560 },
+    ultra: { pixelRatio: Math.min(dpr, 2), shadows: true, shadowMapSize: 4096, treeDensity: 1.35, headlightShadows: true, bloom: true, smaa: true, extraFx: true, photoTextures: true, treeLod: 720 },
   };
   const p = base[level];
   return { ...p, pixelRatio: p.pixelRatio * scale };

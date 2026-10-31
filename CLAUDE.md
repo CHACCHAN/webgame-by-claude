@@ -4,7 +4,7 @@ Browser 3D downhill touge racing game. Read `docs/PROGRESS.md` first: it is the
 running log of what is done, verified and pending. `docs/PLAN.md` holds the design.
 
 ## Layout
-- `backend/` Laravel 13 JSON API (players, runs, leaderboard, ghosts). Tests: `php artisan test` (sqlite in-memory).
+- `backend/` Laravel 13 JSON API (players, runs, leaderboard, ghosts, online rooms) + Laravel Reverb WebSocket server. Tests: `php artisan test` (sqlite in-memory).
 - `frontend/` Vite + React 19 + three.js 0.186 + @react-three/fiber + postprocessing + Rapier (compat).
   - `src/game/` engine code, DOM-free where possible so it runs in Node for headless sims:
     `track/` (course design, Track centerline, terrain, road geometry), `vehicle/` (PhysicsWorld, VehicleSim, specs),
@@ -39,6 +39,10 @@ running log of what is done, verified and pending. `docs/PLAN.md` holds the desi
   to fall back to the procedural builder.
 - Courses live in `track/courses.ts` (design + `Landform` from `track/landforms.ts` + rivals, medals, music, art).
   After changing a course design, regenerate the CPU ghosts (`npm run seed:bots`) and re-check medals with the sim.
+- Online battle (≤3 players): lobby/start/results via `RoomController`; car states are presence-channel client events
+  (`client-state`, ~12 Hz) relayed by Reverb, which runs inside the `app` container (entrypoint, `START_REVERB`), proxied by
+  nginx at `/app/`. Reverb key/secret are generated per container; never commit them. Client: `store/online.ts`,
+  engine side `game/net/RemoteRacers.ts`. Online race time = max(physics clock, wall clock since the shared green light).
 - Race timing/splits/AI run per physics step (`Game.raceStep`, `driveAI`); keep frame-time logic out of timing.
 
 ## Conventions

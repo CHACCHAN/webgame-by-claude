@@ -45,6 +45,22 @@ Newest first. "Verified" means actually executed in this environment; anything e
   rocks and bushes are smooth noise-displaced lumps (rocks with the scanned texture, sunk into the ground). Found &
   fixed: the canvas foliage texture was mapped upside down (flipY). Before/after screenshots checked.
   Still the main gap: procedural car bodies look boxy in close-ups (needs a dedicated modelling pass or artist GLBs).
+- **Online battle (owner request, up to 3 players)**: Laravel rooms API (create with a 4-character code, join, car
+  choice, leave with host hand-over, host start with a server-chosen green-light time, finish times, rematch;
+  max 3 / min 2 players enforced in a transaction; per-player rate limit) + Laravel Reverb presence channel per
+  room (signed by our own auth endpoint with the player token) for room updates and ~12 Hz car-state client
+  events. Reverb runs inside the `app` container, credentials generated per container, nginx proxies `/app/`.
+  Client: lobby / room / results screens, interpolated remote cars (no contact) with name tags, slot colours,
+  live standings in the HUD, polling fallback when the socket is down, online pause = menu only.
+  Race clock = max(physics clock, wall clock since the green light) so low frame rates gain nothing.
+  Verified: 13 backend tests (4 new: join limits, lifecycle, host hand-over, channel auth signature); WebSocket
+  handshake through nginx (101 + connection_established); E2E `online.spec.ts` with three browser contexts:
+  create → join by code ×2 → 4th refused (API) → host start → all racing on the shared green light → car
+  states flow between all three, live standings list 3 → finish (shortcut near the line after the course
+  minimum) → shared results with three times → rematch back to the room; no console errors. Full E2E 9/9.
+  Not verifiable here: play over the internet between real machines (needs a publicly reachable deployment).
+- Perf follow-up of the vegetation pass: the Low preset had become ~1.84 M triangles (from ~1.2 M); rocks/bushes
+  back to 80-triangle meshes and the near-tree distance is now per preset (240/380/560/720 m) → ~1.5 M at Low.
 - Fixed: the end of this log had been cut off by a write while the disk was full; the known-issues list is restored.
 - Bug found & fixed: on 天狼 the garage camera dipped into the steep bank beside the start and glided in from the
   title camera through the hill (rival select showed the road from underneath). The camera and its glide are now

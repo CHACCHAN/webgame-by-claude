@@ -7,6 +7,7 @@ import { LeaderboardScreen } from './ui/screens/Leaderboard';
 import { SettingsScreen } from './ui/screens/Settings';
 import { ReplayOverlay, ResultsScreen } from './ui/screens/Results';
 import { Hud, PauseMenu } from './ui/hud/Hud';
+import { OnlineLobbyScreen, OnlineResultsScreen, OnlineRoomScreen } from './ui/screens/Online';
 
 export function App() {
   const screen = useApp((s) => s.screen);
@@ -19,7 +20,8 @@ export function App() {
       const app = useApp.getState();
       if (app.screen !== 'race' || app.paused) return;
       if (e.code === 'Escape' || e.code === 'KeyP') {
-        gameHolder.game?.setPaused(true);
+        // an online race keeps running for everyone: only the menu opens
+        if (app.mode !== 'online') gameHolder.game?.setPaused(true);
         app.set({ paused: true });
       }
     };
@@ -31,7 +33,7 @@ export function App() {
       const start = !!pad?.buttons[9]?.pressed;
       const app = useApp.getState();
       if (start && !prevStart && app.screen === 'race' && !app.paused) {
-        gameHolder.game?.setPaused(true);
+        if (app.mode !== 'online') gameHolder.game?.setPaused(true);
         app.set({ paused: true });
       }
       prevStart = start;
@@ -40,7 +42,7 @@ export function App() {
     raf = requestAnimationFrame(poll);
     const onBlur = () => {
       const app = useApp.getState();
-      if (app.screen === 'race' && !app.paused && app.phase === 'racing') {
+      if (app.screen === 'race' && !app.paused && app.phase === 'racing' && app.mode !== 'online') {
         gameHolder.game?.setPaused(true);
         app.set({ paused: true });
       }
@@ -64,7 +66,7 @@ export function App() {
     return () => clearInterval(id);
   }, []);
 
-  const inRace = screen === 'race' || (screen === 'results' && phase !== 'replay');
+  const inRace = screen === 'race' || (screen === 'results' && phase !== 'replay') || screen === 'onlineResults';
   return (
     <div className={`app screen-${screen}`}>
       <GameCanvas />
@@ -79,6 +81,9 @@ export function App() {
         {screen === 'leaderboard' && <LeaderboardScreen />}
         {screen === 'settings' && <SettingsScreen />}
         {screen === 'controls' && <ControlsScreen />}
+        {screen === 'online' && <OnlineLobbyScreen />}
+        {screen === 'onlineRoom' && <OnlineRoomScreen />}
+        {screen === 'onlineResults' && <OnlineResultsScreen />}
         {inRace && (phase === 'countdown' || phase === 'racing' || phase === 'finished') && <Hud key={String(gameHolder.game?.currentConfig?.carId) + phase.length} />}
         {screen === 'results' && <ResultsScreen />}
         {screen === 'replay' && <ReplayOverlay />}

@@ -43,6 +43,7 @@ export interface SceneryQuality {
   treeDensity: number;
   shadows: boolean;
   photoTextures: boolean;
+  treeLod: number;
 }
 
 /** Builds every static mesh along and around the course. */
@@ -199,7 +200,7 @@ export function buildScenery(track: Track, terrain: TerrainData, quality: Scener
   nightEmissive.push(...nightEmissiveSigns);
 
   // ------------------------------------------------------------- trees
-  const trees = buildTrees(terrain, quality.treeDensity);
+  const trees = buildTrees(terrain, quality.treeDensity, quality.treeLod);
   group.add(trees);
   group.add(buildClutter(track, terrain, quality.treeDensity, surfaceTexture));
   const turbines = buildTurbines(terrain);
@@ -734,7 +735,7 @@ function cityWeight(lf: Landform, x: number, z: number) {
   return w;
 }
 
-function buildTrees(terrain: TerrainData, density: number) {
+function buildTrees(terrain: TerrainData, density: number, lodDistance: number) {
   const group = new THREE.Group();
   group.name = 'trees';
   const geo = treeGeometry();
@@ -819,6 +820,7 @@ function buildTrees(terrain: TerrainData, density: number) {
     lods.push({ near, far, center: near.boundingSphere!.center.clone() });
   }
   group.userData.lods = lods;
+  group.userData.lodDistance = lodDistance;
   return group;
 }
 
@@ -827,7 +829,7 @@ export function updateTreeLods(trees: THREE.Object3D, camera: THREE.Vector3) {
   const lods = trees.userData.lods as { near: THREE.InstancedMesh; far: THREE.InstancedMesh; center: THREE.Vector3 }[];
   for (const l of lods) {
     const d = l.center.distanceTo(camera);
-    const near = d < 560;
+    const near = d < (trees.userData.lodDistance as number);
     l.near.visible = near;
     l.far.visible = !near;
   }
@@ -930,7 +932,7 @@ function farTreeGeometry() {
  * bushes (rounder, with soft outward normals and darker undersides).
  */
 function lumpGeometry(seed: number, amount: number, kind: 'rock' | 'bush') {
-  let g: THREE.BufferGeometry = new THREE.IcosahedronGeometry(1, kind === 'rock' ? 2 : 2);
+  let g: THREE.BufferGeometry = new THREE.IcosahedronGeometry(1, 1);
   g.deleteAttribute('normal');
   g.deleteAttribute('uv');
   g = mergeVertices(g);
