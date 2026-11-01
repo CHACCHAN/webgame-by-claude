@@ -171,6 +171,8 @@ export class Game {
   private garageViewYaw = 0;
   private garageLight = new THREE.SpotLight('#fff1e0', 0, 30, 0.55, 0.8, 1.2);
   private lampLights: THREE.PointLight[] = [];
+  /** lamp index each pooled light is attached to (-1 = free) */
+  private lampSlots: number[] = [];
   timeOfDay: TimeOfDay = 'night';
   assist: AssistLevel = 1;
   autoShift = true;
@@ -224,6 +226,7 @@ export class Game {
     for (let i = 0; i < 6; i++) {
       const l = new THREE.PointLight('#ffa850', 0, 42, 1.7);
       this.lampLights.push(l);
+      this.lampSlots.push(-1);
       this.root.add(l);
     }
     this.scene.add(this.root);
@@ -254,6 +257,7 @@ export class Game {
     this.physics = new PhysicsWorld(this.track);
     this.scenery = buildScenery(this.track, this.terrain, { treeDensity: this.quality.treeDensity, shadows: this.quality.shadows, photoTextures: this.quality.photoTextures, treeLod: this.quality.treeLod });
     this.root.add(this.scenery.group);
+    this.lampSlots.fill(-1);
     await this.yieldFrame(0.75, '夜景を灯しています');
     this.env = buildEnvironment(this.terrain);
     this.root.add(this.env.group);
@@ -564,7 +568,7 @@ export class Game {
     this.env.update(this.time, this.camera.position);
     this.rain.update(this.time, this.camera.position, this.player?.sim.velocity ?? _zero);
     this.scenery.update(this.time, this.camera.position);
-    this.updateLampLights();
+    this.updateLampLights(dt);
   }
 
   private racers(): Racer[] {
@@ -1116,7 +1120,12 @@ export class Game {
   }
 
   /** Move the pooled point lights to the lamps nearest the camera. */
-  private updateLampLights() {
+  /**
+   * Real-time lights for the street lamps nearest the camera (the baked lightmap covers the rest).
+   * A light keeps its lamp while that lamp stays among the nearest ones and fades out before it moves
+   * to another, so lamp pools never pop on and off.
+   */
+  private updateLampLights(dt: number) {
     const lampsOn = this.env.preset.lampsOn;
     const cam = this.camera.position;
     const lamps = this.scenery.lamps;
@@ -1131,17 +1140,37 @@ export class Game {
         if (d < best[worst].d) best[worst] = { d, i };
       }
     }
+    const wanted = new Set(best.map((b) => b.i));
+    const assigned = new Set(this.lampSlots.filter((i) => i >= 0 && wanted.has(i)));
+    const fade = Math.min(1, dt * 4);
     this.lampLights.forEach((l, k) => {
-      const b = best[k];
-      if (!b || lampsOn < 0.2) {
+      let lamp = this.lampSlots[k];
+      if (lampsOn < 0.2) {
         l.intensity = 0;
         return;
       }
-      const lamp = lamps[b.i];
-      l.position.copy(lamp.position);
-      l.color.copy(lamp.color);
-      // fade by distance so swapping lights never pops
-      l.intensity = 170 * lampsOn * smoothstep(200, 90, Math.sqrt(b.d));
+      if (lamp >= 0 && !wanted.has(lamp)) {
+        // leaving lamp: fade out, then become free
+        l.intensity = Math.max(0, l.intensity - 170 * lampsOn * fade);
+        if (l.intensity > 0.5) return;
+        lamp = -1;
+      }
+      if (lamp < 0) {
+        const free = best.find((b) => !assigned.has(b.i));
+        if (!free) {
+          l.intensity = 0;
+          this.lampSlots[k] = -1;
+          return;
+        }
+        lamp = free.i;
+        assigned.add(lamp);
+        l.intensity = 0;
+        l.position.copy(lamps[lamp].position);
+        l.color.copy(lamps[lamp].color);
+      }
+      this.lampSlots[k] = lamp;
+      const target = 170 * lampsOn * smoothstep(200, 90, Math.sqrt(lamps[lamp].position.distanceToSquared(cam)));
+      l.intensity += (target - l.intensity) * fade;
     });
   }
 

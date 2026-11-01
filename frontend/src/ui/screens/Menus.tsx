@@ -415,21 +415,24 @@ export async function startRaceFromState(rival?: AILevel) {
   app.set({ screen: 'race', result: null, paused: false });
 }
 
+/** [action, keyboard, gamepad] — also shown briefly at every race start */
+export const CONTROL_ROWS: [string, string, string][] = [
+  ['アクセル', 'W / ↑', 'RT / A'],
+  ['ブレーキ・バック', 'S / ↓', 'LT / X'],
+  ['ステアリング', 'A D / ← →', '左スティック'],
+  ['サイドブレーキ', 'Space', 'B / RB'],
+  ['シフトアップ / ダウン（MT時）', 'E / Q', 'Y / LB'],
+  ['カメラ切替', 'C', '十字キー↑'],
+  ['コースに復帰', 'R', 'Back'],
+  ['ポーズ', 'Esc / P', 'Start'],
+];
+
 export function ControlsScreen() {
   const go = useApp((s) => s.go);
   useMenuInput((a) => {
     if (a === 'back' || a === 'confirm') { sfx.back(); go('modes'); }
   });
-  const rows: [string, string, string][] = [
-    ['アクセル', 'W / ↑', 'RT / A'],
-    ['ブレーキ・バック', 'S / ↓', 'LT / X'],
-    ['ステアリング', 'A D / ← →', '左スティック'],
-    ['サイドブレーキ', 'Space', 'B / RB'],
-    ['シフトアップ / ダウン（MT時）', 'E / Q', 'Y / LB'],
-    ['カメラ切替', 'C', '十字キー↑'],
-    ['コースに復帰', 'R', 'Back'],
-    ['ポーズ', 'Esc / P', 'Start'],
-  ];
+  const rows = CONTROL_ROWS;
   return (
     <div className="screen panel-screen">
       <div className="panel wide">

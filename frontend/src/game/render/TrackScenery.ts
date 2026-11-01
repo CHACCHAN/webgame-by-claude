@@ -97,6 +97,11 @@ export function buildScenery(track: Track, terrain: TerrainData, quality: Scener
   group.add(nearMesh);
   const farMat = terrainMat.clone();
   farMat.normalMap = null;
+  // where the two grids overlap at the near grid's border they are nearly coplanar: push the coarse
+  // mesh back in depth so the near mesh always wins instead of z-fighting (flickering hillsides)
+  farMat.polygonOffset = true;
+  farMat.polygonOffsetFactor = 2;
+  farMat.polygonOffsetUnits = 4;
   const farMesh = new THREE.Mesh(gridGeometry(terrain.far, terrain, false), farMat);
   farMesh.name = 'terrain-far';
   group.add(farMesh);
@@ -828,8 +833,10 @@ function buildTrees(terrain: TerrainData, density: number, lodDistance: number) 
 export function updateTreeLods(trees: THREE.Object3D, camera: THREE.Vector3) {
   const lods = trees.userData.lods as { near: THREE.InstancedMesh; far: THREE.InstancedMesh; center: THREE.Vector3 }[];
   for (const l of lods) {
+    // hysteresis: a chunk right at the switch distance must not flap between meshes every frame
     const d = l.center.distanceTo(camera);
-    const near = d < (trees.userData.lodDistance as number);
+    const lod = trees.userData.lodDistance as number;
+    const near = l.near.visible ? d < lod + 60 : d < lod;
     l.near.visible = near;
     l.far.visible = !near;
   }
@@ -988,6 +995,7 @@ function buildClutter(
     envMapIntensity: 0.4,
   });
   const bushes: THREE.Matrix4[] = [], rocks: THREE.Matrix4[] = [];
+  const UP = new THREE.Vector3(0, 1, 0), normal = new THREE.Vector3(), tilt = new THREE.Quaternion();
   const bushCol: THREE.Color[] = [], rockCol: THREE.Color[] = [];
   const p = new THREE.Vector3();
   const q = new THREE.Quaternion();
@@ -1001,16 +1009,21 @@ function buildClutter(
     if (s < track.startS + 45 && off < 16) continue;
     track.pointAt(s, side * off, p);
     const y = terrain.heightAt(p.x, p.z);
-    const steep = Math.abs(terrain.heightAt(p.x + 1.5, p.z) - terrain.heightAt(p.x - 1.5, p.z)) / 3;
+    const gx = (terrain.heightAt(p.x + 1.5, p.z) - terrain.heightAt(p.x - 1.5, p.z)) / 3;
+    const gz = (terrain.heightAt(p.x, p.z + 1.5) - terrain.heightAt(p.x, p.z - 1.5)) / 3;
+    const steep = Math.hypot(gx, gz);
     if (Math.abs(y - p.y) > 14) continue;
-    q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), r() * 6.28);
+    q.setFromAxisAngle(UP, r() * 6.28);
     if (steep > 0.9 || r() < 0.18) {
+      // boulders lie in the slope (tilted to the ground normal) and are half buried, so on steep
+      // cuttings they read as rock outcrops rather than flat discs sticking out of the hill
       const sc = 0.3 + r() * 0.9;
-      rocks.push(new THREE.Matrix4().compose(new THREE.Vector3(p.x, y - sc * 0.18, p.z), q, new THREE.Vector3(sc * (1 + r()), sc * (0.55 + r() * 0.35), sc * (1 + r() * 0.5))));
+      q.premultiply(tilt.setFromUnitVectors(UP, normal.set(-gx, 1, -gz).normalize()));
+      rocks.push(new THREE.Matrix4().compose(new THREE.Vector3(p.x, y - sc * (0.25 + Math.min(steep, 1.5) * 0.2), p.z), q, new THREE.Vector3(sc * (1 + r() * 0.8), sc * (0.7 + r() * 0.3), sc * (1 + r() * 0.5))));
       rockCol.push(new THREE.Color().setHSL(0.08 + r() * 0.05, 0.05 + r() * 0.08, 0.6 + r() * 0.3));
     } else {
       const sc = 0.5 + r() * 1.1;
-      bushes.push(new THREE.Matrix4().compose(new THREE.Vector3(p.x, y, p.z), q, new THREE.Vector3(sc * (0.8 + r() * 0.6), sc, sc)));
+      bushes.push(new THREE.Matrix4().compose(new THREE.Vector3(p.x, y - steep * sc * 0.35, p.z), q, new THREE.Vector3(sc * (0.8 + r() * 0.6), sc, sc)));
       bushCol.push(new THREE.Color().setHSL(0.22 + r() * 0.1, 0.35 + r() * 0.2, 0.7 + r() * 0.5));
     }
   }

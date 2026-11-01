@@ -41,6 +41,7 @@ export function SettingsScreen() {
     { label: '運転アシスト', value: ['オフ', '標準', '強'][s.assist], note: 'カウンターステア補助・スピン防止', change: (d) => { const v = ((s.assist + d + 3) % 3) as 0 | 1 | 2; s.set({ assist: v }); if (game) game.assist = v; } },
     { label: 'トランスミッション', value: s.autoShift ? 'オートマチック' : 'マニュアル (E/Q)', change: () => { s.set({ autoShift: !s.autoShift }); if (game) game.autoShift = !s.autoShift; } },
     { label: 'ゴースト表示（タイムアタック）', value: s.showGhost ? 'オン' : 'オフ', change: () => { s.set({ showGhost: !s.showGhost }); if (game) game.showGhost = !s.showGhost; } },
+    { label: '操作ガイド（スタート時）', value: s.controlsGuide !== false ? 'オン' : 'オフ', note: 'レース開始時に操作方法をしばらく表示します', change: () => s.set({ controlsGuide: s.controlsGuide === false }) },
     { label: 'コーナー予告', value: s.cornerGuide ? 'オン' : 'オフ', note: '急カーブの手前で標識と警告音を出します', change: () => { s.set({ cornerGuide: !s.cornerGuide }); if (game) game.cornerGuide = !s.cornerGuide; } },
     { label: 'マスター音量', value: pct(s.masterVolume), change: (d) => s.set({ masterVolume: step(s.masterVolume, d) }) },
     { label: '効果音', value: pct(s.sfxVolume), change: (d) => s.set({ sfxVolume: step(s.sfxVolume, d) }) },

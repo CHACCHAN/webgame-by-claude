@@ -8,7 +8,7 @@ import { startRaceFromState } from '../screens/Menus';
 import { sfx } from '../sfx';
 import { COURSES } from '../../game/track/courses';
 import { currentCourseId } from '../../store/settings';
-import { Portrait } from '../screens/Menus';
+import { CONTROL_ROWS, Portrait } from '../screens/Menus';
 import type { HudState } from '../../game/Game';
 import { leaveRoom } from '../../store/online';
 import { SLOT_COLORS } from '../../game/net/RemoteRacers';
@@ -88,6 +88,8 @@ function updateStandings(el: HTMLOListElement | null, rows: HudState['online']) 
 export function Hud() {
   const { mode, rivalLevel, ghostChoice, phase } = useApp();
   const showFps = useSettings((s) => s.showFps);
+  const guideOn = useSettings((s) => s.controlsGuide !== false);
+  const autoShift = useSettings((s) => s.autoShift);
   const refs = {
     time: useRef<HTMLDivElement>(null),
     speed: useRef<HTMLDivElement>(null),
@@ -107,6 +109,7 @@ export function Hud() {
     lines: useRef<HTMLCanvasElement>(null),
     corner: useRef<HTMLDivElement>(null),
     standings: useRef<HTMLOListElement>(null),
+    guide: useRef<HTMLDivElement>(null),
   };
   const [redline, setRedline] = useState(8000);
   const [turbo, setTurbo] = useState(false);
@@ -185,6 +188,13 @@ export function Hud() {
       if (r.wrong.current) r.wrong.current.style.opacity = h.wrongWay ? '1' : '0';
       updateCornerNote(r.corner.current, h.corner);
       updateStandings(r.standings.current, h.online);
+      if (r.guide.current) {
+        // during the countdown and the first seconds of the race, then it fades away
+        const show = guideOn && (h.countdown > 0 || h.raceTime < 8);
+        r.guide.current.classList.toggle('show', show);
+        const pad = Array.from(navigator.getGamepads?.() ?? []).some((p) => p?.connected);
+        r.guide.current.classList.toggle('pad', pad);
+      }
       if (r.drift.current) {
         const show = h.driftCombo > 20;
         r.drift.current.style.opacity = show ? '1' : '0';
@@ -326,6 +336,17 @@ export function Hud() {
       </div>
       <div className="countdown" ref={refs.countdown} />
       <div className="wrong-way" ref={refs.wrong}>逆走中 ― WRONG WAY</div>
+      {guideOn && (
+        <div className="start-guide" ref={refs.guide}>
+          {CONTROL_ROWS.filter(([a]) => !a.includes('MT時') || !autoShift).map(([action, key, padKey]) => (
+            <div key={action}>
+              <kbd className="k-key">{key}</kbd>
+              <kbd className="k-pad">{padKey}</kbd>
+              <span>{action}</span>
+            </div>
+          ))}
+        </div>
+      )}
       <div className="corner-note" ref={refs.corner}>
         <svg viewBox="0 0 100 100" className="cn-sign">
           <polygon points="50,3 97,50 50,97 3,50" className="cn-plate" />

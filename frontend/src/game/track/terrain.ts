@@ -185,7 +185,8 @@ export function buildTerrain(track: Track, lf: Landform, opts: { nearCell?: numb
     if (info.idx < 0) return h;
     const halfW = track.width[info.idx] / 2;
     const edge = halfW + 1.2;
-    const bed = info.roadY - 0.45;
+    // banked corners drop the inner edge below the centreline: keep the bed under the lowest edge
+    const bed = info.roadY - 0.45 - Math.abs(track.bank[info.idx]) * edge;
     const isBridge = track.zone[info.idx] === 'bridge';
     if (info.dist < edge) {
       if (isBridge) return Math.min(h, bed - 9);
@@ -217,6 +218,7 @@ export function buildTerrain(track: Track, lf: Landform, opts: { nearCell?: numb
   const nnz = Math.ceil((maxZ + margin - nz0) / nearCell) + 1;
   const nearH = new Float32Array(nnx * nnz);
   const nearD = new Float32Array(nnx * nnz);
+  const nearI = new Int32Array(nnx * nnz);
   const info = { dist: 0, roadY: 0, idx: -1 };
   for (let j = 0; j < nnz; j++) {
     const z = nz0 + j * nearCell;
@@ -224,6 +226,24 @@ export function buildTerrain(track: Track, lf: Landform, opts: { nearCell?: numb
       const x = nx0 + i * nearCell;
       nearH[j * nnx + i] = finalHeight(x, z, info);
       nearD[j * nnx + i] = info.dist;
+      nearI[j * nnx + i] = info.idx;
+    }
+  }
+  // Hairpins: a grid point that belongs to the other leg's cutting can sit above this leg's road edge,
+  // and bilinear interpolation then lifts the ground over the asphalt. Keep every road corridor clear.
+  for (let k = 0; k < track.count; k++) {
+    if (track.zone[k] === 'bridge') continue;
+    const px = track.pos[k * 3], py = track.pos[k * 3 + 1], pz = track.pos[k * 3 + 2];
+    const reach = track.width[k] / 2 + 1.2 + nearCell;
+    const i0 = Math.max(0, Math.floor((px - reach - nx0) / nearCell)), i1 = Math.min(nnx - 1, Math.ceil((px + reach - nx0) / nearCell));
+    const j0 = Math.max(0, Math.floor((pz - reach - nz0) / nearCell)), j1 = Math.min(nnz - 1, Math.ceil((pz + reach - nz0) / nearCell));
+    for (let jj = j0; jj <= j1; jj++) {
+      for (let ii = i0; ii <= i1; ii++) {
+        const g = jj * nnx + ii;
+        if (Math.abs(nearI[g] - k) < 40) continue;
+        if (Math.hypot(nx0 + ii * nearCell - px, nz0 + jj * nearCell - pz) > reach) continue;
+        nearH[g] = Math.min(nearH[g], py - 0.45 - Math.abs(track.bank[k]) * reach);
+      }
     }
   }
   const near: HeightGrid = { x0: nx0, z0: nz0, cell: nearCell, nx: nnx, nz: nnz, heights: nearH, roadDist: nearD };
@@ -235,6 +255,15 @@ export function buildTerrain(track: Track, lf: Landform, opts: { nearCell?: numb
   const fnz = Math.ceil(10400 / farCell) + 1;
   const farH = new Float32Array(fnx * fnz);
   const nearX1 = nx0 + (nnx - 1) * nearCell, nearZ1 = nz0 + (nnz - 1) * nearCell;
+  // lowest near-grid height within one far cell of (x, z): the coarse mesh must stay under every road
+  // cut of the near mesh, not only under the point it sits on
+  const nearMin = (x: number, z: number) => {
+    const i0 = Math.max(0, Math.floor((x - farCell - nx0) / nearCell)), i1 = Math.min(nnx - 1, Math.ceil((x + farCell - nx0) / nearCell));
+    const j0 = Math.max(0, Math.floor((z - farCell - nz0) / nearCell)), j1 = Math.min(nnz - 1, Math.ceil((z + farCell - nz0) / nearCell));
+    let m = Infinity;
+    for (let jj = j0; jj <= j1; jj++) for (let ii = i0; ii <= i1; ii++) m = Math.min(m, nearH[jj * nnx + ii]);
+    return m;
+  };
   for (let j = 0; j < fnz; j++) {
     const z = fz0 + j * farCell;
     for (let i = 0; i < fnx; i++) {
@@ -244,8 +273,10 @@ export function buildTerrain(track: Track, lf: Landform, opts: { nearCell?: numb
       const edge = Math.min(i, fnx - 1 - i, j, fnz - 1 - j) * farCell;
       const floor = lf.waterLevel !== null ? lf.waterLevel - 30 : Math.min(h, 120);
       h = lerp(Math.min(h, floor), h, smoothstep(0, 1600, edge));
+      // under the near mesh the far mesh is hidden: sink it below the lowest near terrain around it
+      // (the outermost cell is kept so the two meshes meet at the near grid's border)
       const inside = x > nx0 + farCell && x < nearX1 - farCell && z > nz0 + farCell && z < nearZ1 - farCell;
-      if (inside) h -= 30;
+      if (inside) h = Math.min(h - 30, nearMin(x, z) - 8);
       farH[j * fnx + i] = h;
     }
   }

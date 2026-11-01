@@ -66,3 +66,32 @@ describe('corner detection (pace notes and roadside signs)', () => {
     }
   });
 });
+
+describe('terrain never covers the road (all courses)', () => {
+  for (const id of COURSE_ORDER) {
+    it(`${id}: near terrain stays under the asphalt, the coarse far mesh under both`, () => {
+      const c = COURSES[id];
+      const t = new Track(c.design);
+      const T = buildTerrain(t, c.landform);
+      const f = T.far;
+      const farAt = (x: number, z: number) => {
+        const gx = (x - f.x0) / f.cell, gz = (z - f.z0) / f.cell;
+        const i = Math.floor(gx), j = Math.floor(gz), u = gx - i, v = gz - j;
+        const h = (a: number, b: number) => f.heights[b * f.nx + a];
+        return (h(i, j) * (1 - u) + h(i + 1, j) * u) * (1 - v) + (h(i, j + 1) * (1 - u) + h(i + 1, j + 1) * u) * v;
+      };
+      let worstNear = -Infinity, worstFar = -Infinity;
+      for (let i = 0; i < t.count; i += 2) {
+        const hw = t.width[i] / 2;
+        for (const lat of [-hw, -hw / 2, 0, hw / 2, hw]) {
+          const p = t.pointAt(i, lat);
+          // bridges span a gorge: the terrain there is far below anyway
+          worstNear = Math.max(worstNear, T.heightAt(p.x, p.z) - p.y);
+          worstFar = Math.max(worstFar, farAt(p.x, p.z) - Math.min(p.y, T.heightAt(p.x, p.z)));
+        }
+      }
+      expect(worstNear).toBeLessThan(-0.05);
+      expect(worstFar).toBeLessThan(-1);
+    });
+  }
+});

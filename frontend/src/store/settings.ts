@@ -18,6 +18,7 @@ export interface Settings {
   autoShift: boolean;
   showGhost: boolean;
   cornerGuide: boolean;
+  controlsGuide: boolean;
   showFps: boolean;
   courseId: CourseId;
   set: (patch: Partial<Omit<Settings, 'set'>>) => void;
@@ -36,6 +37,7 @@ export const useSettings = create<Settings>()(
       autoShift: true,
       showGhost: true,
       cornerGuide: true,
+      controlsGuide: true,
       showFps: false,
       courseId: DEFAULT_COURSE,
       set: (patch) => set(patch),

@@ -480,3 +480,13 @@ kbd {
   .ol-split { grid-template-columns: 1fr; }
   .ol-code-big b { font-size: 48px; }
 }
+
+/* controls guide at the start of a race */
+.start-guide { position: absolute; left: 26px; bottom: 26px; transform: translateY(8px); display: grid; grid-template-columns: auto; gap: 6px;
+  padding: 12px 20px; border-radius: 8px; background: rgba(5, 8, 14, 0.6); border: 1px solid var(--line); opacity: 0; transition: opacity 0.6s, transform 0.6s; pointer-events: none; }
+.start-guide.show { opacity: 1; transform: translateY(0); }
+.start-guide > div { display: flex; align-items: center; gap: 8px; font-size: 14px; white-space: nowrap; }
+.start-guide kbd { min-width: 64px; text-align: center; }
+.start-guide .k-pad, .start-guide.pad .k-key { display: none; }
+.start-guide.pad .k-pad { display: inline-block; }
+@media (max-width: 1000px) { .start-guide { font-size: 12px; padding: 8px 12px; } }

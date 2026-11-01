@@ -2,6 +2,27 @@
 
 Newest first. "Verified" means actually executed in this environment; anything else is marked as unverified.
 
+## Session 3 (2026-11-01) — owner playtest on a real GPU (60 fps, Cloudflare tunnel)
+
+### Reported & fixed
+- **Mound across the road (drive-through)** on 天狼's last hairpin: the coarse far terrain mesh (24 m grid, no
+  collider) was only lowered by a fixed 30 m under the near grid, but roads cut deeper than that into the ridge
+  and caldera walls — it rose up to 16 m (天狼), 44 m (朧峠) and 227 m (霧降湖) above road/near terrain in places.
+  Inside the near area it now sits 8 m below the *lowest* near-grid height within one far cell. Also fixed: on
+  banked hairpins the near terrain covered the inner road edge by up to 0.32 m (the road bed now accounts for the
+  bank), and other-leg grid points are kept out of every road corridor. Regression test for all courses:
+  near terrain below the asphalt at 5 points across the road every 2 m, far mesh ≥ 1 m below both.
+  Screenshot at the reported spot: road clear.
+- Rocks looked like floating discs on steep cuttings: they are now tilted to the slope normal, less flat and half
+  buried; bushes sink with the slope.
+- **Screen flicker** (not reproducible without a GPU; causes removed): camera passing through the intruding far
+  mesh (fixed above), z-fighting where near and far terrain overlap at the near grid border (polygon offset on the
+  far mesh), tree chunks flapping between LOD meshes at the switch distance (60 m hysteresis), street-lamp lights
+  jumping between lamps when the nearest set changed (lights now keep their lamp and fade out/in when they move).
+  Needs confirmation by the owner on a real GPU.
+- **Improvement**: controls guide (keyboard, or gamepad labels when a pad is connected) during the countdown and
+  the first 8 s of every race, bottom-left; settings toggle「操作ガイド（スタート時）」.
+
 ## Session 2 (2026-10-30, continued)
 
 ### Done & verified
