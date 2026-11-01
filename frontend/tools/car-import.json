@@ -1,0 +1,38 @@
+{
+  "shiden": {
+    "dir": "rx7",
+    "simplify": 1,
+    "config": {
+      "wheels": "Material\\.01[145]$",
+      "paint": "Material\\.007$",
+      "glass": "Material\\.0(08|16)$",
+      "headlights": "Material\\.002$",
+      "taillights": "Material\\.017$"
+    }
+  },
+  "s15": {
+    "dir": "s15",
+    "simplify": 0.65,
+    "config": {
+      "wheels": "Wheel1Mtl|Tire1Mtl|BrakeDisc1Mtl",
+      "calipers": "BrakeCaliper",
+      "paint": "Paint1Mtl",
+      "glass": "Windows1Mtl",
+      "headlights": "Textures5Mtl",
+      "taillights": "Textures1Mtl",
+      "drop": "Paint5Mtl|Downpipe|FuseBox|KnHighFlow|Mishimoto|RadiatorFan|Intercooler|SparkPlug|OilFiller|IntakeMisc|Filter1Mtl|HeatShield|ExhaustHousing|Intermediate|RearDifferential|FrontSuspension|FrontSwaybar|RearCoilovers|TurboFins|HoodSprayers"
+    },
+    "textureSize": 512
+  },
+  "raijin": {
+    "dir": "impreza",
+    "simplify": 0.65,
+    "config": {
+      "wheels": "^(Tire|Rim)",
+      "paint": "Car_Paint",
+      "glass": "Window|Clear$|Clear_Side",
+      "headlights": "HL[ _]Glass",
+      "taillights": "TL[ _]Glass"
+    }
+  }
+}

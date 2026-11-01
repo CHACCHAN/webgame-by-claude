@@ -43,6 +43,8 @@ export interface CarSpec {
   /** UI stat bars 0..10 */
   stats: { power: number; grip: number; drift: number; weight: number };
   colors: { body: string; accent: string };
+  /** third-party 3D model in public/models/cars/<id>.glb (attribution shown in the garage) */
+  model?: { title: string; author: string; url: string; license: string };
 }
 
 export const CAR_SPECS: Record<CarId, CarSpec> = {
@@ -112,7 +114,8 @@ export const CAR_SPECS: Record<CarId, CarSpec> = {
     downforce: 1.1,
     driftiness: 0.45,
     stats: { power: 9, grip: 9, drift: 5, weight: 5 },
-    colors: { body: '#1d4fa8', accent: '#d8dce4' },
+    colors: { body: '#d9dbde', accent: '#1d4fa8' },
+    model: { title: 'Subaru Impreza WRX STi 2004 Custom', author: 'Mac CGI', url: 'https://sketchfab.com/3d-models/subaru-impreza-wrx-sti-2004-custom-08296bc950364621b6174a3078bb19e0', license: 'CC BY 4.0' },
   },
   shiden: {
     id: 'shiden',
@@ -146,7 +149,8 @@ export const CAR_SPECS: Record<CarId, CarSpec> = {
     downforce: 0.9,
     driftiness: 0.75,
     stats: { power: 8, grip: 7, drift: 8, weight: 6 },
-    colors: { body: '#c8102e', accent: '#111111' },
+    colors: { body: '#f5c400', accent: '#111111' },
+    model: { title: 'Mazda RX-7 FD', author: 'Lexyc16', url: 'https://sketchfab.com/3d-models/mazda-rx-7-fd-d35ff630df614771b82e7b2f59035b1e', license: 'CC BY 4.0' },
   },
   supra: {
     id: 'supra',
@@ -248,7 +252,8 @@ export const CAR_SPECS: Record<CarId, CarSpec> = {
     downforce: 0.8,
     driftiness: 0.9,
     stats: { power: 7, grip: 7, drift: 10, weight: 7 },
-    colors: { body: '#f2c21a', accent: '#111111' },
+    colors: { body: '#f5cf30', accent: '#111111' },
+    model: { title: 'Nissan Silvia (S15)', author: 'Mona x Supercars', url: 'https://sketchfab.com/3d-models/nissan-silvia-s15-20a8388a009e4a7aae61a9bb50ad8945', license: 'CC BY 4.0' },
   },
 };
 

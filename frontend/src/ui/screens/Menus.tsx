@@ -144,11 +144,11 @@ export function Hint({ items }: { items: [string, string][] }) {
 
 const COLORS: Record<CarId, string[]> = {
   hayate: ['#e8e6e1', '#b3121c', '#1b1d22', '#2f6db5', '#e0b400'],
-  raijin: ['#1d4fa8', '#d6d9de', '#0c0c0e', '#8f1218', '#5e6b3a'],
-  shiden: ['#c8102e', '#f2f2f0', '#121214', '#f2a900', '#3a7d44'],
+  raijin: ['#d9dbde', '#1d4fa8', '#0c0c0e', '#8f1218', '#5e6b3a'],
+  shiden: ['#f5c400', '#c8102e', '#f2f2f0', '#121214', '#3a7d44'],
   supra: ['#eeeeee', '#d8481c', '#c40d1e', '#121214', '#1f5fb5'],
   r34: ['#2f4fa6', '#e9e9ea', '#121214', '#8a8f96', '#4a2a63'],
-  s15: ['#f2c21a', '#e9e9ea', '#121214', '#b3121c', '#2f6db5'],
+  s15: ['#f5cf30', '#e9e9ea', '#121214', '#b3121c', '#2f6db5'],
 };
 
 export function GarageScreen() {
@@ -203,6 +203,11 @@ export function GarageScreen() {
         <h2 className="car-name">{spec.name}</h2>
         <div className="car-tag">{spec.tagline} ・ {spec.drive}</div>
         <p className="car-desc">{spec.description}</p>
+        {spec.model && (
+          <p className="car-credit">
+            3D model: “{spec.model.title}” by {spec.model.author} ({spec.model.license}, Sketchfab)
+          </p>
+        )}
         <div className="stats">
           {stat('POWER', spec.stats.power)}
           {stat('GRIP', spec.stats.grip)}

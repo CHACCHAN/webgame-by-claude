@@ -37,6 +37,10 @@ running log of what is done, verified and pending. `docs/PLAN.md` holds the desi
 - Cars load from `frontend/public/models/cars/*.glb` at runtime. After editing `CarModel.ts`, rebuild and run
   `npm run assets:cars` (with `vite preview` on :4173 and `PW_MODULE=<path to playwright>`), or delete the GLBs
   to fall back to the procedural builder.
+- Third-party car models: unpack each glTF zip into a folder, describe it in `frontend/tools/car-import.json`
+  (patterns for wheels / calipers / paint / glass / lamps / drop), then with `vite preview` on :4173:
+  `node tools/import-cars.cjs preview <srcRoot> <outDir> <ids>` (orientation renders) and
+  `node tools/import-cars.cjs import <srcRoot> <ids>` → `public/models/cars/<id>.glb`. Attribution: CarSpec.model + docs/ASSETS.md.
 - Courses live in `track/courses.ts` (design + `Landform` from `track/landforms.ts` + rivals, medals, music, art).
   After changing a course design, regenerate the CPU ghosts (`npm run seed:bots`) and re-check medals with the sim.
 - Online battle (≤3 players): lobby/start/results via `RoomController`; car states are presence-channel client events

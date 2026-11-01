@@ -53,25 +53,33 @@ Downloaded from ambientCG (https://ambientcg.com, CC0 1.0 — no attribution req
 | `rock_albedo.webp` / `rock_normal.webp` | Rock030 | Color / NormalGL | 512 px, colour ×1.35 |
 | `concrete_albedo.webp` / `concrete_normal.webp` | Concrete034 | Color / NormalGL | 512 px, colour ×0.82; lattice frames and weathering are drawn on top |
 
-## Car models from Sketchfab (owner request, private use) — files pending
-The owner asked to replace the cars with these models for a private game played by friends and family. All six
-are **CC Attribution 4.0** (free download); attribution below must stay in the game credits and here. The car
+## Car models from Sketchfab (owner request, private use)
+The owner asked to replace the cars with Sketchfab models for a private game played by friends and family. The car
 names and designs are trademarks / designs of their manufacturers (private, non-commercial use decided by the
-owner). Files are not in the repository yet: `api.sketchfab.com` is blocked in this environment and Sketchfab
-downloads need a logged-in account, so the owner provides them (see PROGRESS).
+owner). Attribution below is required by the licences and is also shown in the garage under each car.
+`api.sketchfab.com` is blocked here, so the owner downloads the glTF zips and attaches them.
 
-| Game id | Model | Author | Source | Licence |
-|---|---|---|---|---|
-| `hayate` | Toyota AE86 Sprinter Trueno Zenki | Martin Trafas (@TinoD2) | https://sketchfab.com/3d-models/a5737bf3cc9b4179a6e5ebe173ff70d9 | CC BY 4.0 |
-| `supra` | Toyota Supra Mk4 | MiguelG19 | https://sketchfab.com/3d-models/7b814545bf7148aba70b7af03b0f2817 | CC BY 4.0 |
-| `r34` | 1999 Nissan Skyline GTR R34 | 007 (@tangwang920) | https://sketchfab.com/3d-models/facbb68395044ac3a22de327d72da9ea | CC BY 4.0 |
-| `shiden` | Mazda RX-7 FD | Lexyc16 | https://sketchfab.com/3d-models/d35ff630df614771b82e7b2f59035b1e | CC BY 4.0 |
-| `raijin` | Subaru Impreza WRX STi 2004 Custom | MAC ULT ARTS (@MACULTARTS) | https://sketchfab.com/3d-models/08296bc950364621b6174a3078bb19e0 | CC BY 4.0 |
-| `s15` | Nissan Silvia (S15) | Mona x Supercars (@Car2022) | https://sketchfab.com/3d-models/20a8388a009e4a7aae61a9bb50ad8945 | CC BY 4.0 |
+| Game id | Model | Author | Source | Licence | Status |
+|---|---|---|---|---|---|
+| `shiden` | Mazda RX-7 FD | Lexyc16 | https://sketchfab.com/3d-models/d35ff630df614771b82e7b2f59035b1e | CC BY 4.0 | **in game** (37 k tris, 0.65 MB) |
+| `s15` | Nissan Silvia (S15) | Mona x Supercars (@Car2022) | https://sketchfab.com/3d-models/20a8388a009e4a7aae61a9bb50ad8945 | CC BY 4.0 | **in game** (49 k tris, 1.9 MB) |
+| `raijin` | Subaru Impreza WRX STi 2004 Custom | Mac CGI (@MACCGI) | https://sketchfab.com/3d-models/08296bc950364621b6174a3078bb19e0 | CC BY 4.0 | **in game** (53 k tris, 0.57 MB) |
+| `r34` | 1999 Nissan Skyline GTR R34 | 007 (@tangwang920) | https://sketchfab.com/3d-models/facbb68395044ac3a22de327d72da9ea | CC BY 4.0 (as stated by the uploader) | on hold — owner decision |
+| `supra` | 1993 Toyota Supra Turbo MK IV Versus 2F2F (delivered instead of the linked MiguelG19 model) | Ddiaz Design | https://sketchfab.com/3d-models/cf54b195d7314a61aba4f94a4ffcf6c8 | CC BY-NC-SA 4.0 | on hold — owner decision |
+| `hayate` | Toyota AE86 Sprinter Trueno Zenki | Martin Trafas (@TinoD2) | https://sketchfab.com/3d-models/a5737bf3cc9b4179a6e5ebe173ff70d9 | CC BY 4.0 | not delivered (procedural car still used) |
 
-Planned processing (to be recorded per file when done): glTF-Transform (dedup, simplify to a web budget —
-the AE86 and Supra are ~0.7 M faces —, textures resized to ≤ 2048 px WebP, meshopt), re-rooted to the game's
-car contract (wheel pivots, paint/light materials), scaled to the real dimensions.
+On hold: the R34 and Supra files use a commercial racing game's internal naming for meshes, materials and
+textures (`…SkylineGTRR34F2_1999…`, `FnF_SupraMKIVF2_1994…`, "3DWheel Front L"), which suggests they were extracted
+from that game; the uploader's licence may then not be valid. Left to the owner to decide.
+
+Processing (`tools/import-cars.cjs` + `tools/car-import.json`, converter `src/game/render/carImport.ts`): the glTF is
+loaded with three.js in a headless browser, oriented to +Z forward (front detected from the headlamp parts), scaled
+so the wheelbase matches the physics spec, ground at y = 0; wheel parts (merged meshes split by corner) become
+`wheel_*`/`spin_*` pivots (calipers steer but do not spin) and are fitted to the physics wheel radius; paint /
+glass / headlamp / taillamp materials are renamed to the game's swap names (paint colour selectable in the
+garage, brake lights, headlights); hidden engine-bay parts of the S15 are dropped. Then glTF-Transform `optimize`
+(simplify where needed, WebP textures ≤ 1024 px — 512 px for the S15 —, meshopt; palette merge off so the
+material names survive). The resulting GLBs are adaptations under the same licences.
 
 ## Owner-supplied generated assets
 Generated by the owner with ChatGPT (images) and Gemini (music, video) from the prompts in

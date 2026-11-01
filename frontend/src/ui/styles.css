@@ -490,3 +490,5 @@ kbd {
 .start-guide .k-pad, .start-guide.pad .k-key { display: none; }
 .start-guide.pad .k-pad { display: inline-block; }
 @media (max-width: 1000px) { .start-guide { font-size: 12px; padding: 8px 12px; } }
+
+.car-credit { margin: -6px 0 10px; font-size: 11px; color: var(--muted); letter-spacing: 0.02em; }

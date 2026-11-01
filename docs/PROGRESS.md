@@ -30,8 +30,15 @@ Newest first. "Verified" means actually executed in this environment; anything e
   finish all three courses at legend level with 0 respawns (legend laps — Oboro: AE86 106.9 s, S15 100.0 s,
   RX-7 96.0 s, Supra 96.7 s, Impreza 93.3 s, R34 93.5 s); medals for the new cars from the per-course ratios of
   the existing ones. Backend accepts the new ids. Title footer no longer claims fictional cars.
-- Pending: the model files. `api.sketchfab.com` is blocked here and downloads need a Sketchfab login; until they
-  arrive the new cars use procedural fallback bodies.
+- Model files arrived as zips (5 of 6). Converter + import tool written (see ASSETS.md). **In game: RX-7 (shiden),
+  S15, Impreza (raijin)** — checked in the garage and while driving (orientation, wheels in the arches and on the
+  ground, wheel spin/steer, taillights), paint recolour verified (red RX-7), every car carries its paint, glass,
+  headlamp and taillamp materials; 37–53 k triangles per car. Bugs found & fixed in the converter: the optimiser's
+  palette step renamed the materials (paint colour ignored), a material shared by window and headlamp glass took
+  only one role, three.js turns spaces in node names into underscores (patterns), stray unreferenced vertices broke
+  the RX-7 bounds.
+- On hold: R34 and Supra (signs of extraction from a commercial game; the delivered Supra is a different model,
+  CC BY-NC-SA). Not delivered: AE86 (likely too large to attach). Those cars keep the procedural fallback body.
 
 ## Session 2 (2026-10-30, continued)
 
