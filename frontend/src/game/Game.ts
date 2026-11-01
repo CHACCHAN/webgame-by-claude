@@ -4,7 +4,7 @@ import { COURSES, type CourseId, type CourseInfo } from './track/courses';
 import { buildTerrain, type TerrainData } from './track/terrain';
 import { PhysicsWorld, PHYSICS_DT, initRapier } from './vehicle/PhysicsWorld';
 import { VehicleSim, emptyInput, type AssistLevel, type VehicleInput } from './vehicle/VehicleSim';
-import { CAR_SPECS, type CarId } from './vehicle/carSpecs';
+import { CAR_ORDER, CAR_SPECS, type CarId } from './vehicle/carSpecs';
 import { RacingLine } from './ai/RacingLine';
 import { AIDriver, AI_PROFILES, type AILevel } from './ai/AIDriver';
 import { buildScenery, type SceneryResult } from './render/TrackScenery';
@@ -219,7 +219,7 @@ export class Game {
     await this.yieldFrame(0.05, '物理エンジンを初期化中');
     await initRapier();
     await this.yieldFrame(0.08, '車両モデルを読み込み中');
-    await Promise.all([loadCarTemplates(['hayate', 'raijin', 'shiden']), loadSurfaceTextures()]);
+    await Promise.all([loadCarTemplates(CAR_ORDER), loadSurfaceTextures()]);
     this.root.add(this.smoke.points, this.skids.mesh, this.rain.mesh);
     this.remotes = new RemoteRacers(this.root, (id) => this.rideHeightOf(id), false);
     // pooled lights for nearby street lamps

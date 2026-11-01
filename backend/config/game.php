@@ -33,10 +33,14 @@ return [
         ],
     ],
 
+    // ids are stable (stored runs and ghosts refer to them); names follow the car models in use
     'cars' => [
-        'hayate' => ['name' => 'HAYATE TR-S'],
-        'raijin' => ['name' => 'RAIJIN GT-X'],
-        'shiden' => ['name' => 'SHIDEN RS'],
+        'hayate' => ['name' => 'SPRINTER TRUENO AE86'],
+        's15' => ['name' => 'SILVIA spec-R (S15)'],
+        'shiden' => ['name' => 'RX-7 (FD3S)'],
+        'supra' => ['name' => 'SUPRA RZ (JZA80)'],
+        'raijin' => ['name' => 'IMPREZA WRX STI'],
+        'r34' => ['name' => 'SKYLINE GT-R (BNR34)'],
     ],
 
     'modes' => ['time_attack', 'rival', 'ghost'],

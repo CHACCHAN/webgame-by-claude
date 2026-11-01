@@ -37,7 +37,7 @@ class GameApiTest extends TestCase
         $this->getJson('/api/content')->assertOk()
             ->assertJsonPath('tracks.0.id', 'oboro-downhill')
             ->assertJsonCount(3, 'tracks')
-            ->assertJsonCount(3, 'cars');
+            ->assertJsonCount(6, 'cars');
     }
 
     public function test_player_registration_and_profile(): void

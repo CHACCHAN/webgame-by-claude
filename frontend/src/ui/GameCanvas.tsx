@@ -4,6 +4,7 @@ import { BlendFunction, ToneMappingMode } from 'postprocessing';
 import { useEffect, useMemo } from 'react';
 import * as THREE from 'three';
 import { Game } from '../game/Game';
+import type { CarId } from '../game/vehicle/carSpecs';
 import { currentCourseId, qualityProfile, useSettings } from '../store/settings';
 import { useApp } from '../store/app';
 
@@ -34,7 +35,7 @@ function GameBridge() {
     window.__game = game;
     if (params.get('export') === '1') {
       // dev hook for tools/export-cars: returns a GLB as base64
-      (window as unknown as Record<string, unknown>).__exportCar = async (id: 'hayate' | 'raijin' | 'shiden') => {
+      (window as unknown as Record<string, unknown>).__exportCar = async (id: CarId) => {
         const { exportCarGLB } = await import('../game/render/carAssets');
         const buf = new Uint8Array(await exportCarGLB(id));
         let bin = '';

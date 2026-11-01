@@ -23,6 +23,16 @@ Newest first. "Verified" means actually executed in this environment; anything e
 - **Improvement**: controls guide (keyboard, or gamepad labels when a pad is connected) during the countdown and
   the first 8 s of every race, bottom-left; settings toggle「操作ガイド（スタート時）」.
 
+### Real cars (owner request, private use) — in progress
+- Six cars from Sketchfab (all CC BY 4.0, attribution in ASSETS.md). Roster is now six: the three existing ids keep
+  their physics, records, medals and CPU ghosts and take the closest real car (hayate → AE86, raijin → Impreza
+  WRX STI, shiden → RX-7 FD); three new ids `supra`, `r34`, `s15` with game-tuned specs. Headless sim: all six
+  finish all three courses at legend level with 0 respawns (legend laps — Oboro: AE86 106.9 s, S15 100.0 s,
+  RX-7 96.0 s, Supra 96.7 s, Impreza 93.3 s, R34 93.5 s); medals for the new cars from the per-course ratios of
+  the existing ones. Backend accepts the new ids. Title footer no longer claims fictional cars.
+- Pending: the model files. `api.sketchfab.com` is blocked here and downloads need a Sketchfab login; until they
+  arrive the new cars use procedural fallback bodies.
+
 ## Session 2 (2026-10-30, continued)
 
 ### Done & verified

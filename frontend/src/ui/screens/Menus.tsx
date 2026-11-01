@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { gameHolder } from '../GameCanvas';
 import { useApp } from '../../store/app';
 import { useMenuInput, hoverSelect } from '../useMenuInput';
-import { CAR_ORDER, CAR_SPECS } from '../../game/vehicle/carSpecs';
+import { CAR_ORDER, CAR_SPECS, type CarId } from '../../game/vehicle/carSpecs';
 import type { AILevel } from '../../game/ai/AIDriver';
 import { COURSES, COURSE_ORDER, type CourseId } from '../../game/track/courses';
 import { Track } from '../../game/track/Track';
@@ -64,7 +64,7 @@ export function TitleScreen() {
       <div className="press-start">PRESS ENTER / CLICK TO START</div>
       <div className="title-foot">
         <span>v1.0</span>
-        <span>© 2026 Touge Nocturne Project ― 本作は架空の峠・車両・人物を描いたオリジナル作品です</span>
+        <span>© 2026 Touge Nocturne Project ― 峠・人物は架空です。車名・車両デザインは各メーカーの商標・意匠です（私的利用の非公開作品）</span>
       </div>
     </div>
   );
@@ -142,10 +142,13 @@ export function Hint({ items }: { items: [string, string][] }) {
   );
 }
 
-const COLORS: Record<string, string[]> = {
+const COLORS: Record<CarId, string[]> = {
   hayate: ['#e8e6e1', '#b3121c', '#1b1d22', '#2f6db5', '#e0b400'],
   raijin: ['#1d4fa8', '#d6d9de', '#0c0c0e', '#8f1218', '#5e6b3a'],
   shiden: ['#c8102e', '#f2f2f0', '#121214', '#f2a900', '#3a7d44'],
+  supra: ['#eeeeee', '#d8481c', '#c40d1e', '#121214', '#1f5fb5'],
+  r34: ['#2f4fa6', '#e9e9ea', '#121214', '#8a8f96', '#4a2a63'],
+  s15: ['#f2c21a', '#e9e9ea', '#121214', '#b3121c', '#2f6db5'],
 };
 
 export function GarageScreen() {

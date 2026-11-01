@@ -47,8 +47,8 @@ test('ranking shows the seeded CPU drivers from the Laravel API', async ({ page 
   await page.locator('.menu-list li', { hasText: 'RANKING' }).click();
   await expect(page.locator('.lb-table tbody tr').first()).toBeVisible();
   await expect(page.locator('.lb-table')).toContainText('朧');
-  await page.locator('.tabs button', { hasText: 'RAIJIN GT-X' }).click();
-  await expect(page.locator('.lb-table tbody tr td:nth-child(3)').first()).toHaveText('RAIJIN GT-X');
+  await page.locator('.tabs button', { hasText: 'IMPREZA WRX STI' }).click();
+  await expect(page.locator('.lb-table tbody tr td:nth-child(3)').first()).toHaveText('IMPREZA WRX STI');
 });
 
 test('time attack: full autodriven run, results and online submission', async ({ page }) => {
@@ -59,7 +59,7 @@ test('time attack: full autodriven run, results and online submission', async ({
   await page.keyboard.press('Enter'); // TIME ATTACK
   await expect(page.locator('.course-card.active')).toContainText('OBORO PASS');
   await page.keyboard.press('Enter'); // default course
-  await expect(page.locator('.car-name')).toHaveText('HAYATE TR-S');
+  await expect(page.locator('.car-name')).toHaveText('SPRINTER TRUENO AE86');
   await page.locator('.cta', { hasText: 'この車で出走' }).click();
   await expect(page.locator('.hud')).toBeVisible();
   await page.waitForFunction(() => (window as any).__game.phase === 'racing', null, { timeout: 120_000 });

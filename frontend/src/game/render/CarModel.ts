@@ -39,7 +39,7 @@ interface BodyStyle {
   twoTone: boolean;
 }
 
-const STYLES: Record<CarId, BodyStyle> = {
+const BASE_STYLES = {
   hayate: {
     front: 2.0, rear: -2.15, halfWidth: 0.83, bottom: 0.2, shoulder: 0.78,
     noseTop: 0.78, cowlTop: 0.95, deckTop: 1.0, tailTop: 0.98, roof: 1.33,
@@ -61,6 +61,14 @@ const STYLES: Record<CarId, BodyStyle> = {
     tumblehome: 0.76, softness: 0.9, cornerRound: 0.55, archGap: 0.04, flare: 0.05,
     wing: 'ducktail', headlights: 'popup', twoTone: false,
   },
+} satisfies Record<'hayate' | 'raijin' | 'shiden', BodyStyle>;
+
+/** Fallback bodies for the newer cars until their GLB models are in place. */
+const STYLES: Record<CarId, BodyStyle> = {
+  ...BASE_STYLES,
+  supra: { ...BASE_STYLES.shiden, front: 2.15, rear: -2.35, halfWidth: 0.9, headlights: 'slim' },
+  r34: { ...BASE_STYLES.raijin },
+  s15: { ...BASE_STYLES.shiden, headlights: 'slim' },
 };
 
 const smooth = (e0: number, e1: number, x: number) => {
