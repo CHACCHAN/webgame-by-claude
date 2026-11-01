@@ -26,8 +26,9 @@ curvature/grade smoothed; road widened in hairpins; banking from curvature.
 ## Online battle (added at the owner's request)
 Up to 3 players per room (4-character code). Laravel API for the lobby (create/join/leave, car choice, host start with a
 server-chosen green-light time, finish times, rematch) with server-side limits; Laravel Reverb presence channel per room
-for live car states (client events) and room updates. Remote cars are visual only (no contact), interpolated 120 ms in
-the past. Each client times itself; the race clock never runs slower than the wall clock since the green light.
+for live car states (client events) and room updates. Remote cars are drawn 120 ms in the past and, during the race,
+also exist as solid stand-in bodies in the local physics world (driven toward the extrapolated network pose), so cars
+can bump and lean on each other; each client's own car is authoritative on its own screen. Each client times itself; the race clock never runs slower than the wall clock since the green light.
 
 ## Technical design
 - **Terrain**: road-first. Road heights are interpolated into the hillside (IDW within 320 m) blended with a

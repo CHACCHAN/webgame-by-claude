@@ -1,7 +1,7 @@
 import { Quaternion, Vector3 } from 'three';
 import { clamp, damp, lerp, smoothstep } from '../util/math';
 import { type CarSpec, torqueAt } from './carSpecs';
-import { GROUP_CAR, GROUP_GROUND, GROUP_WALL, PhysicsWorld, RAPIER, groups } from './PhysicsWorld';
+import { GROUP_CAR, GROUP_GROUND, GROUP_PROXY, GROUP_WALL, PhysicsWorld, RAPIER, groups } from './PhysicsWorld';
 
 export interface VehicleInput {
   throttle: number;
@@ -133,7 +133,7 @@ export class VehicleSim {
     this.collider = physics.world.createCollider(
       RAPIER.ColliderDesc.roundCuboid(width / 2 - 0.08, height / 2 - 0.08, length / 2 - 0.08, 0.08)
         .setMassProperties(m, { x: 0, y: comY, z: spec.comForward }, inertia, { x: 0, y: 0, z: 0, w: 1 })
-        .setCollisionGroups(groups(GROUP_CAR, GROUP_GROUND | GROUP_WALL | GROUP_CAR))
+        .setCollisionGroups(groups(GROUP_CAR, GROUP_GROUND | GROUP_WALL | GROUP_CAR | GROUP_PROXY))
         .setFriction(0.15)
         .setRestitution(0.1),
       this.body,

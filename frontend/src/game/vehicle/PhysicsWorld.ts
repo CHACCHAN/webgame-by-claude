@@ -9,6 +9,8 @@ export const PHYSICS_DT = 1 / PHYSICS_HZ;
 export const GROUP_GROUND = 0x0001;
 export const GROUP_WALL = 0x0002;
 export const GROUP_CAR = 0x0004;
+/** stand-ins for other players' cars in online races: they only touch real cars */
+export const GROUP_PROXY = 0x0008;
 export const groups = (membership: number, filter: number) => (membership << 16) | filter;
 
 let initPromise: Promise<void> | null = null;

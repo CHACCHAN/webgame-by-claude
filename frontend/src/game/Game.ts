@@ -177,6 +177,9 @@ export class Game {
   assist: AssistLevel = 1;
   autoShift = true;
   showGhost = true;
+  /** car-to-car contact of the player, gathered over the physics steps of a frame */
+  private contact = { touching: false, wasTouching: false, impulse: 0, cooldown: 0 };
+  private contactShake = 0;
   /** HUD pace notes + warning beeps before tight bends */
   cornerGuide = true;
   corners: Corner[] = [];
@@ -501,6 +504,8 @@ export class Game {
         heading: this.track.headingAt(gridS),
       }));
       this.remotes.setHeadlights(this.env.preset.lampsOn > 0.5 ? 1 : 0.6);
+      // other players are solid: physical stand-ins the local car can bump into
+      this.remotes.enablePhysics(this.physics);
     }
     this.player.sim.autoShift = this.autoShift;
     if (cfg.mode === 'rival' && cfg.rivalLevel) {
@@ -608,8 +613,10 @@ export class Game {
         r.sim.input = r.input;
         r.sim.preStep(PHYSICS_DT);
       }
+      if (this.config?.online) this.remotes.stepProxies(performance.now(), this.player?.sim.position ?? null);
       this.physics.step();
       for (const r of racers) r.sim.postStep(PHYSICS_DT);
+      this.detectCarContact();
       this.simTime += PHYSICS_DT;
       if (this.phase === 'racing' || this.phase === 'finished') this.raceStep();
       this.accumulator -= PHYSICS_DT;
@@ -625,6 +632,43 @@ export class Game {
       this.attractCar.sim.reset(this.track.pointAt(this.track.startS - 10), this.track.headingAt(this.track.startS - 10), 0);
       this.attractCar.proj.index = -1;
     }
+  }
+
+  /** Physics step: is the player's car touching another car (rival or online stand-in), and how hard? */
+  private detectCarContact() {
+    const pl = this.player;
+    if (!pl || this.paused) return;
+    const others = this.rival ? [this.rival.sim.collider, ...this.remotes.colliders()] : this.remotes.colliders();
+    for (const c of others) {
+      this.physics.world.contactPair(pl.sim.collider, c, (m) => {
+        for (let i = 0; i < m.numContacts(); i++) {
+          // pairs are reported a little before the bodies meet (prediction distance): only real contact counts
+          const impulse = m.contactImpulse(i);
+          if (m.contactDist(i) > 0.02 && impulse <= 0) continue;
+          this.contact.touching = true;
+          this.contact.impulse = Math.max(this.contact.impulse, impulse);
+        }
+      });
+    }
+  }
+
+  /** Per frame: a thud (scaled by the hit) when cars meet, a metal scrape while they stay together. */
+  private carContactFeedback(dt: number) {
+    const pl = this.player!;
+    const c = this.contact;
+    const dv = c.impulse / pl.sim.spec.mass;
+    c.cooldown = Math.max(0, c.cooldown - dt);
+    // a thud for every real hit (not only the first touch of a long rub), at most a few per second
+    if (c.touching && dv > 0.2 && (c.cooldown === 0 || !c.wasTouching)) {
+      this.audio?.impact(clamp(0.3 + dv / 6, 0.3, 1));
+      this.contactShake = Math.max(this.contactShake, clamp(dv / 5, 0.25, 1));
+      c.cooldown = 0.25;
+    }
+    this.audio?.scrape(c.touching ? clamp(pl.sim.speed / 30, 0.25, 1) : 0);
+    this.contactShake *= Math.exp(-dt * 5);
+    c.wasTouching = c.touching;
+    c.touching = false;
+    c.impulse = 0;
   }
 
   /** AI inputs, evaluated every physics step. */
@@ -643,11 +687,15 @@ export class Game {
         r.input.handbrake = true;
         continue;
       }
-      if (pl && r === this.rival) r.ai.opponent = { s: pl.proj.s, lateral: pl.proj.lateral };
+      if (pl && r === this.rival) r.ai.opponent = { s: pl.proj.s, lateral: pl.proj.lateral, speed: pl.sim.forwardSpeed };
+      if (r.finished && r.ai.pullOver === null) r.ai.pullOver = r.proj.lateral >= 0 ? 10 : -10;
       r.ai.update(r.sim, dt, r.input);
       if (r.finished) {
+        // pull over to its side and stop: brake only while rolling (holding the brake at a standstill
+        // engages reverse), then the handbrake keeps it parked
         r.input.throttle = 0;
-        r.input.brake = 0.4;
+        r.input.brake = r.sim.forwardSpeed > 1.5 ? 0.4 : 0;
+        r.input.handbrake = r.sim.forwardSpeed <= 1.5;
       }
     }
   }
@@ -665,6 +713,9 @@ export class Game {
       r.ai = new AIDriver(this.track, this.line, AI_PROFILES.rookie, 3);
       r.ai.calibrate(r.sim);
     }
+    // a parked rival past the line is solid: the cool-down driver steers round it
+    const o = this.rival && this.rival !== r ? this.rival : null;
+    r.ai.opponent = o ? { s: o.proj.s, lateral: o.proj.lateral, speed: o.sim.forwardSpeed } : null;
     r.ai.update(r.sim, dt, r.input);
     r.input.throttle = 0;
     r.input.brake = r.sim.forwardSpeed > 4 ? 0.35 : 0;
@@ -679,7 +730,8 @@ export class Game {
     if (r.sim.isFlipped) r.flippedTime += dt;
     else r.flippedTime = 0;
     const lost = Math.abs(r.proj.height) > 12 || r.sim.position.y < -20;
-    if (r.flippedTime > 2 || lost || (r.ai && r.ai.needsRespawn && r !== this.player)) this.respawn(r);
+    // (a finished rival parks on purpose: not stuck)
+    if (r.flippedTime > 2 || lost || (r.ai && r.ai.needsRespawn && r !== this.player && !r.finished)) this.respawn(r);
   }
 
   private respawn(r: Racer) {
@@ -688,6 +740,8 @@ export class Game {
     r.sim.reset(this.track.pointAt(s, lat), this.track.headingAt(s), 0);
     r.proj.index = -1;
     r.flippedTime = 0;
+    // a respawned car may land inside another player's car: ghost them until clear
+    if (r === this.player && this.config?.online) this.remotes.ghostAll(performance.now() + 1500);
     r.lastSafe = { s, t: this.time };
     for (let i = 0; i < 4; i++) this.skids.break(i);
   }
@@ -936,7 +990,7 @@ export class Game {
         velocity: sim.velocity,
         speed: sim.speed,
         slipAngle: sim.slipAngle,
-        impact: sim.impact,
+        impact: Math.max(sim.impact, this.contactShake),
       });
     }
 
@@ -947,6 +1001,8 @@ export class Game {
       this.hud.rpm = sim.rpm;
       this.hud.gear = sim.gear;
       this.hud.boost = sim.boost;
+      // camera shake and contact bookkeeping must run with or without sound
+      if (!this.paused) this.carContactFeedback(dt);
       if (this.audio && !this.paused) {
         const e = this.audio.engine('player', sim.spec.engine.cylinders, sim.spec.engine.turbo);
         if (e.blowOff(sim.input.throttle, sim.boost)) this.audio.blowOff();

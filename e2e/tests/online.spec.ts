@@ -70,14 +70,30 @@ test('online battle: three players join one room by code and race together', asy
   for (const p of all) {
     await p.page.waitForFunction(() => (window as any).__game.remotes.standings().every((r: any) => r.lastHeard > 0 && r.s > 0), null, { timeout: 120_000 });
     await expect(p.page.locator('.online-standings li')).toHaveCount(3);
+    // the other two cars are solid stand-ins in this client's physics world, riding on the road at their network pose
+    const solid = await p.page.evaluate(() => {
+      const g = (window as any).__game;
+      return g.remotes.colliders().map((c: any) => {
+        const t = c.translation();
+        const pr = g.track.project(t.x, t.y, t.z);
+        return { s: pr.s, height: Math.abs(pr.height) };
+      });
+    });
+    expect(solid).toHaveLength(2);
+    for (const c of solid) {
+      expect(c.s).toBeGreaterThan(0);
+      expect(c.height).toBeLessThan(3);
+    }
   }
   // shortcut to the finish once the race clock passes the course minimum (45 s), so the results
   // flow is covered without driving 2.4 km at ~1 fps
   for (const p of all) {
     await p.page.waitForFunction(() => (window as any).__game.hud.raceTime > 47, null, { timeout: 300_000, polling: 500 });
     await p.page.evaluate(() => {
+      // each car in its own grid lane: the cars are solid now
       const g = (window as any).__game, t = g.track, s = t.finishS - 45;
-      g.player.sim.reset(t.pointAt(s, 0), t.headingAt(s), 20);
+      const lane = [-2.7, 2.7, 0][g.currentConfig.online.slot % 3];
+      g.player.sim.reset(t.pointAt(s, lane), t.headingAt(s), 20);
       g.player.proj.index = -1;
       g.player.lastSafe = { s, t: g.time };
     });

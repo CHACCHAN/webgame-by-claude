@@ -253,6 +253,29 @@ export class AudioEngine {
     const t = this.ctx.currentTime;
     this.squeal.gain.gain.setTargetAtTime(0, t, 0.05);
     this.wind.gain.gain.setTargetAtTime(0, t, 0.1);
+    this.scrapeGain?.gain.setTargetAtTime(0, t, 0.05);
+  }
+
+  private scrapeGain: GainNode | null = null;
+
+  /** Continuous metal-on-metal scrape while two cars rub (0 = silent). */
+  scrape(level: number) {
+    if (!this.scrapeGain) {
+      if (level <= 0) return;
+      const src = this.ctx.createBufferSource();
+      src.buffer = this.noise;
+      src.loop = true;
+      const bp = this.ctx.createBiquadFilter();
+      bp.type = 'bandpass';
+      bp.frequency.value = 2600;
+      bp.Q.value = 0.9;
+      const g = this.ctx.createGain();
+      g.gain.value = 0;
+      src.connect(bp).connect(g).connect(this.sfx);
+      src.start();
+      this.scrapeGain = g;
+    }
+    this.scrapeGain.gain.setTargetAtTime(level * 0.3, this.ctx.currentTime, 0.04);
   }
 
   /** Noise burst + low thump. */

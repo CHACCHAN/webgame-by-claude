@@ -23,6 +23,33 @@ Newest first. "Verified" means actually executed in this environment; anything e
 - **Improvement**: controls guide (keyboard, or gamepad labels when a pad is connected) during the countdown and
   the first 8 s of every race, bottom-left; settings toggle「操作ガイド（スタート時）」.
 
+### Car-to-car contact (owner request: 「車同士がぶつけて競争する」)
+- Player vs AI rival: both were already Rapier bodies in the same world (chassis colliders in group CAR), now
+  covered by a unit test (a car running into a parked one shoves it, bodies never interpenetrate).
+- Online: other players' cars become `ProxyCar` stand-ins in each client's physics world — dynamic, real mass,
+  no gravity, group PROXY (touches only real cars, not the ground, walls or other proxies), steered toward the
+  network pose extrapolated ≤ 0.25 s by velocity blending (0.15 s) + spring, so a hit shoves them and they
+  settle back onto their line. Teleports (> 8 m) and the local player's respawn ghost them for 1.5 s until 5 m
+  clear. The local car stays authoritative on its own screen (each client simulates its own hits).
+  Unit test: an S15 rams a Supra stand-in → pushed, slows the rammer, returns within 0.3 m, no overlap.
+- Feedback: contact pairs are read every physics step (`Game.detectCarContact`, real contacts only); a thud scaled
+  by the impulse (≤ 4/s), a camera shake and a looping metal scrape while the cars stay together. Bug found in the
+  browser check: the feedback ran inside the audio block, so without an audio context there was no shake and the
+  contact flags never reset — moved out.
+- AI: the rubber-banded chaser rear-ended the leader at corner entry (headless duel: up to 15 m/s Δv, 9–16 s of
+  contact per race, leader lost 13 s). It now caps its speed behind a car in its lane (closes to a car length plus
+  reaction distance at 4 m/s², then pulls out to pass); ace/legend lean towards the side a close chaser attacks
+  (door-to-door contact). Duel after the fix: 1–4 light hits (≤ 1.6 m/s) per race, both cars finish, the faster
+  car still gets past. Second bug found by the duel: a finished rival held the brake at a standstill, which
+  engages reverse — it drove back up the course into the field (and was respawned every 3 s as "stuck"). It now
+  pulls over to its side and parks on the handbrake, and the player's post-finish autopilot steers round it.
+- Verified: vitest 24/24 (incl. contact, stand-in, no-rear-end tests); `tools/sim-duel.ts` on all three courses
+  (legend vs legend, rookie vs legend, ace vs ace, legend vs legend in other cars: all finish, 0 respawns);
+  browser (low quality): bump into the rival at +8 m/s → rival shoved from 0.5 to 18 m/s, shake 0.5, no errors.
+  E2E: PENDING.
+- Not verified: how the thud/scrape sound by ear; online contact between two real players over the internet (the
+  E2E run covers three clients with solid stand-ins on one machine; the shove itself is covered by the unit test).
+
 ### Real cars (owner request, private use) — in progress
 - Six cars from Sketchfab (all CC BY 4.0, attribution in ASSETS.md). Roster is now six: the three existing ids keep
   their physics, records, medals and CPU ghosts and take the closest real car (hayate → AE86, raijin → Impreza

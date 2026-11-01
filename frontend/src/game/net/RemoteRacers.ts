@@ -2,6 +2,8 @@ import * as THREE from 'three';
 import { CarVisual } from '../render/CarVisual';
 import { CAR_SPECS, type CarId } from '../vehicle/carSpecs';
 import { clamp } from '../util/math';
+import type { PhysicsWorld, RAPIER } from '../vehicle/PhysicsWorld';
+import { ProxyCar } from './ProxyCar';
 
 /** Paint per grid slot so identical cars stay distinguishable (also shown in the lobby and HUD). */
 export const SLOT_COLORS = ['#2a62d8', '#d6283c', '#ecedef'];
@@ -41,15 +43,21 @@ interface RemoteCar {
   s: number;
   fin: number | null;
   lastHeard: number;
+  /** physical stand-in (online contact); when present the visual follows it */
+  proxy: ProxyCar | null;
 }
 
 /** Interpolation delay: render other cars this far in the past so two snapshots bracket the time. */
 const DELAY_MS = 120;
 const _a = new THREE.Vector3(), _b = new THREE.Vector3(), _qa = new THREE.Quaternion(), _qb = new THREE.Quaternion();
+const _vel = new THREE.Vector3();
+/** how far ahead of the newest snapshot a stand-in may be extrapolated (s) */
+const MAX_EXTRAPOLATION = 0.25;
 
 /**
- * Other players' cars in an online race: visual only (no collisions), driven by interpolated
- * network snapshots.
+ * Other players' cars in an online race, driven by network snapshots. Before the race (and without
+ * physics) they are drawn interpolated in the past; once `enablePhysics` gives them solid stand-ins
+ * (`ProxyCar`), they are drawn where those bodies are, so a bump shows on screen at once.
  */
 export class RemoteRacers {
   private cars = new Map<number, RemoteCar>();
@@ -78,7 +86,7 @@ export class RemoteRacers {
       tag.position.set(0, 2.1, 0);
       visual.root.add(tag);
       this.root.add(visual.root);
-      this.cars.set(peer.id, { peer, visual, tag, buf: [], offset: Infinity, wheelSpin: 0, s: 0, fin: null, lastHeard: 0 });
+      this.cars.set(peer.id, { peer, visual, tag, buf: [], offset: Infinity, wheelSpin: 0, s: 0, fin: null, lastHeard: 0, proxy: null });
     }
   }
 
@@ -95,6 +103,45 @@ export class RemoteRacers {
     if (st.fin !== undefined) car.fin = st.fin;
   }
 
+  /** Gives every remote car a physical stand-in so the local car can bump into it. */
+  enablePhysics(physics: PhysicsWorld) {
+    for (const car of this.cars.values()) {
+      if (car.proxy) continue;
+      car.proxy = new ProxyCar(physics, CAR_SPECS[car.peer.carId], car.visual.root.position, car.visual.root.quaternion);
+    }
+  }
+
+  /**
+   * Physics step: steer each stand-in to where its car is now — the newest snapshot extrapolated by
+   * its velocity over the snapshot's age (capped), i.e. the present, not the interpolation delay.
+   */
+  stepProxies(now: number, localCar: THREE.Vector3 | null) {
+    for (const car of this.cars.values()) {
+      const buf = car.buf;
+      if (!car.proxy) continue;
+      car.proxy.updateGhost(now, localCar);
+      if (!buf.length) continue;
+      const b = buf[buf.length - 1], a = buf.length > 1 ? buf[buf.length - 2] : null;
+      if (a && b.t > a.t) _vel.set((b.p[0] - a.p[0]) / ((b.t - a.t) / 1000), (b.p[1] - a.p[1]) / ((b.t - a.t) / 1000), (b.p[2] - a.p[2]) / ((b.t - a.t) / 1000));
+      else _vel.set(0, 0, 0);
+      const age = clamp((now - (b.t + car.offset)) / 1000, 0, MAX_EXTRAPOLATION);
+      _b.fromArray(b.p).addScaledVector(_vel, age);
+      _qb.fromArray(b.q);
+      car.proxy.drive(_b, _qb, _vel, now);
+    }
+  }
+
+  /** After the local car respawns: nobody is solid until clear of it. */
+  ghostAll(until: number) {
+    for (const c of this.cars.values()) c.proxy?.ghost(until);
+  }
+
+  colliders(): RAPIER.Collider[] {
+    const out: RAPIER.Collider[] = [];
+    for (const c of this.cars.values()) if (c.proxy) out.push(c.proxy.collider);
+    return out;
+  }
+
   setHeadlights(on: number) {
     for (const c of this.cars.values()) c.visual.setHeadlights(on);
   }
@@ -105,6 +152,14 @@ export class RemoteRacers {
       if (!buf.length) continue;
       // let the latency estimate creep up slowly so clock drift cannot freeze a car
       car.offset += dt * 5;
+      if (car.proxy) {
+        // contact mode: draw the car where its physical stand-in is
+        const v = buf[buf.length - 1].v;
+        car.wheelSpin += (v / CAR_SPECS[car.peer.carId].wheelRadius) * dt;
+        car.visual.syncFromPose({ position: car.proxy.position, quaternion: car.proxy.quaternion, steer: buf[buf.length - 1].st, wheelRotations: [car.wheelSpin, car.wheelSpin, car.wheelSpin, car.wheelSpin] }, dt);
+        car.visual.setBrakeLights(buf[buf.length - 1].br === 1);
+        continue;
+      }
       const t = now - car.offset - DELAY_MS;
       let i = buf.length - 1;
       while (i > 0 && buf[i - 1].t > t) i--;
@@ -139,6 +194,7 @@ export class RemoteRacers {
   }
 
   private remove(id: number, car: RemoteCar) {
+    car.proxy?.dispose();
     this.root.remove(car.visual.root);
     car.visual.dispose();
     (car.tag.material as THREE.SpriteMaterial).map?.dispose();

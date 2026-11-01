@@ -17,12 +17,14 @@ export interface AIProfile {
   sloppiness: number;
   /** rubber band strength (0..1) */
   catchUp: number;
+  /** 0..1: how firmly it closes the door on a car right behind it (side-by-side contact) */
+  defend: number;
 }
 
 export const AI_PROFILES: Record<AILevel, AIProfile> = {
-  rookie: { level: 'rookie', name: '森 健太', title: 'ROOKIE / 走り始めた新人', gripUse: 0.55, brakeUse: 0.46, sloppiness: 0.45, catchUp: 0.35 },
-  ace: { level: 'ace', name: '高嶺 遼', title: 'LOCAL ACE / 朧峠の地元最速', gripUse: 0.72, brakeUse: 0.64, sloppiness: 0.3, catchUp: 0.25 },
-  legend: { level: 'legend', name: '朧', title: 'LEGEND / 夜を走る幽霊', gripUse: 0.95, brakeUse: 0.86, sloppiness: 0.1, catchUp: 0.3 },
+  rookie: { level: 'rookie', name: '森 健太', title: 'ROOKIE / 走り始めた新人', gripUse: 0.55, brakeUse: 0.46, sloppiness: 0.45, catchUp: 0.35, defend: 0 },
+  ace: { level: 'ace', name: '高嶺 遼', title: 'LOCAL ACE / 朧峠の地元最速', gripUse: 0.72, brakeUse: 0.64, sloppiness: 0.3, catchUp: 0.25, defend: 0.6 },
+  legend: { level: 'legend', name: '朧', title: 'LEGEND / 夜を走る幽霊', gripUse: 0.95, brakeUse: 0.86, sloppiness: 0.1, catchUp: 0.3, defend: 1 },
 };
 
 const _target = new Vector3();
@@ -39,9 +41,11 @@ export class AIDriver {
   private stuckTime = 0;
   /** extra lateral offset used to go around another car */
   private avoid = 0;
-  /** progress (m) of a car to race against, for rubber banding / avoidance */
-  opponent: { s: number; lateral: number } | null = null;
+  /** progress (m), lateral offset and forward speed of a car to race against (rubber band, avoidance, no rear-ending) */
+  opponent: { s: number; lateral: number; speed?: number } | null = null;
   s = 0;
+  /** when set, steer for this lateral offset (m) instead of the racing line, e.g. to pull over after the finish */
+  pullOver: number | null = null;
 
   constructor(track: Track, line: RacingLine, profile: AIProfile, seed = 7) {
     this.track = track;
@@ -69,6 +73,7 @@ export class AIDriver {
 
     // rubber band: a little faster when behind, a little slower when far ahead
     let speedScale = 1;
+    let speedCap = Infinity;
     if (this.opponent) {
       const gap = this.opponent.s - s; // >0 = opponent ahead
       speedScale += clamp(gap / 150, -1, 1) * 0.06 * this.profile.catchUp * 4;
@@ -76,6 +81,18 @@ export class AIDriver {
       const lateralGap = this.opponent.lateral - this.proj.lateral;
       if (gap > 0 && gap < 18 && Math.abs(lateralGap) < 2.4) {
         this.avoid = clamp(this.avoid + (lateralGap > 0 ? -1 : 1) * dt * 3, -2.5, 2.5);
+      }
+      if (gap > 0 && gap < 40 && Math.abs(lateralGap) < 2.1 && this.opponent.speed !== undefined) {
+        // the cars are solid: close up on the car ahead at a speed that still leaves a car length,
+        // then pass once the avoidance offset has cleared it (a tap, not a rear-end crash)
+        const other = Math.max(0, this.opponent.speed);
+        const room = gap - 7 - Math.max(0, speed - other) * 0.4; // a car length plus reaction distance
+        speedCap = other + Math.sqrt(2 * 4 * Math.max(0, room));
+      } else if (gap < 0 && gap > -14 && Math.abs(lateralGap) < 3.5 && this.profile.defend > 0) {
+        // defending: lean towards the side the chaser is trying to pass on, which leads to
+        // door-to-door contact when the chaser commits
+        const want = clamp(lateralGap, -1.6, 1.6) * this.profile.defend;
+        this.avoid += (want - this.avoid) * (1 - Math.exp(-dt * 1.6));
       } else this.avoid *= Math.exp(-dt * 0.8);
     }
 
@@ -83,7 +100,7 @@ export class AIDriver {
     const ts = s + look;
     const wobble = Math.sin(this.wobblePhase + s / 37) * this.profile.sloppiness;
     const half = this.track.widthAt(ts) / 2 - 1.1;
-    const lat = clamp(this.line.offsetAt(ts) + wobble + this.avoid, -half, half);
+    const lat = clamp(this.pullOver ?? this.line.offsetAt(ts) + wobble + this.avoid, -half, half);
     this.track.pointAt(ts, lat, _target);
 
     // pure pursuit
@@ -98,7 +115,7 @@ export class AIDriver {
 
     // speed control
     const idx = Math.min(this.speeds.length - 1, Math.max(0, Math.round(s + Math.max(speed, 0) * 0.35)));
-    let target = this.speeds[idx] * speedScale;
+    let target = Math.min(this.speeds[idx] * speedScale, speedCap);
     // slow down if we're far off line or sliding a lot
     target *= 1 - clamp(Math.abs(vehicle.slipAngle) - 0.2, 0, 0.4);
     const diff = target - speed;
