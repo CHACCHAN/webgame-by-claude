@@ -57,8 +57,28 @@ services:
       dockerfile: docker/web/Dockerfile
     ports:
       - "${WEB_PORT:-8080}:80"
+    networks:
+      - default
+      - edge
     depends_on:
       - app
+
+  # --- public access: Cloudflare Tunnel, started by `docker compose up` when .env has COMPOSE_PROFILES=tunnel
+  # Hostname → service mapping lives in the Cloudflare dashboard: point it at http://web:80.
+  # Only on the edge network, so it reaches nginx but not app/db. nginx trusts CF-Connecting-IP
+  # from this fixed address alone (docker/web/nginx.conf): keep the two in sync.
+  cloudflared:
+    profiles: ["tunnel"]
+    image: cloudflare/cloudflared:latest
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN:-}
+    networks:
+      edge:
+        ipv4_address: 172.30.77.10
+    depends_on:
+      - web
+    restart: unless-stopped
 
   # --- development: Vite dev server with hot reload (docker compose --profile dev up)
   vite:
@@ -108,6 +128,12 @@ services:
     depends_on:
       - web
     ipc: host
+
+networks:
+  edge:
+    ipam:
+      config:
+        - subnet: 172.30.77.0/24
 
 volumes:
   pgdata:

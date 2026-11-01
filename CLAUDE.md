@@ -43,6 +43,8 @@ running log of what is done, verified and pending. `docs/PLAN.md` holds the desi
   (`client-state`, ~12 Hz) relayed by Reverb, which runs inside the `app` container (entrypoint, `START_REVERB`), proxied by
   nginx at `/app/`. Reverb key/secret are generated per container; never commit them. Client: `store/online.ts`,
   engine side `game/net/RemoteRacers.ts`. Online race time = max(physics clock, wall clock since the shared green light).
+- Public access: Cloudflare Tunnel, started by plain `docker compose up` when `.env` has `COMPOSE_PROFILES=tunnel` and `CLOUDFLARE_TUNNEL_TOKEN` (dashboard route → `http://web:80`); an explicit `--profile dev|test` replaces it.
+  nginx restores the visitor IP from `CF-Connecting-IP`, trusting only cloudflared's fixed address `172.30.77.10`: keep `docker-compose.yml` and `docker/web/nginx.conf` in sync.
 - Race timing/splits/AI run per physics step (`Game.raceStep`, `driveAI`); keep frame-time logic out of timing.
 
 ## Conventions

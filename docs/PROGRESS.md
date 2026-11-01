@@ -124,6 +124,14 @@ Newest first. "Verified" means actually executed in this environment; anything e
   car detail (procedural) and ground clutter (low-poly bushes/rocks).
 - Performance: unmeasured on a real GPU. Tree LOD and quality presets exist; ~1.2 M triangles at low.
 
+## Public access (Cloudflare Tunnel)
+- `cloudflared` compose service (profile `tunnel`), token-only remotely-managed tunnel, on a dedicated `edge`
+  network that reaches nginx but not app/db. nginx restores the visitor IP from `CF-Connecting-IP` so per-IP
+  throttles do not become one global bucket; the header is trusted from cloudflared's fixed IP only.
+- Verified on a disposable stack with a client at the trusted/untrusted address: 12 visitor IPs → no 429, same IP
+  → 429 after 10, spoofed header from another address ignored, Reverb upgrade through nginx → 101.
+  Not yet verified end to end against Cloudflare (needs the owner's token and hostname).
+
 ## Known issues / next
 - Real-GPU performance pass (frame time budget, shadow map cost, draw calls) — still unmeasured. Known
   candidate: lamp posts are individual meshes (~650 draw calls on 朧峠 before culling) and could be instanced.

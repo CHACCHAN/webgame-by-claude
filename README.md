@@ -38,7 +38,31 @@ TLS を検査するプロキシの内側でビルドする場合は、そのプ�
 - 通信は Laravel Reverb（WebSocket、Pusher プロトコル）。Reverb は `app` コンテナ内で起動し、nginx が `/app/` を中継します。
   鍵はコンテナ起動ごとに自動生成され、リポジトリには含まれません。WebSocket が使えない場合もロビーと結果はポーリングで同期します。
 - 同じネットワークの別の PC からは `http://<起動した PC の IP>:8080` で参加できます。インターネット越しに遊ぶには、
-  このスタックを外部から到達できるサーバーで動かす必要があります（本リポジトリにはデプロイ設定を含めていません）。
+  下の Cloudflare Tunnel を使います。
+
+## 外部公開（Cloudflare Tunnel）
+
+ポート開放なしで、Cloudflare で管理している自分のドメインから公開できます。
+
+1. Cloudflare ダッシュボード（Networking → Tunnels）でトンネルを作成し、Docker 用コマンドに含まれるトークンをコピーする。
+2. 同じトンネルに Published application のルートを追加する（例: `touge.example.com`）。サービス URL は `http://web:80`。
+3. `.env` にトークンと公開 URL を書く（`.env` は Git の管理外です。トークンはコミットしないでください）。
+
+   ```bash
+   COMPOSE_PROFILES=tunnel
+   CLOUDFLARE_TUNNEL_TOKEN=<トークン>
+   APP_URL=https://touge.example.com
+   ```
+
+4. 起動する。`COMPOSE_PROFILES=tunnel` により `cloudflared` も一緒に起動します。
+
+   ```bash
+   docker compose up -d --build
+   ```
+
+`--profile dev` や `--profile test` を付けた起動では `cloudflared` は起動しません。
+
+TLS は Cloudflare が終端し、オンライン対戦の WebSocket も同じホスト名の `wss://` で通ります。
 
 ## 操作方法
 
