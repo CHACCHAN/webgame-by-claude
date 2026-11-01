@@ -41,6 +41,9 @@ running log of what is done, verified and pending. `docs/PLAN.md` holds the desi
   (patterns for wheels / calipers / paint / glass / lamps / drop), then with `vite preview` on :4173:
   `node tools/import-cars.cjs preview <srcRoot> <outDir> <ids>` (orientation renders) and
   `node tools/import-cars.cjs import <srcRoot> <ids>` → `public/models/cars/<id>.glb`. Attribution: CarSpec.model + docs/ASSETS.md.
+  Patterns match `"<mesh name> <material name>"` (three.js strips `.` from node names, keeps material names). Optional
+  `restyle` (recolour / un-glow parts) and `reduce` (error-bounded decimation of dense untextured parts, e.g. tyres).
+  Rebuild (`npx vite build`) after an import before checking in `vite preview` — it serves `dist/`.
 - Courses live in `track/courses.ts` (design + `Landform` from `track/landforms.ts` + rivals, medals, music, art).
   After changing a course design, regenerate the CPU ghosts (`npm run seed:bots`) and re-check medals with the sim.
 - Online battle (≤3 players): lobby/start/results via `RoomController`; car states are presence-channel client events

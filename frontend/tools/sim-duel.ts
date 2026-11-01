@@ -40,7 +40,7 @@ while (t < 480 && cars.some((c) => c.finish < 0)) {
       // park like the game's finished rival (holding the brake at a standstill would engage reverse)
       c.ai.pullOver = c.proj.lateral >= 0 ? 10 : -10;
       c.input.throttle = 0;
-      c.input.brake = c.sim.forwardSpeed > 1.5 ? 0.4 : 0;
+      c.input.brake = c.sim.forwardSpeed > 1.5 ? 0.4 : 0.25;
       c.input.handbrake = c.sim.forwardSpeed <= 1.5;
     }
     c.sim.input = c.input;

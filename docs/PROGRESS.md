@@ -42,11 +42,14 @@ Newest first. "Verified" means actually executed in this environment; anything e
   (door-to-door contact). Duel after the fix: 1–4 light hits (≤ 1.6 m/s) per race, both cars finish, the faster
   car still gets past. Second bug found by the duel: a finished rival held the brake at a standstill, which
   engages reverse — it drove back up the course into the field (and was respawned every 3 s as "stuck"). It now
-  pulls over to its side and parks on the handbrake, and the player's post-finish autopilot steers round it.
+  pulls over to its side and parks (handbrake + a foot brake below the reverse threshold), and the player's
+  post-finish autopilot steers round it. Browser check (timescale 8): rival finished, moved to the road edge
+  (lateral 3.65 m), speed never negative, parked at 0.003 m/s 11 m before the course end, no respawn.
 - Verified: vitest 24/24 (incl. contact, stand-in, no-rear-end tests); `tools/sim-duel.ts` on all three courses
   (legend vs legend, rookie vs legend, ace vs ace, legend vs legend in other cars: all finish, 0 respawns);
   browser (low quality): bump into the rival at +8 m/s → rival shoved from 0.5 to 18 m/s, shake 0.5, no errors.
-  E2E: PENDING.
+  E2E (Docker stack rebuilt with this code): 9/9 passed in 24.5 min, including the 3-player online race, which now
+  also checks that every client holds two solid stand-ins riding on the road.
 - Not verified: how the thud/scrape sound by ear; online contact between two real players over the internet (the
   E2E run covers three clients with solid stand-ins on one machine; the shove itself is covered by the unit test).
 
@@ -64,8 +67,17 @@ Newest first. "Verified" means actually executed in this environment; anything e
   palette step renamed the materials (paint colour ignored), a material shared by window and headlamp glass took
   only one role, three.js turns spaces in node names into underscores (patterns), stray unreferenced vertices broke
   the RX-7 bounds.
-- On hold: R34 and Supra (signs of extraction from a commercial game; the delivered Supra is a different model,
-  CC BY-NC-SA). Not delivered: AE86 (likely too large to attach). Those cars keep the procedural fallback body.
+- R34 and Supra: the first files (signs of extraction from a commercial game) were replaced by models I proposed
+  from a Sketchfab API search and the owner delivered: **R34 by Lexyc16 and Supra mk4 by Black Snow, both CC BY 4.0,
+  now in game.** R34: 50 k tris, wheelbase/length/height 2.665/4.61/1.34 m straight from the spec scale. Supra: a
+  modded show car — purple self-lit rims and exhaust tips, red self-lit front strips and red front indicators
+  restyled (new importer options `restyle`, error-bounded `reduce`); 226 k → 82 k tris (tyre tread was 44 k: the
+  optimiser's per-part error bound skips small dense parts; a first unbounded decimation filled the tyre holes and
+  hid the rims — caught in the garage shot, replaced by an error-bounded one). Exhaust tip shared the rim material
+  and was taken for a wheel (wheel radius 0.57 m) — pattern fixed. Checked in the browser: garage (default and
+  recoloured paint), driving, all four wheel pivots, paint/glass/headlamp/taillamp materials, no console errors.
+- AE86: the linked model is 71.7 MB / 706 k tris (too large to attach); two light CC BY replacements proposed
+  (ASSETS.md). Until one arrives `hayate` keeps the procedural body.
 
 ## Session 2 (2026-10-30, continued)
 

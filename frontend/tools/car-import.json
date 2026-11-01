@@ -34,5 +34,59 @@
       "headlights": "HL[ _]Glass",
       "taillights": "TL[ _]Glass"
     }
+  },
+  "supra": {
+    "dir": "supra",
+    "simplify": 0.3,
+    "config": {
+      "wheels": "Scene_-_Root\\.004$|chargespeed|1disk|tormoz1",
+      "calipers": "tormoz2| \\.023$|glossBlack\\.001$",
+      "paint": " esta80$",
+      "glass": " esta80_glass$",
+      "headlights": "headlight_L_custom.*(glass_clear|esta80_running)| material$",
+      "taillights": "esta80_running\\.002$| esta80_brake$| esta80_taillight$",
+      "drop": "(interior|rubber|seats|dials|mats|boot)\\.002$|mirror\\.002$|backface\\.001$|bailey1_pipe_clamp",
+      "restyle": {
+        " \\.002$": {
+          "color": "#2c2d31",
+          "emissive": "#000000",
+          "metalness": 0.85,
+          "roughness": 0.32
+        },
+        " \\.027$": {
+          "color": "#111111",
+          "emissive": "#000000"
+        },
+        "bumper_F.*blinker": {
+          "color": "#ff8a00",
+          "metalness": 0.2,
+          "roughness": 0.2
+        },
+        " \\.00[34]$": {
+          "emissive": "#000000",
+          "color": "#222222"
+        }
+      },
+      "reduce": {
+        "Scene_-_Root\\.004$": {
+          "keep": 0.25,
+          "error": 0.005
+        }
+      }
+    },
+    "textureSize": 512,
+    "simplifyError": 0.002
+  },
+  "r34": {
+    "dir": "r34",
+    "simplify": 0.8,
+    "config": {
+      "wheels": "Material\\.01[02]$",
+      "paint": "Material\\.001$",
+      "glass": "Material\\.006$",
+      "headlights": "^Object_3 Material$",
+      "taillights": "Material\\.009$"
+    },
+    "textureSize": 512
   }
 }

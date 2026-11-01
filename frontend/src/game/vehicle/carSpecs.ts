@@ -185,6 +185,7 @@ export const CAR_SPECS: Record<CarId, CarSpec> = {
     driftiness: 0.65,
     stats: { power: 10, grip: 7, drift: 7, weight: 4 },
     colors: { body: '#eeeeee', accent: '#111111' },
+    model: { title: 'Toyota Supra mk4', author: 'Black Snow', url: 'https://sketchfab.com/3d-models/toyota-supra-mk4-8bebdee25b774067929bb33e648533ac', license: 'CC BY 4.0' },
   },
   r34: {
     id: 'r34',
@@ -219,6 +220,7 @@ export const CAR_SPECS: Record<CarId, CarSpec> = {
     driftiness: 0.4,
     stats: { power: 10, grip: 9, drift: 4, weight: 4 },
     colors: { body: '#2f4fa6', accent: '#111111' },
+    model: { title: 'Nissan Skyline R34 GT-R', author: 'Lexyc16', url: 'https://sketchfab.com/3d-models/nissan-skyline-r34-gt-r-ff8fb2251dfa4bb9979e7022c5a6666c', license: 'CC BY 4.0' },
   },
   s15: {
     id: 's15',

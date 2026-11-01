@@ -691,10 +691,10 @@ export class Game {
       if (r.finished && r.ai.pullOver === null) r.ai.pullOver = r.proj.lateral >= 0 ? 10 : -10;
       r.ai.update(r.sim, dt, r.input);
       if (r.finished) {
-        // pull over to its side and stop: brake only while rolling (holding the brake at a standstill
-        // engages reverse), then the handbrake keeps it parked
+        // pull over to its side and stop; once slow, hold it with the handbrake and a light foot brake
+        // (VehicleSim engages reverse when the brake is held above 0.3 at a standstill)
         r.input.throttle = 0;
-        r.input.brake = r.sim.forwardSpeed > 1.5 ? 0.4 : 0;
+        r.input.brake = r.sim.forwardSpeed > 1.5 ? 0.4 : 0.25;
         r.input.handbrake = r.sim.forwardSpeed <= 1.5;
       }
     }

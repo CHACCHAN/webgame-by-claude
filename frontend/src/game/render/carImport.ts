@@ -26,6 +26,13 @@ export interface CarImportConfig {
   drop?: string;
   /** set when the model's front is towards −Z and there are no headlight parts to tell */
   faceNegZ?: boolean;
+  /** tweaks of the kept materials by label pattern, e.g. to tone down a show car's glowing rims */
+  restyle?: Record<string, { color?: string; emissive?: string; metalness?: number; roughness?: number }>;
+  /**
+   * extra decimation of over-detailed untextured parts (e.g. tyre tread): { pattern: { keep, error } } —
+   * keep = target fraction of triangles, error = max deviation relative to the part's size (default 0.006)
+   */
+  reduce?: Record<string, { keep: number; error?: number }>;
 }
 
 interface Part {
@@ -57,6 +64,25 @@ async function loadParts(url: string, rotation?: [number, number, number]) {
 }
 
 /** Triangles [start, start + count) of an (indexed or not) geometry as a new non-indexed geometry. */
+/**
+ * Error-bounded decimation of an untextured part: welded by position only (so hard edges do not stop
+ * the simplifier), smooth normals afterwards. Bounded so that holes (a tyre round its rim) stay open.
+ */
+async function decimate(geo: THREE.BufferGeometry, keep: number, error: number) {
+  const { MeshoptSimplifier } = await import('three/examples/jsm/libs/meshopt_simplifier.module.js');
+  const { mergeVertices } = await import('three/examples/jsm/utils/BufferGeometryUtils.js');
+  await MeshoptSimplifier.ready;
+  const bare = new THREE.BufferGeometry();
+  bare.setAttribute('position', geo.getAttribute('position'));
+  const welded = mergeVertices(bare, 1e-5);
+  const index = welded.getIndex()!;
+  const target = Math.max(3, Math.floor((index.count * keep) / 3) * 3);
+  const [indices] = MeshoptSimplifier.simplify(new Uint32Array(index.array), welded.getAttribute('position').array as Float32Array, 3, target, error);
+  welded.setIndex(new THREE.BufferAttribute(indices, 1));
+  welded.computeVertexNormals();
+  return welded.toNonIndexed();
+}
+
 function subGeometry(geo: THREE.BufferGeometry, start: number, count: number) {
   const flat = geo.index ? geo.toNonIndexed() : geo;
   const out = new THREE.BufferGeometry();
@@ -108,10 +134,36 @@ export async function importCarModel(url: string, spec: CarSpec, cfg: CarImportC
   const [wheelRe, caliperRe, paintRe, glassRe, headRe, tailRe, dropRe] = [cfg.wheels, cfg.calipers, cfg.paint, cfg.glass, cfg.headlights, cfg.taillights, cfg.drop].map(re);
   const label = (p: Part) => `${p.name} ${p.material.name}`;
   const parts = (await loadParts(url, cfg.rotation)).filter((p) => !(dropRe && dropRe.test(label(p))));
+  for (const [pattern, r] of Object.entries(cfg.reduce ?? {})) {
+    const rx = new RegExp(pattern, 'i');
+    for (const p of parts) if (rx.test(label(p))) p.geo = await decimate(p.geo, r.keep, r.error ?? 0.006);
+  }
   const wheelParts = parts.filter((p) => wheelRe!.test(label(p)));
   const caliperParts = parts.filter((p) => !wheelRe!.test(label(p)) && caliperRe?.test(label(p)));
   const bodyParts = parts.filter((p) => !wheelParts.includes(p) && !caliperParts.includes(p));
   if (!wheelParts.length) throw new Error('no wheel parts matched');
+
+  // ---- restyled copies of kept materials (one per source material and rule)
+  const rules = Object.entries(cfg.restyle ?? {}).map(([p, s]) => ({ rx: new RegExp(p, 'i'), s }));
+  const restyled = new Map<string, THREE.Material>();
+  const restyle = (p: Part): THREE.Material => {
+    const k = rules.findIndex((r) => r.rx.test(label(p)));
+    if (k < 0) return p.material;
+    const key = `${p.material.uuid}|${k}`;
+    if (!restyled.has(key)) {
+      const m = p.material.clone() as THREE.MeshStandardMaterial;
+      const s = rules[k].s;
+      if (s.color) m.color.set(s.color);
+      if (s.emissive !== undefined) {
+        m.emissive.set(s.emissive);
+        m.emissiveIntensity = 1;
+      }
+      if (s.metalness !== undefined) m.metalness = s.metalness;
+      if (s.roughness !== undefined) m.roughness = s.roughness;
+      restyled.set(key, m);
+    }
+    return restyled.get(key)!;
+  };
 
   // ---- front at +Z: decided by where the headlights are
   let flip = !!cfg.faceNegZ;
@@ -130,7 +182,7 @@ export async function importCarModel(url: string, spec: CarSpec, cfg: CarImportC
     for (const p of list) {
       splitByCorner(p.geo, wc.x, wc.z).forEach((g, q) => {
         if (!g) return;
-        corner[q].geos.push({ geo: g, material: p.material, spin });
+        corner[q].geos.push({ geo: g, material: restyle(p), spin });
         if (spin) {
           g.computeBoundingBox();
           corner[q].box.union(g.boundingBox!);
@@ -172,7 +224,7 @@ export async function importCarModel(url: string, spec: CarSpec, cfg: CarImportC
     if (headRe?.test(l)) return named(p.material, 'headlight');
     if (tailRe?.test(l)) return named(p.material, 'taillight');
     if (glassRe?.test(l)) return named(p.material, 'glass');
-    return p.material;
+    return restyle(p);
   };
 
   const root = new THREE.Group();
