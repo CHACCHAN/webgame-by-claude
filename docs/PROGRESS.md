@@ -16,7 +16,10 @@ Newest first. "Verified" means actually executed in this environment; anything e
   the pool hands lights over between lamps every few metres, so the hot spots faded in and out under bloom.
   Lights now hang 0.9 m below the fixture and over the road. The light pool itself was traced over 3,581
   frames: hand-overs only, no oscillation.
-  (Clearance measurement per lamp: in progress.)
+  Measured per lamp (light → nearest terrain within 3 m, rock-shed lamps separately): before, Kirifuri had 4
+  lights within 1.5 m of the slope (closest *inside* it), Tenrou 1 inside, Oboro closest 3.2 m, plus 32 shed
+  lights 0.15 m under the ceiling; after, ≥ 6.2 m from terrain on all courses and shed lights 1.05 m under the
+  ceiling. Needs confirmation by the owner on a real GPU.
 - **Pop-up headlamps lit while closed (RX-7)**: the model's "headlight" parts were the bumper lamps, the
   pop-ups are modelled shut. Cars with `popUpLamps` in their spec now get runtime pods (raycast onto the bonnet,
   hinged at the lid's rear edge, paint-coloured shell, bezel, lens) that open in 0.6 s when the lights come on at
@@ -32,10 +35,17 @@ Newest first. "Verified" means actually executed in this environment; anything e
 - Robustness: an unknown time-of-day value (e.g. corrupted saved settings) fell through to NaN sky/fog values
   and a black screen for the rest of the session; it now falls back to night.
 - Scenery models proposed to the owner (Sketchfab, CC BY): see docs/ASSETS.md.
-  Verified so far (browser, medium quality): RX-7 pods up with lit lenses at night and folded/dark at dawn (state
-  and screenshot), lamp arm over the road in both shots, night tail lamps lit on RX-7 (was black) and Impreza;
-  S15 lens texture is dark → per-car `tailLampGain` 2.5 (re-check pending). Exhaust/backfire screenshot, lamp
-  clearance numbers and the full E2E run: pending.
+  Further bug found while checking: none of the imported car GLBs carried their anchor empties (the optimiser
+  prunes empty nodes), so the exhaust came out from under the middle of the car and imported cars had no
+  headlight beam cones; anchors are now derived from the geometry at load (lamp meshes, muffler mesh or the rear
+  corner). Also the Supra's dashboard trim shared the tail-lamp material and would have glowed red (pattern fixed,
+  re-imported); every car's lamp materials checked to sit only at the front/rear.
+  Verified (browser, medium quality, night): RX-7 pods up with lit lenses at night, folded and dark at dawn
+  (state + screenshot); lamp arms over the road; tail lamps lit without braking on RX-7 (was black), S15 (lens
+  gain 2.5), Impreza, AE86 (procedural), Supra, R34; exhaust plume and a backfire flame behind the car (60 fps
+  simulated through the real emitter, then frozen for the shot); no page errors. vitest 25/25.
+  E2E on the rebuilt Docker stack: 9/9 passed (22.9 min), including the 3-player online race.
+  Not verified: the flicker fix and the backfire/pop sound on real hardware; backfire timing in real driving.
 
 ### Reported & fixed
 - **Mound across the road (drive-through)** on 天狼's last hairpin: the coarse far terrain mesh (24 m grid, no

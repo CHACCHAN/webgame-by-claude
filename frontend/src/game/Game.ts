@@ -326,7 +326,7 @@ export class Game {
       m.emissiveIntensity = (m.userData.baseIntensity as number) * lamps;
     }
     this.smoke.setColor(tod === 'dawn' ? '#d9d4cf' : tod === 'rain' ? '#9aa6b4' : '#7d8794');
-    this.exhaust.setColor(tod === 'dawn' ? '#b9b6b2' : tod === 'rain' ? '#7f8a96' : '#5d646d');
+    this.exhaust.setColor(tod === 'dawn' ? '#c4c1bd' : tod === 'rain' ? '#9aa3ad' : '#a3a0a6');
     // wet roads: glossy, darker asphalt and slicker terrain; less tyre grip
     const wet = this.env.preset.rain;
     const road = this.scenery.roadMaterial;

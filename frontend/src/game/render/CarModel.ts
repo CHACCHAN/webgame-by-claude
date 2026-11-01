@@ -174,9 +174,54 @@ export function rigFromTemplate(template: THREE.Object3D, spec: CarSpec, opts: {
     if (o.name.startsWith('anchor_taillight')) anchors.taillights.push(o.position.clone());
     if (o.name === 'anchor_exhaust') anchors.exhaust.copy(o.position);
   });
+  deriveAnchors(root, fresh, anchors);
   const target = root.getObjectByName('headlight_target') ?? new THREE.Object3D();
-  if (!target.parent) root.add(target);
+  if (!target.parent) {
+    target.position.set(0, 0.3, 30);
+    root.add(target);
+  }
   return { root, body, wheels, materials: fresh, headlightTargets: [target], anchors, fromModel: true };
+}
+
+/**
+ * The model optimiser prunes empty nodes, so imported GLBs arrive without their anchor empties:
+ * rebuild them from the geometry — lamps from the lamp-material meshes (left/right halves), the
+ * tailpipe from a muffler/exhaust mesh at the back if there is one, else low at the rear left.
+ */
+function deriveAnchors(root: THREE.Object3D, mats: CarMaterials, anchors: CarRig['anchors']) {
+  const boxOf = (pred: (m: THREE.Mesh) => boolean) => {
+    const box = new THREE.Box3();
+    root.traverse((o) => {
+      const m = o as THREE.Mesh;
+      if (m.isMesh && pred(m)) box.expandByObject(m);
+    });
+    return box;
+  };
+  const halves = (box: THREE.Box3) => {
+    const c = box.getCenter(new THREE.Vector3());
+    const q = (box.max.x - box.min.x) / 4;
+    return [new THREE.Vector3(c.x + q, c.y, c.z), new THREE.Vector3(c.x - q, c.y, c.z)];
+  };
+  const uses = (m: THREE.Mesh, mat: THREE.Material) => (Array.isArray(m.material) ? m.material.includes(mat) : m.material === mat);
+  if (!anchors.headlights.length) {
+    const b = boxOf((m) => uses(m, mats.headlight));
+    if (!b.isEmpty()) anchors.headlights.push(...halves(b));
+  }
+  if (!anchors.taillights.length) {
+    const b = boxOf((m) => uses(m, mats.taillight));
+    if (!b.isEmpty()) anchors.taillights.push(...halves(b));
+  }
+  if (anchors.exhaust.lengthSq() === 0) {
+    const body = boxOf(() => true);
+    if (body.isEmpty()) return;
+    const len = body.max.z - body.min.z;
+    const pipe = boxOf((m) => /muffler|exhaust|tailpipe/i.test(m.name) && new THREE.Box3().setFromObject(m).max.z < body.min.z + len * 0.25);
+    if (!pipe.isEmpty() && pipe.max.y < 0.8) {
+      anchors.exhaust.set((pipe.min.x + pipe.max.x) / 2, (pipe.min.y + pipe.max.y) / 2, pipe.min.z - 0.02);
+    } else {
+      anchors.exhaust.set(-0.45 * (body.max.x - body.min.x) / 2, 0.3, body.min.z + 0.05);
+    }
+  }
 }
 
 /** Optional GLB car models (public/models/cars/<id>.glb); procedural cars are the fallback. */

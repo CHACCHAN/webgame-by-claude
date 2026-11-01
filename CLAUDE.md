@@ -44,6 +44,9 @@ running log of what is done, verified and pending. `docs/PLAN.md` holds the desi
   Patterns match `"<mesh name> <material name>"` (three.js strips `.` from node names, keeps material names). Optional
   `restyle` (recolour / un-glow parts) and `reduce` (error-bounded decimation of dense untextured parts, e.g. tyres).
   Rebuild (`npx vite build`) after an import before checking in `vite preview` — it serves `dist/`.
+  The optimiser prunes empty nodes, so imported GLBs have no anchor empties: `CarModel.deriveAnchors` rebuilds lamp
+  and exhaust anchors from the geometry. Lamp roles must only cover lamp parts (check: lamp materials only at the
+  car's ends). Retractable lamps: `CarSpec.popUpLamps` (runtime pods in `CarVisual`); dark lens textures: `tailLampGain`.
 - Courses live in `track/courses.ts` (design + `Landform` from `track/landforms.ts` + rivals, medals, music, art).
   After changing a course design, regenerate the CPU ghosts (`npm run seed:bots`) and re-check medals with the sim.
 - Online battle (≤3 players): lobby/start/results via `RoomController`; car states are presence-channel client events

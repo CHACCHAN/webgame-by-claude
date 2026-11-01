@@ -44,7 +44,7 @@
       "paint": " esta80$",
       "glass": " esta80_glass$",
       "headlights": "headlight_L_custom.*(glass_clear|esta80_running)| material$",
-      "taillights": "esta80_running\\.002$| esta80_brake$| esta80_taillight$",
+      "taillights": "esta80_running\\.002$| esta80_brake$|taillight_L_custom.* esta80_taillight$",
       "drop": "(interior|rubber|seats|dials|mats|boot)\\.002$|mirror\\.002$|backface\\.001$|bailey1_pipe_clamp",
       "restyle": {
         " \\.002$": {

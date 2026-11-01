@@ -23,6 +23,8 @@ interface Pool {
   alpha: Float32Array;
   /** alpha at birth */
   base: Float32Array;
+  /** born this frame: drawn once before it starts to age (short flames would vanish unseen at low frame rates) */
+  fresh: Uint8Array;
   cursor: number;
 }
 
@@ -34,7 +36,7 @@ function makePool(n: number, material: THREE.ShaderMaterial): Pool {
   geo.setAttribute('alpha', new THREE.BufferAttribute(alpha, 1).setUsage(THREE.DynamicDrawUsage));
   const points = new THREE.Points(geo, material);
   points.frustumCulled = false;
-  return { points, pos, vel: new Float32Array(n * 3), life: new Float32Array(n), maxLife: new Float32Array(n), size, alpha, base: new Float32Array(n), cursor: 0 };
+  return { points, pos, vel: new Float32Array(n * 3), life: new Float32Array(n), maxLife: new Float32Array(n), size, alpha, base: new Float32Array(n), fresh: new Uint8Array(n), cursor: 0 };
 }
 
 const vertexShader = /* glsl */ `
@@ -128,23 +130,23 @@ export class ExhaustFX {
   emit(s: ExhaustState, tip: THREE.Vector3, back: THREE.Vector3, carVel: THREE.Vector3, throttle: number, rpm: number, turbo: boolean, dt: number) {
     const speed = carVel.length();
     // puffs: a light idle trickle, more under load; thinned out at speed where the gas disperses at once
-    const rate = (5 + 34 * throttle * rpm) * this.density * (1 / (1 + speed / 12));
+    const rate = (9 + 34 * throttle * rpm) * this.density * (1 / (1 + speed / 12));
     s.carry += rate * dt;
     while (s.carry >= 1) {
       s.carry -= 1;
-      this.spawn(this.puffs, tip, carVel, back, 1.5 + 3.5 * throttle, 0.16, 0.7 + Math.random() * 0.7, 0.1 + 0.18 * throttle * rpm);
+      this.spawn(this.puffs, tip, carVel, back, 1.5 + 3.5 * throttle, 0.16, 0.8 + Math.random() * 0.8, 0.34 + 0.32 * throttle * rpm);
     }
     // backfire: throttle snapped shut at high revs
     let bang = false;
     if (s.lastThrottle > 0.6 && throttle < 0.15 && rpm > 0.62 && Math.random() < (turbo ? 0.75 : 0.45)) {
-      s.flameTime = 0.09 + Math.random() * 0.08;
+      s.flameTime = 0.1 + Math.random() * 0.1;
       bang = true;
     }
     s.lastThrottle = throttle;
     if (s.flameTime > 0) {
       s.flameTime -= dt;
       const n = Math.max(1, Math.round(dt / 0.016));
-      for (let k = 0; k < n; k++) this.spawn(this.flames, tip, carVel, back, 7, 0.32 + Math.random() * 0.22, 0.05 + Math.random() * 0.04, 1);
+      for (let k = 0; k < n; k++) this.spawn(this.flames, tip, carVel, back, 7, 0.45, 0.07 + Math.random() * 0.05, 1);
     }
     return bang;
   }
@@ -163,11 +165,12 @@ export class ExhaustFX {
     pool.size[i] = size;
     pool.alpha[i] = alpha;
     pool.base[i] = alpha;
+    pool.fresh[i] = 1;
   }
 
   update(dt: number) {
-    this.step(this.puffs, dt, (t, base) => [0.16 + t * 1.5, base * (1 - t) ** 1.6], 2.4);
-    this.step(this.flames, dt, (t, base) => [0.3 * (1 + t * 0.6), base * (1 - t)], 0);
+    this.step(this.puffs, dt, (t, base) => [0.12 + t * 0.95, base * (1 - t) ** 1.4], 2.4);
+    this.step(this.flames, dt, (t, base) => [0.45 * (1 + t * 0.7), base * (1 - t)], 0);
   }
 
   private step(pool: Pool, dt: number, shape: (t: number, base: number) => [number, number], dragK: number) {
@@ -177,7 +180,8 @@ export class ExhaustFX {
         pool.alpha[i] = 0;
         continue;
       }
-      pool.life[i] -= dt;
+      if (pool.fresh[i]) pool.fresh[i] = 0;
+      else pool.life[i] -= dt;
       const t = Math.min(1, 1 - pool.life[i] / pool.maxLife[i]);
       for (let k = 0; k < 3; k++) {
         pool.vel[i * 3 + k] *= drag;
