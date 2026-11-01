@@ -567,6 +567,12 @@ function placeLamps(track: Track, sides: ReturnType<typeof classifySides>, lamps
   }
 }
 
+/** Yaw that turns a lamp post's arm (modelled along local −X) towards the horizontal unit direction `dir`. */
+export function lampArmYaw(dir: { x: number; z: number }) {
+  // a rotation by θ about +Y maps local (−1, 0, 0) to (−cos θ, 0, sin θ)
+  return Math.atan2(dir.z, -dir.x);
+}
+
 function buildLampMeshes(track: Track, lamps: Lamp[], group: THREE.Group, nightEmissive: THREE.MeshStandardMaterial[]) {
   const poleMat = new THREE.MeshStandardMaterial({ color: '#7d8287', metalness: 0.7, roughness: 0.4 });
   const sodiumMat = new THREE.MeshStandardMaterial({ color: '#ffd9a0', emissive: SODIUM, emissiveIntensity: 6, roughness: 0.3 });
@@ -590,8 +596,7 @@ function buildLampMeshes(track: Track, lamps: Lamp[], group: THREE.Group, nightE
     // arm points towards the road centre
     const center = track.getPos(i);
     const dir = new THREE.Vector3().subVectors(center, lamp.position).setY(0).normalize();
-    const yaw = Math.atan2(-dir.z, -dir.x);
-    q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), -yaw + Math.PI);
+    q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), lampArmYaw(dir));
     const m = new THREE.Matrix4().compose(lamp.position, q, s1);
     poleMats.push(m);
     (lamp.color.equals(LED) ? led : sodium).push(m);

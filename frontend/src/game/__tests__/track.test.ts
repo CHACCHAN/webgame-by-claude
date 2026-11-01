@@ -95,3 +95,16 @@ describe('terrain never covers the road (all courses)', () => {
     });
   }
 });
+
+describe('street lamps', () => {
+  it('turn their arm (local −X) towards the road in every direction', async () => {
+    const THREE = await import('three');
+    const { lampArmYaw } = await import('../render/TrackScenery');
+    for (let a = 0; a < Math.PI * 2; a += Math.PI / 7) {
+      const dir = new THREE.Vector3(Math.cos(a), 0, Math.sin(a));
+      const q = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), lampArmYaw(dir));
+      const arm = new THREE.Vector3(-1, 0, 0).applyQuaternion(q);
+      expect(arm.distanceTo(dir)).toBeLessThan(1e-9);
+    }
+  });
+});

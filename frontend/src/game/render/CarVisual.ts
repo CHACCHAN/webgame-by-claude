@@ -6,6 +6,10 @@ import { clamp, damp } from '../util/math';
 
 const _q = new THREE.Quaternion(), _p = new THREE.Vector3();
 const AXIS_Y = new THREE.Vector3(0, 1, 0), AXIS_X = new THREE.Vector3(1, 0, 0);
+/** headlight level from which pop-up lamps open and position lamps count as "on" (below: daytime) */
+const LIGHTS_ON = 0.75;
+/** pop-up pod: width, height, depth (m); hinge angle closed / open (rad, + = folded into the bonnet) */
+const POD = { w: 0.36, h: 0.13, d: 0.25, closed: 1.45, open: -0.06 };
 
 /** Pose source for a car visual: a live simulation or a ghost replay. */
 export interface CarPose {
@@ -33,6 +37,14 @@ export class CarVisual {
   private bodyRoll = 0;
   private ghostMaterials: THREE.Material[] = [];
   readonly rideHeight: number;
+  /** retractable headlamp pods (hinges), their lens material and opening state 0..1 */
+  private pods: THREE.Group[] = [];
+  private podLens: THREE.MeshStandardMaterial | null = null;
+  private podOpen = 0;
+  private podTarget = 0;
+  private lightLevel = 0;
+  /** tail lamp glow when not braking (position lamps at night) */
+  private tailBase = 0.9;
 
   constructor(spec: CarSpec, opts: { headlights: boolean; shadows: boolean; ghost?: boolean; bodyColor?: string; rideHeight: number }) {
     this.spec = spec;
@@ -50,6 +62,7 @@ export class CarVisual {
     });
 
     if (opts.ghost) this.makeGhost();
+    if (spec.popUpLamps && this.rig.fromModel && !opts.ghost) this.buildPods(spec.popUpLamps);
 
     if (opts.headlights && !opts.ghost) {
       const front = this.rig.anchors.headlights[0]?.z ?? 2;
@@ -87,7 +100,10 @@ export class CarVisual {
             gl_FragColor = vec4(vec3(1.0, 0.93, 0.8) * a, 1.0);
           }`,
       });
-      for (const hl of this.rig.anchors.headlights) {
+      // the beams come out of the raised pods on pop-up cars
+      const sources = this.pods.length ? this.pods.map((h) => new THREE.Vector3(h.position.x, h.position.y + POD.h * 0.55, h.position.z + POD.d)) : this.rig.anchors.headlights;
+      if (this.pods.length) spot.position.y = sources[0].y;
+      for (const hl of sources) {
         const cone = new THREE.Mesh(new THREE.ConeGeometry(3.2, 22, 24, 1, true), beamMat);
         cone.rotation.x = -Math.PI / 2 - 0.05;
         cone.position.set(hl.x, hl.y, hl.z + 11);
@@ -97,13 +113,91 @@ export class CarVisual {
     }
   }
 
-  setHeadlights(on: number) {
-    for (const s of this.headlights) s.intensity = 260 * on;
-    for (const b of this.beams) {
-      ((b.material as THREE.ShaderMaterial).uniforms.uIntensity.value as number) = 0.05 * on;
-      b.visible = on > 0.05;
+  /**
+   * Headlight level (1 at night; ~0.5 by day = daytime running lights). Pop-up lamps open only at
+   * night and stay shut (and dark) by day; `instant` skips their animation (garage).
+   */
+  setHeadlights(on: number, instant = false) {
+    this.lightLevel = on;
+    this.tailBase = on >= LIGHTS_ON ? 3.4 : 0.9;
+    if (this.pods.length) {
+      this.podTarget = on >= LIGHTS_ON ? 1 : 0;
+      if (instant) this.podOpen = this.podTarget;
+      // the bumper lamps of a pop-up car are only parking lamps
+      this.rig.materials.headlight.emissiveIntensity = on >= LIGHTS_ON ? 1.2 : 0;
+      this.applyPods();
+    } else {
+      this.applyBeams(on);
+      this.rig.materials.headlight.emissiveIntensity = 4 * on;
     }
-    this.rig.materials.headlight.emissiveIntensity = 4 * on;
+    this.setBrakeLights(false);
+  }
+
+  private applyBeams(level: number) {
+    for (const s of this.headlights) s.intensity = 260 * level;
+    for (const b of this.beams) {
+      ((b.material as THREE.ShaderMaterial).uniforms.uIntensity.value as number) = 0.05 * level;
+      b.visible = level > 0.05;
+    }
+  }
+
+  /** Pods hinged at the rear edge of their lid, lying folded inside the bonnet until they open. */
+  private buildPods(cfg: { x: number; z: number }) {
+    const body = this.rig.body;
+    this.rig.root.updateMatrixWorld(true);
+    const box = new THREE.Box3().setFromObject(body);
+    const toRig = this.rig.root.matrixWorld.clone().invert();
+    const meshes: THREE.Object3D[] = [];
+    body.traverse((o) => {
+      if ((o as THREE.Mesh).isMesh) meshes.push(o);
+    });
+    const ray = new THREE.Raycaster();
+    const front = box.clone().applyMatrix4(toRig).max.z;
+    this.podLens = new THREE.MeshStandardMaterial({ color: '#dfe6ee', emissive: '#fff4e0', emissiveIntensity: 0, roughness: 0.1, metalness: 0.3 });
+    const geoBox = new THREE.BoxGeometry(POD.w, POD.h, POD.d).translate(0, POD.h / 2, POD.d / 2);
+    const geoBezel = new THREE.PlaneGeometry(POD.w * 0.94, POD.h * 0.86).translate(0, POD.h / 2, POD.d + 0.002);
+    const geoLens = new THREE.PlaneGeometry(POD.w * 0.8, POD.h * 0.62).translate(0, POD.h / 2, POD.d + 0.004);
+    for (const side of [1, -1]) {
+      const x = side * cfg.x, zc = front - cfg.z;
+      // bonnet height at the lid centre: cast down onto the body
+      const from = new THREE.Vector3(x, box.max.y + 1, zc).applyMatrix4(this.rig.root.matrixWorld);
+      ray.set(from, new THREE.Vector3(0, -1, 0));
+      const hit = ray.intersectObjects(meshes, false)[0];
+      const y = hit ? hit.point.applyMatrix4(toRig).y : box.clone().applyMatrix4(toRig).max.y - 0.5;
+      const hinge = new THREE.Group();
+      hinge.name = 'popup_pod';
+      hinge.position.set(x, y - 0.012, zc - POD.d / 2);
+      const shell = new THREE.Mesh(geoBox, this.rig.materials.paint);
+      const bezel = new THREE.Mesh(geoBezel, this.rig.materials.trim);
+      const lens = new THREE.Mesh(geoLens, this.podLens);
+      for (const m of [shell, bezel, lens]) {
+        m.castShadow = true;
+        hinge.add(m);
+      }
+      body.add(hinge);
+      this.pods.push(hinge);
+    }
+    this.applyPods();
+  }
+
+  private applyPods() {
+    const k = this.podOpen;
+    for (const h of this.pods) {
+      h.rotation.x = POD.closed + (POD.open - POD.closed) * k;
+      h.visible = k > 0.02;
+    }
+    // full beam only once the pods are (nearly) up
+    const lit = this.lightLevel * THREE.MathUtils.smoothstep(k, 0.6, 1);
+    if (this.podLens) this.podLens.emissiveIntensity = 5 * lit;
+    this.applyBeams(lit);
+  }
+
+  /** Per-frame animation (pop-up lamps take ~0.6 s). */
+  private tick(dt: number) {
+    if (!this.pods.length || this.podOpen === this.podTarget) return;
+    const step = dt / 0.6;
+    this.podOpen = this.podTarget > this.podOpen ? Math.min(this.podTarget, this.podOpen + step) : Math.max(this.podTarget, this.podOpen - step);
+    this.applyPods();
   }
 
   private makeGhost() {
@@ -154,6 +248,7 @@ export class CarVisual {
       wv.spin.rotation.x = w.rotation;
     });
     this.setBrakeLights(braking || sim.input.handbrake);
+    this.tick(dt);
   }
 
   /** Update from a ghost pose. */
@@ -165,10 +260,11 @@ export class CarVisual {
       this.rig.wheels[0].pivot.rotation.y = damp(this.rig.wheels[0].pivot.rotation.y, p.steer, 10, dt);
       this.rig.wheels[1].pivot.rotation.y = this.rig.wheels[0].pivot.rotation.y;
     }
+    this.tick(dt);
   }
 
   setBrakeLights(on: boolean) {
-    this.rig.materials.taillight.emissiveIntensity = on ? 7 : 1.6;
+    this.rig.materials.taillight.emissiveIntensity = (on ? 9 : this.tailBase) * (this.spec.tailLampGain ?? 1);
   }
 
   dispose() {

@@ -146,7 +146,14 @@ export function rigFromTemplate(template: THREE.Object3D, spec: CarSpec, opts: {
         // keep the GLB textures but take over the shared, tweakable material
         const target = byName[mat.name] as THREE.MeshStandardMaterial;
         const src = mat as THREE.MeshStandardMaterial;
-        if (src.map && !target.map) target.map = src.map;
+        if (src.map && !target.map) {
+          target.map = src.map;
+          // lamp lenses glow through their own texture (the bright parts of the lens light up)
+          if (mat.name === 'taillight' || mat.name === 'headlight') {
+            target.emissiveMap = src.map;
+            target.color.set('#ffffff');
+          }
+        }
         return target;
       }
       if (!cloned.has(mat)) cloned.set(mat, mat.clone());
@@ -169,7 +176,7 @@ export function rigFromTemplate(template: THREE.Object3D, spec: CarSpec, opts: {
   });
   const target = root.getObjectByName('headlight_target') ?? new THREE.Object3D();
   if (!target.parent) root.add(target);
-  return { root, body, wheels, materials: fresh, headlightTargets: [target], anchors };
+  return { root, body, wheels, materials: fresh, headlightTargets: [target], anchors, fromModel: true };
 }
 
 /** Optional GLB car models (public/models/cars/<id>.glb); procedural cars are the fallback. */
@@ -272,6 +279,8 @@ export interface CarRig {
   headlightTargets: THREE.Object3D[];
   /** world-space-ish anchor points (body local) for effects */
   anchors: { exhaust: THREE.Vector3; headlights: THREE.Vector3[]; taillights: THREE.Vector3[] };
+  /** a GLB model (vs the procedural fallback body) */
+  fromModel?: boolean;
 }
 
 export function buildCar(spec: CarSpec, opts: { bodyColor?: string; procedural?: boolean } = {}): CarRig {

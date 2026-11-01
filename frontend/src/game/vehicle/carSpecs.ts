@@ -45,6 +45,13 @@ export interface CarSpec {
   colors: { body: string; accent: string };
   /** third-party 3D model in public/models/cars/<id>.glb (attribution shown in the garage) */
   model?: { title: string; author: string; url: string; license: string };
+  /**
+   * retractable headlamps on the 3D model (modelled closed): pods rise when the lights are on.
+   * x = pod centre off the centre line, z = lid centre behind the front of the body (m)
+   */
+  popUpLamps?: { x: number; z: number };
+  /** tail lamp glow multiplier for models whose lens texture is dark (the lens glows through it) */
+  tailLampGain?: number;
 }
 
 export const CAR_SPECS: Record<CarId, CarSpec> = {
@@ -150,6 +157,7 @@ export const CAR_SPECS: Record<CarId, CarSpec> = {
     driftiness: 0.75,
     stats: { power: 8, grip: 7, drift: 8, weight: 6 },
     colors: { body: '#f5c400', accent: '#111111' },
+    popUpLamps: { x: 0.57, z: 0.5 },
     model: { title: 'Mazda RX-7 FD', author: 'Lexyc16', url: 'https://sketchfab.com/3d-models/mazda-rx-7-fd-d35ff630df614771b82e7b2f59035b1e', license: 'CC BY 4.0' },
   },
   supra: {
@@ -255,6 +263,7 @@ export const CAR_SPECS: Record<CarId, CarSpec> = {
     driftiness: 0.9,
     stats: { power: 7, grip: 7, drift: 10, weight: 7 },
     colors: { body: '#f5cf30', accent: '#111111' },
+    tailLampGain: 2.5,
     model: { title: 'Nissan Silvia (S15)', author: 'Mona x Supercars', url: 'https://sketchfab.com/3d-models/nissan-silvia-s15-20a8388a009e4a7aae61a9bb50ad8945', license: 'CC BY 4.0' },
   },
 };

@@ -8,7 +8,7 @@ import { CAR_ORDER, CAR_SPECS, type CarId } from './vehicle/carSpecs';
 import { RacingLine } from './ai/RacingLine';
 import { AIDriver, AI_PROFILES, type AILevel } from './ai/AIDriver';
 import { buildScenery, type SceneryResult } from './render/TrackScenery';
-import { buildEnvironment, type EnvironmentRig, type TimeOfDay } from './render/Environment';
+import { buildEnvironment, PRESETS, type EnvironmentRig, type TimeOfDay } from './render/Environment';
 import { CarVisual } from './render/CarVisual';
 import { loadCarTemplates } from './render/carAssets';
 import { loadSurfaceTextures } from './render/surfaceTextures';
@@ -20,6 +20,7 @@ const ONLINE_LANES = [-2.7, 2.7, 0];
 import { ChaseCamera } from './camera/ChaseCamera';
 import { InputManager } from './input/Input';
 import { TireSmoke, SkidMarks } from './fx/TireEffects';
+import { ExhaustFX, newExhaustState, type ExhaustState } from './fx/Exhaust';
 import { Rain } from './fx/Rain';
 import { AudioEngine } from './audio/AudioEngine';
 import { GhostPlayer, GhostRecorder, type GhostData } from './race/Ghost';
@@ -108,9 +109,13 @@ interface Racer {
   flippedTime: number;
   finished: boolean;
   finishTime: number;
+  exhaust: ExhaustState;
 }
 
 const _v = new THREE.Vector3(), _q = new THREE.Quaternion(), _f = new THREE.Vector3();
+const _tip = new THREE.Vector3(), _back = new THREE.Vector3();
+/** real-time lamp lights hang this far (m) below the lamp fixture */
+const LAMP_LIGHT_DROP = 0.9;
 const _zero = new THREE.Vector3();
 
 export class Game {
@@ -125,6 +130,7 @@ export class Game {
   audio: AudioEngine | null = null;
   chase!: ChaseCamera;
   smoke = new TireSmoke();
+  exhaust = new ExhaustFX();
   skids = new SkidMarks(8);
   rain = new Rain();
   /** tyre grip multiplier from the weather (wet roads) */
@@ -223,7 +229,8 @@ export class Game {
     await initRapier();
     await this.yieldFrame(0.08, '車両モデルを読み込み中');
     await Promise.all([loadCarTemplates(CAR_ORDER), loadSurfaceTextures()]);
-    this.root.add(this.smoke.points, this.skids.mesh, this.rain.mesh);
+    this.root.add(this.smoke.points, this.skids.mesh, this.rain.mesh, this.exhaust.group);
+    this.exhaust.density = this.quality.treeDensity < 0.6 ? 0.6 : 1;
     this.remotes = new RemoteRacers(this.root, (id) => this.rideHeightOf(id), false);
     // pooled lights for nearby street lamps
     for (let i = 0; i < 6; i++) {
@@ -302,6 +309,8 @@ export class Game {
   }
 
   applyTimeOfDay(tod: TimeOfDay) {
+    // unknown values (e.g. corrupted saved settings) would poison the sky and fog with NaN: black screen
+    if (!PRESETS[tod]) tod = 'night';
     this.timeOfDay = tod;
     this.env.apply(tod, this.scene, this.renderer);
     const envMap = this.env.buildEnvMap(this.renderer);
@@ -317,6 +326,7 @@ export class Game {
       m.emissiveIntensity = (m.userData.baseIntensity as number) * lamps;
     }
     this.smoke.setColor(tod === 'dawn' ? '#d9d4cf' : tod === 'rain' ? '#9aa6b4' : '#7d8794');
+    this.exhaust.setColor(tod === 'dawn' ? '#b9b6b2' : tod === 'rain' ? '#7f8a96' : '#5d646d');
     // wet roads: glossy, darker asphalt and slicker terrain; less tyre grip
     const wet = this.env.preset.rain;
     const road = this.scenery.roadMaterial;
@@ -388,6 +398,7 @@ export class Game {
       flippedTime: 0,
       finished: false,
       finishTime: 0,
+      exhaust: newExhaustState(),
     };
   }
 
@@ -424,6 +435,7 @@ export class Game {
       this.replay = null;
     }
     this.smoke.clear();
+    this.exhaust.clear();
     this.skids.clear();
     this.audio?.removeAllEngines();
     this.audio?.silenceDriving();
@@ -451,7 +463,7 @@ export class Game {
     const ride = tmp.rideHeight;
     tmp.dispose();
     this.garageCar = new CarVisual(spec, { headlights: true, shadows: this.quality.shadows, rideHeight: 0, bodyColor: color });
-    this.garageCar.setHeadlights(this.env.preset.lampsOn > 0.5 ? 1 : 0.5);
+    this.garageCar.setHeadlights(this.env.preset.lampsOn > 0.5 ? 1 : 0.5, true);
     // park at the summit, just before the start line, angled for the camera
     const s = this.track.startS - 14;
     const p = this.track.pointAt(s, 0.6);
@@ -958,7 +970,10 @@ export class Game {
     const alpha = clamp(this.accumulator / PHYSICS_DT, 0, 1);
     for (const r of this.racers()) {
       r.visual.syncFromSim(r.sim, this.paused ? 1 : alpha, dt);
-      if (!this.paused) this.emitTyreFx(r, dt);
+      if (!this.paused) {
+        this.emitTyreFx(r, dt);
+        this.emitExhaust(r, dt);
+      }
     }
     if (this.ghost && (this.phase === 'racing' || this.phase === 'finished' || this.phase === 'countdown')) {
       const t = this.phase === 'countdown' ? 0 : this.player?.finished ? this.player.finishTime : this.simTime - this.raceStartTime;
@@ -974,8 +989,12 @@ export class Game {
     if (this.config?.online && (this.phase === 'countdown' || this.phase === 'racing' || this.phase === 'finished')) {
       this.remotes.update(performance.now(), dt);
     }
-    if (!this.paused) this.smoke.update(dt);
+    if (!this.paused) {
+      this.smoke.update(dt);
+      this.exhaust.update(dt);
+    }
     this.smoke.setViewportHeight(this.renderer.domElement.height);
+    this.exhaust.setViewportHeight(this.renderer.domElement.height);
 
     // ---- camera
     if (this.phase === 'attract' && this.attractCar) this.cinematicCamera(dt, this.attractCar.visual.root, this.attractCar.proj.s);
@@ -1023,6 +1042,23 @@ export class Game {
       const e = this.audio.engine('attract', sim.spec.engine.cylinders, sim.spec.engine.turbo);
       const d = sim.position.distanceTo(this.camera.position);
       e.update(sim.rpm, sim.input.throttle, sim.boost, clamp(1 - d / 160, 0, 1) * 0.5, sim.spec.engine.redline);
+    }
+  }
+
+  /** Exhaust puffs and backfires from the tailpipe (with a pop when the camera is close). */
+  private emitExhaust(r: Racer, dt: number) {
+    const sim = r.sim;
+    const rig = r.visual.rig, root = r.visual.root;
+    // tailpipe in world space from the car's pose (the model only sits lower by the ride height)
+    _tip.copy(rig.anchors.exhaust).add(rig.root.position).applyQuaternion(root.quaternion).add(root.position);
+    _back.copy(sim.forward).negate();
+    const rpm = clamp(sim.rpm / sim.spec.engine.redline, 0, 1);
+    const throttle = sim.gear === -1 ? 0.2 : sim.input.throttle;
+    const bang = this.exhaust.emit(r.exhaust, _tip, _back, sim.velocity, throttle, rpm, sim.spec.engine.turbo, dt);
+    if (bang && this.audio) {
+      const d = _tip.distanceTo(this.camera.position);
+      const gain = clamp(1 - d / 60, 0, 1);
+      if (gain > 0.05) this.audio.backfire(0.25 + 0.55 * gain);
     }
   }
 
@@ -1221,7 +1257,10 @@ export class Game {
         lamp = free.i;
         assigned.add(lamp);
         l.intensity = 0;
+        // below the fixture, never right against it: a point light a few cm from the rock-shed
+        // ceiling or a cutting made a blinding hot spot that flooded the screen with bloom
         l.position.copy(lamps[lamp].position);
+        l.position.y -= LAMP_LIGHT_DROP;
         l.color.copy(lamps[lamp].color);
       }
       this.lampSlots[k] = lamp;

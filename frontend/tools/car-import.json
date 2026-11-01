@@ -5,9 +5,9 @@
     "config": {
       "wheels": "Material\\.01[145]$",
       "paint": "Material\\.007$",
-      "glass": "Material\\.0(08|16)$",
+      "glass": "Material\\.008$",
       "headlights": "Material\\.002$",
-      "taillights": "Material\\.017$"
+      "taillights": "Material\\.01[67]$"
     }
   },
   "s15": {

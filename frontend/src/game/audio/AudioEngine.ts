@@ -302,6 +302,32 @@ export class AudioEngine {
     o.stop(t + 0.32);
   }
 
+  /** Exhaust backfire: a sharp crack and a short low pop. */
+  backfire(strength: number) {
+    const t = this.ctx.currentTime;
+    const src = this.ctx.createBufferSource();
+    src.buffer = this.noise;
+    const f = this.ctx.createBiquadFilter();
+    f.type = 'bandpass';
+    f.frequency.value = 1300 + Math.random() * 500;
+    f.Q.value = 0.8;
+    const g = this.ctx.createGain();
+    g.gain.setValueAtTime(0.9 * strength, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.09);
+    src.connect(f).connect(g).connect(this.sfx);
+    src.start(t, Math.random(), 0.12);
+    const o = this.ctx.createOscillator();
+    o.type = 'triangle';
+    o.frequency.setValueAtTime(150, t);
+    o.frequency.exponentialRampToValueAtTime(48, t + 0.08);
+    const og = this.ctx.createGain();
+    og.gain.setValueAtTime(0.55 * strength, t);
+    og.gain.exponentialRampToValueAtTime(0.001, t + 0.1);
+    o.connect(og).connect(this.sfx);
+    o.start(t);
+    o.stop(t + 0.12);
+  }
+
   blowOff() {
     const t = this.ctx.currentTime;
     const src = this.ctx.createBufferSource();

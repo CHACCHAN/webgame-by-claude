@@ -4,6 +4,39 @@ Newest first. "Verified" means actually executed in this environment; anything e
 
 ## Session 3 (2026-11-01) — owner playtest on a real GPU (60 fps, Cloudflare tunnel)
 
+### Second playtest report (lamps, flicker, pop-ups, tail lamps) + exhaust
+- **Street lamps faced away from the road**: the arm/head are modelled along local −X and the yaw formula turned
+  −X onto *minus* the direction to the road (θ = π − atan2(−dz, −dx)); now θ = atan2(dz, −dx) (`lampArmYaw`,
+  unit-tested for every direction). The light sources and baked light pools moved with the heads, so the pools
+  now lie on the road instead of beside it.
+- **Whole-screen flicker near lights** (not reproducible without a GPU; causes found by measurement):
+  the pooled real-time lamp lights hung at the lamp head — with the heads turned outward that was right against
+  cuttings, and in the rock shed 0.15 m under the concrete ceiling. With the lights' 1/d^1.7 falloff a surface
+  that close gets ~25× (shed: ~4000 units) the brightness of one 1 m away: far over the bloom threshold, and
+  the pool hands lights over between lamps every few metres, so the hot spots faded in and out under bloom.
+  Lights now hang 0.9 m below the fixture and over the road. The light pool itself was traced over 3,581
+  frames: hand-overs only, no oscillation.
+  (Clearance measurement per lamp: in progress.)
+- **Pop-up headlamps lit while closed (RX-7)**: the model's "headlight" parts were the bumper lamps, the
+  pop-ups are modelled shut. Cars with `popUpLamps` in their spec now get runtime pods (raycast onto the bonnet,
+  hinged at the lid's rear edge, paint-coloured shell, bezel, lens) that open in 0.6 s when the lights come on at
+  night and fold away at dawn; main beam and spot light only once they are up, the bumper lamps become dim
+  parking lamps. Procedural fallback bodies keep their own fixed pods. AE86: to set when its model arrives.
+- **Tail lamps not lit at night**: tail lamps were a fixed 1.6 unless braking, and on the RX-7 the red lamp
+  emitters sat under a smoked cover that the import had mapped to the window glass. Now: position-lamp level
+  3.4 whenever the headlights are on (0.9 by day), brake 9; lamp lenses of imported models glow through their
+  own texture (emissive map); RX-7 re-imported with emitter + cover as tail lamps.
+- **Exhaust** (new): `fx/Exhaust.ts` — puffs from the tailpipe anchor (idle trickle, more under load, thinned at
+  speed), backfire flames (additive, blooming) when the throttle is snapped shut at high revs (turbo cars more
+  often) with a crack/pop sound when the camera is close. Player, rival and attract car.
+- Robustness: an unknown time-of-day value (e.g. corrupted saved settings) fell through to NaN sky/fog values
+  and a black screen for the rest of the session; it now falls back to night.
+- Scenery models proposed to the owner (Sketchfab, CC BY): see docs/ASSETS.md.
+  Verified so far (browser, medium quality): RX-7 pods up with lit lenses at night and folded/dark at dawn (state
+  and screenshot), lamp arm over the road in both shots, night tail lamps lit on RX-7 (was black) and Impreza;
+  S15 lens texture is dark → per-car `tailLampGain` 2.5 (re-check pending). Exhaust/backfire screenshot, lamp
+  clearance numbers and the full E2E run: pending.
+
 ### Reported & fixed
 - **Mound across the road (drive-through)** on 天狼's last hairpin: the coarse far terrain mesh (24 m grid, no
   collider) was only lowered by a fixed 30 m under the near grid, but roads cut deeper than that into the ridge
