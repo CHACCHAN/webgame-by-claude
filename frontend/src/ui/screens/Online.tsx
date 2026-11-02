@@ -37,6 +37,7 @@ export function OnlineLobbyScreen() {
     const stored = loadPlayer();
     if (stored && !useOnline.getState().player) useOnline.getState().set({ player: stored });
     gameHolder.game?.showGarage(useOnline.getState().carId);
+    void gameHolder.game?.audio?.playMusic('bgm_online');
   }, []);
   useMenuInput((a) => {
     if (a === 'back') { sfx.back(); go('modes'); }
@@ -106,6 +107,9 @@ function RealtimeBadge() {
 export function OnlineRoomScreen() {
   const { room, player, carId, busy, error } = useOnline();
   const go = useApp((s) => s.go);
+  useEffect(() => {
+    void gameHolder.game?.audio?.playMusic('bgm_online');
+  }, []);
   const exit = () => {
     sfx.back();
     void leaveRoom();
@@ -175,6 +179,10 @@ export function OnlineResultsScreen() {
   const { room, player, busy, error } = useOnline();
   const result = useApp((s) => s.result);
   const go = useApp((s) => s.go);
+  useEffect(() => {
+    // after the finish jingle
+    void gameHolder.game?.audio?.playMusic('bgm_results', { delay: 4.5 });
+  }, []);
   useMenuInput((a) => {
     if (a === 'back') { sfx.back(); void leaveRoom(); go('modes'); }
   });

@@ -166,6 +166,9 @@ export function GarageScreen() {
   useEffect(() => {
     gameHolder.game?.setGarageColor(color);
   }, [color]);
+  useEffect(() => {
+    void gameHolder.game?.audio?.playMusic('bgm_garage');
+  }, []);
   const cycleColor = (d: number) => {
     const k = (palette.indexOf(color) + d + palette.length) % palette.length;
     set({ carColor: palette[k] });
@@ -324,6 +327,9 @@ export function CoursesScreen() {
     return { km: ((t.finishS - t.startS) / 1000).toFixed(2), drop: Math.round(y0 - y1) };
   };
   const [info] = useState(() => Object.fromEntries(COURSE_ORDER.map((id) => [id, stats(id)])) as Record<CourseId, { km: string; drop: number }>);
+  useEffect(() => {
+    void gameHolder.game?.audio?.playMusic('bgm_menu');
+  }, []);
   const choose = async (id: CourseId) => {
     sfx.confirm();
     useSettings.getState().set({ courseId: id });

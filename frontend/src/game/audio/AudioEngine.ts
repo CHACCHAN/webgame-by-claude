@@ -10,13 +10,24 @@ interface LoopConfig {
   fadeIn: number;
 }
 const DEFAULT_LOOP: LoopConfig = { volume: 0.6, loopFrom: 0, xfade: 3, fadeIn: 1.5 };
-/** Per-track loop points, measured from the delivered files' loudness envelopes. */
+/**
+ * Per-track loop points of the delivered files (all normalised to -15.4 LUFS): pairs of moments whose next
+ * seconds sound alike (spectral self-similarity), moved onto the same beat phase so the kicks of both passes
+ * coincide during the crossfade. Tracks whose sections never repeat closely get longer crossfades.
+ */
+const RACE = { volume: 0.5, xfade: 1.5, fadeIn: 0.8 };
 const MUSIC: Record<string, Partial<LoopConfig>> = {
-  bgm_menu: { volume: 0.7, loopFrom: 0, loopAt: 149, xfade: 4 },
-  bgm_race: { volume: 0.5, loopFrom: 39, loopAt: 164.5, xfade: 1.5, fadeIn: 0.8 },
-  // loop points sit at matching "end of chorus" moments found by spectral comparison
-  bgm_race_kirifuri: { volume: 0.5, loopFrom: 72.37, loopAt: 159.63, xfade: 1.5, fadeIn: 0.8 },
-  bgm_race_tenrou: { volume: 0.5, loopFrom: 94.25, loopAt: 145.46, xfade: 1.5, fadeIn: 0.8 },
+  bgm_menu: { volume: 0.6, loopFrom: 55.77, loopAt: 184.62, xfade: 4 },
+  bgm_garage: { volume: 0.55, loopFrom: 9.57, loopAt: 141.8, xfade: 2 },
+  bgm_online: { volume: 0.6, loopFrom: 23.59, loopAt: 99.38, xfade: 2 },
+  bgm_results: { volume: 0.55, loopFrom: 18.76, loopAt: 136.51, xfade: 3, fadeIn: 2 },
+  bgm_race: { ...RACE, loopFrom: 59.49, loopAt: 176.79 },
+  bgm_race_kirifuri: { ...RACE, loopFrom: 4.5, loopAt: 184.83, xfade: 2 },
+  bgm_race_tenrou: { ...RACE, loopFrom: 50.43, loopAt: 185.33 },
+  bgm_race_rain: { ...RACE, loopFrom: 49.69, loopAt: 145.98 },
+  bgm_race_dawn: { ...RACE, loopFrom: 59.26, loopAt: 159.83, xfade: 2 },
+  bgm_rival: { ...RACE, loopFrom: 71.14, loopAt: 163.75, xfade: 2 },
+  bgm_ghost: { ...RACE, loopFrom: 73.84, loopAt: 184.94 },
 };
 
 /** Synthesised engine/tyre/wind audio built with WebAudio nodes only. */
@@ -415,21 +426,25 @@ export class AudioEngine {
   /**
    * Play a looping music track. Instead of a hard loop, each pass crossfades into
    * the next one at the track's loop point, which hides intros, fade-outs and MP3
-   * padding. Falls back to the synthesised pad for menus when no file exists.
+   * padding. Falls back to the synthesised pad for menus when no file exists. `delay` (s) leaves room
+   * for a jingle before the track fades in.
    */
-  async playMusic(name: string | null, fallback?: string) {
+  async playMusic(name: string | null, { fallback, delay = 0 }: { fallback?: string; delay?: number } = {}) {
     if (this.current?.name === name) return;
     this.stopMusic(1.2);
     if (!name) return;
+    // a decoded 3-minute track takes ~75 MB: keep only the one asked for (the stopped one plays out its fade)
+    for (const k of this.tracks.keys()) if (k.startsWith('bgm_') && k !== name && k !== fallback) this.tracks.delete(k);
+    let track = name;
     let buf = await this.loadTrack(name);
-    if (!buf && fallback) buf = await this.loadTrack(fallback);
+    if (!buf && fallback) buf = await this.loadTrack((track = fallback));
     if (this.current) return; // another track was requested meanwhile
     if (!buf) {
       if (name.startsWith('bgm_menu')) this.startAmbient();
       return;
     }
     this.stopAmbient();
-    const cfg = { ...DEFAULT_LOOP, ...(MUSIC[name] ?? (fallback ? MUSIC[fallback] : undefined) ?? {}) };
+    const cfg = { ...DEFAULT_LOOP, ...MUSIC[track] };
     const loopAt = Math.min(cfg.loopAt ?? buf.duration - 3, buf.duration - cfg.xfade);
     const state = { name, voices: [] as { src: AudioBufferSourceNode; gain: GainNode }[], timer: 0 };
     this.current = state;
@@ -454,7 +469,7 @@ export class AudioEngine {
         voice(passEnd, cfg.loopFrom, cfg.xfade);
       }, lead * 1000);
     };
-    voice(this.ctx.currentTime + 0.05, 0, cfg.fadeIn);
+    voice(this.ctx.currentTime + 0.05 + delay, 0, cfg.fadeIn);
   }
 
   stopMusic(fade = 1) {
@@ -474,17 +489,17 @@ export class AudioEngine {
     }
   }
 
-  /** One-shot music sting (e.g. crossing the finish line). */
+  /** One-shot music sting (e.g. crossing the finish line). Resolves to its length (s), 0 when not shipped. */
   async playJingle(name: string, volume = 0.8) {
     const buf = await this.loadTrack(name);
-    if (!buf) return false;
+    if (!buf) return 0;
     const src = this.ctx.createBufferSource();
     src.buffer = buf;
     const g = this.ctx.createGain();
     g.gain.value = volume;
     src.connect(g).connect(this.music);
     src.start();
-    return true;
+    return buf.duration;
   }
 
   /** Slow evolving pad for menus (no assets needed). */

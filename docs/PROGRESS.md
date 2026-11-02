@@ -4,6 +4,27 @@ Newest first. "Verified" means actually executed in this environment; anything e
 
 ## Session 4 (2026-11-02) — real-GPU performance pass on the owner's PC
 
+### Music remade with Suno (batch 3) — done & verified in the browser
+- The owner remade all music with Suno Pro (frenchcore / uptempo hardcore / speedcore): 11 BGM + 5 jingles,
+  delivered as 48 kHz AAC. Gain-only loudness match (BGM −15.4, jingles −16.4 LUFS), MP3 160 kbps, `public/audio/`.
+- Loop points: candidate pairs from the mel-spectrum self-similarity of the next 8 s, best pair per minimum span,
+  then moved onto the same beat phase (onset-envelope comb). Several tracks never repeat a section closely (menu,
+  online, dawn, rival): longer crossfades there. Seam preview rendered for the owner to judge by ear.
+- New wiring: race music by mode, then weather (`Game.raceMusic`: rival → `bgm_rival`, ghost → `bgm_ghost`, rain →
+  `bgm_race_rain`, dawn → `bgm_race_dawn`, else the course's track); car select `bgm_garage`; results/replay
+  `bgm_results` after the jingles; online lobby/room `bgm_online`; course select back to `bgm_menu`.
+  Jingles: `jingle_rival_win` for beating the rival, then on the results screen `jingle_medal` (new medal) or
+  `jingle_record` (new local record, not the first run) as the finish jingle ends. `playMusic` takes `{ fallback,
+  delay }` and uses the loop settings of the track actually loaded (it used the requested one's for a fallback).
+- Decoded music is ~75 MB per 3-minute track: the cache now keeps only the requested track (it kept every track
+  ever played).
+- Checked in headless Chrome on vite preview: menu → course select → car select → rival race → finish played
+  `bgm_menu`, `bgm_menu`, `bgm_garage`, `bgm_rival`, `jingle_rival_win`, `jingle_medal`, `bgm_results`; the 12
+  mode × weather combinations pick the right track; all 16 files decode and every loop point lies inside its file.
+- Sound effects (Suno Sounds, WAV): 18 generated in the owner's Suno library through Claude in Chrome (engines 5
+  types × mid/high, squeal, turbo, blow-off, backfire, crash, scrape, rain, wind). Not downloaded yet: Pro allows 20
+  downloads a month (27 left until 2026-12-02), and Chrome stops each download at its save dialog.
+
 ### Whole-screen black frames (the reported "flicker near lights") — found and fixed
 - Freezing a night race and rendering the same view (real GPU, high): single frames came out completely black
   (mean 0) at 5 spots on 朧峠 and 1 on 霧降湖, about once per race while driving (old build: 1 in 8,610 frames).

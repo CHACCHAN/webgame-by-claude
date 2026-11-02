@@ -560,7 +560,8 @@ export class Game {
     // the background during the countdown rather than each the first time it comes into view (mid-race hitches)
     void this.precompile();
     if (this.audio) {
-      void this.audio.playMusic(this.course.music, 'bgm_race');
+      void this.audio.playMusic(this.raceMusic(cfg.mode), { fallback: this.course.music });
+      this.audio.preload('jingle_finish', 'jingle_lose', 'jingle_rival_win', 'jingle_medal', 'jingle_record');
       const spec = CAR_SPECS[cfg.carId];
       this.audio.engine('player', spec.engine.cylinders, spec.engine.turbo);
       if (this.rival) this.audio.engine('rival', this.rival.sim.spec.engine.cylinders, this.rival.sim.spec.engine.turbo);
@@ -570,6 +571,15 @@ export class Game {
 
   restart() {
     if (this.config) this.startRace(this.config);
+  }
+
+  /** Battles have their own tracks; otherwise rain and dawn have theirs, night runs the course's. */
+  private raceMusic(mode: RaceMode) {
+    if (mode === 'rival') return 'bgm_rival';
+    if (mode === 'ghost') return 'bgm_ghost';
+    if (this.timeOfDay === 'rain') return 'bgm_race_rain';
+    if (this.timeOfDay === 'dawn') return 'bgm_race_dawn';
+    return this.course.music;
   }
 
   setPaused(p: boolean) {
@@ -946,8 +956,9 @@ export class Game {
       const lost = this.config?.online
         ? this.remotes.standings().some((r) => r.fin !== null && r.fin < pl.finishTime * 1000)
         : !!this.rival?.finished && this.rival.finishTime < pl.finishTime;
+      const beatRival = !lost && !!this.rival;
       if (lost) void a.playJingle('jingle_lose').then((ok) => ok || a.chime([659, 587, 494, 440], 0.16));
-      else void a.playJingle('jingle_finish').then((ok) => ok || a.chime([784, 988, 1175, 1568], 0.11));
+      else void a.playJingle(beatRival ? 'jingle_rival_win' : 'jingle_finish').then((ok) => ok || a.chime([784, 988, 1175, 1568], 0.11));
     }
     if (this.hud.driftCombo > 30) this.hud.driftScore += Math.round(this.hud.driftCombo);
     this.hud.driftCombo = 0;

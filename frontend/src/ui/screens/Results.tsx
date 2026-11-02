@@ -39,6 +39,7 @@ export function ResultsScreen() {
       encoded.current = cached.encoded;
       setSubmit(cached.submit);
       setLocalPB(cached.localPB);
+      void gameHolder.game?.audio?.playMusic('bgm_results');
       return;
     }
     encoded.current = encodeGhost(result.ghost);
@@ -58,6 +59,15 @@ export function ResultsScreen() {
     }
     if (loadPlayer()) void send(loadPlayer()!.name);
     else setSubmit({ kind: 'need-name' });
+    // the finish jingle is playing (a longer one for beating the rival): a new medal or record gets its own
+    // sting as it ends, then the results music
+    const audio = gameHolder.game?.audio;
+    const sting = medalNew.get(result) ? 'jingle_medal' : isNew && prev ? 'jingle_record' : null;
+    const t = setTimeout(async () => {
+      const len = audio && sting ? await audio.playJingle(sting) : 0;
+      void audio?.playMusic('bgm_results', { delay: Math.max(0, len - 0.5) });
+    }, result.rivalLevel && !result.rivalWon ? 6000 : 4300);
+    return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [result]);
 
