@@ -133,8 +133,8 @@ for commercial use.
 
 | File (`frontend/public/`) | Source | Processing | Used in |
 |---|---|---|---|
-| `audio/bgm_menu.mp3` | Gemini | loudnorm −16 LUFS, 144 kbps; loop 0–149 s, 4 s crossfade | title / menus |
-| `audio/bgm_race.mp3` | Gemini | loudnorm −16 LUFS, 144 kbps; loop 39–164.5 s, 1.5 s crossfade | races (all courses until per-course tracks arrive) |
+| `audio/bgm_menu.mp3` | Gemini | loudnorm −16 LUFS, 128 kbps CBR; loop 0–149 s, 4 s crossfade | title / menus |
+| `audio/bgm_race.mp3` | Gemini | loudnorm −16 LUFS, 128 kbps CBR; loop 39–164.5 s, 1.5 s crossfade | races (all courses until per-course tracks arrive) |
 | `audio/jingle_finish.mp3` | Gemini | last 8.3 s of the delivered 63 s track (from 55.3 s) | finish line (synth chime fallback) |
 | `video/loading_loop.mp4`, `video/loading_poster.webp` | Gemini | ping-pong loop to 20 s, audio removed, H.264 CRF 30; poster frame | boot / loading screen, dimmed |
 | `img/rivals/oboro-{rookie,ace,legend}.webp` | ChatGPT | 768×1152 WebP with alpha | rival cards, battle HUD |

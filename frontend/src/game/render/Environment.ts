@@ -162,7 +162,9 @@ void main() {
       col += vec3(0.8 + r * 0.2, 0.85, 1.0) * b * tw * 1.6 * uStars * smoothstep(0.0, 0.25, h);
     }
     // faint milky band
-    float band = exp(-pow(dot(d, normalize(vec3(0.35, 0.62, -0.7))), 2.0) * 22.0);
+    // b * b, not pow(b, 2.0): pow of a negative base is undefined (NaN on Direct3D)
+    float b = dot(d, normalize(vec3(0.35, 0.62, -0.7)));
+    float band = exp(-b * b * 22.0);
     col += vec3(0.05, 0.055, 0.08) * band * smoothstep(0.45, 0.8, fbm(d.xz * 6.0 + d.y * 3.0)) * uStars;
   }
   // thin clouds

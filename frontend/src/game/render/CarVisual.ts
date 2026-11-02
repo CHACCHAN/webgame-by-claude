@@ -100,7 +100,9 @@ export class CarVisual {
           uniform float uIntensity; varying float vT; varying vec3 vN; varying vec3 vV;
           void main() {
             float edge = pow(abs(dot(vN, vV)), 1.5);
-            float a = pow(vT, 2.2) * edge * uIntensity;
+            // interpolation leaves vT a hair below 0 at the far rim: pow() of a negative base is NaN, and one NaN
+            // pixel spread by the bloom blur blacked out the whole frame
+            float a = pow(clamp(vT, 0.0, 1.0), 2.2) * edge * uIntensity;
             gl_FragColor = vec4(vec3(1.0, 0.93, 0.8) * a, 1.0);
           }`,
       });

@@ -4,6 +4,20 @@ Newest first. "Verified" means actually executed in this environment; anything e
 
 ## Session 4 (2026-11-02) — real-GPU performance pass on the owner's PC
 
+### Whole-screen black frames (the reported "flicker near lights") — found and fixed
+- Freezing a night race and rendering the same view (real GPU, high): single frames came out completely black
+  (mean 0) at 5 spots on 朧峠 and 1 on 霧降湖, about once per race while driving (old build: 1 in 8,610 frames).
+  Not there at low quality (no post-processing). Reading the half-float scene buffer before post-processing: every
+  black frame had 3 NaN pixels, no other frame had any; the bloom blur spread them over the whole picture.
+  Bisected (scenery, environment, particles, env map, normal maps, clearcoat: no effect; both cars hidden: gone) and
+  identified with an ID render at the NaN pixels: the headlight beam cones (`CarVisual`, here the rival's).
+  Cause: `pow(vT, 2.2)` with `vT` (the cone's uv.y) interpolated a hair below 0 at the far rim; pow of a negative
+  base is undefined (NaN). Fixed with a clamp; the sky's milky band had `pow(dot, 2.0)` with a possibly negative
+  base too (always NaN on Direct3D, where pow is exp2(y·log2 x)) → `b * b`. All other GLSL pow() bases are clamped.
+  After: 0 NaN / 0 black frames at 10 frozen spots on all courses (3,020 frames), 0 in a full night race
+  (9,520 frames). A tentative clamp of material output (half-float overflow theory) did not help and was removed.
+- Fixed: docs/ASSETS.md listed the menu and 朧峠 tracks at 144 kbps; they are 128 kbps CBR (frame count).
+
 ### Hitches: shaders compiled mid-race
 - Long frames over a full 朧峠 race (high, 17.4 k frames): 13 ≥ 20 ms. The worst mid-race ones (41 / 24 ms at
   35.9 / 36.6 %) were the turbine and vending machine shaders compiling the first time they came into view
