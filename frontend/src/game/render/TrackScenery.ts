@@ -19,6 +19,7 @@ import { surfaceImage as photoImage, surfaceTexture as photoTexture, type Surfac
 import { findCorners } from '../track/corners';
 import { faceRoadYaw, levelSites, planRoadsideSites, siteClearings, sitePoint, type RoadsideSite } from '../track/propSites';
 import { getProp, instanceProp, placeAt, type PropTemplate } from './propAssets';
+import { buildVegetation, type BushInstance } from './Vegetation';
 
 export interface Lamp {
   position: THREE.Vector3;
@@ -216,7 +217,17 @@ export function buildScenery(track: Track, terrain: TerrainData, quality: Scener
   // ------------------------------------------------------------- trees
   const trees = buildTrees(terrain, quality.treeDensity, quality.treeLod, clearings);
   group.add(trees);
-  group.add(buildClutter(track, terrain, quality.treeDensity, surfaceTexture, clearings));
+  const clutter = buildClutter(track, terrain, quality.treeDensity, surfaceTexture, clearings);
+  group.add(clutter.group);
+  // bushes: shrub models near the camera when the plant models are there, else lumps everywhere
+  const vegetation = buildVegetation(track, terrain, sides, {
+    density: quality.treeDensity,
+    clearings,
+    bushes: clutter.bushes,
+    farBush: { geometry: clutter.bushGeo, material: clutter.bushMat },
+  });
+  if (vegetation) group.add(vegetation.group);
+  else clutter.group.add(lumpBushes(clutter));
   const turbines = buildTurbines(terrain);
   group.add(turbines.group);
   const rotorAngles = new Float32Array(turbines.phases.length);
@@ -230,6 +241,7 @@ export function buildScenery(track: Track, terrain: TerrainData, quality: Scener
     sites,
     update(time, cameraPos) {
       updateTreeLods(trees, cameraPos);
+      vegetation?.update(cameraPos);
       for (const r of turbines.rotors) r.rotation.z = time * 0.9 + r.userData.phase;
       if (turbines.spin) {
         for (let k = 0; k < rotorAngles.length; k++) rotorAngles[k] = time * 0.9 + turbines.phases[k];
@@ -1172,13 +1184,6 @@ function buildClutter(
       bushCol.push(new THREE.Color().setHSL(0.22 + r() * 0.1, 0.35 + r() * 0.2, 0.7 + r() * 0.5));
     }
   }
-  const bushMesh = new THREE.InstancedMesh(bushGeo, bushMat, bushes.length);
-  bushes.forEach((m, i) => {
-    bushMesh.setMatrixAt(i, m);
-    bushMesh.setColorAt(i, bushCol[i]);
-  });
-  bushMesh.receiveShadow = true;
-  bushMesh.computeBoundingSphere();
   const rockMesh = new THREE.InstancedMesh(rockGeo, rockMat, rocks.length);
   rocks.forEach((m, i) => {
     rockMesh.setMatrixAt(i, m);
@@ -1187,8 +1192,21 @@ function buildClutter(
   rockMesh.castShadow = true;
   rockMesh.receiveShadow = true;
   rockMesh.computeBoundingSphere();
-  group.add(bushMesh, rockMesh);
-  return group;
+  group.add(rockMesh);
+  const instances: BushInstance[] = bushes.map((m, i) => ({ matrix: m, color: bushCol[i] }));
+  return { group, bushes: instances, bushGeo, bushMat };
+}
+
+/** Procedural bushes everywhere (fallback when the plant models are missing). */
+function lumpBushes(c: ReturnType<typeof buildClutter>) {
+  const bushMesh = new THREE.InstancedMesh(c.bushGeo, c.bushMat, c.bushes.length);
+  c.bushes.forEach((b, i) => {
+    bushMesh.setMatrixAt(i, b.matrix);
+    bushMesh.setColorAt(i, b.color);
+  });
+  bushMesh.receiveShadow = true;
+  bushMesh.computeBoundingSphere();
+  return bushMesh;
 }
 
 /** Wind turbines on the skyline ridge (rotors animate in Scenery.update). */

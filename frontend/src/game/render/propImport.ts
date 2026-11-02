@@ -42,6 +42,20 @@ export interface PropImportConfig {
   rotor?: { parts: string; /** node animated in the source; its pivot and animation axis define the hub */ node?: string };
   /** named points: the centre of the matched parts' box ("<pattern>@bottom" for the bottom centre) */
   anchors?: Record<string, string>;
+  /**
+   * plant sets: a regular expression whose first capture group names the variant a part belongs to; each
+   * variant is exported as its own node `variant_<name>` with its foot at the origin (scale from `scale`)
+   */
+  variants?: string;
+  /** split each variant into this many plants standing side by side along X (sets modelled as one mesh) */
+  splitX?: number;
+  /**
+   * decimation of textured parts keeping their UVs and normals (vertices are only removed, never moved):
+   * keep = target fraction of triangles, error = max deviation relative to the part's size
+   */
+  simplify?: { keep: number; error?: number; /** never below this many triangles per part */ minTris?: number };
+  /** render the kept materials opaque (the source asks for alpha cutout but its colour map has no alpha) */
+  opaque?: boolean;
 }
 
 interface Part {
@@ -96,6 +110,30 @@ async function decimate(geo: THREE.BufferGeometry, keep: number, error: number) 
   return welded.toNonIndexed();
 }
 
+/** UV-preserving decimation: a subset of the welded vertices is kept with their attributes. */
+async function simplifyTextured(geo: THREE.BufferGeometry, keep: number, error: number) {
+  const { MeshoptSimplifier } = await import('three/examples/jsm/libs/meshopt_simplifier.module.js');
+  await MeshoptSimplifier.ready;
+  const flat = geo.index ? geo.toNonIndexed() : geo;
+  for (const n of Object.keys(flat.attributes)) if (!['position', 'normal', 'uv'].includes(n)) flat.deleteAttribute(n);
+  const g = mergeVertices(flat, 1e-6);
+  const index = g.getIndex()!;
+  const pos = new Float32Array(g.getAttribute('position').array);
+  const uv = g.getAttribute('uv');
+  const attrs = new Float32Array(uv.count * 2);
+  for (let i = 0; i < uv.count; i++) {
+    attrs[i * 2] = uv.getX(i);
+    attrs[i * 2 + 1] = uv.getY(i);
+  }
+  const target = Math.max(3, Math.floor((index.count * keep) / 3) * 3);
+  // (present in three's meshoptimizer build, missing from its type declarations)
+  const simplifier = MeshoptSimplifier as unknown as { simplifyWithAttributes: (...args: unknown[]) => [Uint32Array, number] };
+  const [indices] = simplifier.simplifyWithAttributes(new Uint32Array(index.array), pos, 3, attrs, 2, [1.5, 1.5], null, target, error);
+  g.setIndex(new THREE.BufferAttribute(indices, 1));
+  // drop the vertices no triangle uses any more
+  return mergeVertices(g.toNonIndexed(), 1e-6);
+}
+
 const boxOf = (geos: THREE.BufferGeometry[]) => {
   const box = new THREE.Box3();
   for (const g of geos) {
@@ -133,6 +171,7 @@ function animatedHub(gltf: Awaited<ReturnType<typeof loadSource>>, nodeName: str
 }
 
 export async function importPropModel(url: string, id: string, cfg: PropImportConfig) {
+  if (cfg.variants) return importVariants(url, id, cfg);
   const re = (p?: string) => (p ? new RegExp(p, 'i') : null);
   const gltf = await loadSource(url);
   const holder = new THREE.Group();
@@ -274,6 +313,156 @@ export async function importPropModel(url: string, id: string, cfg: PropImportCo
 }
 
 /**
+ * Splits parts into `k` plants along X: 1-D k-means of the triangle centres (started at the quantiles),
+ * then any cluster with under 5 % of the triangles (a stray leaf) joins its nearest neighbour.
+ */
+function splitAlongX(parts: Part[], k: number): Part[][] {
+  const tris: { part: Part; t: number; x: number; g: number }[] = [];
+  for (const part of parts) {
+    const flat = part.geo.index ? part.geo.toNonIndexed() : part.geo;
+    part.geo = flat;
+    const pos = flat.getAttribute('position');
+    for (let t = 0; t < pos.count / 3; t++) tris.push({ part, t, x: (pos.getX(t * 3) + pos.getX(t * 3 + 1) + pos.getX(t * 3 + 2)) / 3, g: 0 });
+  }
+  tris.sort((a, b) => a.x - b.x);
+  let centres = Array.from({ length: k }, (_, j) => tris[Math.floor(((j + 0.5) / k) * tris.length)].x);
+  for (let it = 0; it < 30; it++) {
+    for (const e of tris) {
+      let best = 0;
+      for (let j = 1; j < centres.length; j++) if (Math.abs(e.x - centres[j]) < Math.abs(e.x - centres[best])) best = j;
+      e.g = best;
+    }
+    centres = centres.map((c, j) => {
+      const members = tris.filter((e) => e.g === j);
+      return members.length ? members.reduce((sum, e) => sum + e.x, 0) / members.length : c;
+    });
+  }
+  const sizes = centres.map((_, j) => tris.filter((e) => e.g === j).length);
+  for (let j = 0; j < centres.length; j++) {
+    if (sizes[j] >= 0.05 * tris.length || sizes[j] === 0) continue;
+    let to = -1;
+    for (let o = 0; o < centres.length; o++) if (o !== j && sizes[o] >= 0.05 * tris.length && (to < 0 || Math.abs(centres[o] - centres[j]) < Math.abs(centres[to] - centres[j]))) to = o;
+    for (const e of tris) if (e.g === j) e.g = to;
+    sizes[to] += sizes[j];
+    sizes[j] = 0;
+  }
+  const out: Part[][] = [];
+  for (let g = 0; g < centres.length; g++) {
+    if (!sizes[g]) continue;
+    const byPart = new Map<Part, number[]>();
+    for (const e of tris) if (e.g === g) byPart.set(e.part, [...(byPart.get(e.part) ?? []), e.t]);
+    out.push(
+      [...byPart].map(([part, list]) => {
+        const geo = new THREE.BufferGeometry();
+        for (const [n, attr] of Object.entries(part.geo.attributes)) {
+          const a = attr as THREE.BufferAttribute;
+          const arr = new Float32Array(list.length * 3 * a.itemSize);
+          list.forEach((t, j) => {
+            for (let c = 0; c < 3 * a.itemSize; c++) arr[j * 3 * a.itemSize + c] = a.array[t * 3 * a.itemSize + c];
+          });
+          geo.setAttribute(n, new THREE.BufferAttribute(arr, a.itemSize, a.normalized));
+        }
+        return { label: part.label, geo, material: part.material };
+      }),
+    );
+  }
+  return out;
+}
+
+/** Plant sets: one node per variant, each standing at the origin, decimated with UVs kept. */
+async function importVariants(url: string, id: string, cfg: PropImportConfig) {
+  const gltf = await loadSource(url);
+  const holder = new THREE.Group();
+  holder.add(gltf.scene);
+  if (cfg.rotation) holder.rotation.set(cfg.rotation[0], cfg.rotation[1], cfg.rotation[2]);
+  holder.updateMatrixWorld(true);
+  const rx = new RegExp(cfg.variants!, 'i');
+  const dropRe = cfg.drop ? new RegExp(cfg.drop, 'i') : null;
+  const groups = new Map<string, Part[]>();
+  let before = 0;
+  for (const p of collectParts(holder)) {
+    if (dropRe?.test(p.label)) continue;
+    const name = rx.exec(p.label)?.[1];
+    if (!name) continue;
+    before += p.geo.getAttribute('position').count / 3;
+    groups.set(name, [...(groups.get(name) ?? []), p]);
+  }
+  if (!groups.size) throw new Error('no variants matched');
+  if (cfg.splitX && cfg.splitX > 1) {
+    for (const [name, parts] of [...groups]) {
+      groups.delete(name);
+      splitAlongX(parts, cfg.splitX).forEach((list, k) => groups.set(`${name}_${k}`, list));
+    }
+  }
+  const scale = cfg.scale ?? 1;
+  const materials = new Map<THREE.Material, THREE.MeshStandardMaterial>();
+  const materialFor = (m: THREE.Material) => {
+    if (!materials.has(m)) {
+      const c = m.clone() as THREE.MeshStandardMaterial;
+      if (cfg.opaque) {
+        c.alphaTest = 0;
+        c.transparent = false;
+      }
+      c.side = THREE.DoubleSide;
+      materials.set(m, c);
+    }
+    return materials.get(m)!;
+  };
+  const root = new THREE.Group();
+  root.name = `prop-${id}`;
+  const variants: { name: string; tris: number; min: number[]; max: number[] }[] = [];
+  let after = 0;
+  for (const [name, parts] of [...groups].sort(([a], [b]) => a.localeCompare(b))) {
+    if (cfg.simplify) {
+      for (const p of parts) {
+        const tris = (p.geo.index?.count ?? p.geo.getAttribute('position').count) / 3;
+        const keep = Math.min(1, Math.max(cfg.simplify.keep, (cfg.simplify.minTris ?? 0) / tris));
+        if (keep < 1) p.geo = await simplifyTextured(p.geo, keep, cfg.simplify.error ?? 0.01);
+      }
+    }
+    // foot: centre of what touches the ground, lowest point at y = 0
+    const box = boxOf(parts.map((p) => p.geo));
+    const limit = box.min.y + 0.05 * (box.max.y - box.min.y);
+    const foot = new THREE.Box3();
+    const v = new THREE.Vector3();
+    for (const p of parts) {
+      const pos = p.geo.getAttribute('position');
+      for (let i = 0; i < pos.count; i++) if (v.fromBufferAttribute(pos, i).y <= limit) foot.expandByPoint(v);
+    }
+    const c = foot.getCenter(new THREE.Vector3());
+    const m = new THREE.Matrix4().makeScale(scale, scale, scale).multiply(new THREE.Matrix4().makeTranslation(-c.x, -box.min.y, -c.z));
+    const node = new THREE.Group();
+    node.name = `variant_${name}`;
+    const byMat = new Map<THREE.Material, THREE.BufferGeometry[]>();
+    for (const p of parts) {
+      p.geo.applyMatrix4(m);
+      const mat = materialFor(p.material);
+      byMat.set(mat, [...(byMat.get(mat) ?? []), p.geo]);
+    }
+    let tris = 0;
+    for (const [mat, geos] of byMat) {
+      const names = Object.keys(geos[0].attributes).filter((n) => geos.every((g) => g.getAttribute(n)));
+      for (const g of geos) for (const n of Object.keys(g.attributes)) if (!names.includes(n)) g.deleteAttribute(n);
+      const geo = mergeVertices(mergeGeometries(geos.map((g) => (g.index ? g.toNonIndexed() : g)))!, 1e-6);
+      tris += geo.getIndex()!.count / 3;
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.name = `${id}_${name}`;
+      node.add(mesh);
+    }
+    after += tris;
+    const vb = boxOf(node.children.map((o) => (o as THREE.Mesh).geometry));
+    variants.push({ name, tris, min: vb.min.toArray().map((x) => +x.toFixed(3)), max: vb.max.toArray().map((x) => +x.toFixed(3)) });
+    root.add(node);
+  }
+  const all = boxOf(root.children.flatMap((n) => n.children.map((o) => (o as THREE.Mesh).geometry)));
+  root.userData = { prop: { id, anchors: {}, variants, min: all.min.toArray(), max: all.max.toArray() } };
+  const stats = { scale, trisBefore: before, tris: after, variants };
+  const { GLTFExporter } = await import('three/examples/jsm/exporters/GLTFExporter.js');
+  const glb = await new Promise<ArrayBuffer>((resolve, reject) => new GLTFExporter().parse(root, (r) => resolve(r as ArrayBuffer), reject, { binary: true }));
+  return { glb, stats };
+}
+
+/**
  * Dev-only: renders a model from the front (+Z), side (+X) and top, with a 1 m grid and a red marker
  * along +Z, for picking `rotation` / `yaw`. With a config the converted prop is shown instead.
  */
@@ -283,6 +472,15 @@ export async function previewPropModel(url: string, cfg?: PropImportConfig, id =
     const { glb } = await importPropModel(url, id, cfg);
     const gltf = await new GLTFLoader().parseAsync(glb, '');
     object = gltf.scene;
+    // plant sets: variants side by side along X
+    const variants: THREE.Object3D[] = [];
+    object.traverse((o) => o.name.startsWith('variant_') && variants.push(o));
+    let x = 0;
+    for (const v of variants) {
+      const b = new THREE.Box3().setFromObject(v);
+      v.position.x = x - b.min.x;
+      x += b.max.x - b.min.x + 0.2;
+    }
   } else {
     object = (await loadSource(url)).scene;
   }

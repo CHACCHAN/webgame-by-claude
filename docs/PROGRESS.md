@@ -35,11 +35,43 @@ Newest first. "Verified" means actually executed in this environment; anything e
   ≥ 7.15 m on all courses (was ≥ 6.2 m); screenshots (low quality) of every prop on every course at night, and
   天狼 again at dawn after the fixes (lamp lenses and vending displays dark by day, white turbines — their rotor instances turn ~0.9 rad/s about a fixed hub, read back in the browser —,
   summit vending machines facing the road). vitest 31/31.
-- Draw calls / triangles (headless, low quality, night, the same 8 views along each course, before → after):
-  朧峠 409 → 132 calls (1.75 M → 1.57 M tris), 霧降湖 210 → 111 (1.40 M → 1.27 M), 天狼 624 → 186 (1.58 M → 1.41 M);
-  separate (non-instanced) scenery meshes on 朧峠 707 → 95. Mostly the curve-mirror fix above; the imported props
-  themselves are instanced (one draw call per part and prop type).
+- Draw calls / triangles (headless, low quality, night, the same 8 views along each course, smallest of 3
+  samples per view — `tools/perf-views.cjs`; a first measurement with single samples was inflated by samples that
+  spanned two frames and is superseded): before → with the props
+  朧峠 305 → 131 calls (1.54 M → 1.57 M tris), 霧降湖 160 → 111 (1.24 M → 1.27 M), 天狼 498 → 171 (1.26 M → 1.26 M);
+  separate (non-instanced) scenery meshes on 朧峠 707 → 95. The drop is the curve-mirror fix above; the imported
+  props are instanced (one draw call per part and prop type) and add ~1–3 % triangles.
+- E2E on the Docker stack (props commit `c21e237`): 8 passed, the 3-player online race **flaky** — its first
+  attempt timed out waiting for the third page's title screen (180 s) while I was running a headless model import
+  on the same machine; it passed on the retry, and again on its own with `--retries=0` (12.3 min). Boot time
+  measured without other load (3 runs each, low): 22.1–22.4 s before, 22.6–24.2 s with the props.
 - Not verified: look and performance on a real GPU (owner).
+
+### Vegetation (6 Poly Haven plant sets, CC0) — in progress, handed over to a local session
+- Delivered by the owner: Shrub 02, Shrub 04, Fern 02, Grass Medium 01, Weed Plant 02, Nettle Plant (glTF, 1K).
+  Leaves are real geometry (the "alpha cutout" colour maps have no alpha), 6–31 k triangles per set.
+- Importer: `variants` (one GLB per set, one node per plant standing at the origin), `splitX` (Shrub 04 is four
+  plants in one mesh: 1-D k-means along X), `simplify` = UV/normal-preserving decimation
+  (meshoptimizer simplifyWithAttributes; vertices are only dropped, never moved) with `minTris`, `opaque`.
+  Result per set: Shrub 02 27 k → 3.6 k tris (4 plants), Shrub 04 27 k → 1.4 k (4), Fern 02 6.2 k → 1.9 k (4),
+  Grass 23 k → 3.3 k (9 tufts), Weed 11 k → 1.3 k (5), Nettle 27 k → 1.6 k (4); ~690 KB of GLBs.
+- Runtime `render/Vegetation.ts`: instances in 40 m cells; one InstancedMesh per plant part holding only the cells
+  round the camera, refilled when the camera changes cell (draw calls = number of plant parts, ~30). Bushes from
+  the clutter pass become shrub models near the camera and stay the old lumps further out; grass / weeds / nettles
+  in a dense verge strip (0.9–3.7 m beyond the road wall) and grass / ferns / nettles on the slopes behind
+  (to ~22 m); none under the rock shed roof, in water, on the summit start area, in the shrine / bus-stop
+  clearings, nearer another road leg, or on slopes steeper than 1.5. No shadow casting (the shadow pass would draw
+  every plant again; the old lump bushes did not cast either). Near radius: bushes 2 cells from medium up,
+  low plants 1 cell (2 on high / ultra — this last change was not measured, the session was interrupted).
+- Verified: unit test (plants never on the asphalt / shoulder of any road leg, near fields only round the camera,
+  far lumps only outside), vitest 32/32. Triangles (same views, smallest of 3): low 朧峠 1.57 → 1.73 M,
+  霧降湖 1.27 → 1.41 M, 天狼 1.26 → 1.43 M (+26–29 draw calls); high (before the plant radius 2 change, with
+  shadows): 朧峠 3.10 → 3.56 M, 天狼 3.31 → 3.86 M. A first version had shrubs cast shadows and all plants at
+  radius 2: +1.7 M at high, hence the changes above.
+- Not done / not verified: the look is **not finished** — at medium on SwiftShader the verges and cuttings still
+  read sparse and dark at dawn (screenshots only; 120–180 grass tufts within 30 m of the road). The owner wants
+  high quality as the target and moves development to their PC (Radeon RX 5700 XT) to tune it on a real GPU.
+  Not E2E-tested with the plants yet.
 
 ## Session 3 (2026-11-01) — owner playtest on a real GPU (60 fps, Cloudflare tunnel)
 

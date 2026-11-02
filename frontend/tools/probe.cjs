@@ -3,7 +3,8 @@
 //   node tools/probe.cjs <low|medium|high> <absolute path to script.cjs> [width] [height]
 // The script exports `async (page, { fps, out }) => {}`; `window.__game` is the Game instance.
 // Env: URL (default http://localhost:4173/, e.g. add ?timescale=8), OUT (screenshot folder, default
-// tools/scratch — gitignored), PW_MODULE (playwright module path if `require('playwright')` fails).
+// tools/scratch — gitignored), PW_MODULE (playwright module path if `require('playwright')` fails),
+// PW_GPU=1 (render on the real GPU in a visible window instead of SwiftShader).
 // SwiftShader runs at ~1–6 fps: for logic-only checks set `window.__game.renderer.render = () => {}`.
 const { chromium } = require(process.env.PW_MODULE || 'playwright');
 const fs = require('fs');
@@ -14,7 +15,11 @@ const path = require('path');
   if (!scriptPath) throw new Error('usage: node tools/probe.cjs <quality> <script.cjs> [w] [h]');
   const out = path.resolve(process.env.OUT || 'tools/scratch');
   fs.mkdirSync(out, { recursive: true });
-  const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
+  // PW_GPU=1 (a machine with a real GPU, e.g. the owner's PC): a visible browser window on the GPU, so frame
+  // times are real. Default: headless with SwiftShader software rendering (cloud containers, ~1–6 fps).
+  const browser = process.env.PW_GPU
+    ? await chromium.launch({ headless: false, args: ['--ignore-gpu-blocklist', '--enable-gpu-rasterization'] })
+    : await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
   const page = await browser.newPage({ viewport: { width: +w, height: +h } });
   const logs = [];
   page.on('console', (m) => logs.push(`[${m.type()}] ${m.text()}`));

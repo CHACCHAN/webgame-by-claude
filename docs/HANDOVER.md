@@ -1,14 +1,32 @@
-# 引き継ぎ書（2026-11-02 時点）
+# 引き継ぎ書（2026-11-02 時点、セッション 4 → ローカルセッション）
 
 次のセッションはまずこのファイル、次に `CLAUDE.md`（構成・コマンド・注意点）、`docs/PROGRESS.md`（作業ログ。検証済み／未検証を区別して記録）を読むこと。
 素材の出典・ライセンスは `docs/ASSETS.md`、設計は `docs/PLAN.md`。
+
+## 0. 次のセッションでまずやること（オーナーの PC、GPU: Radeon RX 5700 XT）
+オーナーの依頼で、ここから先はオーナーのローカル PC で開発する（クラウドには GPU が無く、ソフトウェア描画で
+1〜6fps しか出ないため、高品質の見た目と fps を確かめられなかった）。**高品質（high）で動くことが前提**。
+1. ブランチ `ccr-aed90fb5-j1rhzm` を取得し、`cd frontend && npm ci && npx tsc -b && npx vite build && npx vitest run`（32 件）。
+2. **植物（草・茂み・シダ）の仕上げ**（セッション 4 の途中で中断。コミット済みで動くが、見た目は未完成）:
+   - `render/Vegetation.ts` を high で実機確認する。クラウドの medium のスクリーンショットでは、道路脇や切り土の斜面が
+     まだ「まばらで暗い」。調整できるところ: 2 つの配置パスの本数（`passes` の count・from・span）、種類の比率、
+     大きさ（`sc`）、色味（`tint`）、表示範囲（`plantRadius` / `bushRadius`、1 セル = 40m）、斜面の上限（`steep > 1.5`
+     は除外。急な切り土に生えない原因）。
+   - 最後の変更（high で草の表示範囲を 2 セルに広げた）はポリゴン数をまだ測っていない。
+   - 植物を入れた状態の E2E は未実施。
+3. **実 GPU での fps 計測**（high）: `vite preview` を起動し、
+   `PW_GPU=1 FPS=1 node tools/probe.cjs high $PWD/tools/perf-views.cjs`（3 コース × 8 地点のドローコール・ポリゴン数・fps）。
+   ゲーム内の設定「FPS表示」でも見られる。目標は 1080p / 60fps。
+4. 結果を PROGRESS に「検証済み」「未検証」を分けて書く。
 
 ## 1. 現在の状態
 - ブランチ: `ccr-aed90fb5-j1rhzm`（セッション 4 の作業ブランチ。セッションごとに指定されるので、そのセッションの指示に従う。
   オーナーの明示依頼がない限り PR は作らない）。
 - テスト結果:
-  - フロント単体テスト（vitest）: 31/31（セッション 4、背景モデル追加後）
-  - E2E（Playwright、Docker 上）: セッション 4 で実行中（9 件中 5 件成功の時点。完了後に記入）
+  - フロント単体テスト（vitest）: 32/32（セッション 4 の最終状態、植物込み）
+  - E2E（Playwright、Docker 上、背景モデルのコミット `c21e237` 時点。植物はまだ入っていない）: 8 件成功、
+    オンライン 3 人対戦が 1 回目だけ失敗（3 人目の画面がタイトルまで 180 秒以内に来なかった。同じマシンで
+    別のヘッドレス処理を動かしていた時間帯）→ 再試行で成功。単独で再試行なし（`--retries=0`）でも成功（12.3 分）。
   - バックエンド（`php artisan test`）: 13/13（2026-11-02 に実行。セッション 4 ではバックエンドを変更していないので再実行していない）
 - 遊べる内容:
   - コース 3 本: 朧峠、霧降湖、天狼スカイライン
@@ -18,13 +36,16 @@
   - モード: タイムアタック、AI ライバル戦、ゴーストバトル、オンライン対戦（最大 3 人）
   - 背景の 3D モデル 9 種（Sketchfab、CC BY）: 街灯（ナトリウム灯・LED 灯）、風力発電機、カーブミラー、自販機、
     鳥居と石灯籠（各コースに祠を 1 か所）、バス停（各コース 1 か所）、コーン（スタート・ゴール付近）
+  - 植物 6 種（Poly Haven、CC0）: 茂み 2 種、シダ、草、雑草 2 種（仕上げ中。0. を参照）
   - Laravel 側: ランキング、ゴースト、対戦ルーム
 - オーナーは実 GPU（60fps）で遊んでおり、Cloudflare Tunnel で公開済み（オーナー自身が設定）。
 
 ## 2. オーナーからの制約（必ず守る）
 - **作業環境**
-  - 作業は Claude Code のクラウドセッション内だけで行う。オーナーのローカル PC には接続しない。
-  - ローカルの Unity・Blender・GPU サーバーに依存しない。
+  - 2026-11-02、オーナーの判断で開発をオーナーのローカル PC（Radeon RX 5700 XT）に移す。以前の「クラウドセッション内
+    だけで行う・ローカル PC に接続しない」はこれで解除。
+  - ローカルの Unity・Blender に依存しない。GPU は見た目と fps の確認に使い、ビルドや素材変換の手順は GPU なしでも
+    再現できる形（Docker / Node / ヘッドレス Chromium）を保つ。
   - Docker は必須。
 - **お金・秘密情報**
   - 有料の外部 API・有料クラウドは使わない／登録しない。
@@ -53,13 +74,7 @@
      - 夜にリトラが開き、明け方に閉じること
      - テールランプ（夜はブレーキなしでも点灯）
      - ランプ素材が車の前後端だけにあること
-   - 背景用の 3D 素材 9 点はセッション 4 で受け取り、すべてゲームに入れた。
-2. **植物（草・茂み・シダ）のモデル**（セッション 4 で依頼。ASSETS.md「Still requested」に URL）
-   - Poly Haven（CC0）の Grass Medium 01、Fern 02、Shrub 02、Shrub 04、Weed Plant 02（任意で Nettle Plant）。glTF・1K で依頼。
-   - 今の茂みと岩は自作の塊（`TrackScenery.buildClutter`、最大 9000×密度 個のインスタンス）。差し替えるときは
-     ポリゴン数を抑える（間引き・距離での切り替え）。草は新規に道路脇と斜面へ散らす。
-   - セッション 4 はネットワーク設定で Sketchfab / Poly Haven の API に届かず、候補は Web 検索で選んだだけ。
-     ポリゴン数・サイズは届いてから確認する。
+   - 背景用の 3D 素材 9 点と植物 6 点はセッション 4 で受け取り、すべてゲームに入れた（残りの依頼はハチロクだけ）。
 
 ## 4. 実機でしか確かめられない未確認事項（オーナーの確認待ち）
 - **光の近くの画面チカチカ**
@@ -71,12 +86,14 @@
 - **アフターファイアの出方**
   - 実際の運転での頻度・見え方は未確認。
   - 静止状態で 60fps を模擬したスクリーンショットでのみ確認済み。
-- **背景モデルの見た目**
-  - 確認はソフトウェア描画（low 品質）のスクリーンショットだけ。実 GPU での質感（カーブミラーの映り込み、街灯レンズの光り方、
-    風車の回転の見え方）は未確認。
-- 実 GPU での性能計測（フレーム時間、影、ドローコール）は未実施。
-  - ヘッドレスでの数え上げでは、ドローコールが平均で 朧峠 409→132、霧降湖 210→111、天狼 624→186 に減った
-    （主にカーブミラーの重複を直した効果。PROGRESS セッション 4）。
+- **背景モデル・植物の見た目**
+  - 確認はソフトウェア描画（low / medium）のスクリーンショットだけ。実 GPU での質感（カーブミラーの映り込み、
+    街灯レンズの光り方、風車の回転、植物の密度と色）は未確認。
+- 実 GPU での性能計測（フレーム時間、影、ドローコール）は未実施（0. の 3）。
+  - ヘッドレスでの数え上げ（low、8 地点、3 回の最小値）: ドローコール 朧峠 305→131→158、霧降湖 160→111→137、
+    天狼 498→171→200（セッション前 → 背景モデル → 植物込み）。ポリゴン数は背景モデルでほぼ変わらず、植物で +11〜14%。
+    high では 朧峠 3.10M→3.56M、天狼 3.31M→3.86M（植物込み、草の表示範囲を広げる前）。
+  - 一度目の計測は 2 フレーム分をまとめて数えたサンプルがあり数字が大きすぎた（409→132 など）。PROGRESS で訂正済み。
   - PROGRESS の「lamp posts are individual meshes」は古い記述だった（街灯は前から InstancedMesh）。訂正済み。
 
 ## 5. 既知の小さな課題・次の候補
@@ -93,12 +110,20 @@
   - 祠（鳥居＋石灯籠）とバス停の場所は自動で選ぶ（`track/propSites.ts`。直線の山側で、ガードレール・カーブ・洞門・橋・
     他の区間から離れた、いちばん平らな所）。場所を変えたい・数を増やしたいときはここを調整する。
   - 自販機のモデルは 1 デザインだけ（3 台とも同じ見た目）。石灯籠は夜も灯らない。
-  - 変換元の glTF は Git に入れていない（約 33MB）。取り込み直すときは Sketchfab から再取得してもらう（ASSETS.md に URL）。
+  - 変換元の glTF は Git に入れていない（背景約 33MB、植物約 10MB）。取り込み直すときは元の zip を
+    `tools/prop-import.json` の `dir` と同じ名前のフォルダに展開し、その親フォルダを `<展開先>` に渡す
+    （例: `street_light/scene.gltf`、`shrub_02_1k/shrub_02_1k.gltf`）。zip が無ければ ASSETS.md の URL から再取得。
 - **その他**
   - 朧峠のキービジュアルの車が実在車に似ている（公開前に差し替え推奨）。
   - タッチ操作は未対応。
 
 ## 6. 最近の主な変更（新しい順。詳細は PROGRESS「Session 4」「Session 3」）
+
+### 植物（セッション 4、仕上げ途中）
+- 取り込みツールに植物セット用の機能を追加: `variants`（1 株ずつ別ノード）、`splitX`（1 メッシュに並んだ株を分割）、
+  `simplify`（UV を保ったまま間引く）、`opaque`。6 セットで計 30 株、合計 約 690KB。
+- `render/Vegetation.ts`: 40m の区画ごとに植物を持ち、カメラの周りの区画だけを InstancedMesh に詰め直す。
+  茂みは近くが実物モデル、遠くは従来の塊。草・雑草は道路脇の帯に密に、草・シダは斜面に。影は落とさない。
 
 ### 背景の 3D モデル（セッション 4）
 - 小物の取り込みツールを新規作成: `tools/import-props.cjs`、`tools/prop-import.json`、`render/propImport.ts`
@@ -147,7 +172,19 @@
   - ゴール後は路肩に停車する。
 - 検証用ツール: `tools/sim-duel.ts`。
 
-## 7. 環境の立ち上げ（クラウドコンテナは毎回まっさら）
+## 7. 環境の立ち上げ
+### ローカル（オーナーの PC）
+```bash
+git fetch origin ccr-aed90fb5-j1rhzm && git checkout ccr-aed90fb5-j1rhzm
+cd frontend && npm ci && npx tsc -b && npx vite build && npx vitest run
+npx vite preview --port 4173 --strictPort        # 別ターミナル。ブラウザで http://localhost:4173（設定で品質 high）
+npx playwright install chromium                   # ローカルなら可（クラウドではしないこと）
+PW_GPU=1 FPS=1 node tools/probe.cjs high $PWD/tools/perf-views.cjs   # 実 GPU で計測（ウィンドウが開く）
+docker compose up -d --build && docker compose --profile test run --rm e2e   # E2E（docker/certs は空のままでよい）
+```
+- E2E や重い計測を同時に走らせない（セッション 4 で CPU の取り合いによりオンライン対戦の E2E が一度タイムアウトした）。
+
+### クラウドコンテナ（毎回まっさら）
 ```bash
 # Docker（E2E とスタック起動に必要）
 nohup dockerd > /tmp/dockerd.log 2>&1 &
@@ -199,7 +236,9 @@ nohup npx vite preview --port 4173 --strictPort > /tmp/preview.log 2>&1 &   # �
 | 背景（街灯、ガードレール、洞門、橋、標識、小物の配置） | `frontend/src/game/render/TrackScenery.ts` |
 | 背景モデルの読み込み・インスタンス化・クレジット | `frontend/src/game/render/propAssets.ts` |
 | 祠・バス停の場所選びと地面ならし | `frontend/src/game/track/propSites.ts` |
-| 背景モデルの取り込み | `frontend/tools/import-props.cjs`, `prop-import.json`, `src/game/render/propImport.ts` |
+| 背景モデル・植物の取り込み | `frontend/tools/import-props.cjs`, `prop-import.json`, `src/game/render/propImport.ts` |
+| 植物の配置（区画ごとのインスタンス、近く／遠くの切り替え） | `frontend/src/game/render/Vegetation.ts` |
+| 描画負荷の計測（8 地点のドローコール・ポリゴン数・fps） | `frontend/tools/perf-views.cjs`（`tools/probe.cjs` で実行） |
 | AI（追突回避・ライン防御・停車） | `frontend/src/game/ai/AIDriver.ts` |
 | オンラインの相手車（代役の車体） | `frontend/src/game/net/RemoteRacers.ts`, `ProxyCar.ts` |
 | 排気・タイヤスモーク | `frontend/src/game/fx/Exhaust.ts`, `TireEffects.ts` |

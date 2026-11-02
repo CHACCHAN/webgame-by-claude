@@ -111,3 +111,64 @@ describe('prop models', () => {
     expect(tip.z).toBeCloseTo(2, 5);
   });
 });
+
+describe('vegetation', () => {
+  it('keeps plants off the road and fills only the cells round the camera', async () => {
+    const { registerPropTemplate } = await import('../render/propAssets');
+    const { buildVegetation } = await import('../render/Vegetation');
+    // stand-in plant sets: one small box per variant
+    const set = (id: string, names: string[]) => {
+      const root = new THREE.Group();
+      root.userData.prop = { id, anchors: {}, min: [0, 0, 0], max: [1, 1, 1] };
+      for (const n of names) {
+        const v = new THREE.Group();
+        v.name = `variant_${n}`;
+        v.add(new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.6, 0.4).translate(0, 0.3, 0), new THREE.MeshStandardMaterial()));
+        root.add(v);
+      }
+      registerPropTemplate(id as never, root);
+    };
+    set('shrub_02', ['a', 'b']);
+    set('grass_medium_01', ['mid_a', 'tall_a']);
+    set('fern_02', ['a']);
+    set('nettle_plant', ['tall_a']);
+    set('weed_plant_02', ['a']);
+    const course = COURSES['oboro-downhill'];
+    const track = new Track(course.design);
+    const terrain = buildTerrain(track, course.landform);
+    const sides = classifySides(track, terrain);
+    const bushes = [300, 900, 1500].map((s) => ({ matrix: new THREE.Matrix4().makeTranslation(track.pointAt(s, 12)), color: new THREE.Color(1, 1, 1) }));
+    const veg = buildVegetation(track, terrain, sides, {
+      density: 1,
+      clearings: [],
+      bushes,
+      farBush: { geometry: new THREE.BoxGeometry(), material: new THREE.MeshStandardMaterial() },
+    })!;
+    const counts = veg.counts();
+    expect(counts.shrub).toBe(3);
+    expect(counts.grass).toBeGreaterThan(3000);
+    expect(counts.fern).toBeGreaterThan(300);
+    const cam = track.pointAt(900, 0);
+    veg.update(cam);
+    const m = new THREE.Matrix4(), p = new THREE.Vector3();
+    let near = 0;
+    for (const mesh of veg.group.children as THREE.InstancedMesh[]) {
+      for (let i = 0; i < mesh.count; i++) {
+        mesh.getMatrixAt(i, m);
+        p.setFromMatrixPosition(m);
+        const d = Math.hypot(p.x - cam.x, p.z - cam.z);
+        if (mesh.name === 'bush-lump') {
+          expect(d).toBeGreaterThan(40);
+          continue;
+        }
+        near++;
+        // within the 5 × 5 cells (40 m) round the camera's cell
+        expect(d).toBeLessThan(40 * 3 * Math.SQRT2);
+        // not on the asphalt or the shoulder of any road leg
+        const proj = track.project(p.x, p.y, p.z);
+        expect(Math.abs(proj.lateral)).toBeGreaterThan(track.width[Math.round(proj.s)] / 2 + SHOULDER + 0.5);
+      }
+    }
+    expect(near).toBeGreaterThan(200);
+  });
+});

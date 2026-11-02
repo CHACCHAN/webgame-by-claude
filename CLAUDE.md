@@ -23,6 +23,13 @@ pending. `docs/PLAN.md` holds the design.
 - Headless driving sim: `cd frontend && npx tsx tools/sim-run.ts [cars] [levels]`
 - E2E: `docker compose --profile test run --rm e2e` (stack must be up)
 
+## Environment notes (local sessions on the owner's PC)
+- From 2026-11-02 development continues on the owner's PC (AMD Radeon RX 5700 XT) at the owner's request: tune
+  looks and measure frame rates at **high** quality on the real GPU. Browser checks on the GPU:
+  `PW_GPU=1 node tools/probe.cjs high <script.cjs>` (visible window), frame rates with `FPS=1` and
+  `tools/perf-views.cjs`. A normal `npx playwright install chromium` is fine locally. Keep the build and asset steps
+  reproducible without the GPU (Docker / Node / headless Chromium), as the cloud notes below describe.
+
 ## Environment notes (cloud sessions)
 - dockerd is not running by default: `nohup dockerd > /tmp/dockerd.log 2>&1 &`.
   Docker Hub rate-limits: `/etc/docker/daemon.json` → `{"registry-mirrors":["https://mirror.gcr.io"]}`.
@@ -56,6 +63,9 @@ pending. `docs/PLAN.md` holds the design.
   = +Z = towards the road) and `node tools/import-props.cjs import <srcRoot> [ids]`, settings in `tools/prop-import.json`
   (`yaw`, `height`/`scale`, `pivot` incl. `@base`, `roles` lamp/glow, `rotor`, `anchors`, `select` one model of a pack).
   Prop metadata (anchors, rotor pose, bounds) is stored in the root node's glTF extras. Lamp light = `anchors.light`.
+  Plants (Poly Haven sets: `variants` = one node per plant, UV-preserving `simplify`) are placed by `render/Vegetation.ts`:
+  40 m cells, one InstancedMesh per plant part refilled from the cells round the camera (bushes: shrub models near,
+  procedural lumps far). Tune counts / radii / scales there; no plant shadows by design (cost).
   The shrine and the bus stop stand on sites from `track/propSites.ts` (straight mountain-side ground, terrain levelled
   to the road bed in `buildScenery` before the terrain mesh is built); trees/clutter keep clear of them.
 - Courses live in `track/courses.ts` (design + `Landform` from `track/landforms.ts` + rivals, medals, music, art).

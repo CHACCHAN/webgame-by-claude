@@ -20,6 +20,7 @@ const wanted = (shots ? rest[1] : rest[0])?.split(',') ?? Object.keys(props).fil
 
 // the source files are served with CORS so the game page can load them
 const types = { '.gltf': 'model/gltf+json', '.bin': 'application/octet-stream', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg' };
+// (a prop's `file` overrides scene.gltf, e.g. Poly Haven's <name>_1k.gltf)
 const root = path.resolve(srcRoot);
 const server = http.createServer((req, res) => {
   const file = path.join(root, decodeURIComponent(new URL(req.url, 'http://x').pathname));
@@ -44,7 +45,7 @@ const server = http.createServer((req, res) => {
   for (const id of wanted) {
     const prop = props[id];
     if (!prop) throw new Error(`unknown prop ${id}`);
-    const url = `http://localhost:8098/${prop.dir}/scene.gltf`;
+    const url = `http://localhost:8098/${prop.dir}/${prop.file ?? 'scene.gltf'}`;
     if (shots) {
       const out = rest[0];
       fs.mkdirSync(out, { recursive: true });

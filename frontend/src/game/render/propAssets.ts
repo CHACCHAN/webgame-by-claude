@@ -9,10 +9,14 @@ import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.j
  *
  * Prop space: metres, ground at y = 0, origin at the foot, front towards +Z (a lamp's arm along −X).
  */
-export const PROP_IDS = ['street_light', 'led_light', 'wind_turbine', 'curve_mirror', 'vending', 'torii', 'lantern', 'bus_stop', 'cone'] as const;
+export const PROP_IDS = [
+  'street_light', 'led_light', 'wind_turbine', 'curve_mirror', 'vending', 'torii', 'lantern', 'bus_stop', 'cone',
+  // plant sets (Poly Haven): one variant per plant, see render/Vegetation.ts
+  'shrub_02', 'shrub_04', 'fern_02', 'grass_medium_01', 'weed_plant_02', 'nettle_plant',
+] as const;
 export type PropId = (typeof PROP_IDS)[number];
 
-/** Attribution of the scenery models (CC BY 4.0, Sketchfab): shown in the settings screen, see docs/ASSETS.md. */
+/** Attribution of the scenery models (Sketchfab CC BY 4.0, Poly Haven CC0): shown in the settings screen, see docs/ASSETS.md. */
 export const PROP_CREDITS: { use: string; title: string; author: string; url: string; license: string }[] = [
   { use: '街灯', title: 'Street Light', author: 'KloWorks', url: 'https://sketchfab.com/3d-models/street-light-2d44b333f56c4faaab1bd2007868cc37', license: 'CC BY 4.0' },
   { use: '街灯（LED）', title: 'Various Low-Poly Street Lights', author: 'KMB3D', url: 'https://sketchfab.com/3d-models/various-low-poly-street-lights-1173b0c4d9b0400bbeaafbee0e94ca59', license: 'CC BY 4.0' },
@@ -23,6 +27,13 @@ export const PROP_CREDITS: { use: string; title: string; author: string; url: st
   { use: '石灯籠', title: 'Stone Lantern', author: 'Jamie McFarlane', url: 'https://sketchfab.com/3d-models/stone-lantern-4e674d91b33a450781aebd9c490b0f05', license: 'CC BY 4.0' },
   { use: 'バス停', title: 'Kyoto Cityscene: Bus Stop', author: 'Mikail Karaca', url: 'https://sketchfab.com/3d-models/kyoto-cityscene-bus-stop-5eb07fc3b28f474dbf15b1bbac814c82', license: 'CC BY 4.0' },
   { use: 'コーン', title: 'Traffic Cone', author: 'Jamie McFarlane', url: 'https://sketchfab.com/3d-models/traffic-cone-66b282e65d3b4da8a883ae8579bfb33c', license: 'CC BY 4.0' },
+  // plants: CC0 (no attribution required, credited anyway)
+  { use: '茂み', title: 'Shrub 02', author: 'Poly Haven', url: 'https://polyhaven.com/a/shrub_02', license: 'CC0' },
+  { use: '茂み', title: 'Shrub 04', author: 'Poly Haven', url: 'https://polyhaven.com/a/shrub_04', license: 'CC0' },
+  { use: 'シダ', title: 'Fern 02', author: 'Poly Haven', url: 'https://polyhaven.com/a/fern_02', license: 'CC0' },
+  { use: '草', title: 'Grass Medium 01', author: 'Poly Haven', url: 'https://polyhaven.com/a/grass_medium_01', license: 'CC0' },
+  { use: '雑草', title: 'Weed Plant 02', author: 'Poly Haven', url: 'https://polyhaven.com/a/weed_plant_02', license: 'CC0' },
+  { use: '雑草', title: 'Nettle Plant', author: 'Poly Haven', url: 'https://polyhaven.com/a/nettle_plant', license: 'CC0' },
 ];
 
 export interface PropPart {
@@ -41,6 +52,8 @@ export interface PropTemplate {
   anchors: Record<string, THREE.Vector3>;
   min: THREE.Vector3;
   max: THREE.Vector3;
+  /** plant sets: each variant stands at the origin (its parts are not in `parts`) */
+  variants?: { name: string; parts: PropPart[] }[];
 }
 
 const templates = new Map<PropId, PropTemplate>();
@@ -79,11 +92,15 @@ export function registerPropTemplate(id: PropId, scene: THREE.Object3D) {
   const rotorNode = r.getObjectByName('rotor') ?? null;
   const toRotor = rotorNode ? rotorNode.matrixWorld.clone().invert() : null;
   const parts: PropPart[] = [], rotorParts: PropPart[] = [];
+  const variants = new Map<string, PropPart[]>();
   r.traverse((o) => {
     const mesh = o as THREE.Mesh;
     if (!mesh.isMesh) return;
-    let inRotor = false;
-    for (let p: THREE.Object3D | null = mesh; p && p !== r; p = p.parent) if (p === rotorNode) inRotor = true;
+    let inRotor = false, variant: string | null = null;
+    for (let p: THREE.Object3D | null = mesh; p && p !== r; p = p.parent) {
+      if (p === rotorNode) inRotor = true;
+      if (p.name.startsWith('variant_')) variant = p.name.slice(8);
+    }
     const material = mesh.material as THREE.MeshStandardMaterial;
     for (const v of Object.values(material)) if (v instanceof THREE.Texture) v.userData.sharedAsset = true;
     const role = ['lamp', 'glow'].includes(material.name) ? material.name : undefined;
@@ -95,12 +112,14 @@ export function registerPropTemplate(id: PropId, scene: THREE.Object3D) {
       for (let i = 0; i < pos.count; i++) r2 = Math.max(r2, pos.getX(i) ** 2 + pos.getY(i) ** 2 + pos.getZ(i) ** 2);
       geometry.boundingSphere = new THREE.Sphere(new THREE.Vector3(), Math.sqrt(r2));
     }
-    (inRotor ? rotorParts : parts).push({ geometry, material, role });
+    if (variant) variants.set(variant, [...(variants.get(variant) ?? []), { geometry, material, role }]);
+    else (inRotor ? rotorParts : parts).push({ geometry, material, role });
   });
   const meta = r.userData.prop as { anchors: Record<string, number[]>; min: number[]; max: number[]; rotor?: { position: number[]; quaternion: number[] } };
   const anchors: Record<string, THREE.Vector3> = {};
   for (const [k, v] of Object.entries(meta.anchors ?? {})) anchors[k] = new THREE.Vector3().fromArray(v);
   const t: PropTemplate = { id, parts, anchors, min: new THREE.Vector3().fromArray(meta.min), max: new THREE.Vector3().fromArray(meta.max) };
+  if (variants.size) t.variants = [...variants].sort(([a], [b]) => a.localeCompare(b)).map(([name, list]) => ({ name, parts: list }));
   if (rotorNode && rotorParts.length) {
     t.rotor = { parts: rotorParts, matrix: new THREE.Matrix4().multiplyMatrices(toRoot, rotorNode.matrixWorld) };
   }

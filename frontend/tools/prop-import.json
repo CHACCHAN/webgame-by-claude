@@ -140,5 +140,93 @@
     "config": {
       "height": 0.7
     }
+  },
+  "_doc_plants": "Plants (Poly Haven, CC0): one GLB per set, `variants` = one node per plant with its foot at the origin; srcRoot for these is the folder of the unpacked Poly Haven zips.",
+  "shrub_02": {
+    "dir": "shrub_02_1k",
+    "file": "shrub_02_1k.gltf",
+    "textureSize": 512,
+    "config": {
+      "variants": "(shrub_02_[a-d])",
+      "scale": 0.9,
+      "opaque": true,
+      "simplify": {
+        "keep": 0.14,
+        "error": 0.02
+      }
+    }
+  },
+  "shrub_04": {
+    "dir": "shrub_04_1k",
+    "file": "shrub_04_1k.gltf",
+    "textureSize": 512,
+    "config": {
+      "variants": "(shrub_04)",
+      "scale": 4,
+      "opaque": true,
+      "simplify": {
+        "keep": 0.05,
+        "error": 0.02,
+        "minTris": 300
+      },
+      "splitX": 4
+    }
+  },
+  "fern_02": {
+    "dir": "fern_02_1k",
+    "file": "fern_02_1k.gltf",
+    "textureSize": 512,
+    "config": {
+      "variants": "(fern_02_[a-d])",
+      "scale": 2.2,
+      "opaque": true,
+      "simplify": {
+        "keep": 0.3,
+        "error": 0.02
+      }
+    }
+  },
+  "grass_medium_01": {
+    "dir": "grass_medium_01_1k",
+    "file": "grass_medium_01_1k.gltf",
+    "textureSize": 512,
+    "config": {
+      "variants": "(grass_medium_01_(?:mid|large|tall)_[a-c])",
+      "scale": 2.6,
+      "opaque": true,
+      "simplify": {
+        "keep": 0.1,
+        "error": 0.02,
+        "minTris": 180
+      }
+    }
+  },
+  "weed_plant_02": {
+    "dir": "weed_plant_02_1k",
+    "file": "weed_plant_02_1k.gltf",
+    "textureSize": 512,
+    "config": {
+      "variants": "(weed_plant_02_[a-e])",
+      "scale": 3.5,
+      "opaque": true,
+      "simplify": {
+        "keep": 0.12,
+        "error": 0.02
+      }
+    }
+  },
+  "nettle_plant": {
+    "dir": "nettle_plant_1k",
+    "file": "nettle_plant_1k.gltf",
+    "textureSize": 512,
+    "config": {
+      "variants": "(nettle_plant_(?:tall|medium)_[ab])",
+      "scale": 4,
+      "opaque": true,
+      "simplify": {
+        "keep": 0.06,
+        "error": 0.02
+      }
+    }
   }
 }

@@ -87,7 +87,7 @@ export function SettingsScreen() {
           <ul>
             {PROP_CREDITS.map((c) => (
               <li key={c.url}>
-                {c.use}: “<a href={c.url} target="_blank" rel="noreferrer">{c.title}</a>” by {c.author} ({c.license}, Sketchfab、ゲーム用に変換)
+                {c.use}: “<a href={c.url} target="_blank" rel="noreferrer">{c.title}</a>” by {c.author} ({c.license}{c.url.includes('sketchfab') ? ', Sketchfab' : ''}、ゲーム用に変換)
               </li>
             ))}
           </ul>
