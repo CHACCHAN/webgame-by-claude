@@ -153,6 +153,20 @@ In the style of 90s arcade racing games. No vocals.
 
 ---
 
+## 第 3 弾：Suno Pro で全音源を作り直し（2026-11-02 依頼）
+オーナーが Suno Pro を契約。BGM はオーナーの好みのフレンチコア／アップテンポハードコア／スピードコア寄りで作り直し、
+効果音とジングルは Suno の Sound モードで作る。ファイルは `~/Downloads/suno/` にまとめて置いてもらう。
+
+- BGM（Custom モード、Instrumental オン、Style と Exclude Styles に下記を貼る）。既存名の 6 本は置けばそのまま差し替わる。
+  新しい名前の曲は、鳴らす場面の配線をこちらで行う。ループ点はこちらで測る（イントロ・フェードがあっても可）。
+  `bgm_menu` `bgm_race`（朧峠）`bgm_race_kirifuri` `bgm_race_tenrou` `bgm_race_rain` `bgm_race_dawn` `bgm_rival` `bgm_ghost`
+  `bgm_garage` `bgm_results` `bgm_online`
+- ジングル（Sound モード、ワンショット）: `jingle_finish` `jingle_lose` `jingle_medal` `jingle_record` `jingle_rival_win`
+- 効果音（Sound モード、WAV）: エンジン 5 種 × idle/mid/high、ターボ、ブローオフ、アフターファイア ×3、スキール、シフト、衝突 ×2、
+  こすれ、雨、風、夜の虫、湖畔、カウントダウン、区間通過、コーナー警告、UI ×3。
+  ループ物は WAV 必須（MP3 は前後に無音が入り継ぎ目ができる）。
+- 依頼文の全文はチャットで渡したもの（このセッションの最終回答）と同じ。取り込み時に ASSETS.md へ「Suno Pro（生成日）」と記録する。
+
 ## 受け取り後の作業（こちらで実施）
 1. 形式変換・最適化（WebP、MP3 の音量正規化）と配置。肖像は `public/img/rivals/<コース>-<レベル>.webp`、
    キーアートは `public/img/courses/<コース>.webp`
