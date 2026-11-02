@@ -38,8 +38,9 @@ pending. `docs/PLAN.md` holds the design.
   (`PW_MODULE=/opt/node-tools/node_modules/playwright`, `vite preview` on :4173). Never `pkill -f` a pattern contained in your own command line.
 
 ## Environment notes (owner's PC `ubuntu-dev`, when the owner opens a session there)
-- The live stack (compose project `touge-nocturne` + cloudflared) runs on this machine: never restart or rebuild it
-  unless the owner asks. Other compose projects on the host are unrelated.
+- The live stack (compose project `touge-nocturne` + cloudflared) runs on this machine. Deploy finished changes with
+  `docker compose up -d --build` without asking (owner's standing permission; nobody else uses the site yet), then
+  check that the new build is served. Other compose projects on the host are unrelated: leave them alone.
 - `vite preview` inherits the dev proxy (`/api` → localhost:8080 = the live server): always serve with
   `API_PROXY=http://127.0.0.1:9 npx vite preview …` so test runs cannot create players or submit runs.
 - No Node on the host: use a user-space Node 24 tarball (nodejs.org) and `npm i playwright-core` outside the repo

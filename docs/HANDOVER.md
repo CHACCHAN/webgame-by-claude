@@ -17,13 +17,13 @@
   - モード: タイムアタック、AI ライバル戦、ゴーストバトル、オンライン対戦（最大 3 人）
   - Laravel 側: ランキング、ゴースト、対戦ルーム
 - オーナーは実 GPU（60fps）で遊んでおり、Cloudflare Tunnel で公開済み（オーナー自身が設定）。
-- **公開中のサイトは Session 4 の修正前のビルドのまま**。反映には `docker compose up -d --build`（公開サイトが再起動する）が必要で、オーナーの指示待ち。
+- 公開中のサイトには Session 4 の修正を反映済み（オーナーの PC で `docker compose up -d --build`）。
 
 ## 2. オーナーからの制約（必ず守る）
 - **作業環境**
   - 基本は Claude Code のクラウドセッション内で作業する。こちらから オーナーのローカル PC に接続しない。
   - 例外: オーナーが自分の PC（`ubuntu-dev`）で Claude Code を開いた場合は、その PC で作業してよい（2026-11-02 にオーナーが許可）。
-    この PC では公開中のスタックが動いているので、指示なく再起動・再ビルドしない（手順は 7 章）。
+    この PC では公開中のスタックも動いている。誰もアクセスしないので、再起動・再ビルド（反映）は確認なしで行ってよい（2026-11-02 にオーナーが許可。手順は 7 章）。
   - ローカルの Unity・Blender・GPU サーバーに依存しない。
   - Docker は必須。
 - **お金・秘密情報**
@@ -152,7 +152,9 @@
 ## 7. 環境の立ち上げ（クラウドコンテナは毎回まっさら）
 
 ### オーナーの PC（`ubuntu-dev`）で作業する場合
-- この PC では公開中のスタック（`touge-nocturne` の app/web/db/cloudflared）が動いている。指示なく `docker compose up/down/build` しない。
+- この PC では公開中のスタック（`touge-nocturne` の app/web/db/cloudflared）が動いている。
+  - 修正の反映はリポジトリ直下で `docker compose up -d --build`。確認なしで行ってよい（オーナー許可済み）。反映後は配信中のビルドが新しくなったことを確かめる。
+  - 同じ PC の別のプロジェクト（connect-cit など）には触らない。
 - node が入っていない。Node 24 の tarball（nodejs.org）をユーザー領域に展開して使う。
   - Playwright はリポジトリの外で `npm i playwright-core` し、`PW_MODULE` にそのパスを渡す。
   - ブラウザは `/usr/bin/google-chrome`。ヘッドレスでも実 GPU（RX 5700 XT、Vulkan）で描画できる。
