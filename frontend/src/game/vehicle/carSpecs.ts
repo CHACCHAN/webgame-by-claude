@@ -52,6 +52,8 @@ export interface CarSpec {
   popUpLamps?: { x: number; z: number };
   /** tail lamp glow multiplier for models whose lens texture is dark (the lens glows through it) */
   tailLampGain?: number;
+  /** tailpipe tip on the 3D model (body-local m, +x = left) where no part is named like an exhaust */
+  exhaust?: [number, number, number];
 }
 
 export const CAR_SPECS: Record<CarId, CarSpec> = {
@@ -88,6 +90,9 @@ export const CAR_SPECS: Record<CarId, CarSpec> = {
     driftiness: 0.85,
     stats: { power: 5, grip: 6, drift: 9, weight: 9 },
     colors: { body: '#e8e6e1', accent: '#16181c' },
+    // pop-up lamps come with the model (imported raised, folded by day: CarImportConfig.popUps)
+    exhaust: [0.44, 0.3, -2.09],
+    model: { title: 'Toyota Corolla AE86 Trueno', author: 'Lexyc16', url: 'https://sketchfab.com/3d-models/toyota-corolla-ae86-trueno-fe02fba6302e450ea8424591493341ea', license: 'CC BY 4.0' },
   },
   raijin: {
     id: 'raijin',

@@ -353,7 +353,7 @@ const VARIANTS = {
   noMirrors: () => {
     const ms = window.__game.scenery.group.children.filter((o) => {
       const p = o.geometry && o.geometry.parameters;
-      return o.isMesh && (o.geometry.type === 'TorusGeometry' || o.geometry.type === 'CircleGeometry' || (o.geometry.type === 'CylinderGeometry' && p.radiusTop === 0.05 && p.height === 2.8));
+      return o.name === 'curve-mirrors' || (o.isMesh && (o.geometry.type === 'TorusGeometry' || o.geometry.type === 'CircleGeometry' || (o.geometry.type === 'CylinderGeometry' && p.radiusTop === 0.05 && p.height === 2.8)));
     });
     ms.forEach((m) => (m.visible = false));
     return () => ms.forEach((m) => (m.visible = true));

@@ -4,6 +4,7 @@
 //   node tools/import-cars.cjs preview <srcRoot> <outDir> [ids]   – side/top/front renders
 //   node tools/import-cars.cjs import  <srcRoot> [ids]            – writes public/models/cars/<id>.glb
 // Per-car settings: tools/car-import.json ({ id: { dir, config } }). Needs `vite preview` on :4173.
+// CHROME=<path> uses an installed Chrome instead of Playwright's bundled browser (e.g. with playwright-core).
 const { chromium } = require(process.env.PW_MODULE || 'playwright');
 const fs = require('fs');
 const path = require('path');
@@ -29,7 +30,7 @@ const server = http.createServer((req, res) => {
 
 (async () => {
   await new Promise((r) => server.listen(8099, r));
-  const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
+  const browser = await chromium.launch({ executablePath: process.env.CHROME, args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
   const page = await browser.newPage();
   page.on('pageerror', (e) => console.error('[page]', e.message));
   await page.goto(`${base}/?export=1`);

@@ -4,6 +4,36 @@ Newest first. "Verified" means actually executed in this environment; anything e
 
 ## Session 4 (2026-11-02) — real-GPU performance pass on the owner's PC
 
+### Owner deliveries: AE86 model and the scenery models
+- **AE86** (`hayate`): Lexyc16's "Toyota Corolla AE86 Trueno" (26 k tris; the Flamestroke candidate is 157 k tris
+  at 1/10 scale). Its pop-up lamps are modelled raised, mixed into the big trim/lens meshes: new import option
+  `CarImportConfig.popUps` cuts the connected pieces lying wholly inside a box (both sides) into hinged nodes
+  `popup_l/r` (hinge on the rear top edge, closing angle in the node extras); `CarModel` picks them up
+  (`CarRig.popUps`) and `CarVisual` folds them 0.64 rad into the bonnet by day (lid flush; first try 1.2 rad left
+  holes) and raises and lights them at night; the bumper lamps are parking lamps. Anime tie-ins removed (tofu-shop
+  door decal dropped, plates blanked with new `restyle.map: false`). Exhaust: no muffler-named part and the rear-corner
+  guess put it on the wrong side → new `CarSpec.exhaust` override (checked with a marker on the pipe).
+  `import-cars.cjs` takes `CHROME=<path>` (playwright-core has no bundled browser).
+- **Scenery models** (8 of the 9 delivered; the KMB3D lamp set is park-style and unused): `tools/import-props.cjs`
+  (+ `props-import.json`) compresses them (1.1 MB together); `render/props.ts` normalises size / facing / origin at
+  load, merges each model per material and places it instanced (`placeProp`, moving parts such as turbine rotors
+  spun per instance). Replaced: every street light (glass tinted sodium / LED, light source under the model's head),
+  the turbines on 天狼, the curve mirrors, the summit vending machines. New: a roadside shrine (torii between two stone
+  lanterns) and a bus shelter per course on the levellest straight roadside spot, preferring the hill side
+  (`roadsideSpot`), with the clutter kept out; cones at the start and finish gantries. Procedural shapes stay as the
+  fallback when a model does not load. Credits: garage (cars) and the settings screen (scenery), docs/ASSETS.md.
+- Bugs found on the way: the vending machines' fronts faced the hillside (procedural ones too); the module-level
+  list of night-lit sign materials grew with every course switch.
+- Verified (real GPU, screenshots): AE86 in the garage at night (pods up, lit, blank plates) and dawn (folded flush),
+  tail lamps lit at night, exhaust at the pipe, driving at night/dawn with the pods following; every prop on all three
+  courses at night and dawn, turbine rotors turning, credits on the settings screen; no page errors; vitest 26/26.
+  Cost of the props (朧峠 high): draw calls 437 → 451, triangles 3.9 M → 4.1 M; low 292 → 295 calls.
+- Cappuccino (owner request): no downloadable CC model of the real car on Sketchfab (only a fantasy "GT concept");
+  links to a CGTrader low-poly model (licence/price unconfirmed) and a 3D-print model given to the owner, plus the
+  option of a procedural body.
+
+### Real-GPU performance pass
+
 Worked directly on the owner's PC this time, with the owner's approval (`ubuntu-dev`: i7-6950X, Radeon RX 5700 XT,
 Ubuntu; the public Docker stack + tunnel run on the same machine and were left untouched). Headless Google Chrome 155
 renders on the real GPU through ANGLE/Vulkan (RADV). New `tools/perf-gpu.cjs` drives the built game and records per

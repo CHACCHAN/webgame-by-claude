@@ -88,5 +88,38 @@
       "taillights": "Material\\.009$"
     },
     "textureSize": 512
+  },
+  "hayate": {
+    "dir": "toyota_corolla_ae86_trueno",
+    "simplify": 1,
+    "config": {
+      "wheels": "Material\\.0(03|04|20)$",
+      "paint": "Material\\.001$",
+      "glass": "Material\\.011$",
+      "headlights": "Material\\.012$",
+      "taillights": "Material\\.014$",
+      "drop": "tofu_shop",
+      "restyle": {
+        "fpostersmallwall": {
+          "color": "#f2f2ee",
+          "map": false
+        },
+        "Material\\.005$": {
+          "emissive": "#000000"
+        }
+      },
+      "popUps": {
+        "box": [
+          0.7,
+          1.55,
+          0.2,
+          0.85,
+          3.65,
+          4.3
+        ],
+        "lens": "Material\\.005$",
+        "closed": 0.64
+      }
+    }
   }
 }

@@ -27,18 +27,28 @@ export interface CarImportConfig {
   /** set when the model's front is towards −Z and there are no headlight parts to tell */
   faceNegZ?: boolean;
   /** tweaks of the kept materials by label pattern, e.g. to tone down a show car's glowing rims */
-  restyle?: Record<string, { color?: string; emissive?: string; metalness?: number; roughness?: number }>;
+  restyle?: Record<string, { color?: string; emissive?: string; metalness?: number; roughness?: number; map?: false }>;
   /**
    * extra decimation of over-detailed untextured parts (e.g. tyre tread): { pattern: { keep, error } } —
    * keep = target fraction of triangles, error = max deviation relative to the part's size (default 0.006)
    */
   reduce?: Record<string, { keep: number; error?: number }>;
+  /**
+   * retractable headlamps modelled raised: connected pieces lying wholly inside `box` (source units after
+   * `rotation`, [x0, x1, y0, y1, z0, z1]; the x range applies to |x|, so it covers both sides) become the
+   * hinged nodes "popup_l" / "popup_r" (hinge along their rear top edge, closing angle in the node's
+   * extras) that the game folds into the bonnet by day; pieces matching `lens` get the "popup_lens" material.
+   * `closed`: front-down angle (rad) that lays the pod's top flush with the bonnet
+   */
+  popUps?: { box: [number, number, number, number, number, number]; lens: string; closed: number };
 }
 
 interface Part {
   name: string;
   geo: THREE.BufferGeometry;
   material: THREE.Material;
+  /** piece of a pop-up lamp (see CarImportConfig.popUps) */
+  pod?: boolean;
 }
 
 const CORNERS = ['fl', 'fr', 'rl', 'rr'] as const;
@@ -93,6 +103,18 @@ function subGeometry(geo: THREE.BufferGeometry, start: number, count: number) {
   return out;
 }
 
+/** Triangles `tris` of a non-indexed geometry as a new geometry. */
+function pickTriangles(flat: THREE.BufferGeometry, tris: number[]) {
+  const out = new THREE.BufferGeometry();
+  for (const [name, attr] of Object.entries(flat.attributes)) {
+    const a = attr as THREE.BufferAttribute;
+    const arr = new (a.array.constructor as Float32ArrayConstructor)(tris.length * 3 * a.itemSize);
+    tris.forEach((t, i) => arr.set(a.array.subarray(t * 3 * a.itemSize, (t + 1) * 3 * a.itemSize), i * 3 * a.itemSize));
+    out.setAttribute(name, new THREE.BufferAttribute(arr, a.itemSize, a.normalized));
+  }
+  return out;
+}
+
 /** Splits a geometry into the four wheel corners by triangle centroid (merged wheel meshes). */
 function splitByCorner(geo: THREE.BufferGeometry, cx: number, cz: number): (THREE.BufferGeometry | null)[] {
   const flat = geo.index ? geo.toNonIndexed() : geo;
@@ -107,17 +129,38 @@ function splitByCorner(geo: THREE.BufferGeometry, cx: number, cz: number): (THRE
     // fl: +x (left), +z (front); fr: −x; rl / rr: rear
     buckets[(z / 3 > cz ? 0 : 2) + (x / 3 > cx ? 0 : 1)].push(t);
   }
-  return buckets.map((tris) => {
-    if (!tris.length) return null;
-    const out = new THREE.BufferGeometry();
-    for (const [name, attr] of Object.entries(flat.attributes)) {
-      const a = attr as THREE.BufferAttribute;
-      const arr = new (a.array.constructor as Float32ArrayConstructor)(tris.length * 3 * a.itemSize);
-      tris.forEach((t, i) => arr.set(a.array.subarray(t * 3 * a.itemSize, (t + 1) * 3 * a.itemSize), i * 3 * a.itemSize));
-      out.setAttribute(name, new THREE.BufferAttribute(arr, a.itemSize, a.normalized));
-    }
-    return out;
-  });
+  return buckets.map((tris) => (tris.length ? pickTriangles(flat, tris) : null));
+}
+
+/**
+ * Cuts the connected pieces (triangles sharing vertex positions) that lie wholly inside the box
+ * (x range on |x|) out of a part: returns [pieces inside, the rest], either may be null.
+ */
+function cutPieces(geo: THREE.BufferGeometry, box: [number, number, number, number, number, number]) {
+  const flat = geo.index ? geo.toNonIndexed() : geo;
+  const pos = flat.getAttribute('position');
+  const n = pos.count / 3;
+  const parent = Array.from({ length: n }, (_, i) => i);
+  const find = (i: number): number => (parent[i] === i ? i : (parent[i] = find(parent[i])));
+  const owner = new Map<string, number>();
+  for (let v = 0; v < pos.count; v++) {
+    const key = `${pos.getX(v).toFixed(4)},${pos.getY(v).toFixed(4)},${pos.getZ(v).toFixed(4)}`;
+    const t = Math.floor(v / 3);
+    const o = owner.get(key);
+    if (o === undefined) owner.set(key, t);
+    else parent[find(t)] = find(o);
+  }
+  const [x0, x1, y0, y1, z0, z1] = box;
+  const inBox = new Map<number, boolean>();
+  for (let v = 0; v < pos.count; v++) {
+    const r = find(Math.floor(v / 3));
+    const x = Math.abs(pos.getX(v)), y = pos.getY(v), z = pos.getZ(v);
+    const ok = x >= x0 && x <= x1 && y >= y0 && y <= y1 && z >= z0 && z <= z1;
+    inBox.set(r, (inBox.get(r) ?? true) && ok);
+  }
+  const inside: number[] = [], rest: number[] = [];
+  for (let t = 0; t < n; t++) (inBox.get(find(t)) ? inside : rest).push(t);
+  return [inside.length ? pickTriangles(flat, inside) : null, rest.length ? pickTriangles(flat, rest) : null] as const;
 }
 
 const boxOf = (geos: THREE.BufferGeometry[]) => {
@@ -138,9 +181,21 @@ export async function importCarModel(url: string, spec: CarSpec, cfg: CarImportC
     const rx = new RegExp(pattern, 'i');
     for (const p of parts) if (rx.test(label(p))) p.geo = await decimate(p.geo, r.keep, r.error ?? 0.006);
   }
-  const wheelParts = parts.filter((p) => wheelRe!.test(label(p)));
-  const caliperParts = parts.filter((p) => !wheelRe!.test(label(p)) && caliperRe?.test(label(p)));
-  const bodyParts = parts.filter((p) => !wheelParts.includes(p) && !caliperParts.includes(p));
+  if (cfg.popUps) {
+    for (const p of [...parts]) {
+      if (wheelRe!.test(label(p))) continue;
+      const [pod, rest] = cutPieces(p.geo, cfg.popUps.box);
+      if (!pod) continue;
+      // both sides stay in one part here: split by side once the car frame is known
+      parts.push({ name: p.name, geo: pod, material: p.material, pod: true });
+      if (rest) p.geo = rest;
+      else parts.splice(parts.indexOf(p), 1);
+    }
+  }
+  const podParts = parts.filter((p) => p.pod);
+  const wheelParts = parts.filter((p) => !p.pod && wheelRe!.test(label(p)));
+  const caliperParts = parts.filter((p) => !p.pod && !wheelRe!.test(label(p)) && caliperRe?.test(label(p)));
+  const bodyParts = parts.filter((p) => !p.pod && !wheelParts.includes(p) && !caliperParts.includes(p));
   if (!wheelParts.length) throw new Error('no wheel parts matched');
 
   // ---- restyled copies of kept materials (one per source material and rule)
@@ -160,6 +215,8 @@ export async function importCarModel(url: string, spec: CarSpec, cfg: CarImportC
       }
       if (s.metalness !== undefined) m.metalness = s.metalness;
       if (s.roughness !== undefined) m.roughness = s.roughness;
+      // e.g. blank number plates instead of a film car's well-known registration
+      if (s.map === false) m.map = null;
       restyled.set(key, m);
     }
     return restyled.get(key)!;
@@ -238,6 +295,38 @@ export async function importCarModel(url: string, spec: CarSpec, cfg: CarImportC
     mesh.name = p.name;
     body.add(mesh);
   }
+  // ---- pop-up lamps: one hinge per side along the rear top edge of its pieces
+  if (cfg.popUps && podParts.length) {
+    const lensRe = new RegExp(cfg.popUps.lens, 'i');
+    for (const p of podParts) p.geo.applyMatrix4(toCar);
+    for (const side of [1, -1]) {
+      const pieces = podParts.flatMap((p) => {
+        // with the split line at −∞ along z only the left (+x) and right buckets are used
+        const halves = splitByCorner(p.geo, 0, -Infinity);
+        const mine = side > 0 ? halves[0] : halves[1];
+        return mine ? [{ p, geo: mine }] : [];
+      });
+      if (!pieces.length) continue;
+      const box = boxOf(pieces.map((q) => q.geo));
+      // hinge along the rear top edge: the highest point of the pod's back end
+      let rearTop = -Infinity;
+      for (const { geo } of pieces) {
+        const pos = geo.getAttribute('position');
+        for (let v = 0; v < pos.count; v++) if (pos.getZ(v) < box.min.z + 0.15 * (box.max.z - box.min.z)) rearTop = Math.max(rearTop, pos.getY(v));
+      }
+      const hinge = new THREE.Group();
+      hinge.name = side > 0 ? 'popup_l' : 'popup_r';
+      hinge.position.set((box.min.x + box.max.x) / 2, rearTop, box.min.z);
+      hinge.userData = { popupClosed: cfg.popUps.closed };
+      for (const { p, geo } of pieces) {
+        geo.translate(-hinge.position.x, -hinge.position.y, -hinge.position.z);
+        const mesh = new THREE.Mesh(geo, lensRe.test(label(p)) ? named(p.material, 'popup_lens') : restyle(p));
+        mesh.name = `${hinge.name}_${p.name}`;
+        hinge.add(mesh);
+      }
+      body.add(hinge);
+    }
+  }
   CORNERS.forEach((q, i) => {
     const c = centers[i].clone().applyMatrix4(toCar);
     // fit the wheel to the physics wheel radius (small corrections only)
@@ -265,7 +354,7 @@ export async function importCarModel(url: string, spec: CarSpec, cfg: CarImportC
   };
   const lamps = (rx: RegExp | null, prefix: string) => {
     if (!rx) return;
-    const geos = body.children.filter((m) => rx.test(`${m.name} ${(m as THREE.Mesh).material && ((m as THREE.Mesh).material as THREE.Material).name}`) || ((m as THREE.Mesh).material as THREE.Material).name === prefix).map((m) => (m as THREE.Mesh).geometry);
+    const geos = body.children.filter((m) => (m as THREE.Mesh).isMesh).filter((m) => rx.test(`${m.name} ${(m as THREE.Mesh).material && ((m as THREE.Mesh).material as THREE.Material).name}`) || ((m as THREE.Mesh).material as THREE.Material).name === prefix).map((m) => (m as THREE.Mesh).geometry);
     if (!geos.length) return;
     const box = boxOf(geos);
     const c = box.getCenter(new THREE.Vector3());
@@ -275,7 +364,7 @@ export async function importCarModel(url: string, spec: CarSpec, cfg: CarImportC
   };
   lamps(headRe, 'headlight');
   lamps(tailRe, 'taillight');
-  const bodyBox = boxOf(body.children.map((m) => (m as THREE.Mesh).geometry));
+  const bodyBox = boxOf(body.children.filter((m) => (m as THREE.Mesh).isMesh).map((m) => (m as THREE.Mesh).geometry));
   anchor('anchor_exhaust', new THREE.Vector3(-0.45 * (bodyBox.max.x - bodyBox.min.x) / 2, 0.3, bodyBox.min.z + 0.05));
   const target = new THREE.Object3D();
   target.name = 'headlight_target';

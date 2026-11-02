@@ -190,18 +190,40 @@ export function rigFromTemplate(template: THREE.Object3D, spec: CarSpec, opts: {
     if (o.name === 'anchor_exhaust') anchors.exhaust.copy(o.position);
   });
   deriveAnchors(root, fresh, anchors);
+  if (spec.exhaust) anchors.exhaust.set(...spec.exhaust);
   const target = root.getObjectByName('headlight_target') ?? new THREE.Object3D();
   if (!target.parent) {
     target.position.set(0, 0.3, 30);
     root.add(target);
   }
-  return { root, body, wheels, materials: fresh, headlightTargets: [target], anchors, fromModel: true };
+  return { root, body, wheels, materials: fresh, headlightTargets: [target], anchors, fromModel: true, popUps: modelPopUps(root) };
+}
+
+/** Hinged pop-up lamp nodes written by the importer (CarImportConfig.popUps), if any. */
+function modelPopUps(root: THREE.Object3D): CarRig['popUps'] {
+  const hinges = ['popup_l', 'popup_r'].map((n) => root.getObjectByName(n)).filter((o): o is THREE.Object3D => !!o);
+  if (!hinges.length) return undefined;
+  const lenses: THREE.MeshStandardMaterial[] = [];
+  for (const h of hinges)
+    h.traverse((o) => {
+      const m = (o as THREE.Mesh).material as THREE.MeshStandardMaterial | undefined;
+      if (m?.name === 'popup_lens' && !lenses.includes(m)) lenses.push(m);
+    });
+  // one lens material per rig (both sides share it after the optimiser's de-duplication)
+  for (const m of lenses) {
+    m.emissive.set('#fff4e0');
+    m.emissiveMap = m.map;
+    m.emissiveIntensity = 0;
+  }
+  for (const m of lenses.slice(1)) for (const h of hinges) h.traverse((o) => ((o as THREE.Mesh).material === m ? ((o as THREE.Mesh).material = lenses[0]) : null));
+  return { hinges, lens: lenses[0] ?? null, closed: (hinges[0].userData.popupClosed as number | undefined) ?? 1.2 };
 }
 
 /**
  * The model optimiser prunes empty nodes, so imported GLBs arrive without their anchor empties:
  * rebuild them from the geometry — lamps from the lamp-material meshes (left/right halves), the
- * tailpipe from a muffler/exhaust mesh at the back if there is one, else low at the rear left.
+ * tailpipe from a muffler/exhaust mesh at the back if there is one, else low at the rear right
+ * (CarSpec.exhaust overrides it).
  */
 function deriveAnchors(root: THREE.Object3D, mats: CarMaterials, anchors: CarRig['anchors']) {
   const boxOf = (pred: (m: THREE.Mesh) => boolean) => {
@@ -341,6 +363,8 @@ export interface CarRig {
   anchors: { exhaust: THREE.Vector3; headlights: THREE.Vector3[]; taillights: THREE.Vector3[] };
   /** a GLB model (vs the procedural fallback body) */
   fromModel?: boolean;
+  /** pop-up lamps of the model itself, modelled raised: hinges, their lens and the folding angle (rad) */
+  popUps?: { hinges: THREE.Object3D[]; lens: THREE.MeshStandardMaterial | null; closed: number };
 }
 
 export function buildCar(spec: CarSpec, opts: { bodyColor?: string; procedural?: boolean } = {}): CarRig {

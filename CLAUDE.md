@@ -49,11 +49,17 @@ pending. `docs/PLAN.md` holds the design.
 - The GPU picks its own clock (800–2100 MHz) and frame costs change ~2× with it: compare builds with paired runs.
 
 ## Gotchas
+- Scenery models (street lights, turbines, mirrors, vending machines, shrine, bus stop, cones): glTF folders →
+  `node tools/import-props.cjs <srcRoot> [ids]` (`tools/props-import.json`) → `public/models/props/*.glb`; size,
+  facing (+Z = front) and origin are set in `PROPS` (`render/props.ts`), placement in `TrackScenery.ts`. Each model
+  falls back to the procedural shape when it fails to load. Credits: `PROPS[].credit` (settings screen) + ASSETS.md.
+- Car models with pop-up lamps modelled raised: `popUps` in `car-import.json` (box around the pods, lens pattern,
+  folding angle); modelled closed instead: `CarSpec.popUpLamps` (runtime pods). Exhaust guess wrong: `CarSpec.exhaust`.
 - Never leave a transmissive (refractive) material in the scene: three.js then renders every opaque object a second
   time per frame. Imported car materials are flattened by `CarModel.withoutTransmission`.
-- Cars load from `frontend/public/models/cars/*.glb` at runtime. After editing `CarModel.ts`, rebuild and run
-  `npm run assets:cars` (with `vite preview` on :4173 and `PW_MODULE=<path to playwright>`), or delete the GLBs
-  to fall back to the procedural builder.
+- Cars load from `frontend/public/models/cars/*.glb` at runtime. All six are imported third-party models now:
+  do not run `npm run assets:cars` (it exports the procedural bodies of hayate/raijin/shiden over their GLBs).
+  Deleting a GLB falls back to the procedural builder.
 - Third-party car models: unpack each glTF zip into a folder, describe it in `frontend/tools/car-import.json`
   (patterns for wheels / calipers / paint / glass / lamps / drop), then with `vite preview` on :4173:
   `node tools/import-cars.cjs preview <srcRoot> <outDir> <ids>` (orientation renders) and

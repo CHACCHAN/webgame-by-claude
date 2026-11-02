@@ -12,6 +12,7 @@ import { buildEnvironment, PRESETS, type EnvironmentRig, type TimeOfDay } from '
 import { CarVisual } from './render/CarVisual';
 import { loadCarTemplates } from './render/carAssets';
 import { loadSurfaceTextures } from './render/surfaceTextures';
+import { loadProps } from './render/props';
 import { findCorners, type Corner, type CornerKind } from './track/corners';
 import { RemoteRacers, SLOT_COLORS, type NetState, type Peer } from './net/RemoteRacers';
 
@@ -228,7 +229,7 @@ export class Game {
     await this.yieldFrame(0.05, '物理エンジンを初期化中');
     await initRapier();
     await this.yieldFrame(0.08, '車両モデルを読み込み中');
-    await Promise.all([loadCarTemplates(CAR_ORDER), loadSurfaceTextures()]);
+    await Promise.all([loadCarTemplates(CAR_ORDER), loadSurfaceTextures(), loadProps()]);
     this.root.add(this.smoke.points, this.skids.mesh, this.rain.mesh, this.exhaust.group);
     this.exhaust.density = this.quality.treeDensity < 0.6 ? 0.6 : 1;
     this.remotes = new RemoteRacers(this.root, (id) => this.rideHeightOf(id), false);

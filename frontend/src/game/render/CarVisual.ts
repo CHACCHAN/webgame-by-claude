@@ -38,8 +38,11 @@ export class CarVisual {
   private ghostMaterials: THREE.Material[] = [];
   readonly rideHeight: number;
   /** retractable headlamp pods (hinges), their lens material and opening state 0..1 */
-  private pods: THREE.Group[] = [];
+  private pods: THREE.Object3D[] = [];
   private podLens: THREE.MeshStandardMaterial | null = null;
+  /** hinge angles; runtime pods are hidden while folded, the model's own fold into the bonnet */
+  private podAngles = { closed: POD.closed, open: POD.open };
+  private podHide = true;
   private podOpen = 0;
   private podTarget = 0;
   private lightLevel = 0;
@@ -62,7 +65,8 @@ export class CarVisual {
     });
 
     if (opts.ghost) this.makeGhost();
-    if (spec.popUpLamps && this.rig.fromModel && !opts.ghost) this.buildPods(spec.popUpLamps);
+    if (this.rig.popUps && !opts.ghost) this.useModelPods(this.rig.popUps);
+    else if (spec.popUpLamps && this.rig.fromModel && !opts.ghost) this.buildPods(spec.popUpLamps);
 
     if (opts.headlights && !opts.ghost) {
       const front = this.rig.anchors.headlights[0]?.z ?? 2;
@@ -180,11 +184,21 @@ export class CarVisual {
     this.applyPods();
   }
 
+  /** Pop-up lamps that are part of the model (modelled raised): they fold forward into the bonnet by day. */
+  private useModelPods(p: NonNullable<CarRig['popUps']>) {
+    this.pods = p.hinges;
+    this.podLens = p.lens;
+    this.podAngles = { closed: p.closed, open: 0 };
+    this.podHide = false;
+    this.applyPods();
+  }
+
   private applyPods() {
     const k = this.podOpen;
+    const { closed, open } = this.podAngles;
     for (const h of this.pods) {
-      h.rotation.x = POD.closed + (POD.open - POD.closed) * k;
-      h.visible = k > 0.02;
+      h.rotation.x = closed + (open - closed) * k;
+      h.visible = !this.podHide || k > 0.02;
     }
     // full beam only once the pods are (nearly) up
     const lit = this.lightLevel * THREE.MathUtils.smoothstep(k, 0.6, 1);
