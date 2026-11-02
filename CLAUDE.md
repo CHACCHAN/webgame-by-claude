@@ -1,7 +1,8 @@
 # CLAUDE.md — TOUGE NOCTURNE (朧峠)
 
-Browser 3D downhill touge racing game. Read `docs/PROGRESS.md` first: it is the
-running log of what is done, verified and pending. `docs/PLAN.md` holds the design.
+Browser 3D downhill touge racing game. Read `docs/HANDOVER.md` first (current state, owner rules, what the
+owner is to deliver, how to verify), then `docs/PROGRESS.md`: the running log of what is done, verified and
+pending. `docs/PLAN.md` holds the design.
 
 ## Layout
 - `backend/` Laravel 13 JSON API (players, runs, leaderboard, ghosts, online rooms) + Laravel Reverb WebSocket server. Tests: `php artisan test` (sqlite in-memory).
@@ -31,7 +32,8 @@ running log of what is done, verified and pending. `docs/PLAN.md` holds the desi
   dl.polyhaven.org, kenney, sketchfab and jsdelivr are blocked. Most assets are procedural; photo textures
   in `public/textures/` and owner-supplied images/music are listed in docs/ASSETS.md.
 - Headless Chromium renders WebGL with SwiftShader (~1–6 fps): use quality `low` for automated UI checks and
-  the Node headless sim for driving/physics checks. Never `pkill -f` a pattern contained in your own command line.
+  the Node headless sim for driving/physics checks. Browser checks: `node tools/probe.cjs <quality> <script.cjs>`
+  (`PW_MODULE=/opt/node-tools/node_modules/playwright`, `vite preview` on :4173). Never `pkill -f` a pattern contained in your own command line.
 
 ## Gotchas
 - Cars load from `frontend/public/models/cars/*.glb` at runtime. After editing `CarModel.ts`, rebuild and run

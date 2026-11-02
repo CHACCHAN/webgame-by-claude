@@ -8,4 +8,4 @@ dist/
 /e2e/playwright-report/
 /docker/certs/*.crt
 /docker/certs/*.pem
-tools/scratch/
+**/tools/scratch/
