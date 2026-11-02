@@ -4,6 +4,21 @@ Newest first. "Verified" means actually executed in this environment; anything e
 
 ## Session 4 (2026-11-02) — real-GPU performance pass on the owner's PC
 
+### Hitches: shaders compiled mid-race
+- Long frames over a full 朧峠 race (high, 17.4 k frames): 13 ≥ 20 ms. The worst mid-race ones (41 / 24 ms at
+  35.9 / 36.6 %) were the turbine and vending machine shaders compiling the first time they came into view
+  (`renderer.info.programs` over the race). The load-time `renderer.compile` did not help at medium and up: it
+  compiled the screen variants, but post-processing draws the scene into an offscreen buffer (linear output, no
+  tone mapping: other cache keys, checked by diffing them), and the race's headlamp spots + shadows change every
+  shader again. `Game.precompile` now compiles against a stand-in render target when post-processing is on, at load
+  and in the background at every race start (`compileAsync`, during the countdown): no scenery shader compiles
+  mid-race any more (2 unnamed shadow-depth programs remain at ~64 %), programs at load 111 → 93.
+  After: 11 long frames, mid-race 23–32 ms with no single cause (main thread and GPU both moderate, GPU clock
+  swinging 800–2100 MHz); the spike as the results screen appears at the finish (~70–100 ms) is left as is.
+- E2E on an isolated Docker stack next to the live one (project `touge-e2e`, own subnet, port 8090): 9/9 (the
+  3-player online race separately, 10.1 min). Backend tests failed on a fresh checkout before running (`tests/Unit`
+  missing: git keeps no empty folder) → suite removed from phpunit.xml: 13/13.
+
 ### Owner deliveries: AE86 model and the scenery models
 - **AE86** (`hayate`): Lexyc16's "Toyota Corolla AE86 Trueno" (26 k tris; the Flamestroke candidate is 157 k tris
   at 1/10 scale). Its pop-up lamps are modelled raised, mixed into the big trim/lens meshes: new import option

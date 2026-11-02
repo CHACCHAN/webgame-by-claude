@@ -32,6 +32,8 @@ export type GamePhase = 'loading' | 'attract' | 'garage' | 'countdown' | 'racing
 export type RaceMode = 'time_attack' | 'rival' | 'ghost' | 'online';
 
 export interface QualitySettings {
+  /** post-processing on: the scene is drawn into an offscreen buffer, not straight to the screen */
+  bloom: boolean;
   shadows: boolean;
   shadowMapSize: number;
   treeDensity: number;
@@ -195,6 +197,8 @@ export class Game {
   /** id of the local player in an online battle */
   onlineSelfId = 0;
   private rideHeights = new Map<CarId, number>();
+  /** stand-in for the post-processing buffer when compiling shaders (see precompile) */
+  private compileTarget: THREE.WebGLRenderTarget | null = null;
   private cornerIdx = 0;
   private warnedCorner = -1;
   /** debug/testing: let an AI drive the player car and speed up simulated time */
@@ -278,7 +282,7 @@ export class Game {
     this.applyTimeOfDay(this.timeOfDay);
     this.chase.reset();
     await this.yieldFrame(0.92, 'シェーダーを準備中');
-    this.renderer.compile(this.scene, this.camera);
+    await this.precompile();
     await this.yieldFrame(1, '準備完了');
   }
 
@@ -552,6 +556,9 @@ export class Game {
     this.chase.reset();
     this.accumulator = 0;
     this.paused = false;
+    // the race's lights (headlamp spots and their shadows) change every material's shader: compile them all in
+    // the background during the countdown rather than each the first time it comes into view (mid-race hitches)
+    void this.precompile();
     if (this.audio) {
       void this.audio.playMusic(this.course.music, 'bgm_race');
       const spec = CAR_SPECS[cfg.carId];
@@ -1278,8 +1285,22 @@ export class Game {
     return this.player?.sim ?? null;
   }
 
+  /**
+   * Compiles every material of the scene for the current lights, in parallel where the browser can. With
+   * post-processing the scene is drawn into an offscreen buffer, whose shader variants (linear output, no tone
+   * mapping) differ from the screen's ones: compiled against a stand-in target, or the work is wasted.
+   */
+  private precompile() {
+    const r = this.renderer, prev = r.getRenderTarget();
+    if (this.quality.bloom) r.setRenderTarget((this.compileTarget ??= new THREE.WebGLRenderTarget(1, 1)));
+    const done = r.compileAsync(this.scene, this.camera);
+    r.setRenderTarget(prev);
+    return done.catch(() => undefined);
+  }
+
   dispose() {
     this.clearRace();
+    this.compileTarget?.dispose();
     this.input.dispose();
     this.physics?.dispose();
     this.scene.remove(this.root);
