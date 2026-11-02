@@ -108,3 +108,19 @@ describe('street lamps', () => {
     }
   });
 });
+
+describe('curve mirrors', () => {
+  it('stand once per tight bend on the inside, not in a row along it', async () => {
+    const { curveMirrorSpots } = await import('../render/TrackScenery');
+    for (const id of COURSE_ORDER) {
+      const t = new Track(COURSES[id].design);
+      const spots = curveMirrorSpots(t);
+      const tight = findCorners(t, 30).length;
+      expect(spots.length).toBeGreaterThan(0);
+      expect(spots.length).toBeLessThanOrEqual(tight);
+      for (let k = 1; k < spots.length; k++) expect(spots[k].i - spots[k - 1].i).toBeGreaterThan(20);
+      // on the inside of the bend: curvature > 0 turns left, lateral > 0 is right of the centreline
+      for (const s of spots) expect(Math.sign(s.lateral)).toBe(-Math.sign(t.curvature[s.i]));
+    }
+  });
+});

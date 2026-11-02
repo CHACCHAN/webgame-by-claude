@@ -127,6 +127,21 @@ export function createCarMaterials(spec: CarSpec, bodyColor = spec.colors.body):
 const WHEEL_NAMES = ['wheel_fl', 'wheel_fr', 'wheel_rl', 'wheel_rr'];
 
 /**
+ * A single visible refractive (transmission) material makes three.js draw every opaque object a second
+ * time each frame into a refraction buffer, which doubled the cost of the whole scene. Small lenses
+ * left over from imported models (e.g. turn signals) read the same as plain see-through plastic.
+ */
+function withoutTransmission(mat: THREE.Material) {
+  const p = mat as THREE.MeshPhysicalMaterial;
+  if (p.isMeshPhysicalMaterial && p.transmission > 0) {
+    p.opacity = Math.min(p.opacity, 1 - 0.45 * p.transmission);
+    p.transmission = 0;
+    p.transparent = true;
+  }
+  return mat;
+}
+
+/**
  * Build a rig from a GLB template. Contract: metres, +Z forward, ground at y = 0,
  * a node "body", wheel pivots "wheel_fl|fr|rl|rr" (each with a child "spin_*"),
  * optional empties "anchor_headlight_*", "anchor_taillight_*", "anchor_exhaust",
@@ -156,7 +171,7 @@ export function rigFromTemplate(template: THREE.Object3D, spec: CarSpec, opts: {
         }
         return target;
       }
-      if (!cloned.has(mat)) cloned.set(mat, mat.clone());
+      if (!cloned.has(mat)) cloned.set(mat, withoutTransmission(mat.clone()));
       return cloned.get(mat)!;
     };
     m.material = Array.isArray(m.material) ? m.material.map(swap) : swap(m.material);

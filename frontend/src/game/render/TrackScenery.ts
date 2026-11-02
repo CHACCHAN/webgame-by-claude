@@ -617,6 +617,17 @@ function buildLampMeshes(track: Track, lamps: Lamp[], group: THREE.Group, nightE
   inst(ceilingGeo, sodiumMat, ceiling);
 }
 
+/**
+ * Curve mirrors (カーブミラー): one on the inside of each bend tighter than 30 m, at its sharpest point.
+ * (A per-sample curvature peak test put one every metre along constant-radius arcs: ~200 per course,
+ * a fence of orange poles and 600 draw calls.)
+ */
+export function curveMirrorSpots(track: Track) {
+  return findCorners(track, 30)
+    .filter((c) => c.apex >= 30 && c.apex < track.count - 30)
+    .map((c) => ({ i: c.apex, lateral: -c.dir * (track.width[c.apex] / 2 + SHOULDER + 0.8) }));
+}
+
 const nightEmissiveSigns: THREE.MeshStandardMaterial[] = [];
 const vendingLight = new THREE.PointLight('#e8f4ff', 9, 14, 1.6);
 
@@ -708,26 +719,28 @@ function buildSigns(track: Track, sides: ReturnType<typeof classifySides>, group
     group.add(line);
   }
 
-  // curve mirrors (カーブミラー) at hairpins
+  // curve mirrors (カーブミラー)
   const mirrorPole = new THREE.MeshStandardMaterial({ color: '#e46a1c', roughness: 0.5 });
   const mirrorGlass = new THREE.MeshStandardMaterial({ color: '#c8d4dc', metalness: 1, roughness: 0.05, envMapIntensity: 1.5 });
-  for (let i = 30; i < track.count - 30; i++) {
-    const k = track.curvature[i];
-    if (Math.abs(k) < 1 / 30) continue;
-    if (Math.abs(k) < Math.abs(track.curvature[i - 1]) || Math.abs(k) < Math.abs(track.curvature[i + 1])) continue;
-    const inside = k > 0 ? -1 : 1;
-    track.pointAt(i, inside * (track.width[i] / 2 + SHOULDER + 0.8), p);
-    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 2.8, 8), mirrorPole);
-    pole.position.set(p.x, p.y + 1.4, p.z);
-    group.add(pole);
-    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.4, 0.05, 8, 24), mirrorPole);
-    ring.position.set(p.x, p.y + 3.1, p.z);
-    ring.rotation.y = track.heading[i] + Math.PI / 2;
-    group.add(ring);
-    const glass = new THREE.Mesh(new THREE.CircleGeometry(0.38, 24), mirrorGlass);
-    glass.position.copy(ring.position);
-    glass.rotation.y = ring.rotation.y;
-    group.add(glass);
+  const frameGeo = mergeGeometries([
+    new THREE.CylinderGeometry(0.05, 0.05, 2.8, 8).translate(0, 1.4, 0),
+    new THREE.TorusGeometry(0.4, 0.05, 8, 24).translate(0, 3.1, 0),
+  ]);
+  const glassGeo = new THREE.CircleGeometry(0.38, 24).translate(0, 3.1, 0);
+  const mirrors: THREE.Matrix4[] = [];
+  const q = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0), one = new THREE.Vector3(1, 1, 1);
+  for (const { i, lateral } of curveMirrorSpots(track)) {
+    track.pointAt(i, lateral, p);
+    q.setFromAxisAngle(up, track.heading[i] + Math.PI / 2);
+    mirrors.push(new THREE.Matrix4().compose(p, q, one));
+  }
+  if (mirrors.length) {
+    for (const [geo, mat] of [[frameGeo, mirrorPole], [glassGeo, mirrorGlass]] as const) {
+      const mesh = new THREE.InstancedMesh(geo, mat, mirrors.length);
+      mirrors.forEach((m, k) => mesh.setMatrixAt(k, m));
+      mesh.name = 'curve-mirrors';
+      group.add(mesh);
+    }
   }
 }
 

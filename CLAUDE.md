@@ -22,6 +22,8 @@ pending. `docs/PLAN.md` holds the design.
 - Frontend: `cd frontend && npx tsc -b && npm run build && npx vitest run`
 - Headless driving sim: `cd frontend && npx tsx tools/sim-run.ts [cars] [levels]`
 - E2E: `docker compose --profile test run --rm e2e` (stack must be up)
+- Real-GPU performance (needs a host GPU + Google Chrome): `cd frontend && node tools/perf-gpu.cjs <course|quality|ab|census>`
+  (`vite preview` on :4173; compare builds with `URL=before@http://…:4174/,after@http://…:4173/`, see the file header).
 
 ## Environment notes (cloud sessions)
 - dockerd is not running by default: `nohup dockerd > /tmp/dockerd.log 2>&1 &`.
@@ -35,7 +37,19 @@ pending. `docs/PLAN.md` holds the design.
   the Node headless sim for driving/physics checks. Browser checks: `node tools/probe.cjs <quality> <script.cjs>`
   (`PW_MODULE=/opt/node-tools/node_modules/playwright`, `vite preview` on :4173). Never `pkill -f` a pattern contained in your own command line.
 
+## Environment notes (owner's PC `ubuntu-dev`, when the owner opens a session there)
+- The live stack (compose project `touge-nocturne` + cloudflared) runs on this machine: never restart or rebuild it
+  unless the owner asks. Other compose projects on the host are unrelated.
+- `vite preview` inherits the dev proxy (`/api` → localhost:8080 = the live server): always serve with
+  `API_PROXY=http://127.0.0.1:9 npx vite preview …` so test runs cannot create players or submit runs.
+- No Node on the host: use a user-space Node 24 tarball (nodejs.org) and `npm i playwright-core` outside the repo
+  (`PW_MODULE=<that>/node_modules/playwright-core`); Chrome is `/usr/bin/google-chrome` and renders on the RX 5700 XT
+  headless (`--use-angle=vulkan --enable-features=Vulkan`, as in `tools/perf-gpu.cjs`).
+- The GPU picks its own clock (800–2100 MHz) and frame costs change ~2× with it: compare builds with paired runs.
+
 ## Gotchas
+- Never leave a transmissive (refractive) material in the scene: three.js then renders every opaque object a second
+  time per frame. Imported car materials are flattened by `CarModel.withoutTransmission`.
 - Cars load from `frontend/public/models/cars/*.glb` at runtime. After editing `CarModel.ts`, rebuild and run
   `npm run assets:cars` (with `vite preview` on :4173 and `PW_MODULE=<path to playwright>`), or delete the GLBs
   to fall back to the procedural builder.

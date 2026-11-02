@@ -2,6 +2,56 @@
 
 Newest first. "Verified" means actually executed in this environment; anything else is marked as unverified.
 
+## Session 4 (2026-11-02) — real-GPU performance pass on the owner's PC
+
+Worked directly on the owner's PC this time, with the owner's approval (`ubuntu-dev`: i7-6950X, Radeon RX 5700 XT,
+Ubuntu; the public Docker stack + tunnel run on the same machine and were left untouched). Headless Google Chrome 155
+renders on the real GPU through ANGLE/Vulkan (RADV). New `tools/perf-gpu.cjs` drives the built game and records per
+frame: main-thread time of the animation-frame callbacks, `Game.update`, draw calls / triangles and the GPU time
+(EXT_disjoint_timer_query_webgl2) split into shadow maps / main pass / post-processing; plus a scene census, a draw
+tally per scene group and feature A/B on frozen frames. Setup: 1920×1080 at DPR 1, uncapped (no vsync), rival race
+on the autopilot (R34 vs the course's ace). Caution found on the way: `vite preview` inherits the dev proxy, so on
+this PC `/api` would reach the live server on :8080 (players, runs); serve with `API_PROXY=http://127.0.0.1:9`.
+
+### Found & fixed
+- **A refractive lens rendered the whole scene twice.** The Impreza GLB (`raijin`) keeps KHR_materials_transmission
+  on its turn-signal lenses (their material name matches no game material, so it was cloned as is). While one is in
+  view, three.js draws every opaque object a second time into a refraction buffer: ~2× draw calls and main-pass GPU
+  time. The Impreza is the ace rival on 朧峠 and 霧降湖 and a player car. (The R34 and RX-7 GLBs carry transmission on
+  lamp/glass materials too, but those are replaced by game materials.) `CarModel.withoutTransmission` now turns
+  leftover transmissive materials into plain see-through ones; the lens looks the same in the garage (screenshot).
+- **Curve mirrors stood in rows.** The placement tested every 1 m sample for a local curvature peak with ≥, which
+  every sample of a constant-radius arc passes: a mirror every metre along each bend tighter than 30 m (203 / 98 /
+  176 mirrors, 3 meshes each → 609 draw calls on 朧峠), seen as an orange fence on the inside of the hairpins. Now one
+  mirror per bend at its apex (`curveMirrorSpots`, unit test), instanced in 2 draw calls: 4 / 2 / 4 mirrors.
+  Before/after screenshots at the tightest hairpin of each course and a close-up of one mirror.
+- The old note "lamp posts are individual meshes (~650 draw calls)" was stale: lamps are instanced; those draw calls
+  were the mirrors.
+
+### Measurements (paired runs: pre-fix `3fbaa93` vs fixed build, alternating; GPU clock sampled)
+| run | fps | main thread ms p50 | GPU ms p50 / p95 | draw calls p50 / max | frame p99 ms |
+|---|---|---|---|---|---|
+| 朧峠 full race, high/night | 128 → 260 | 5.1 → 3.2 | 5.2/16.9 → 3.0/5.7 | 312/2043 → 332/509 | 31.3 → 8.0 |
+| 霧降湖 full race, high/night | 144 → 255 | 5.7 → 3.0 | 6.2/9.9 → 3.2/6.2 | 565/1225 → 351/411 | 31.5 → 9.9 |
+| 天狼 full race, high/night | 129 → 256 | 7.1 → 3.2 | 6.4/12.0 → 3.1/6.0 | 1069/1970 → 382/551 | 14.2 → 8.8 |
+| 朧峠 first 30 s, low/night | 103 → 369 | 9.4 → 2.1 | 4.3/4.9 → 1.2/2.0 | 1729/1889 → 292/349 | 15.6 → 6.0 |
+| 〃 medium/night | 122 → 287 | 7.9 → 2.7 | 7.5/12.0 → 2.7/5.8 | 1811/1996 → 376/454 | 14.2 → 8.3 |
+| 〃 high/night | 111 → 245 | 8.7 → 3.2 | 8.3/13.2 → 3.0/6.9 | 1879/2045 → 437/509 | 14.3 → 8.7 |
+| 〃 ultra/night | 94 → 286 | 9.3 → 3.1 | 9.1/18.2 → 3.1/4.4 | 1907/2049 → 434/512 | 32.3 → 6.1 |
+
+After the fix rain and dawn cost the same as night (GPU p50 within 0.3 ms at every quality level). Shadow-map passes cost ~0.3 ms and
+post-processing ~0.6 ms of GPU time; `Game.update` 0.1–0.2 ms. Course load ~3–5 s (local preview).
+Remaining per-feature GPU cost (A/B medians on frozen frames, high/night, measured before the fix, ±2 ms noise per
+point): headlight shadows 0.7–2.3 ms, trees 1.6–2.4 ms, sun shadow 0.3–1.5 ms, rocks/bushes 0.7–0.9 ms (all instances
+drawn every frame, no culling), street-lamp point lights 0.4–0.7 ms.
+- **GPU clock caveat**: amdgpu moves the core clock between 800 and 2100 MHz under this load and frame costs change
+  ~2× with it. That first looked like a slowdown building up over race restarts and like rain/dawn being heavier;
+  checked and ruled out (scene objects, lights, physics bodies, programs, particles and rAF loops constant over
+  restarts; fresh-page night/rain/dawn identical at the same clock). Hence the paired runs and the clock column.
+- Verified: vitest 26/26; builds; no page errors in any measured run; screenshots above.
+  Not verified: frame pacing with vsync in a windowed browser (headless only), other GPUs / Windows (ANGLE D3D11),
+  the rare single-frame hitches (max 12–75 ms, a few per run in both builds) — not investigated yet. E2E not re-run.
+
 ## Session 3 (2026-11-01) — owner playtest on a real GPU (60 fps, Cloudflare tunnel)
 
 ### Second playtest report (lamps, flicker, pop-ups, tail lamps) + exhaust
@@ -253,8 +303,8 @@ Newest first. "Verified" means actually executed in this environment; anything e
   Not yet verified end to end against Cloudflare (needs the owner's token and hostname).
 
 ## Known issues / next
-- Real-GPU performance pass (frame time budget, shadow map cost, draw calls) — still unmeasured. Known
-  candidate: lamp posts are individual meshes (~650 draw calls on 朧峠 before culling) and could be instanced.
+- Real-GPU performance pass: done in session 4 (RX 5700 XT). Open: rare single-frame hitches; roadside rocks/bushes
+  are not culled (one instanced mesh per kind for the whole course).
 - The delivered 朧峠 key art's coupe resembles a real 1980s car; replacing it is recommended before a public release.
 - Car models could be replaced by artist GLBs following the contract in docs/ASSETS.md.
 - Engine sound, corner warning beeps and the music loop points are unverified by ear in this environment.
