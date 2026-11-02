@@ -162,4 +162,19 @@ before any public release.
 
 ## Still requested
 - AE86 (`hayate`) car model: one of the two lighter candidates listed under the car models above.
+- Vegetation (requested 2026-11-02, to replace the procedural bush / rock lumps and add grass): Poly Haven models,
+  CC0, glTF at **1K** textures. Picked by web search only — this session's network blocked the Sketchfab and Poly
+  Haven APIs, so triangle counts and sizes are not checked yet; dense models will need decimation / LODs because
+  bushes are instanced by the thousand.
+  | Use | Model | Source |
+  |---|---|---|
+  | grass tufts on verges and slopes | Grass Medium 01 | https://polyhaven.com/a/grass_medium_01 |
+  | ferns under the trees (about 6 k tris, four clumps) | Fern 02 | https://polyhaven.com/a/fern_02 |
+  | bushes | Shrub 02 | https://polyhaven.com/a/shrub_02 |
+  | bushes (variant) | Shrub 04 | https://polyhaven.com/a/shrub_04 |
+  | low weeds on the shoulder | Weed Plant 02 | https://polyhaven.com/a/weed_plant_02 |
+  | taller weeds (optional) | Nettle Plant | https://polyhaven.com/a/nettle_plant |
+  Fallback if the Poly Haven shrubs are too heavy: "Lilac bush pack (12 vars, LODs, game ready)" by LOLIPOP on
+  Sketchfab (free download with LODs and billboards; licence to be checked on the page):
+  https://sketchfab.com/3d-models/lilac-bush-pack-12-vars-lods-game-ready-10312697ec994fc99355cb94f1963a2e
 Every course has its portraits, key art and race music; every proposed scenery model is in the game.
