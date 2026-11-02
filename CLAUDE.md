@@ -49,6 +49,15 @@ pending. `docs/PLAN.md` holds the design.
   The optimiser prunes empty nodes, so imported GLBs have no anchor empties: `CarModel.deriveAnchors` rebuilds lamp
   and exhaust anchors from the geometry. Lamp roles must only cover lamp parts (check: lamp materials only at the
   car's ends). Retractable lamps: `CarSpec.popUpLamps` (runtime pods in `CarVisual`); dark lens textures: `tailLampGain`.
+- Scenery props (street/LED lamps, wind turbines, curve mirrors, vending machines, torii, stone lanterns, bus stop,
+  cones) load from `frontend/public/models/props/<id>.glb` (`render/propAssets.ts`) and are placed as InstancedMesh by
+  `TrackScenery.ts`; a missing GLB falls back to the procedural prop (or no prop). Import like the cars:
+  `node tools/import-props.cjs raw|preview <srcRoot> <outDir> [ids]` (renders; preview = converted, 1 m grid, red arrow
+  = +Z = towards the road) and `node tools/import-props.cjs import <srcRoot> [ids]`, settings in `tools/prop-import.json`
+  (`yaw`, `height`/`scale`, `pivot` incl. `@base`, `roles` lamp/glow, `rotor`, `anchors`, `select` one model of a pack).
+  Prop metadata (anchors, rotor pose, bounds) is stored in the root node's glTF extras. Lamp light = `anchors.light`.
+  The shrine and the bus stop stand on sites from `track/propSites.ts` (straight mountain-side ground, terrain levelled
+  to the road bed in `buildScenery` before the terrain mesh is built); trees/clutter keep clear of them.
 - Courses live in `track/courses.ts` (design + `Landform` from `track/landforms.ts` + rivals, medals, music, art).
   After changing a course design, regenerate the CPU ghosts (`npm run seed:bots`) and re-check medals with the sim.
 - Online battle (≤3 players): lobby/start/results via `RoomController`; car states are presence-channel client events

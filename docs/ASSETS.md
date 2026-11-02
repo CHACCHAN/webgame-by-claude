@@ -18,6 +18,7 @@ still blocked, so Poly Haven files cannot be fetched. Every photo texture has a 
 | Asphalt, concrete, lattice, ground textures (fallback) | `src/game/render/textures.ts` | Canvas noise generators | Project | Used when a photo texture below is missing |
 | Road signs (chevrons, hairpin, speed, pass board) | `textures.ts` | Canvas-drawn, generic Japanese road-sign style | Project | Generic symbols only |
 | Trees, bushes, rocks | `TrackScenery.ts` | Instanced procedural meshes | Project | |
+| Lamp posts, curve mirrors, vending machines, wind turbines (fallback) | `TrackScenery.ts` | Procedural boxes / cylinders | Project | Used when a prop GLB below is missing |
 | Sky, moon, stars, clouds, sea of clouds | `Environment.ts` | GLSL shaders | Project | |
 | City lights, traffic, ferris wheel | `Environment.ts` | Points shader | Project | |
 | Engine / tyre / wind / UI sounds, menu pad | `src/game/audio/AudioEngine.ts` | WebAudio synthesis | Project | No samples |
@@ -97,21 +98,37 @@ as tyre tread). Then glTF-Transform `optimize`
 (simplify where needed, WebP textures ≤ 1024 px — 512 px for the S15 —, meshopt; palette merge off so the
 material names survive). The resulting GLBs are adaptations under the same licences.
 
-## Scenery models proposed to the owner (2026-11-01, not delivered yet)
+## Scenery models from Sketchfab (owner-supplied, in game)
 Picked with the Sketchfab search API (downloadable, CC BY 4.0, ≤ 10 MB glTF, author's own work going by the
-description and uploads). Not used until delivered; integration would load them as instanced props.
+description and uploads) and delivered by the owner on 2026-11-02 as glTF zips. Credited in the game's settings
+screen (`PROP_CREDITS` in `src/game/render/propAssets.ts`) and here. Converted with `tools/import-props.cjs` +
+`tools/prop-import.json` (converter `src/game/render/propImport.ts`) into `frontend/public/models/props/<id>.glb`.
 
-| Use | Model (author) | Source | glTF size / tris |
-|---|---|---|---|
-| Road lights (sodium heads over the road) | Street Light (kloworks) | https://sketchfab.com/3d-models/2d44b333f56c4faaab1bd2007868cc37 | 9.4 MB / 0.6 k |
-| — alternative, untextured set incl. sodium highway heads | Various Low-Poly Street Lights (kmb_jr) | https://sketchfab.com/3d-models/1173b0c4d9b0400bbeaafbee0e94ca59 | 0.2 MB / 11 k |
-| Wind turbines (天狼スカイライン) | Animated Wind Turbine (glowbox3d) | https://sketchfab.com/3d-models/e0678e6615a74ed29c1376a591262159 | 3.7 MB / 3 k |
-| Curve mirrors on blind corners | Blind spot traffic mirror (guru2fifa) | https://sketchfab.com/3d-models/6b7baf381f6c45ef8d92411e0467492b | 0.1 MB / 7.6 k |
-| Roadside vending machine | Japan Vending Machine Soft Drink (ditovirnantio) | https://sketchfab.com/3d-models/431394ee886141349e187fb8dcc2307a | 3.1 MB / 12 |
-| Roadside shrine | Japanese Torii Gate (sahirvirmani) | https://sketchfab.com/3d-models/2027a248de1b4b70985ff97e708fb50d | 5.6 MB / 1.3 k |
-| Roadside shrine | Stone Lantern (jamiemcfarlane) | https://sketchfab.com/3d-models/4e674d91b33a450781aebd9c490b0f05 | 3.0 MB / 1.2 k |
-| Rural bus stop | Kyoto Cityscene: Bus Stop (Xavaltir) | https://sketchfab.com/3d-models/5eb07fc3b28f474dbf15b1bbac814c82 | 2.4 MB / 6.6 k |
-| Start-line props | Traffic Cone (jamiemcfarlane) | https://sketchfab.com/3d-models/66b282e65d3b4da8a883ae8579bfb33c | 2.4 MB / 0.7 k |
+| Game id | Use | Model | Author | Source | Licence | GLB (tris / size) |
+|---|---|---|---|---|---|---|
+| `street_light` | sodium road lamps | Street Light | KloWorks | https://sketchfab.com/3d-models/street-light-2d44b333f56c4faaab1bd2007868cc37 | CC BY 4.0 | 0.6 k / 94 KB |
+| `led_light` | white LED lamps round the start | Various Low-Poly Street Lights (one of the eight) | KMB3D (@kmb_jr) | https://sketchfab.com/3d-models/various-low-poly-street-lights-1173b0c4d9b0400bbeaafbee0e94ca59 | CC BY 4.0 | 0.8 k / 10 KB |
+| `wind_turbine` | wind turbines (天狼スカイライン) | Animated Wind Turbine | Glowbox 3D (@ra3id) | https://sketchfab.com/3d-models/animated-wind-turbine-e0678e6615a74ed29c1376a591262159 | CC BY 4.0 | 3.1 k / 66 KB |
+| `curve_mirror` | curve mirrors at hairpins | Blind spot traffic mirror | guru2fifa | https://sketchfab.com/3d-models/blind-spot-traffic-mirror-6b7baf381f6c45ef8d92411e0467492b | CC BY 4.0 | 1.3 k / 16 KB |
+| `vending` | vending machines (summit, bus stop) | Japan Vending Machine Soft Drink | ditovirnantio | https://sketchfab.com/3d-models/japan-vending-machine-soft-drink-431394ee886141349e187fb8dcc2307a | CC BY 4.0 | 12 / 91 KB |
+| `torii` | roadside shrine | Japanese Torii Gate | Sahir Virmani (@sahirvirmani) | https://sketchfab.com/3d-models/japanese-torii-gate-2027a248de1b4b70985ff97e708fb50d | CC BY 4.0 | 1.3 k / 52 KB |
+| `lantern` | roadside shrine (pair) | Stone Lantern | Jamie McFarlane | https://sketchfab.com/3d-models/stone-lantern-4e674d91b33a450781aebd9c490b0f05 | CC BY 4.0 | 1.2 k / 133 KB |
+| `bus_stop` | rural bus stop | Kyoto Cityscene: Bus Stop | Mikail Karaca (@Xavaltir) | https://sketchfab.com/3d-models/kyoto-cityscene-bus-stop-5eb07fc3b28f474dbf15b1bbac814c82 | CC BY 4.0 | 6.6 k / 181 KB |
+| `cone` | start / finish straights | Traffic Cone | Jamie McFarlane | https://sketchfab.com/3d-models/traffic-cone-66b282e65d3b4da8a883ae8579bfb33c | CC BY 4.0 | 0.7 k / 84 KB |
+
+Processing (the licence allows adaptation; the GLBs are adaptations under the same licence): loaded with three.js in a
+headless browser, turned so the front faces +Z (a lamp's arm along −X), scaled to metres (street light 8.6 m, LED
+lamp 8.2 m, turbine hub at 61 m, mirror 3.5 m, vending machine 1.85 m, torii 4.4 m, lantern 1.75 m, bus stop from
+centimetres, cone 0.7 m), foot at the origin on y = 0, parts merged per material, then glTF-Transform `optimize`
+(WebP textures ≤ 512 px — 1024 px for the vending machine's front —, meshopt). Per model:
+- street light: the lens became its own "lamp" material (lit in sodium / LED colour at night, the cyan emissive
+  texture dropped); the rest no longer self-lit. LED lamp: only `polySurface102` (single arm, flat head) kept,
+  pole recoloured galvanised grey.
+- wind turbine: the animated blades became a separate rotor (hub and axis taken from the model's animation),
+  spun by the game.
+- curve mirror: pole and back cover recoloured orange (Japanese style), mirror surface decimated 6.8 k → 0.4 k tris.
+- vending machine: the display (emissive texture) is a "glow" material, brighter at night.
+- bus stop: kept whole (shelter, bench, utility pole, post box).
 
 Looked at and left out: a "Jizo Mitama" upload that is a sword from a commercial game, a cartoon-style Japanese
 street lamp (style clash), a wind turbine whose author asks not to redistribute it.
@@ -144,4 +161,5 @@ It is used only as a background illustration; replacing it with a more clearly f
 before any public release.
 
 ## Still requested
-Nothing outstanding. Every course has its portraits, key art and race music.
+- AE86 (`hayate`) car model: one of the two lighter candidates listed under the car models above.
+Every course has its portraits, key art and race music; every proposed scenery model is in the game.

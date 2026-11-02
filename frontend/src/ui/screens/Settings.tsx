@@ -6,6 +6,7 @@ import { gameHolder } from '../GameCanvas';
 import type { TimeOfDay } from '../../game/render/Environment';
 import { Hint } from './Menus';
 import { sfx } from '../sfx';
+import { PROP_CREDITS } from '../../game/render/propAssets';
 
 interface Row {
   label: string;
@@ -81,6 +82,16 @@ export function SettingsScreen() {
           </div>
         )}
         <div className="gpu-note">※ 目標は 1080p / 60fps です。カクつく場合は品質か解像度スケールを下げてください。</div>
+        <details className="credits">
+          <summary>背景の 3D モデル（クレジット）</summary>
+          <ul>
+            {PROP_CREDITS.map((c) => (
+              <li key={c.url}>
+                {c.use}: “<a href={c.url} target="_blank" rel="noreferrer">{c.title}</a>” by {c.author} ({c.license}, Sketchfab、ゲーム用に変換)
+              </li>
+            ))}
+          </ul>
+        </details>
       </div>
       <Hint items={[['↑↓', '項目'], ['←→', '変更'], ['Esc', '戻る']]} />
     </div>

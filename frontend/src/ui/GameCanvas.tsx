@@ -56,6 +56,19 @@ function GameBridge() {
         const { previewCarModel } = await import('../game/render/carImport');
         return previewCarModel(url, rotation);
       };
+      // dev hooks for tools/import-props: third-party scenery models → prop GLB (and previews)
+      w.__importProp = async (url: string, id: string, cfg: import('../game/render/propImport').PropImportConfig) => {
+        const { importPropModel } = await import('../game/render/propImport');
+        const { glb, stats } = await importPropModel(url, id, cfg);
+        const buf = new Uint8Array(glb);
+        let bin = '';
+        for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode(...buf.subarray(i, i + 0x8000));
+        return { b64: btoa(bin), stats };
+      };
+      w.__previewProp = async (url: string, cfg?: import('../game/render/propImport').PropImportConfig, id?: string) => {
+        const { previewPropModel } = await import('../game/render/propImport');
+        return previewPropModel(url, cfg, id);
+      };
     }
     game.on((e) => {
       const app = useApp.getState();

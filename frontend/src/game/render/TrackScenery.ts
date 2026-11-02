@@ -17,6 +17,8 @@ import {
 } from './textures';
 import { surfaceImage as photoImage, surfaceTexture as photoTexture, type SurfaceName } from './surfaceTextures';
 import { findCorners } from '../track/corners';
+import { faceRoadYaw, levelSites, planRoadsideSites, siteClearings, sitePoint, type RoadsideSite } from '../track/propSites';
+import { getProp, instanceProp, placeAt, type PropTemplate } from './propAssets';
 
 export interface Lamp {
   position: THREE.Vector3;
@@ -33,6 +35,8 @@ export interface SceneryResult {
   nightEmissive: THREE.MeshStandardMaterial[];
   /** materials carrying the baked lamp lightmap (scaled with lamp state) */
   lightmapMats: THREE.MeshStandardMaterial[];
+  /** levelled roadside sites (shrine, bus stop) */
+  sites: RoadsideSite[];
   update(time: number, cameraPos: THREE.Vector3): void;
 }
 
@@ -51,6 +55,10 @@ export function buildScenery(track: Track, terrain: TerrainData, quality: Scener
   const group = new THREE.Group();
   group.name = 'scenery';
   const sides = classifySides(track, terrain);
+  // a shrine and a bus stop on levelled roadside ground (changes the terrain grid before it is meshed)
+  const sites = planRoadsideSites(track, terrain, sides);
+  levelSites(track, terrain, sites);
+  const clearings = siteClearings(track, sites);
   const nightEmissive: THREE.MeshStandardMaterial[] = [];
   const surfaceImage = (n: SurfaceName) => (quality.photoTextures ? photoImage(n) : null);
   const surfaceTexture = (n: SurfaceName, srgb: boolean) => (quality.photoTextures ? photoTexture(n, srgb) : null);
@@ -190,7 +198,7 @@ export function buildScenery(track: Track, terrain: TerrainData, quality: Scener
   buildBridge(track, terrain, group, concreteMat, steel, lamps);
 
   // ------------------------------------------------------------- lamps
-  placeLamps(track, sides, lamps);
+  placeLamps(track, sides, lamps, sites);
   buildLampMeshes(track, lamps, group, nightEmissive);
   // baked pools of lamp light on the road and the ground around it
   const roadLightmap = bakeRoadLightmap(track, lamps, road.geometry);
@@ -203,13 +211,15 @@ export function buildScenery(track: Track, terrain: TerrainData, quality: Scener
   // ------------------------------------------------------------- signs
   buildSigns(track, sides, group);
   nightEmissive.push(...nightEmissiveSigns);
+  buildSiteProps(track, sides, sites, group, nightEmissive, quality.shadows);
 
   // ------------------------------------------------------------- trees
-  const trees = buildTrees(terrain, quality.treeDensity, quality.treeLod);
+  const trees = buildTrees(terrain, quality.treeDensity, quality.treeLod, clearings);
   group.add(trees);
-  group.add(buildClutter(track, terrain, quality.treeDensity, surfaceTexture));
+  group.add(buildClutter(track, terrain, quality.treeDensity, surfaceTexture, clearings));
   const turbines = buildTurbines(terrain);
   group.add(turbines.group);
+  const rotorAngles = new Float32Array(turbines.phases.length);
 
   return {
     group,
@@ -217,9 +227,14 @@ export function buildScenery(track: Track, terrain: TerrainData, quality: Scener
     roadMaterial,
     nightEmissive,
     lightmapMats,
+    sites,
     update(time, cameraPos) {
       updateTreeLods(trees, cameraPos);
       for (const r of turbines.rotors) r.rotation.z = time * 0.9 + r.userData.phase;
+      if (turbines.spin) {
+        for (let k = 0; k < rotorAngles.length; k++) rotorAngles[k] = time * 0.9 + turbines.phases[k];
+        turbines.spin(rotorAngles);
+      }
     },
   };
 }
@@ -538,12 +553,13 @@ function buildBridge(
   }
 }
 
-function placeLamps(track: Track, sides: ReturnType<typeof classifySides>, lamps: Lamp[]) {
+function placeLamps(track: Track, sides: ReturnType<typeof classifySides>, lamps: Lamp[], sites: RoadsideSite[]) {
   const p = new THREE.Vector3();
   const occupied = (s: number) => lamps.some((l) => Math.abs(l.s - s) < 14);
   const add = (i: number, side: number, color = SODIUM) => {
     i = clamp(Math.round(i), 0, track.count - 1);
     if (occupied(i)) return;
+    if (sites.some((st) => st.side === side && Math.abs(st.s - i) < st.halfLength + 3)) return;
     track.pointAt(i, side * (track.width[i] / 2 + SHOULDER + 0.6), p);
     lamps.push({ position: p.clone(), color: color.clone(), s: i });
   };
@@ -585,6 +601,9 @@ function buildLampMeshes(track: Track, lamps: Lamp[], group: THREE.Group, nightE
   const ceilingGeo = new THREE.BoxGeometry(0.9, 0.12, 0.3);
   const poleMats: THREE.Matrix4[] = [], sodium: THREE.Matrix4[] = [], led: THREE.Matrix4[] = [], ceiling: THREE.Matrix4[] = [];
   const q = new THREE.Quaternion(), s1 = new THREE.Vector3(1, 1, 1);
+  // imported lamp posts (arm along −X like the procedural one, light at their `light` anchor)
+  const models = { sodium: getProp('street_light'), led: getProp('led_light') };
+  const headOf = (kind: 'sodium' | 'led') => models[kind]?.anchors.light ?? new THREE.Vector3(-2.0, 7.2, 0);
   for (const lamp of lamps) {
     const i = Math.round(lamp.s);
     const inShed = track.zone[i] === 'rockshed' && lamp.position.y - track.pos[i * 3 + 1] > 3;
@@ -598,10 +617,11 @@ function buildLampMeshes(track: Track, lamps: Lamp[], group: THREE.Group, nightE
     const dir = new THREE.Vector3().subVectors(center, lamp.position).setY(0).normalize();
     q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), lampArmYaw(dir));
     const m = new THREE.Matrix4().compose(lamp.position, q, s1);
-    poleMats.push(m);
-    (lamp.color.equals(LED) ? led : sodium).push(m);
+    const kind = lamp.color.equals(LED) ? 'led' : 'sodium';
+    if (!models[kind]) poleMats.push(m);
+    (kind === 'led' ? led : sodium).push(m);
     // light source is at the lamp head
-    const headOffset = new THREE.Vector3(-2.0, 7.2, 0).applyQuaternion(q);
+    const headOffset = headOf(kind).clone().applyQuaternion(q);
     lamp.position.add(headOffset);
   }
   const inst = (geo: THREE.BufferGeometry, mat: THREE.Material, list: THREE.Matrix4[], shadow = false) => {
@@ -612,8 +632,27 @@ function buildLampMeshes(track: Track, lamps: Lamp[], group: THREE.Group, nightE
     group.add(mesh);
   };
   inst(poleGeo, poleMat, poleMats, true);
-  inst(headGeo, sodiumMat, sodium);
-  inst(headGeo, ledMat, led);
+  for (const [kind, list, lit] of [['sodium', sodium, sodiumMat], ['led', led, ledMat]] as const) {
+    const model = models[kind];
+    if (!model) {
+      inst(headGeo, lit, list);
+      continue;
+    }
+    const posts = instanceProp(model, list, {
+      castShadow: true,
+      material: (m, part) => {
+        if (part.role !== 'lamp') return m;
+        // the lens glows like the procedural lamp head (strength follows the time of day)
+        m.color.copy(lit.color);
+        m.emissive.copy(lit.emissive);
+        m.emissiveMap = null;
+        m.emissiveIntensity = lit.emissiveIntensity;
+        nightEmissive.push(m);
+        return m;
+      },
+    });
+    group.add(posts.group);
+  }
   inst(ceilingGeo, sodiumMat, ceiling);
 }
 
@@ -621,6 +660,8 @@ const nightEmissiveSigns: THREE.MeshStandardMaterial[] = [];
 const vendingLight = new THREE.PointLight('#e8f4ff', 9, 14, 1.6);
 
 function buildSigns(track: Track, sides: ReturnType<typeof classifySides>, group: THREE.Group) {
+  // filled per build (it used to keep the previous courses' materials after a course switch)
+  nightEmissiveSigns.length = 0;
   group.add(vendingLight);
   const postMat = new THREE.MeshStandardMaterial({ color: '#9aa0a6', metalness: 0.6, roughness: 0.4 });
   const mats = {
@@ -664,8 +705,18 @@ function buildSigns(track: Track, sides: ReturnType<typeof classifySides>, group
   {
     const i = 12;
     const side = sides.right.valley[i] ? -1 : 1;
-    const yaw = track.heading[i] + (side > 0 ? -Math.PI / 2 : Math.PI / 2);
-    for (let k = 0; k < 3; k++) {
+    // fronts to the road (the old heading ± π/2 turned them towards the hillside)
+    const yaw = faceRoadYaw(track, i, side);
+    const vending = getProp('vending');
+    if (vending) {
+      const at: THREE.Matrix4[] = [];
+      for (let k = 0; k < 3; k++) {
+        track.pointAt(i + k * 1.25, side * (track.width[i] / 2 + SHOULDER + 1.6), p);
+        at.push(placeAt(p, yaw));
+      }
+      group.add(instanceProp(vending, at, { castShadow: true, material: (m, part) => vendingGlow(m, part, nightEmissiveSigns) }).group);
+    }
+    for (let k = 0; !vending && k < 3; k++) {
       track.pointAt(i + k * 1.1, side * (track.width[i] / 2 + SHOULDER + 1.6), p);
       const face = new THREE.MeshStandardMaterial({ map: makeVendingTexture(k), emissive: '#ffffff', emissiveIntensity: 1.6, roughness: 0.4 });
       face.emissiveMap = face.map;
@@ -711,12 +762,20 @@ function buildSigns(track: Track, sides: ReturnType<typeof classifySides>, group
   // curve mirrors (カーブミラー) at hairpins
   const mirrorPole = new THREE.MeshStandardMaterial({ color: '#e46a1c', roughness: 0.5 });
   const mirrorGlass = new THREE.MeshStandardMaterial({ color: '#c8d4dc', metalness: 1, roughness: 0.05, envMapIntensity: 1.5 });
-  for (let i = 30; i < track.count - 30; i++) {
-    const k = track.curvature[i];
-    if (Math.abs(k) < 1 / 30) continue;
-    if (Math.abs(k) < Math.abs(track.curvature[i - 1]) || Math.abs(k) < Math.abs(track.curvature[i + 1])) continue;
-    const inside = k > 0 ? -1 : 1;
+  const mirrorModel = getProp('curve_mirror');
+  const mirrors: THREE.Matrix4[] = [];
+  // one per bend tighter than 30 m, at its apex (a curvature plateau used to get one at every sample)
+  for (const c of findCorners(track, 30)) {
+    const i = c.apex;
+    if (i < 30 || i > track.count - 30) continue;
+    const inside = c.dir > 0 ? -1 : 1;
     track.pointAt(i, inside * (track.width[i] / 2 + SHOULDER + 0.8), p);
+    if (mirrorModel) {
+      // the mirror looks back across the bend at the road centre
+      const c = track.getPos(i);
+      mirrors.push(placeAt(p, Math.atan2(c.x - p.x, c.z - p.z)));
+      continue;
+    }
     const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 2.8, 8), mirrorPole);
     pole.position.set(p.x, p.y + 1.4, p.z);
     group.add(pole);
@@ -728,6 +787,81 @@ function buildSigns(track: Track, sides: ReturnType<typeof classifySides>, group
     glass.position.copy(ring.position);
     glass.rotation.y = ring.rotation.y;
     group.add(glass);
+  }
+  if (mirrorModel) {
+    group.add(
+      instanceProp(mirrorModel, mirrors, {
+        castShadow: true,
+        // mirror glass reflects the sky / city lights environment
+        material: (m) => {
+          if (m.metalness > 0.9) m.envMapIntensity = 1.5;
+          return m;
+        },
+      }).group,
+    );
+  }
+}
+
+/** A vending machine's lit display: brightens at night like the other self-lit signs. */
+function vendingGlow(m: THREE.MeshStandardMaterial, part: { role?: string }, list: THREE.MeshStandardMaterial[]) {
+  if (part.role === 'glow') {
+    m.emissive.set('#ffffff');
+    m.emissiveIntensity = 1.6;
+    list.push(m);
+  }
+  return m;
+}
+
+/**
+ * The shrine (torii between two stone lanterns) and the bus stop (with a vending machine) on their
+ * levelled sites, and traffic cones along the start and finish straights.
+ */
+function buildSiteProps(
+  track: Track,
+  sides: ReturnType<typeof classifySides>,
+  sites: RoadsideSite[],
+  group: THREE.Group,
+  nightEmissive: THREE.MeshStandardMaterial[],
+  shadows: boolean,
+) {
+  const placements = new Map<PropTemplate, THREE.Matrix4[]>();
+  const put = (t: PropTemplate | null, m: THREE.Matrix4) => {
+    if (t) placements.set(t, [...(placements.get(t) ?? []), m]);
+  };
+  const p = new THREE.Vector3();
+  // u along the road, v away from it (site frame); props face the road, sunk a little so the feet of
+  // wide props stay in the ground where the road (and so the levelled ground) slopes
+  const at = (site: RoadsideSite, u: number, v: number, sink = 0.15, turn = 0) => {
+    sitePoint(track, site, u, v, p);
+    p.y -= sink;
+    return placeAt(p, site.yaw + turn);
+  };
+  for (const site of sites) {
+    if (site.kind === 'shrine') {
+      put(getProp('torii'), at(site, 0, 2.0, 0.25));
+      for (const u of [-3.8, 3.8]) put(getProp('lantern'), at(site, u, 0.9, 0.1));
+    } else {
+      // shelter (open side to the road: its front edge is 2 m ahead of its origin), the utility pole
+      // behind it; a vending machine on the pole side. A prop's local +X runs against s on the right
+      // side of the road and with it on the left: u = −side · x.
+      put(getProp('bus_stop'), at(site, 0, 2.1, 0.25));
+      put(getProp('vending'), at(site, site.side * 3.25, 0.9, 0.05));
+    }
+  }
+  // cones on the shoulder beyond the road wall, along the start and finish straights
+  for (const [from, to] of [[track.startS - 14, track.startS - 2], [track.finishS + 2, track.finishS + 16]]) {
+    for (let s = from; s <= to; s += 3) {
+      const i = clamp(Math.round(s), 0, track.count - 1);
+      for (const side of [1, -1]) {
+        if ((side > 0 ? sides.right : sides.left).valley[i]) continue;
+        track.pointAt(s, side * (track.width[i] / 2 + SHOULDER + 0.3), p);
+        put(getProp('cone'), placeAt(p, s * 1.7));
+      }
+    }
+  }
+  for (const [t, list] of placements) {
+    const inst = instanceProp(t, list, { castShadow: shadows && t.id !== 'cone', material: (m, part) => vendingGlow(m, part, nightEmissive) });
+    group.add(inst.group);
   }
 }
 
@@ -745,7 +879,10 @@ function cityWeight(lf: Landform, x: number, z: number) {
   return w;
 }
 
-function buildTrees(terrain: TerrainData, density: number, lodDistance: number) {
+type Clearing = { x: number; z: number; r: number };
+const inClearing = (list: Clearing[], x: number, z: number) => list.some((c) => (x - c.x) ** 2 + (z - c.z) ** 2 < c.r * c.r);
+
+function buildTrees(terrain: TerrainData, density: number, lodDistance: number, clearings: Clearing[]) {
   const group = new THREE.Group();
   group.name = 'trees';
   const geo = treeGeometry();
@@ -794,6 +931,7 @@ function buildTrees(terrain: TerrainData, density: number, lodDistance: number) 
     const d = terrain.roadDistAt(x, z);
     const hw = 7;
     if (d < hw + 3.5) continue;
+    if (inClearing(clearings, x, z)) continue;
     // clearings via noise; denser near the road for that tunnel-of-trees feeling
     const n = noise2(x / 140, z / 140);
     if (n < -0.25 && d > 40) continue;
@@ -983,6 +1121,7 @@ function buildClutter(
   terrain: TerrainData,
   density: number,
   surfaceTexture: (n: SurfaceName, srgb: boolean) => THREE.Texture | null,
+  clearings: Clearing[],
 ) {
   const group = new THREE.Group();
   group.name = 'clutter';
@@ -1013,6 +1152,7 @@ function buildClutter(
     // keep the summit start area (garage, grid) tidy
     if (s < track.startS + 45 && off < 16) continue;
     track.pointAt(s, side * off, p);
+    if (inClearing(clearings, p.x, p.z)) continue;
     const y = terrain.heightAt(p.x, p.z);
     const gx = (terrain.heightAt(p.x + 1.5, p.z) - terrain.heightAt(p.x - 1.5, p.z)) / 3;
     const gz = (terrain.heightAt(p.x, p.z + 1.5) - terrain.heightAt(p.x, p.z - 1.5)) / 3;
@@ -1056,6 +1196,19 @@ function buildTurbines(terrain: TerrainData) {
   const group = new THREE.Group();
   group.name = 'turbines';
   const rotors: THREE.Object3D[] = [];
+  const phases: number[] = [];
+  const model = getProp('wind_turbine');
+  if (model) {
+    const at: THREE.Matrix4[] = [];
+    for (const [x, z] of terrain.landform.features.turbines ?? []) {
+      if (terrain.roadDistAt(x, z) < 45) continue;
+      at.push(placeAt(new THREE.Vector3(x, terrain.heightAt(x, z) - 1, z), 0.6));
+      phases.push(Math.random() * 6);
+    }
+    const inst = instanceProp(model, at, { castShadow: true });
+    group.add(inst.group);
+    return { group, rotors, phases, spin: inst.spin };
+  }
   const mat = new THREE.MeshStandardMaterial({ color: '#d9dde2', roughness: 0.55, metalness: 0.2 });
   const towerGeo = new THREE.CylinderGeometry(1.1, 2.0, 60, 12).translate(0, 30, 0);
   const nacelleGeo = new THREE.BoxGeometry(2.4, 2.4, 7).translate(0, 0, -1.5);
@@ -1084,5 +1237,5 @@ function buildTurbines(terrain: TerrainData) {
     rotors.push(rotor);
     group.add(t);
   }
-  return { group, rotors };
+  return { group, rotors, phases, spin: undefined as ((a: ArrayLike<number>) => void) | undefined };
 }

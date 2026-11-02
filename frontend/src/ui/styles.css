@@ -492,3 +492,7 @@ kbd {
 @media (max-width: 1000px) { .start-guide { font-size: 12px; padding: 8px 12px; } }
 
 .car-credit { margin: -6px 0 10px; font-size: 11px; color: var(--muted); letter-spacing: 0.02em; }
+.credits { margin-top: 12px; font-size: 11px; color: var(--muted); line-height: 1.6; }
+.credits summary { cursor: pointer; }
+.credits ul { margin: 6px 0 0; padding-left: 18px; }
+.credits a { color: inherit; }

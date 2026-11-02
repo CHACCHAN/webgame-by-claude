@@ -4,17 +4,20 @@
 素材の出典・ライセンスは `docs/ASSETS.md`、設計は `docs/PLAN.md`。
 
 ## 1. 現在の状態
-- ブランチ: `ccr-de1f3a33-58aazj`（ここで開発・コミット・プッシュする。オーナーの明示依頼がない限り PR は作らない）。
+- ブランチ: `ccr-aed90fb5-j1rhzm`（セッション 4 の作業ブランチ。セッションごとに指定されるので、そのセッションの指示に従う。
+  オーナーの明示依頼がない限り PR は作らない）。
 - テスト結果:
-  - フロント単体テスト（vitest）: 25/25（`97086b3` 時点）
-  - E2E（Playwright、Docker 上）: 9/9、約 23 分、オンライン 3 人対戦を含む（`97086b3` 時点）
-  - バックエンド（`php artisan test`）: 13/13（2026-11-02 に実行）
+  - フロント単体テスト（vitest）: 31/31（セッション 4、背景モデル追加後）
+  - E2E（Playwright、Docker 上）: E2E_RESULT
+  - バックエンド（`php artisan test`）: 13/13（2026-11-02 に実行。セッション 4 ではバックエンドを変更していないので再実行していない）
 - 遊べる内容:
   - コース 3 本: 朧峠、霧降湖、天狼スカイライン
   - 車 6 台:
     - 実車モデル 5 台: RX-7、S15、インプレッサ、スープラ、R34（Sketchfab、CC BY）
     - ハチロクのみ仮の自作車体
   - モード: タイムアタック、AI ライバル戦、ゴーストバトル、オンライン対戦（最大 3 人）
+  - 背景の 3D モデル 9 種（Sketchfab、CC BY）: 街灯（ナトリウム灯・LED 灯）、風力発電機、カーブミラー、自販機、
+    鳥居と石灯籠（各コースに祠を 1 か所）、バス停（各コース 1 か所）、コーン（スタート・ゴール付近）
   - Laravel 側: ランキング、ゴースト、対戦ルーム
 - オーナーは実 GPU（60fps）で遊んでおり、Cloudflare Tunnel で公開済み（オーナー自身が設定）。
 
@@ -33,7 +36,7 @@
 - **外部素材**
   - 依頼するのは外部素材が必要なときと、自力で解決できないときだけ。
   - Sketchfab のモデルは私的利用（身内のみ）。CC BY / CC0 を選び、ゲームから抜き出したモデルは避ける。
-  - 素材は ASSETS.md と `CarSpec.model` に帰属表示を必ず書く。
+  - 素材は ASSETS.md と `CarSpec.model`（車）／`PROP_CREDITS`（背景モデル、設定画面に表示）に帰属表示を必ず書く。
 - **進め方**
   - オーナーとのやりとりは日本語。
   - 依頼に対しては、実際に動かして確認してから報告する。
@@ -50,13 +53,7 @@
      - 夜にリトラが開き、明け方に閉じること
      - テールランプ（夜はブレーキなしでも点灯）
      - ランプ素材が車の前後端だけにあること
-2. **背景用の 3D 素材**（ASSETS.md「Scenery models proposed」に表）
-   - 内容: 街灯、風力発電機、カーブミラー、自販機、鳥居、石灯籠、バス停、コーン。
-   - **小物用の読み込み・配置の仕組みはまだ無い**。届いたら新しく作る:
-     - glTF を読み込み、InstancedMesh で `TrackScenery.ts` に配置する。
-     - 街灯なら、今の箱形の灯具（`buildLampMeshes`）を置き換える。腕の向きは `lampArmYaw`、光源の位置は `Lamp.position` を使う。
-     - 風車は天狼の既存の自作風車と差し替える。
-   - 帰属表示を ASSETS.md の「in game」に移すこと。
+   - 背景用の 3D 素材 9 点はセッション 4 で受け取り、すべてゲームに入れた（残りの依頼はハチロクだけ）。
 
 ## 4. 実機でしか確かめられない未確認事項（オーナーの確認待ち）
 - **光の近くの画面チカチカ**
@@ -68,8 +65,13 @@
 - **アフターファイアの出方**
   - 実際の運転での頻度・見え方は未確認。
   - 静止状態で 60fps を模擬したスクリーンショットでのみ確認済み。
+- **背景モデルの見た目**
+  - 確認はソフトウェア描画（low 品質）のスクリーンショットだけ。実 GPU での質感（カーブミラーの映り込み、街灯レンズの光り方、
+    風車の回転の見え方）は未確認。
 - 実 GPU での性能計測（フレーム時間、影、ドローコール）は未実施。
-  - PROGRESS の「lamp posts are individual meshes」という記述は、街灯がすでに InstancedMesh なので古い可能性がある（要確認）。
+  - ヘッドレスでの数え上げでは、ドローコールが平均で 朧峠 409→132、霧降湖 210→111、天狼 624→186 に減った
+    （主にカーブミラーの重複を直した効果。PROGRESS セッション 4）。
+  - PROGRESS の「lamp posts are individual meshes」は古い記述だった（街灯は前から InstancedMesh）。訂正済み。
 
 ## 5. 既知の小さな課題・次の候補
 - **S15 の排気の出口**
@@ -81,11 +83,28 @@
   - トレノなのにリトラではない。モデルが届けば解消する。
 - **公開サイト**
   - Cloudflare Access 等でのアクセス制限を推奨（オーナー判断）。
+- **背景モデル**
+  - 祠（鳥居＋石灯籠）とバス停の場所は自動で選ぶ（`track/propSites.ts`。直線の山側で、ガードレール・カーブ・洞門・橋・
+    他の区間から離れた、いちばん平らな所）。場所を変えたい・数を増やしたいときはここを調整する。
+  - 自販機のモデルは 1 デザインだけ（3 台とも同じ見た目）。石灯籠は夜も灯らない。
+  - 変換元の glTF は Git に入れていない（約 33MB）。取り込み直すときは Sketchfab から再取得してもらう（ASSETS.md に URL）。
 - **その他**
   - 朧峠のキービジュアルの車が実在車に似ている（公開前に差し替え推奨）。
   - タッチ操作は未対応。
 
-## 6. 最近の主な変更（新しい順。詳細は PROGRESS「Session 3」）
+## 6. 最近の主な変更（新しい順。詳細は PROGRESS「Session 4」「Session 3」）
+
+### 背景の 3D モデル（セッション 4）
+- 小物の取り込みツールを新規作成: `tools/import-props.cjs`、`tools/prop-import.json`、`render/propImport.ts`
+  （向き・大きさ・足元の位置・光るレンズなどの役割・回転部品・アンカーを設定。確認用の画像も出せる）。
+- 読み込みと配置: `render/propAssets.ts` が `public/models/props/<id>.glb` を読み込み、`TrackScenery.ts` が
+  InstancedMesh で並べる。GLB が無いときは従来の自作の小物に戻る。
+- 街灯（光源の位置はモデルのアンカーから）、LED 灯、風車（モデルのアニメーションから回転軸を取り出して回す）、
+  カーブミラー、自販機を差し替え。新しく祠（鳥居＋石灯籠）、バス停（＋自販機）、コーンを追加。
+- 祠とバス停の地面は道路脇と同じ高さにならしてから地形を作る（`track/propSites.ts`）。木や茂みはそこを避ける。
+- ついでに見つけて直したバグ: カーブミラーがヘアピンのほぼ全地点に並んでいた（朧峠で 203 本）、
+  山頂の自販機が山側を向いていた、コース切り替えで光る看板の素材リストが前のコースの分を持ち越していた。
+- クレジットは設定画面の「背景の 3D モデル（クレジット）」と ASSETS.md。
 
 ### 2 回目のプレイ報告への対応（`cfd1297`、`97086b3`）
 - 街灯が道路の外を向いていた → 向きの式を修正（`TrackScenery.lampArmYaw`、テストあり）。
@@ -156,6 +175,9 @@ nohup npx vite preview --port 4173 --strictPort > /tmp/preview.log 2>&1 &   # �
   - そのため候補は API で探し、オーナーにダウンロードを依頼する。
   - 届く zip は 20MB 程度までなら添付できている。
   - 届いたファイルは `/root/.claude/uploads/<セッション>/` にある。それぞれ新しい空フォルダに展開して扱う。
+- **背景モデルの取り込み**（詳細は CLAUDE.md）
+  - `node tools/import-props.cjs raw|preview <展開先> <出力先> [id]` で向きを確認（preview は変換後。赤い矢印 = +Z = 道路側）。
+  - `node tools/import-props.cjs import <展開先> [id]` で `public/models/props/<id>.glb` を書き出す。設定は `tools/prop-import.json`。
 - **車の取り込みでのはまりどころ**（詳細は CLAUDE.md）
   - 取り込んだら `npx vite build` をし直してから確認する（preview は `dist/` を配信しているため）。
   - パターンは「メッシュ名 + 素材名」に対して照合される。
@@ -168,7 +190,10 @@ nohup npx vite preview --port 4173 --strictPort > /tmp/preview.log 2>&1 &   # �
 | 車の見た目（ライト、リトラ、テール、車体の動き） | `frontend/src/game/render/CarVisual.ts` |
 | 車モデルの読み込み・アンカー・自作車体 | `frontend/src/game/render/CarModel.ts` |
 | 車の性能値・帰属表示・`popUpLamps`・`tailLampGain` | `frontend/src/game/vehicle/carSpecs.ts` |
-| 背景（街灯、ガードレール、洞門、橋、標識） | `frontend/src/game/render/TrackScenery.ts` |
+| 背景（街灯、ガードレール、洞門、橋、標識、小物の配置） | `frontend/src/game/render/TrackScenery.ts` |
+| 背景モデルの読み込み・インスタンス化・クレジット | `frontend/src/game/render/propAssets.ts` |
+| 祠・バス停の場所選びと地面ならし | `frontend/src/game/track/propSites.ts` |
+| 背景モデルの取り込み | `frontend/tools/import-props.cjs`, `prop-import.json`, `src/game/render/propImport.ts` |
 | AI（追突回避・ライン防御・停車） | `frontend/src/game/ai/AIDriver.ts` |
 | オンラインの相手車（代役の車体） | `frontend/src/game/net/RemoteRacers.ts`, `ProxyCar.ts` |
 | 排気・タイヤスモーク | `frontend/src/game/fx/Exhaust.ts`, `TireEffects.ts` |

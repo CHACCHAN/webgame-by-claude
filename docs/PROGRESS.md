@@ -2,6 +2,45 @@
 
 Newest first. "Verified" means actually executed in this environment; anything else is marked as unverified.
 
+## Session 4 (2026-11-02) — scenery models from the owner
+
+### Scenery props (9 Sketchfab models, CC BY 4.0)
+- Delivered by the owner: street light (KloWorks), low-poly street light set (KMB3D), animated wind turbine
+  (Glowbox 3D), curve mirror (guru2fifa), vending machine (ditovirnantio), torii (Sahir Virmani), stone lantern and
+  traffic cone (Jamie McFarlane), bus stop (Mikail Karaca). Sources, licences and changes: docs/ASSETS.md; credited
+  in the game's settings screen (「背景の 3D モデル（クレジット）」).
+- New prop pipeline: `tools/import-props.cjs` + `tools/prop-import.json` + `render/propImport.ts` (orientation /
+  size / pivot / material roles / rotor / anchors, renders for checking) → `public/models/props/<id>.glb`
+  (~740 KB for all nine); runtime `render/propAssets.ts` loads them with the cars and places them as
+  InstancedMesh (one per part); procedural fallback (lamps, mirrors, vending machines, turbines) when a GLB is missing.
+- In game: sodium road lamps and the white LED lamps round the start (lens glows at night, light anchor from the
+  model: heads now 8.3 m / 7.8 m up), wind turbines on 天狼 (rotor spun about the hub axis taken from the model's
+  animation), curve mirrors at hairpins, vending machines at the summit, new: a roadside shrine (torii + two stone
+  lanterns) and a rural bus stop (shelter, utility pole, vending machine) on every course, cones along the start
+  and finish straights.
+- Shrine / bus stop sites (`track/propSites.ts`): straight mountain-side ground away from bends, tunnels, bridges
+  and other road legs, chosen by flatness; the terrain grid is levelled to the road bed under them (≤ 6.4 cm off
+  after levelling on all courses) and trees/bushes keep clear.
+- Bugs found while doing this, fixed: a curve mirror stood at **every sample** of a constant-radius hairpin (203 on
+  朧峠, 609 separate meshes) → one per bend tighter than 30 m (4 / 2 / 4 per course); the summit vending machines
+  faced the hillside (their fronts pointed away from the road; measured: front · to-road = −1 on both sides)
+  → face the road; the self-lit sign material list kept the previous course's materials after a course switch.
+  Found in the screenshots and fixed: on 天狼 the first bus-stop site straddled the end of a guardrail run (the
+  side was only checked at the site centre) → the whole footprint ± 6 m must be guardrail-free; the turbine model
+  is half metallic in its texture and looked dark brown → painted (metalness 0.05).
+- Verified: unit tests (6 new: sites on all three courses — beyond the road wall, nearest road is their own leg,
+  not in tunnels/bridges, levelled ±0.15 m, road corridor heights untouched, facing the road; prop GLBs load and
+  their quantised parts bake back to metres with matching anchors/bounds; rotor instancing about the hub);
+  lamp light clearance re-measured as in session 3 (light 0.9 m under the lens → nearest terrain within 3 m):
+  ≥ 7.15 m on all courses (was ≥ 6.2 m); screenshots (low quality) of every prop on every course at night, and
+  天狼 again at dawn after the fixes (lamp lenses and vending displays dark by day, white turbines — their rotor instances turn ~0.9 rad/s about a fixed hub, read back in the browser —,
+  summit vending machines facing the road). vitest 31/31.
+- Draw calls / triangles (headless, low quality, night, the same 8 views along each course, before → after):
+  朧峠 409 → 132 calls (1.75 M → 1.57 M tris), 霧降湖 210 → 111 (1.40 M → 1.27 M), 天狼 624 → 186 (1.58 M → 1.41 M);
+  separate (non-instanced) scenery meshes on 朧峠 707 → 95. Mostly the curve-mirror fix above; the imported props
+  themselves are instanced (one draw call per part and prop type).
+- Not verified: look and performance on a real GPU (owner).
+
 ## Session 3 (2026-11-01) — owner playtest on a real GPU (60 fps, Cloudflare tunnel)
 
 ### Second playtest report (lamps, flicker, pop-ups, tail lamps) + exhaust
@@ -253,8 +292,9 @@ Newest first. "Verified" means actually executed in this environment; anything e
   Not yet verified end to end against Cloudflare (needs the owner's token and hostname).
 
 ## Known issues / next
-- Real-GPU performance pass (frame time budget, shadow map cost, draw calls) — still unmeasured. Known
-  candidate: lamp posts are individual meshes (~650 draw calls on 朧峠 before culling) and could be instanced.
+- Real-GPU performance pass (frame time budget, shadow map cost, draw calls) — still unmeasured. (The old note
+  about individual lamp-post meshes was stale: lamps were already instanced; the ~600 separate meshes on 朧峠 were
+  the duplicated curve mirrors, fixed in session 4.)
 - The delivered 朧峠 key art's coupe resembles a real 1980s car; replacing it is recommended before a public release.
 - Car models could be replaced by artist GLBs following the contract in docs/ASSETS.md.
 - Engine sound, corner warning beeps and the music loop points are unverified by ear in this environment.

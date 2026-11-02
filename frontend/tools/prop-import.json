@@ -1,0 +1,144 @@
+{
+  "_doc": "Scenery models → public/models/props/<id>.glb (tools/import-props.cjs, src/game/render/propImport.ts). Patterns match '<node path> <material name>'. Sources and licences: docs/ASSETS.md.",
+  "street_light": {
+    "dir": "street_light",
+    "config": {
+      "yaw": 3.14159265,
+      "height": 8.6,
+      "pivot": "@base",
+      "roles": {
+        "/Light_low_": "lamp"
+      },
+      "restyle": {
+        "^(?!.*/Light_low_)": {
+          "emissive": "#000000"
+        },
+        "/Light_low_": {
+          "emissive": "#ffffff",
+          "color": "#fff4e0",
+          "roughness": 0.3,
+          "map": false
+        }
+      },
+      "anchors": {
+        "light": "/Light_low_@bottom"
+      }
+    }
+  },
+  "led_light": {
+    "dir": "various_low-poly_street_lights",
+    "config": {
+      "select": "polySurface102",
+      "yaw": -1.5707963,
+      "height": 8.2,
+      "pivot": "@base",
+      "roles": {
+        " light$": "lamp"
+      },
+      "restyle": {
+        " metal$": {
+          "color": "#9aa0a6",
+          "metalness": 0.6,
+          "roughness": 0.4
+        },
+        " light$": {
+          "color": "#ffffff",
+          "metalness": 0,
+          "roughness": 0.3
+        }
+      },
+      "anchors": {
+        "light": " light$@bottom"
+      }
+    }
+  },
+  "wind_turbine": {
+    "dir": "animated_wind_turbine",
+    "textureSize": 512,
+    "config": {
+      "scale": 0.0115,
+      "rotor": {
+        "parts": "/Blades",
+        "node": "Blades"
+      },
+      "anchors": {
+        "hub": "/Blades"
+      },
+      "restyle": {
+        " WindTurbine_PBR$": {
+          "metalness": 0.05
+        }
+      }
+    }
+  },
+  "curve_mirror": {
+    "dir": "blind_spot_traffic_mirror",
+    "config": {
+      "yaw": 3.14159265,
+      "height": 3.5,
+      "ground": 0,
+      "pivot": "/Pole_0/",
+      "reduce": {
+        " mirror$": {
+          "keep": 0.06,
+          "error": 0.003
+        }
+      },
+      "restyle": {
+        " Pole$": {
+          "color": "#e46a1c",
+          "metalness": 0.2,
+          "roughness": 0.5
+        },
+        " Cover$": {
+          "color": "#e46a1c",
+          "roughness": 0.5
+        },
+        " mirror$": {
+          "color": "#d0d8de",
+          "roughness": 0.04
+        }
+      },
+      "anchors": {
+        "mirror": " mirror$"
+      }
+    }
+  },
+  "vending": {
+    "dir": "japan_vending_machine_soft_drink",
+    "textureSize": 1024,
+    "config": {
+      "height": 1.85,
+      "roles": {
+        " vending$": "glow"
+      }
+    }
+  },
+  "torii": {
+    "dir": "japanese_torii_gate",
+    "config": {
+      "yaw": 1.5707963,
+      "height": 4.4
+    }
+  },
+  "lantern": {
+    "dir": "stone_lantern",
+    "config": {
+      "height": 1.75
+    }
+  },
+  "bus_stop": {
+    "dir": "kyoto_cityscene_bus_stop",
+    "config": {
+      "yaw": 3.14159265,
+      "scale": 0.01,
+      "pivot": "Material_26$"
+    }
+  },
+  "cone": {
+    "dir": "traffic_cone",
+    "config": {
+      "height": 0.7
+    }
+  }
+}

@@ -11,6 +11,7 @@ import { buildScenery, type SceneryResult } from './render/TrackScenery';
 import { buildEnvironment, PRESETS, type EnvironmentRig, type TimeOfDay } from './render/Environment';
 import { CarVisual } from './render/CarVisual';
 import { loadCarTemplates } from './render/carAssets';
+import { loadPropTemplates } from './render/propAssets';
 import { loadSurfaceTextures } from './render/surfaceTextures';
 import { findCorners, type Corner, type CornerKind } from './track/corners';
 import { RemoteRacers, SLOT_COLORS, type NetState, type Peer } from './net/RemoteRacers';
@@ -228,7 +229,7 @@ export class Game {
     await this.yieldFrame(0.05, '物理エンジンを初期化中');
     await initRapier();
     await this.yieldFrame(0.08, '車両モデルを読み込み中');
-    await Promise.all([loadCarTemplates(CAR_ORDER), loadSurfaceTextures()]);
+    await Promise.all([loadCarTemplates(CAR_ORDER), loadSurfaceTextures(), loadPropTemplates()]);
     this.root.add(this.smoke.points, this.skids.mesh, this.rain.mesh, this.exhaust.group);
     this.exhaust.density = this.quality.treeDensity < 0.6 ? 0.6 : 1;
     this.remotes = new RemoteRacers(this.root, (id) => this.rideHeightOf(id), false);
@@ -292,7 +293,8 @@ export class Game {
         if ((o as THREE.InstancedMesh).isInstancedMesh) (o as THREE.InstancedMesh).dispose();
         const m = o as THREE.Mesh;
         if (!m.geometry) return;
-        m.geometry.dispose();
+        // prop models are shared by every course (render/propAssets.ts)
+        if (!m.geometry.userData.sharedAsset) m.geometry.dispose();
         for (const mat of Array.isArray(m.material) ? m.material : [m.material]) {
           if (!mat) continue;
           for (const v of Object.values(mat)) if (v instanceof THREE.Texture) textures.add(v);
@@ -301,7 +303,7 @@ export class Game {
           mat.dispose();
         }
       });
-      textures.forEach((t) => t.dispose());
+      textures.forEach((t) => !t.userData.sharedAsset && t.dispose());
     }
     this.env.dispose();
     this.scene.environment = null;
