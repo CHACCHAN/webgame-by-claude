@@ -59,6 +59,16 @@ Newest first. "Verified" means actually executed in this environment; anything e
   could not stop and respawned: those runs were replaced by clean runs or estimates.
 - Fixed on the way: the colour picked in the car select was never used in the race (`RaceConfig.color`).
 
+### Smaller fixes
+- Curve mirrors on the left of the road faced away from it (all were turned to the road's left); test checks both
+  sides.
+- Exhaust from the real tailpipes: S15 (muffler named only in its material, now matched), Impreza and R34 (tip on
+  the left, the guess was right), RX-7 (10 cm out).
+- Exhaust for online peers (they now send throttle and engine speed; older clients' are read from speed changes)
+  and replay cars (from the recorded motion). Replay check: up to 17 live exhaust particles (none before).
+- Roadside clutter culling tried (spatial chunks + distance cut): no measurable gain on the real GPU at matched
+  clocks (GPU p50 7.15 → 7.19 ms), more draw calls; reverted.
+
 ### Tests
 - Backend: the `backend-test` image bakes the code in, so earlier runs without `--build` tested old code. With
   `--build`: 14/14 (new: ready gating, rejoin, room conditions).
