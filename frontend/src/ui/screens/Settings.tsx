@@ -6,6 +6,7 @@ import { gameHolder } from '../GameCanvas';
 import { Hint } from './Menus';
 import { sfx } from '../sfx';
 import { PROP_CREDITS } from '../../game/render/props';
+import { TRAIN_INFO, TRAIN_ORDER } from '../../game/vehicle/trains';
 
 interface Row {
   label: string;
@@ -72,6 +73,12 @@ export function SettingsScreen() {
         <div className="gpu-note">※ 目標は 1080p / 60fps です。カクつく場合は品質か解像度スケールを下げてください。</div>
         <div className="credits">
           背景の3Dモデル（Sketchfab, CC BY 4.0）: {PROP_CREDITS.map((c) => `“${c.title}” by ${c.author}`).join(' / ')}
+          <br />
+          電車のモーター音（Wikimedia Commons の録音を切り出し・加工）:{' '}
+          {TRAIN_ORDER.flatMap((id) => {
+            const c = TRAIN_INFO[id].motorSound?.credit;
+            return c ? [`${TRAIN_INFO[id].name}: “${c.title}” by ${c.author} (${c.license})`] : [];
+          }).join(' / ')}
         </div>
       </div>
       <Hint items={[['↑↓', '項目'], ['←→', '変更'], ['Esc', '戻る']]} />

@@ -1,5 +1,5 @@
 import type { CarId } from '../vehicle/carSpecs';
-import { COURSES, TRAIN_MEDALS, type CourseId } from '../track/courses';
+import { COURSES, ROACH_MEDALS, TRAIN_MEDALS, type CourseId } from '../track/courses';
 import type { TrainId } from '../vehicle/trains';
 
 export type Medal = 'gold' | 'silver' | 'bronze' | null;
@@ -24,6 +24,7 @@ export function nextTarget(course: CourseId, car: CarId, bestMs: number | null):
 
 function medalsOf(course: CourseId, car: CarId) {
   const c = COURSES[course];
+  if (car === 'roach') return ROACH_MEDALS[course];
   return car in c.medals ? c.medals[car as keyof typeof c.medals] : TRAIN_MEDALS[course][car as TrainId];
 }
 

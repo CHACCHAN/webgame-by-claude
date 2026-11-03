@@ -1,7 +1,7 @@
-import type { TrainId } from '../vehicle/trains';
 import { buildTrain, type TrainRig } from './TrainModel';
+import { buildRoach, type CreatureRig } from './RoachModel';
 import * as THREE from 'three';
-import type { CarId, CarSpec } from '../vehicle/carSpecs';
+import type { CarId, CarSpec, RoadCarId } from '../vehicle/carSpecs';
 
 /**
  * Procedural car bodies. Each car is lofted from cross sections along its
@@ -66,7 +66,7 @@ const BASE_STYLES = {
 } satisfies Record<'hayate' | 'raijin' | 'shiden', BodyStyle>;
 
 /** Fallback bodies for the newer cars until their GLB models are in place. */
-const STYLES: Record<Exclude<CarId, TrainId>, BodyStyle> = {
+const STYLES: Record<RoadCarId, BodyStyle> = {
   ...BASE_STYLES,
   supra: { ...BASE_STYLES.shiden, front: 2.15, rear: -2.35, halfWidth: 0.9, headlights: 'slim' },
   r34: { ...BASE_STYLES.raijin },
@@ -373,17 +373,20 @@ export interface CarRig {
   train?: TrainRig;
   /** where the headlights hang (a train's leading car; anchors.headlights are then in its frame), else root */
   lampParent?: THREE.Object3D;
+  /** a creature: its legs run with the distance covered (render/RoachModel.ts) */
+  creature?: CreatureRig;
 }
 
 export function buildCar(spec: CarSpec, opts: { bodyColor?: string; procedural?: boolean } = {}): CarRig {
   if (spec.train) return buildTrain(spec, opts);
+  if (spec.creature) return buildRoach(spec, opts);
   const tpl = opts.procedural ? null : carTemplate(spec.id);
   if (tpl) return rigFromTemplate(tpl, spec, opts);
   return buildProceduralCar(spec, opts);
 }
 
 export function buildProceduralCar(spec: CarSpec, opts: { bodyColor?: string } = {}): CarRig {
-  const st = STYLES[spec.id as Exclude<CarId, TrainId>];
+  const st = STYLES[spec.id as RoadCarId];
   const mats = createCarMaterials(spec, opts.bodyColor);
   const root = new THREE.Group();
   root.name = `car-${spec.id}`;

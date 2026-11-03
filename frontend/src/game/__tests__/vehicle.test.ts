@@ -140,8 +140,37 @@ describe('VehicleSim', () => {
     expect(corner('s15', 70, (t, i) => { i.brake = t < 0.3 ? 0.8 : 0; i.steer = 0.8; i.throttle = t > 0.3 ? 0.9 : 0; })).toBeGreaterThan(30);
   });
 
+  it('the cockroach (joke entry) out-accelerates, outruns and outbrakes every other vehicle', () => {
+    const perf = (car: CarId) => {
+      let t100 = Infinity, vmax = 0;
+      drive(car, 60, (t, v, i) => {
+        i.throttle = 1;
+        if (t100 === Infinity && v.speed * 3.6 >= 100) t100 = t;
+        vmax = Math.max(vmax, v.speed * 3.6);
+      });
+      // braking distance from 100 km/h (a held brake would then engage reverse)
+      let stop = Infinity;
+      drive(car, 25, (t, v, i) => {
+        i.brake = 1;
+        // (the derived speed is set by the first step)
+        if (stop === Infinity && t > 0.1 && v.speed < 0.5) stop = Math.abs(v.position.z);
+      }, 100 / 3.6);
+      return { t100, vmax, stop };
+    };
+    const roach = perf('roach');
+    expect(roach.t100).toBeLessThan(2);
+    expect(roach.vmax).toBeGreaterThan(380);
+    expect(roach.stop).toBeLessThan(25);
+    for (const car of [...CAR_ORDER, 'n700'] as CarId[]) {
+      const p = perf(car);
+      expect(roach.t100).toBeLessThan(p.t100);
+      expect(roach.vmax).toBeGreaterThan(p.vmax);
+      expect(roach.stop).toBeLessThan(p.stop);
+    }
+  });
+
   it('held on the line it revs but neither moves nor drops into reverse', () => {
-    for (const car of [...CAR_ORDER, ...TRAIN_ORDER]) {
+    for (const car of [...CAR_ORDER, ...TRAIN_ORDER, 'roach'] as CarId[]) {
       let maxRpm = 0;
       const { v } = drive(car, 4, (_t, sim, i) => {
         i.hold = true;

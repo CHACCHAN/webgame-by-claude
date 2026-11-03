@@ -98,6 +98,21 @@ describe('trains', () => {
     expect(Math.abs(out.y)).toBeCloseTo(Math.SQRT1_2, 2);
   });
 
+  it('each recorded motor sound is shipped and maps rising time to rising speed', async () => {
+    const { existsSync } = await import('node:fs');
+    const { TRAIN_INFO } = await import('../vehicle/trains');
+    for (const id of TRAIN_ORDER) {
+      const rec = TRAIN_INFO[id].motorSound;
+      if (!rec) continue;
+      expect(existsSync(`public/audio/${rec.file}.mp3`)).toBe(true);
+      expect(rec.knots[0][1]).toBe(0);
+      for (let k = 1; k < rec.knots.length; k++) {
+        expect(rec.knots[k][0]).toBeGreaterThan(rec.knots[k - 1][0]);
+        expect(rec.knots[k][1]).toBeGreaterThan(rec.knots[k - 1][1]);
+      }
+    }
+  });
+
   it('backing up pulls the cars back along the same path', () => {
     const out = (t: number) => ({ p: new THREE.Vector3(0, 0, t * 60), heading: 0 });
     const ahead = drive(out, 300);

@@ -5,6 +5,7 @@ import { gameHolder } from '../GameCanvas';
 import { CAR_SPECS, VEHICLE_ORDER, type CarId, type CarSpec } from '../../game/vehicle/carSpecs';
 import { Hint } from './Menus';
 import { TRAIN_INFO, TRAIN_ORDER, type TrainId } from '../../game/vehicle/trains';
+import { ROACH_INFO } from '../../game/vehicle/roach';
 import { sfx } from '../sfx';
 
 /** Body colours offered for each car (first = default). */
@@ -17,6 +18,8 @@ export const COLORS: Record<CarId, string[]> = {
   supra: ['#eeeeee', '#d8481c', '#c40d1e', '#121214', '#1f5fb5'],
   r34: ['#2f4fa6', '#e9e9ea', '#121214', '#8a8f96', '#4a2a63'],
   s15: ['#f5cf30', '#e9e9ea', '#121214', '#b3121c', '#2f6db5'],
+  // the cockroach: one swatch per species colouring
+  roach: ROACH_INFO.liveries.map((l) => l.swatch),
 };
 
 /** Peak power from the torque curve (linear between the points, up to the redline). */
@@ -82,15 +85,45 @@ function TrainFigures({ spec, full }: { spec: CarSpec; full: boolean }) {
   );
 }
 
+/** The cockroach's figures (vehicle/roach.ts). */
+function CreatureFigures({ spec, full }: { spec: CarSpec; full: boolean }) {
+  const c = spec.creature!.figures;
+  if (!full) {
+    return (
+      <div className="specs-row">
+        <div><small>0-100 km/h</small><b>{c.zeroToHundred.toFixed(1)} s</b></div>
+        <div><small>TOP SPEED</small><b>{c.topSpeed} km/h</b></div>
+        <div><small>WEIGHT</small><b>{spec.mass} kg</b></div>
+      </div>
+    );
+  }
+  return (
+    <dl className="spec-table">
+      <dt>種別</dt><dd>巨大ゴキブリ（昆虫綱ゴキブリ目）</dd>
+      <dt>体長</dt><dd>約 {c.bodyLength} m（触角を除く）</dd>
+      <dt>駆動</dt><dd>{c.legs}本脚（全脚駆動）</dd>
+      <dt>0-100 km/h</dt><dd>{c.zeroToHundred.toFixed(1)} 秒</dd>
+      <dt>最高速度</dt><dd>{c.topSpeed} km/h</dd>
+      <dt>グリップ</dt><dd>スポーツカーの約 1.3 倍（脚の爪で路面をつかむ）</dd>
+      <dt>体重</dt><dd>{spec.mass} kg</dd>
+      <dt>変速機</dt><dd>なし</dd>
+    </dl>
+  );
+}
+
 /** Name, character and figures of a car: `full` adds the whole specification table (car list). */
 export function CarSheet({ spec, index, full = false }: { spec: CarSpec; index: number; full?: boolean }) {
   const power = peakPower(spec);
   const [trqRpm, trq] = peakTorque(spec);
   return (
     <>
-      <div className="car-index">{two(index + 1)} / {two(VEHICLE_ORDER.length)}{spec.train && <span className="train-badge">TRAIN ・ ネタ枠</span>}</div>
+      <div className="car-index">
+        {two(index + 1)} / {two(VEHICLE_ORDER.length)}
+        {spec.train && <span className="train-badge">TRAIN ・ ネタ枠</span>}
+        {spec.creature && <span className="train-badge">CREATURE ・ ネタ枠</span>}
+      </div>
       <h2 className="car-name">{spec.name}</h2>
-      <div className="car-tag">{spec.tagline} ・ {spec.train ? spec.train.operator : spec.drive}</div>
+      <div className="car-tag">{spec.tagline} ・ {spec.train ? spec.train.operator : spec.creature ? `${spec.creature.figures.legs}本脚` : spec.drive}</div>
       <p className="car-desc">{spec.description}</p>
       <div className="stats">
         <Stat label="POWER" v={spec.stats.power} />
@@ -100,6 +133,8 @@ export function CarSheet({ spec, index, full = false }: { spec: CarSpec; index: 
       </div>
       {spec.train ? (
         <TrainFigures spec={spec} full={full} />
+      ) : spec.creature ? (
+        <CreatureFigures spec={spec} full={full} />
       ) : full ? (
         <dl className="spec-table">
           <dt>エンジン</dt><dd>{spec.engineName}</dd>

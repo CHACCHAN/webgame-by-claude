@@ -1,5 +1,5 @@
 import type { AILevel } from '../ai/AIDriver';
-import type { CarId } from '../vehicle/carSpecs';
+import type { CarId, RoadCarId } from '../vehicle/carSpecs';
 import { KIRIFURI_LAKESIDE, OBORO_DOWNHILL, TENROU_SKYLINE, type CourseDesign } from './courseDesign';
 import { BAY, CALDERA, RIDGE, type Landform } from './landforms';
 import type { TrainId } from '../vehicle/trains';
@@ -29,7 +29,7 @@ export interface CourseInfo {
   rivals: Record<AILevel, RivalInfo>;
   /** medal target times per car (ms, standing start) */
   /** per car; the trains' come from TRAIN_MEDALS below (filled from simulated runs) */
-  medals: Record<Exclude<CarId, TrainId>, { gold: number; silver: number; bronze: number }>;
+  medals: Record<RoadCarId, { gold: number; silver: number; bronze: number }>;
   music: string;
   /** optional course key art (public path) */
   art: string;
@@ -149,4 +149,14 @@ export const TRAIN_MEDALS: Record<CourseId, Record<TrainId, { gold: number; silv
     ginza1000: { gold: 126_500, silver: 135_500, bronze: 146_500 },
     n700: { gold: 124_500, silver: 133_500, bronze: 144_500 },
   },
+};
+
+/**
+ * Medal times of the cockroach (joke entry) per course: gold = the legend AI's time with it (tools/sim-run.ts,
+ * 2026-11-03), silver +7 %, bronze +16 %. The AI keeps to its 223 km/h cap on the straights: a player can beat gold.
+ */
+export const ROACH_MEDALS: Record<CourseId, { gold: number; silver: number; bronze: number }> = {
+  'oboro-downhill': { gold: 76_000, silver: 81_500, bronze: 88_000 },
+  'kirifuri-lakeside': { gold: 63_000, silver: 67_500, bronze: 73_000 },
+  'tenrou-skyline': { gold: 55_500, silver: 59_500, bronze: 64_500 },
 };

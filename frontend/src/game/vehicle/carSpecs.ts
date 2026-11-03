@@ -1,8 +1,11 @@
 // The original three ids are kept (records, ghosts and medals stay valid); the cars now carry the
 // names of the real cars whose models replace them (see docs/ASSETS.md).
 import { TRAIN_ORDER, trainSpec, type TrainId, type TrainInfo } from './trains';
+import { ROACH_SPEC, type CreatureInfo } from './roach';
 
-export type CarId = 'hayate' | 'raijin' | 'shiden' | 'supra' | 'r34' | 's15' | TrainId;
+export type CarId = 'hayate' | 'raijin' | 'shiden' | 'supra' | 'r34' | 's15' | TrainId | 'roach';
+/** the real cars (AI, bots, medals per course, procedural fallback bodies) */
+export type RoadCarId = Exclude<CarId, TrainId | 'roach'>;
 
 export interface CarSpec {
   id: CarId;
@@ -66,9 +69,11 @@ export interface CarSpec {
   exhaust?: [number, number, number];
   /** a train (joke entry, vehicle/trains.ts): drawn as three cars following the simulated front bogie */
   train?: TrainInfo;
+  /** a creature (joke entry, vehicle/roach.ts): legs instead of wheels, no exhaust */
+  creature?: CreatureInfo;
 }
 
-const CARS: Record<Exclude<CarId, TrainId>, CarSpec> = {
+const CARS: Record<RoadCarId, CarSpec> = {
   hayate: {
     id: 'hayate',
     name: 'SPRINTER TRUENO AE86',
@@ -296,12 +301,19 @@ const CARS: Record<Exclude<CarId, TrainId>, CarSpec> = {
   },
 };
 
-export const CAR_SPECS: Record<CarId, CarSpec> = { ...CARS, ...(Object.fromEntries(TRAIN_ORDER.map((id) => [id, trainSpec(id)])) as Record<TrainId, CarSpec>) };
+export const CAR_SPECS: Record<CarId, CarSpec> = {
+  ...CARS,
+  ...(Object.fromEntries(TRAIN_ORDER.map((id) => [id, trainSpec(id)])) as Record<TrainId, CarSpec>),
+  roach: ROACH_SPEC,
+};
 
 /** the cars (AI rivals, bot ghosts and models use these) */
 export const CAR_ORDER: CarId[] = ['hayate', 's15', 'shiden', 'supra', 'raijin', 'r34'];
-/** everything a player can drive: the cars, then the trains */
-export const VEHICLE_ORDER: CarId[] = [...CAR_ORDER, ...TRAIN_ORDER];
+/** everything a player can drive: the cars, the trains, then the cockroach */
+export const VEHICLE_ORDER: CarId[] = [...CAR_ORDER, ...TRAIN_ORDER, 'roach'];
+
+/** one fixed ratio (trains, the cockroach): no AT/MT choice */
+export const singleRatio = (spec: CarSpec) => spec.gears.length === 1;
 
 export function torqueAt(spec: CarSpec, rpm: number): number {
   const t = spec.engine.torque;

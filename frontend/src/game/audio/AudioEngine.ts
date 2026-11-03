@@ -1,6 +1,7 @@
 import { clamp } from '../util/math';
 import type { CarSpec } from '../vehicle/carSpecs';
 import { TrainSound } from './TrainSound';
+import { BugSound } from './BugSound';
 
 interface LoopConfig {
   volume: number;
@@ -143,7 +144,7 @@ export class AudioEngine {
   private noise: AudioBuffer;
   private squeal: { src: AudioBufferSourceNode; gain: GainNode; filter: BiquadFilterNode };
   private wind: { gain: GainNode; filter: BiquadFilterNode };
-  private engines = new Map<string, (EngineSound | TrainSound) & { kind: string }>();
+  private engines = new Map<string, (EngineSound | TrainSound | BugSound) & { kind: string }>();
   private musicNodes: AudioNode[] = [];
 
   constructor() {
@@ -209,15 +210,26 @@ export class AudioEngine {
     this.music.gain.value = music;
   }
 
-  /** The running sound of a vehicle: a synthesised engine, or a train's traction equipment. */
-  engine(id: string, spec: CarSpec): EngineSound | TrainSound {
+  /** The running sound of a vehicle: a synthesised engine, a train's traction equipment or a creature's legs. */
+  engine(id: string, spec: CarSpec): EngineSound | TrainSound | BugSound {
     const e = this.engines.get(id);
     if (e && e.kind === spec.id) return e;
     if (e) this.removeEngine(id);
     const sound = spec.train
-      ? new TrainSound(this.ctx, spec.train.sound, this.noise, this.sfx)
-      : new EngineSound(this.ctx, spec.engine.cylinders, spec.engine.turbo, this.noise, this.sfx);
+      ? this.trainSound(spec)
+      : spec.creature
+        ? new BugSound(this.ctx, this.noise, this.sfx)
+        : new EngineSound(this.ctx, spec.engine.cylinders, spec.engine.turbo, this.noise, this.sfx);
     this.engines.set(id, Object.assign(sound, { kind: spec.id }));
+    return sound;
+  }
+
+  /** A train's traction sound; its recording (if any) joins once decoded. */
+  private trainSound(spec: CarSpec) {
+    const t = spec.train!;
+    const sound = new TrainSound(this.ctx, t.sound, this.noise, this.sfx, t.vmax);
+    const rec = t.motorSound;
+    if (rec) void this.loadTrack(rec.file).then((buffer) => buffer && sound.setRecording(buffer, rec.knots, rec.gain));
     return sound;
   }
 

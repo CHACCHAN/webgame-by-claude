@@ -70,6 +70,11 @@ export interface TrainInfo {
    * with the brightness (linear luminance) up to which a texel there counts as window (default 0.1).
    */
   lamps?: { head: LampPair; tail: LampPair; windows: [number, number]; windowLum?: number };
+  /**
+   * A recording of the traction equipment pulling away (public/audio/<file>.mp3, credits in docs/ASSETS.md) and
+   * when it reached which speed: [seconds into the clip, km/h], rising. Played at the point matching the speed.
+   */
+  motorSound?: { file: string; knots: [number, number][]; gain?: number; credit: { title: string; author: string; license: string; url: string } };
 }
 
 /**
@@ -86,6 +91,11 @@ export const TRAIN_INFO: Record<TrainId, TrainInfo & { name: string; tagline: st
     liveries: [{ name: '中央・総武線（黄1号）', band: '#ffd400' }],
     // head and tail lamps share one unit under the windscreen
     lamps: { head: { x: 0.85, y: 1.19, w: 0.24, h: 0.14 }, tail: { x: 0.85, y: 1.19, w: 0.24, h: 0.14 }, windows: [1.78, 2.77] },
+    // an E231 (suburban type) pulling away: its motor line rises straight from 2.2 s, i.e. 2.5 km/h/s throughout
+    motorSound: {
+      file: 'motor_e231', knots: [[2.2, 0], [22.2, 50]],
+      credit: { title: 'E231系 加速音', author: 'Sulho', license: 'CC BY-SA 3.0', url: 'https://commons.wikimedia.org/wiki/File:E231.ogg' },
+    },
     model: { title: 'JR東日本E231系電車', author: 'own.guest', url: 'https://sketchfab.com/3d-models/98d47a9e4aca454d9c02eb2c690fdaee', license: 'CC BY 4.0' },
   },
   jr117: {
@@ -97,6 +107,11 @@ export const TRAIN_INFO: Record<TrainId, TrainInfo & { name: string; tagline: st
     gearRatio: 4.82, wheel: 0.86, body: 'painted', width: 2.9, carLength: 20, bogies: 13.8, front: 'jnr103',
     liveries: [{ name: 'サンライナー（白＋赤帯）', body: '#f2efe8', band: '#f2efe8', band2: '#d8261c' }],
     lamps: { head: { x: 0.56, y: 1.99, w: 0.22, h: 0.22, round: true }, tail: { x: 1.0, y: 1.3, w: 0.18, h: 0.18, round: true }, windows: [1.94, 2.85], windowLum: 0.4 },
+    // on board a 117 motor car (MoHa 117-15) leaving a station; speeds from a motor line (0.237 km/h per Hz)
+    motorSound: {
+      file: 'motor_jr117', knots: [[3, 0], [25.5, 45], [35, 61], [45, 70.4], [55, 77.7], [65, 83.9], [75, 88.9], [85, 91.2], [105, 94.3], [120, 97.9], [135, 102.9], [150, 106.7], [160, 108.8]],
+      credit: { title: '117系 モハ117-15 走行音', author: 'spaceaero2', license: 'CC BY 3.0', url: 'https://commons.wikimedia.org/wiki/File:JR_west_117_shinkaisoku_moha117-15_akashi.ogg' },
+    },
     model: { title: '117系 サンライナー | 117 series『Sun Liner』', author: 'own.guest', url: 'https://sketchfab.com/3d-models/6434932c06974d10927c2fe36c2c7f8e', license: 'CC BY 4.0' },
   },
   keisei3300: {
@@ -106,6 +121,11 @@ export const TRAIN_INFO: Record<TrainId, TrainInfo & { name: string; tagline: st
     gearRatio: 6.06, wheel: 0.86, body: 'painted', width: 2.8, carLength: 18, bogies: 12.6, front: 'jnr103',
     liveries: [{ name: '赤電（ファイヤーオレンジ＋モーンアイボリー）', body: '#e05a1a', band: '#e05a1a', band2: '#efe3c4' }],
     lamps: { head: { x: 0.8, y: 1.84, w: 0.22, h: 0.22 }, tail: { x: 1.1, y: 1.84, w: 0.22, h: 0.22 }, windows: [2.09, 3.08] },
+    // Keikyu's first 1000 series (1959, all motor cars, resistor control, ran with Keisei's cars): 3.5 km/h/s to 40
+    motorSound: {
+      file: 'motor_keisei3300', knots: [[3.7, 0], [15.1, 40], [20, 54.4], [30, 75.9], [40, 92.5], [45, 99.8]],
+      credit: { title: '京急旧1000形 走行音', author: 'toshinori baba', license: 'パブリックドメイン', url: 'https://commons.wikimedia.org/wiki/File:Keikyu_kyu1000kei_rokuon.ogg' },
+    },
     model: { title: '京成3300形(赤電) 先頭車1・中間車1・先頭車2', author: 'V3B4', url: 'https://sketchfab.com/V3B4', license: 'CC BY-NC 4.0' },
   },
   ginza1000: {
@@ -116,6 +136,11 @@ export const TRAIN_INFO: Record<TrainId, TrainInfo & { name: string; tagline: st
     liveries: [{ name: 'レモンイエロー', body: '#f2b705', band: '#f2b705', band2: '#c8102e' }],
     // the head lamps sit high on the roof dome
     lamps: { head: { x: 0.16, y: 3.28, w: 0.26, h: 0.26, round: true }, tail: { x: 1.05, y: 1.19, w: 0.15, h: 0.15, round: true }, windows: [1.8, 2.82], windowLum: 0.32 },
+    // a Toshiba IGBT VVVF (JR West 223-2000; no recording of the Ginza line's PMSM drive exists): 2.7 km/h/s to 50
+    motorSound: {
+      file: 'motor_ginza1000', knots: [[2, 0], [20.5, 50], [24, 58.6], [28, 67.2], [32.5, 75.7]],
+      credit: { title: '223系2000番台 東芝VVVF 発車', author: '321keiHIKARI', license: 'CC BY-SA 3.0', url: "https://commons.wikimedia.org/wiki/File:TOSHIBA_Omi_imazu-Shin_asahi_M'_222-3031Hassya.ogg" },
+    },
     model: { title: 'Japan Train Tokyo Metro Ginza Line (low poly)', author: 'ditovirnantio', url: 'https://sketchfab.com/3d-models/dc622d519f8d4b7ab1fd478815d129f8', license: 'CC BY 4.0' },
   },
   n700: {
@@ -128,6 +153,12 @@ export const TRAIN_INFO: Record<TrainId, TrainInfo & { name: string; tagline: st
     liveries: [{ name: '白＋青帯', body: '#f4f5f6', band: '#1f3d8f' }],
     // lamps low on the sides of the nose
     lamps: { head: { x: 0.85, y: 1.05, w: 0.36, h: 0.12, round: true }, tail: { x: 0.85, y: 1.05, w: 0.36, h: 0.12, round: true }, windows: [1.72, 2.26] },
+    // a 700 series (the N700's predecessor) leaving Kyoto, on board; speeds from a motor line (8.5 Hz per km/h)
+    // (quiet at low speed, where the N700 spends the pass: louder)
+    motorSound: {
+      file: 'motor_n700', knots: [[5, 0], [50, 90], [60, 110.7], [100, 152.8], [130, 178.6], [170, 201.4]], gain: 2,
+      credit: { title: '700系 のぞみ 車内走行音', author: 'spaceaero2', license: 'CC BY 3.0', url: 'https://commons.wikimedia.org/wiki/File:JR_central_700series_nozomi_387_717-53_shinosaka.ogg' },
+    },
     model: { title: 'N700-3000 Series Shinkansen', author: 'Layo', url: 'https://sketchfab.com/3d-models/f70820be44e0467d8b1614f2aa3045bd', license: 'CC BY 4.0' },
   },
 };

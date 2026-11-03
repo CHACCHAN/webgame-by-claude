@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { gameHolder } from '../GameCanvas';
 import { useApp } from '../../store/app';
 import { useMenuInput, hoverSelect } from '../useMenuInput';
-import { CAR_SPECS, VEHICLE_ORDER, type CarId } from '../../game/vehicle/carSpecs';
+import { CAR_SPECS, VEHICLE_ORDER, singleRatio, type CarId } from '../../game/vehicle/carSpecs';
 import type { AILevel } from '../../game/ai/AIDriver';
 import { COURSES, COURSE_ORDER, type CourseId } from '../../game/track/courses';
 import { Track } from '../../game/track/Track';
@@ -171,8 +171,8 @@ export function GarageScreen() {
   const orbit = useGarageOrbit();
   const confirm = () => {
     sfx.confirm();
-    // a train has a single gear ratio: no AT/MT choice
-    if (!spec.train) go('transmission');
+    // a train or the cockroach has a single ratio: no AT/MT choice
+    if (!singleRatio(spec)) go('transmission');
     else if (mode === 'rival') go('rivals');
     else void startRaceFromState();
   };
@@ -222,7 +222,7 @@ export function RivalsScreen() {
     if (a === 'left' || a === 'up') { setI((x) => (x + 2) % 3); sfx.move(); }
     if (a === 'right' || a === 'down') { setI((x) => (x + 1) % 3); sfx.move(); }
     if (a === 'confirm') start();
-    if (a === 'back') { sfx.back(); go(CAR_SPECS[useApp.getState().carId].train ? 'garage' : 'transmission'); }
+    if (a === 'back') { sfx.back(); go(singleRatio(CAR_SPECS[useApp.getState().carId]) ? 'garage' : 'transmission'); }
   });
   return (
     <div className="screen rivals">

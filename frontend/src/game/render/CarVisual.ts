@@ -219,15 +219,17 @@ export class CarVisual {
     this.rig.train?.update(this.rig.root);
   }
 
-  /** Recolour: the paint, or a train's livery. */
+  /** Recolour: the paint, a train's livery or a creature's colouring. */
   setColor(color: string) {
     if (this.rig.train) this.rig.train.setLivery(color);
+    else if (this.rig.creature) this.rig.creature.setLivery(color);
     else this.rig.materials.paint.color.set(color);
   }
 
-  /** Per-frame animation (pop-up lamps take ~0.6 s; a train's cars follow the leading bogie). */
+  /** Per-frame animation (pop-up lamps take ~0.6 s; a train's cars follow the leading bogie; a creature's legs run). */
   private tick(dt: number) {
     this.rig.train?.update(this.rig.root);
+    this.rig.creature?.update(this.root, dt);
     if (!this.pods.length || this.podOpen === this.podTarget) return;
     const step = dt / 0.6;
     this.podOpen = this.podTarget > this.podOpen ? Math.min(this.podTarget, this.podOpen + step) : Math.max(this.podTarget, this.podOpen - step);

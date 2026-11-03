@@ -28,6 +28,7 @@ import { GhostPlayer, GhostRecorder, type GhostData } from './race/Ghost';
 import { clamp, damp, lerp, smoothstep } from './util/math';
 import type { TrackProjection } from './track/Track';
 import { loadTrainModels, trainNose } from './render/TrainModel';
+import { loadRoachModel } from './render/RoachModel';
 import { TRAIN_ORDER } from './vehicle/trains';
 
 export type GamePhase = 'loading' | 'attract' | 'garage' | 'countdown' | 'racing' | 'finished' | 'replay';
@@ -246,7 +247,7 @@ export class Game {
     await this.yieldFrame(0.05, '物理エンジンを初期化中');
     await initRapier();
     await this.yieldFrame(0.08, '車両モデルを読み込み中');
-    await Promise.all([loadCarTemplates(CAR_ORDER), loadTrainModels(TRAIN_ORDER), loadSurfaceTextures(), loadProps()]);
+    await Promise.all([loadCarTemplates(CAR_ORDER), loadTrainModels(TRAIN_ORDER), loadRoachModel(), loadSurfaceTextures(), loadProps()]);
     this.root.add(this.smoke.points, this.skids.mesh, this.rain.mesh, this.exhaust.group);
     this.exhaust.density = this.quality.treeDensity < 0.6 ? 0.6 : 1;
     this.remotes = new RemoteRacers(this.root, (id) => this.rideHeightOf(id), false);
@@ -1122,7 +1123,7 @@ export class Game {
 
   /** Puffs and backfires from a car's tailpipe (with a pop when the camera is close). */
   private puff(visual: CarVisual, state: ExhaustState, velocity: THREE.Vector3, throttle: number, rpm: number, dt: number) {
-    if (visual.spec.train) return;
+    if (visual.spec.train || visual.spec.creature) return;
     const rig = visual.rig, root = visual.root;
     // tailpipe in world space from the car's pose (the model only sits lower by the ride height)
     _tip.copy(rig.anchors.exhaust).add(rig.root.position).applyQuaternion(root.quaternion).add(root.position);
