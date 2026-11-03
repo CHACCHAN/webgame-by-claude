@@ -1256,8 +1256,8 @@ function buildLandmarks(track: Track, terrain: TerrainData, sides: ReturnType<ty
   if (shelter) {
     const spot = roadsideSpot(track, terrain, sides, { range: [Math.round(track.count * 0.45), Math.round(track.finishS - 100)], halfWidth: 4.5, depth: 5, gap: 0.5, avoid, tol: 1.2 });
     if (spot) {
-      // the shelter reaches 2 m ahead of its origin (open side to the road)
-      const at = frame(spot, 0.5, 2.6);
+      // the shelter reaches 1.13 m ahead of its origin (open side to the road; 2.25 m deep)
+      const at = frame(spot, 0.5, 1.75);
       group.add(placeProp(shelter, [at(0, 0)], { castShadow: true, name: 'bus-stop' }).group);
       const c = new THREE.Vector3().setFromMatrixPosition(at(0, 0));
       keepOut.push({ x: c.x, z: c.z, r: 6 });

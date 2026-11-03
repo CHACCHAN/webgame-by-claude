@@ -4,10 +4,11 @@ import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.j
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
 /**
- * Third-party scenery models (public/models/props, made with tools/import-props.cjs; credits in docs/ASSETS.md).
- * Every model is brought to one convention when it loads: metres, base on y = 0 at the origin, its front
- * (mirror glass, vending machine front, the way through a torii, the open side of the bus shelter) towards +Z,
- * a street light's arm along −X. Scenery falls back to its procedural shapes for a model that did not load.
+ * Scenery models, our own: built by Blender scripts (tools/blender/props/<file>.py → `node tools/blender-models.cjs
+ * props` → public/models/props). They are built to one convention, which every model is also brought to when it
+ * loads: metres, base on y = 0 at the origin, its front (mirror glass, vending machine front, the way through a torii,
+ * the open side of the bus shelter) towards +Z, a street light's arm along −X. Scenery falls back to its procedural
+ * shapes for a model that did not load.
  */
 export type PropId = 'streetLight' | 'windTurbine' | 'curveMirror' | 'vending' | 'torii' | 'stoneLantern' | 'busStop' | 'cone';
 
@@ -23,27 +24,22 @@ interface PropDef {
   moving?: string;
   /**
    * Box in prop coordinates (x0, x1, z0, z1; metres, after scaling and yaw) whose triangles are left out, e.g. a
-   * utility pole that came with the model. The scale still comes from the whole model.
+   * part that came with a model. The scale still comes from the whole model.
    */
   drop?: [number, number, number, number];
-  /** Sketchfab title and author (CC BY 4.0), shown in the settings screen */
-  credit: [string, string];
 }
 
+// heights as built (the street light is stretched 0.5 % to the lamp height the lighting is placed for)
 const PROPS: Record<PropId, PropDef> = {
-  streetLight: { file: 'street_light.glb', height: 7.6, yaw: Math.PI, origin: [0, 0], credit: ['Street Light', 'KloWorks'] },
-  windTurbine: { file: 'wind_turbine.glb', height: 86, origin: [0, 0], moving: 'Blades', credit: ['Animated Wind Turbine', 'Glowbox 3D'] },
-  curveMirror: { file: 'curve_mirror.glb', height: 3.6, yaw: Math.PI, origin: [0, 0], credit: ['Blind spot traffic mirror', 'guru2fifa'] },
-  vending: { file: 'vending_machine.glb', height: 1.83, credit: ['Japan Vending Machine Soft Drink', 'ditovirnantio'] },
-  torii: { file: 'torii.glb', height: 4.6, yaw: Math.PI / 2, credit: ['Japanese Torii Gate', 'Sahir Virmani'] },
-  stoneLantern: { file: 'stone_lantern.glb', height: 1.6, credit: ['Stone Lantern', 'Jamie McFarlane'] },
-  // the open side faces −Z in the source; its utility pole (with crossarm and lamp) stood at the front corner
-  busStop: { file: 'bus_stop.glb', height: 8.8, yaw: Math.PI, origin: [-4, -15], drop: [-5, -2.6, -3.4, -2.2], credit: ['Kyoto Cityscene: Bus Stop', 'Mikail Karaca'] },
-  cone: { file: 'traffic_cone.glb', height: 0.7, credit: ['Traffic Cone', 'Jamie McFarlane'] },
+  streetLight: { file: 'street_light.glb', height: 7.6, origin: [0, 0] },
+  windTurbine: { file: 'wind_turbine.glb', height: 86, origin: [0, 0], moving: 'Blades' },
+  curveMirror: { file: 'curve_mirror.glb', height: 3.57, origin: [0, 0] },
+  vending: { file: 'vending_machine.glb', height: 1.83 },
+  torii: { file: 'torii.glb', height: 4.6 },
+  stoneLantern: { file: 'stone_lantern.glb', height: 1.6 },
+  busStop: { file: 'bus_stop.glb', height: 2.59, origin: [0, 0] },
+  cone: { file: 'traffic_cone.glb', height: 0.7 },
 };
-
-/** Attribution of the scenery models (CC BY 4.0, Sketchfab). */
-export const PROP_CREDITS = Object.values(PROPS).map((d) => ({ title: d.credit[0], author: d.credit[1] }));
 
 export interface PropPiece {
   geometry: THREE.BufferGeometry;

@@ -5,7 +5,6 @@ import { useMenuInput, hoverSelect } from '../useMenuInput';
 import { gameHolder } from '../GameCanvas';
 import { Hint } from './Menus';
 import { sfx } from '../sfx';
-import { PROP_CREDITS } from '../../game/render/props';
 import { fullscreenSupported, toggleFullscreen, useFullscreen } from '../fullscreen';
 import { TRAIN_INFO, TRAIN_ORDER } from '../../game/vehicle/trains';
 
@@ -75,8 +74,6 @@ export function SettingsScreen() {
         )}
         <div className="gpu-note">※ 目標は 1080p / 60fps です。カクつく場合は品質か解像度スケールを下げてください。</div>
         <div className="credits">
-          背景の3Dモデル（Sketchfab, CC BY 4.0）: {PROP_CREDITS.map((c) => `“${c.title}” by ${c.author}`).join(' / ')}
-          <br />
           電車の音（Wikimedia Commons の録音を切り出し・加工）:{' '}
           {[...new Set(TRAIN_ORDER.flatMap((id) => [TRAIN_INFO[id].motorSound?.credit, TRAIN_INFO[id].runningSound?.credit]))]
             .flatMap((c) => (c ? [`“${c.title}” by ${c.author} (${c.license})`] : []))
