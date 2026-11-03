@@ -24,6 +24,11 @@ Newest first. "Verified" means actually executed in this environment; anything e
   fans; falling when braking); re-cues per 44 s: VVVF 0, 117 5, 3300 12 (was a grain every 0.06 s); coasting
   −21…−26 dBFS (was a faint synthesis); in-game capture confirms E231 = synthesis + running, 117 = recording +
   running. Not listened to by a person. Tests: pattern bands and carrier ramps, clips shipped.
+- Owner's verdict (2026-11-03): still too rough for train fans; real-time VVVF simulators exist as OSS, use one.
+  Looked up (GitHub API, READMEs): VvvfGeeks/VVVF-Simulator (C#, non-commercial use of the code allowed with a link;
+  in-train sound = motor model torque ripple + motor / gear harmonics + filters + an impulse response), its YAML
+  files (30 trains), a JS one under AGPL (not usable), a Java port claiming MIT (doubtful). Not started: the plan is
+  in HANDOVER §0 (owner to approve the licence first; the repository is public).
 
 ## Session 5f (2026-11-03) — fullscreen toggle (owner's request: PC and phones alike)
 

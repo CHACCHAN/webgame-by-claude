@@ -1,13 +1,79 @@
-# 引き継ぎ書（2026-11-02 時点）
+# 引き継ぎ書（2026-11-03 時点）
 
 次のセッションはまずこのファイル、次に `CLAUDE.md`（構成・コマンド・注意点）、`docs/PROGRESS.md`（作業ログ。検証済み／未検証を区別して記録）を読むこと。
 素材の出典・ライセンスは `docs/ASSETS.md`、設計は `docs/PLAN.md`。
 
+## 0. 次のセッションでまずやること: 電車の音を作り込む（オーナー要望、2026-11-03）
+- オーナーの言葉（Session 5g の作り直しを聞いたあと）:
+  「電車の音についてもっとしつこく求めます／調べたところVVVFインバータをリアルタイムにシュミレーションするOSS等があるみたいです／
+  電車の音にはファンが多いことからも雑だとあまり好まれないことが多いです」
+- Session 5g で「細切れ」「惰行中に無音」は直した。ただ、VVVF の音は制御パターンの数値を手で打ち直した近似で、オーナーの評価は
+  「まだ雑」。目標は、鉄道ファンが聞いて違和感のない音。
+
+### 今の実装と、本物のシミュレーターとの差
+- **制御パターン**（`vehicle/vvvf.ts`）: YAML の数値を手で打ち直した近似。E231 の YAML は 1473 行あり、次のものは入っていない。
+  - 振幅（変調率）の曲線: `Amplitude` の Default / PowerOn / PowerOff（InverseProportional など）。今は f / f_full × 1.15 の直線。
+  - ジャーク設定 `JerkSetting`（力行・ブレーキの入／切で周波数の変化率 60 / 100 Hz/s）、`MinimumFrequency`。
+  - フリーラン（惰行に入るときの振幅の絞り方: `EnableFreeRunOn/Off`、`StuckFreeRun…`）。今はゲートを 0.35 → 0 に絞るだけ。
+  - パルスモードの細部: `Alternative`、`DiscreteTime`、`BaseWave`、`PulseHarmonics`、特殊パターン（`CustomPwm.cs` が 100KB ある）。
+- **音の作り方**（`public/audio/vvvf-worklet.js`）: 今は線間電圧をそのまま、高域・低域フィルタを通して鳴らしているだけ。
+  本物のシミュレーターの「車内の音」（Train RealTime）は、次の3つを足して作っている。
+  - モーターの音: 誘導電動機のモデル（`Vvvf/Model/Motor.cs`、dq 軸の電流・磁束・トルク）に PWM の電圧を入れ、
+    **トルクの脈動（`DiffTe`）** を音にする。
+  - 高調波: モーターの磁気音（`HarmonicSound`）と歯車の音（`GearSound`）。
+  - 仕上げ: フィルタ（`AudioFilter.cs`）と、車体のインパルス応答の畳み込み（`TrainSound/Filter.wav`）。
+- **対象外の電車**
+  - 117・京成3300 は抵抗制御で VVVF ではないので、シミュレーターでは作れない。今は録音を速度に追従させて再生している。
+    改善するなら、より良い録音を探すか、直流直巻電動機と歯車音を合成する。
+  - 銀座線1000（東芝 PMSM）と N700 は公開パターンが無い。今は代用（東芝 207-2000）と推定のまま。
+
+### 調べた OSS（2026-11-03。GitHub API と README で確認、コードは未読）
+| リポジトリ | 言語 | 内容 | 利用条件 |
+|---|---|---|---|
+| [VvvfGeeks/VVVF-Simulator](https://github.com/VvvfGeeks/VVVF-Simulator) | C#（WPF） | **本命**。VVVF の音と車内音（モーター・歯車・IR）のリアルタイム生成、YAML の読み込み、WAV 書き出し。★124、2026-05 更新 | LICENSE ファイルは無い。README の Term of use: 非商用ならコードは自由に使ってよい。改変したプログラムや動画には、元のプログラムへのリンクを書くこと |
+| [VvvfGeeks/YAML-Files](https://github.com/VvvfGeeks/YAML-Files) | YAML | 上の入力データ 30 形式（`VVVF/*.yaml`）。今使っている E231 三菱・207-2000 東芝のほか、E231 日立、E231-900、E233-1000 三菱、209 三菱、東急・近鉄・阪急など | 記載なし（「再現であり、実物と同じではない」）。対象は Simulator v1.10.0.2 以降 |
+| [datacrystals/VVVFSimulator](https://github.com/datacrystals/VVVFSimulator) | JavaScript（ブラウザ） | 簡単な SPWM（今の実装と同じくらい） | AGPL-3.0。取り込むとゲーム全体に AGPL がかかるので使わない |
+| [Deiloproxide/VVVF-Simulator-Library](https://github.com/Deiloproxide/VVVF-Simulator-Library) | Java | VVVF-Simulator の非公式の移植。MIT を名乗っている | 元の条件は非商用なので、MIT は疑わしい（README は 404）。参考にしない |
+| Jerethon/VVVF-Simulator | C# | VvvfGeeks 版のフォーク | 元と同じ |
+
+- ほかにあるかは未調査。オーナーは「OSS等」と言っているので、日本語圏の Web 版なども含めて探し直す。
+
+### 進め方の案
+1. **ライセンスはオーナーに確認してから取りかかる**
+   - このリポジトリ（github.com/CHACCHAN/webgame-by-claude）は**公開リポジトリ**（API で 200 を確認）。
+   - VVVF-Simulator のコードを JS に移植して入れるのは、README の条件（非商用・リンクの明記）の範囲内。ただし正式なライセンスではない。
+   - オーナーの了承を取り、設定画面のクレジットと ASSETS.md にリンクを書く。作者への問い合わせは、メッセージを送ることになるのでオーナーの確認が要る。
+2. **YAML は手で打ち直さず、そのまま読む**
+   - `public/audio/vvvf/*.yaml` に置き、実行時かビルド時に JSON 化する。
+   - 解釈は `Data/Vvvf/Struct.cs` と `Data/Vvvf/Analyze.cs` から移植する。
+3. **PWM の計算を移植する**（AudioWorklet で動かす）
+   - `Vvvf/Calculation/{Common,L2,L3}.cs`
+   - `Vvvf/Modulation/{Carrier,CustomPwm,SVM,BaseWave,DeltaSigma}.cs`
+   - `Vvvf/MyMath.cs`
+4. **車内音を移植する**
+   - `Vvvf/Model/Motor.cs`
+   - `Generation/Audio/TrainSound/{Audio,AudioFilter,RealTime}.cs`
+   - `Data/TrainAudio/Struct.cs`（モーター諸元・高調波・歯車・フィルタの既定値）
+   - `Filter.wav`: 畳み込みは ConvolverNode でよい。
+5. **ゲームの速度と制御周波数をつなぐ**
+   - 参考: シミュレーターの `Data/BaseFrequency`（力行・ブレーキ・ジャーク）。
+   - 速度から周波数への換算 `hzPerKmh`（歯車比・車輪径・極数）は今のものを流用できる。
+6. **処理の重さを確かめる**
+   - サンプリング周波数はシミュレーターの設定値（`RealtimeTrainSamplingFrequency`。値は未確認）。
+   - モーターの微分方程式をサンプルごとに解くので、スマホでも音切れしないか（AudioWorklet の処理時間）を確かめる。
+7. **確かめ方**（耳だけに頼らない）
+   - 突き合わせ: C# 版の計算部分（GUI 以外）を .NET SDK の Docker でコンソールアプリにして WAV を出す（できるかは未確認）。
+     同じ YAML・同じ速度変化で、JS 版の出力と周波数分析で比べる。
+   - 試聴: 各電車の「発車 → 加速 → 惰行 → ブレーキ」の WAV を書き出し、反映前にオーナーへ送って聞いてもらう（SendUserFile）。
+     実車の動画との聞き比べはオーナーの耳に頼る。
+   - 前回の検証方法: 音だけを OfflineAudioContext で書き出した（CLAUDE.md の Trains の項）。前回のスクリプトは
+     セッションの scratchpad にあり消えているので、作り直す。
+
 ## 1. 現在の状態
 - ブランチ: `ccr-de1f3a33-58aazj`（ここで開発・コミット・プッシュする。オーナーの明示依頼がない限り PR は作らない）。
 - テスト結果:
-  - フロント単体テスト（vitest）: 40/40（Session 5b、2026-11-03。普通のコーナーで滑らない・電車のライト位置を含む）
-  - E2E（Playwright、Docker 上）: 9/9、オンライン 3 人対戦を含む（Session 5b の最後。公開スタックとは別のテスト用スタックで実行）
+  - フロント単体テスト（vitest）: 43/43（Session 5g、2026-11-03。VVVF パターン・電車の音源ファイルを含む）
+  - E2E（Playwright、Docker 上）: 10/10、オンライン 3 人対戦・スマホのタッチ操作を含む（Session 5g の最後、コミット `09ee8b3`。公開スタックとは別のテスト用スタックで実行）
   - バックエンド（`php artisan test`）: 15/15（Session 5b、`--build` 付きでコンテナで実行。ボット記録の置き換えを含む）
   - E2E をオーナーの PC で流すときは、公開中のスタックの DB を汚さないよう別プロジェクトで立てる:
     `docker compose -p touge-e2e -f docker-compose.yml -f <override>` + `COMPOSE_PROFILES=test WEB_PORT=8090`。
@@ -18,12 +84,14 @@
   - 車 6 台: すべて実車モデル（Sketchfab、CC BY）: ハチロク、RX-7、S15、インプレッサ、スープラ、R34
     - ハチロクとRX-7はリトラ（夜に開いて点灯、昼は閉じる）
   - 背景: 街灯・風車（天狼）・カーブミラー・自販機・鳥居と石灯籠・バス停・コーンが実物の3Dモデル（Sketchfab、CC BY）
+  - ネタ枠: 電車 5 両（E231・117・京成3300・銀座線1000・N700）とゴキブリ
   - モード: タイムアタック、AI ライバル戦、ゴーストバトル、オンライン対戦（最大 3 人）
   - Laravel 側: ランキング、ゴースト、対戦ルーム
 - オーナーは実 GPU（60fps）で遊んでおり、Cloudflare Tunnel で公開済み（オーナー自身が設定）。
-- 公開中のサイトには Session 5b の最後（滑りの修正・路面グリップ・電車のライト・バス停）まで反映済み（オーナーの PC で
-  `docker compose up -d --build`。配信中のバンドルがローカルのビルドと一致することを確認。起動時のシーダーでボットの記録 19 件を
-  新しいグリップの記録に置き換え、プレイヤーの記録 7 件はそのまま）。
+- 公開中のサイトには Session 5g の最後（電車の音の作り直し、コミット `09ee8b3`）まで反映済み。
+  - 反映はオーナーの PC で `docker compose up -d --build`。配信中のバンドル（`index-BunuEMsD.js`）がローカルのビルドと一致することと、
+    `/audio/vvvf-worklet.js` が配信されていることを確認した。
+  - Session 5b の反映時に、起動時のシーダーでボットの記録 19 件を新しいグリップの記録に置き換えた（プレイヤーの記録 7 件はそのまま）。
 - 音楽は全部 Suno（オーナーの Pro 契約）で作り直したもの: BGM 11 曲（モード・天気・画面ごと）とジングル 5 本（ASSETS.md）。
   E2E 9/9（2026-11-02、テスト用スタック）を通して公開サイトに反映済み。
 
@@ -71,6 +139,7 @@
     （霧降湖の夜で 1 走行 16 回）。修正後は 3 コースとも 0 回。
   - オーナーの実機（Windows の場合は Direct3D）で消えたかは未確認。
 - **電車の音（2026-11-03 作り直し）**: VVVF 合成・録音の追従・走行音の聞こえ方と音量バランス。
+  - オーナーの評価は「まだ雑」。本物のシミュレーターの移植に進む（0 章）。
 - **スマホ（2026-11-03）**: 実機（iPhone / Android）でのタッチ操作のしやすさ、フレームレート、全画面の効き方。
 - **操作感（2026-11-03 の見直し 2 回）**: 1 回目（壁・ドリフトしやすさ）のあと「すごい滑る」と報告があり、2 回目で
   普通のコーナーは滑らない（ドリフトは意図した操作でだけ始まる）ようにした。コース・雨ごとのグリップ差も入れた。
@@ -105,7 +174,8 @@
 - 「細切れに聞こえる」「アクセル・ブレーキ時しか鳴らない」への対応。VVVF の電車（E231・銀座線・N700）は、ファンが実車を計測した
   制御パターン（VvvfGeeks、E231 は三菱 3 レベル）からインバータ音をその場で合成。抵抗制御の 117・京成3300 は録音を途切れずに再生。
   全車、走っている間は走行音（ジョイント音・床下の音、Commons の録音）が常に鳴る。惰行中はモーター音が消え走行音だけ（実車どおり）。
-- 銀座線（東芝 PMSM）と N700 は公開パターンが無く、近い東芝 IGBT の代用と推定。耳での確認待ち（4 章）。
+- 銀座線（東芝 PMSM）と N700 は公開パターンが無く、近い東芝 IGBT の代用と推定。
+- オーナーの評価は「まだ雑。リアルタイムの VVVF シミュレーター（OSS）があるはず」。次のセッションで作り込む（0 章）。
 
 ### 全画面表示の切り替え（Session 5f、2026-11-03）
 - PC・スマホとも、メニュー画面左下の「全画面」ボタン、F キー、ポーズメニュー、設定画面で切り替え（iPhone の Safari は非対応のため非表示）。
@@ -295,3 +365,6 @@ nohup npx vite preview --port 4173 --strictPort > /tmp/preview.log 2>&1 &   # �
 | 車の取り込み | `frontend/tools/import-cars.cjs`, `car-import.json`, `src/game/render/carImport.ts` |
 | 実 GPU での性能計測 | `frontend/tools/perf-gpu.cjs` |
 | 背景の3Dモデル（読み込み・配置） | `frontend/src/game/render/props.ts`, `TrackScenery.ts`（`buildLandmarks` など）, `tools/import-props.cjs` |
+| 電車の音（全体・VVVF の合成・録音の追従と走行音） | `frontend/src/game/audio/TrainSound.ts`, `public/audio/vvvf-worklet.js`, `audio/TrainRecordings.ts` |
+| VVVF の制御パターン・電車ごとの音の設定 | `frontend/src/game/vehicle/vvvf.ts`, `vehicle/trains.ts`（`vvvf`, `motorSound`, `runningSound`） |
+| 音のクレジット | `frontend/src/ui/screens/Settings.tsx`, `docs/ASSETS.md`（Train sounds） |
