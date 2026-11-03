@@ -98,10 +98,16 @@ describe('trains', () => {
     expect(Math.abs(out.y)).toBeCloseTo(Math.SQRT1_2, 2);
   });
 
-  it('each recorded motor sound is shipped and maps rising time to rising speed', async () => {
+  it('each recorded motor sound and running loop is shipped; the motor maps rising time to rising speed', async () => {
     const { existsSync } = await import('node:fs');
     const { TRAIN_INFO } = await import('../vehicle/trains');
     for (const id of TRAIN_ORDER) {
+      const run = TRAIN_INFO[id].runningSound;
+      if (run) {
+        expect(existsSync(`public/audio/${run.file}.mp3`)).toBe(true);
+        expect(run.loop[1] - run.loop[0]).toBeGreaterThan(10);
+        expect(run.speed).toBeGreaterThan(30);
+      }
       const rec = TRAIN_INFO[id].motorSound;
       if (!rec) continue;
       expect(existsSync(`public/audio/${rec.file}.mp3`)).toBe(true);
@@ -111,6 +117,22 @@ describe('trains', () => {
         expect(rec.knots[k][1]).toBeGreaterThan(rec.knots[k - 1][1]);
       }
     }
+  });
+
+  it('the VVVF patterns: E231 runs asynchronous with a rising carrier, then 3-pulse, then 1-pulse at full voltage', async () => {
+    const { E231_MITSUBISHI, vvvfAt } = await import('../vehicle/vvvf');
+    // 7.07 gear, 0.86 m wheels, 4-pole motors: ~1.45 Hz per km/h
+    expect(E231_MITSUBISHI.hzPerKmh).toBeCloseTo(1.454, 2);
+    const at = (f: number) => vvvfAt(E231_MITSUBISHI.power, f);
+    expect(at(1)).toMatchObject({ pulses: 0, carrier: 198 });
+    expect(at(8).carrier).toBeCloseTo(198 + (460 - 198) / 2, 0);
+    expect(at(24.5).carrier).toBeCloseTo(670, 0);
+    expect(at(45).pulses).toBe(3);
+    expect(at(60)).toMatchObject({ pulses: 1, carrier: 0 });
+    expect(at(10).amp).toBeLessThan(at(30).amp);
+    expect(at(60).amp).toBeGreaterThan(1);
+    // braking keeps the asynchronous carrier longer
+    expect(vvvfAt(E231_MITSUBISHI.brake, 45)).toMatchObject({ pulses: 0, carrier: 1000 });
   });
 
   it('backing up pulls the cars back along the same path', () => {

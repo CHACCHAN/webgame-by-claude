@@ -1,4 +1,5 @@
 import type { CarSpec } from './carSpecs';
+import { E231_MITSUBISHI, GINZA_TOSHIBA_STANDIN, N700_APPROX, type VvvfPattern } from './vvvf';
 
 /**
  * Joke entries: three-car trains driven on the pass. The performance is the real train's (starting acceleration,
@@ -21,6 +22,13 @@ export interface Livery {
 
 /** Face of the procedural stand-in body (used when the model is missing). */
 export type FrontStyle = 'e235' | 'e231' | 'tobu50000' | 'tobu60000' | 'tobu8000' | 'tobu10000' | 'tobu30000' | 'jnr103';
+
+export interface SoundCredit {
+  title: string;
+  author: string;
+  license: string;
+  url: string;
+}
 
 /** A pair of lamps on a cab face (mirrored across the centre line): centre and size in metres; round = ellipse. */
 export interface LampPair {
@@ -74,7 +82,12 @@ export interface TrainInfo {
    * A recording of the traction equipment pulling away (public/audio/<file>.mp3, credits in docs/ASSETS.md) and
    * when it reached which speed: [seconds into the clip, km/h], rising. Played at the point matching the speed.
    */
-  motorSound?: { file: string; knots: [number, number][]; gain?: number; credit: { title: string; author: string; license: string; url: string } };
+  motorSound?: { file: string; knots: [number, number][]; gain?: number; credit: SoundCredit };
+  /** running noise (wheels, rails, rumble) heard whenever the train moves: a loop (public/audio/<file>.mp3, its seamless
+   * window `loop` in s) recorded at `speed` km/h, played faster or slower with the speed */
+  runningSound?: { file: string; loop: [number, number]; speed: number; gain?: number; credit: SoundCredit };
+  /** VVVF inverter: synthesised from this control pattern (instead of a motor recording) */
+  vvvf?: VvvfPattern;
 }
 
 /**
@@ -91,10 +104,11 @@ export const TRAIN_INFO: Record<TrainId, TrainInfo & { name: string; tagline: st
     liveries: [{ name: '中央・総武線（黄1号）', band: '#ffd400' }],
     // head and tail lamps share one unit under the windscreen
     lamps: { head: { x: 0.85, y: 1.19, w: 0.24, h: 0.14 }, tail: { x: 0.85, y: 1.19, w: 0.24, h: 0.14 }, windows: [1.78, 2.77] },
-    // an E231 (suburban type) pulling away: its motor line rises straight from 2.2 s, i.e. 2.5 km/h/s throughout
-    motorSound: {
-      file: 'motor_e231', knots: [[2.2, 0], [22.2, 50]],
-      credit: { title: 'E231系 加速音', author: 'Sulho', license: 'CC BY-SA 3.0', url: 'https://commons.wikimedia.org/wiki/File:E231.ogg' },
+    // the inverter synthesised from its control pattern (vehicle/vvvf.ts)
+    vvvf: E231_MITSUBISHI,
+    runningSound: {
+      file: 'run_emu', loop: [0.3, 63.3], speed: 110,
+      credit: { title: '223系2000番台 東芝VVVF 惰性走行', author: '321keiHIKARI', license: 'CC BY-SA 3.0', url: "https://commons.wikimedia.org/wiki/File:TOSHIBA_Omi_imazu-Shin_asahi_M'_222-3031Dasei.ogg" },
     },
     model: { title: 'JR東日本E231系電車', author: 'own.guest', url: 'https://sketchfab.com/3d-models/98d47a9e4aca454d9c02eb2c690fdaee', license: 'CC BY 4.0' },
   },
@@ -112,6 +126,10 @@ export const TRAIN_INFO: Record<TrainId, TrainInfo & { name: string; tagline: st
       file: 'motor_jr117', knots: [[3, 0], [25.5, 45], [35, 61], [45, 70.4], [55, 77.7], [65, 83.9], [75, 88.9], [85, 91.2], [105, 94.3], [120, 97.9], [135, 102.9], [150, 106.7], [160, 108.8]],
       credit: { title: '117系 モハ117-15 走行音', author: 'spaceaero2', license: 'CC BY 3.0', url: 'https://commons.wikimedia.org/wiki/File:JR_west_117_shinkaisoku_moha117-15_akashi.ogg' },
     },
+    runningSound: {
+      file: 'run_jr117', loop: [0.3, 61.3], speed: 105,
+      credit: { title: '117系 モハ117-15 走行音', author: 'spaceaero2', license: 'CC BY 3.0', url: 'https://commons.wikimedia.org/wiki/File:JR_west_117_shinkaisoku_moha117-15_akashi.ogg' },
+    },
     model: { title: '117系 サンライナー | 117 series『Sun Liner』', author: 'own.guest', url: 'https://sketchfab.com/3d-models/6434932c06974d10927c2fe36c2c7f8e', license: 'CC BY 4.0' },
   },
   keisei3300: {
@@ -126,6 +144,10 @@ export const TRAIN_INFO: Record<TrainId, TrainInfo & { name: string; tagline: st
       file: 'motor_keisei3300', knots: [[3.7, 0], [15.1, 40], [20, 54.4], [30, 75.9], [40, 92.5], [45, 99.8]],
       credit: { title: '京急旧1000形 走行音', author: 'toshinori baba', license: 'パブリックドメイン', url: 'https://commons.wikimedia.org/wiki/File:Keikyu_kyu1000kei_rokuon.ogg' },
     },
+    runningSound: {
+      file: 'run_jr117', loop: [0.3, 61.3], speed: 105,
+      credit: { title: '117系 モハ117-15 走行音', author: 'spaceaero2', license: 'CC BY 3.0', url: 'https://commons.wikimedia.org/wiki/File:JR_west_117_shinkaisoku_moha117-15_akashi.ogg' },
+    },
     model: { title: '京成3300形(赤電) 先頭車1・中間車1・先頭車2', author: 'V3B4', url: 'https://sketchfab.com/V3B4', license: 'CC BY-NC 4.0' },
   },
   ginza1000: {
@@ -136,10 +158,11 @@ export const TRAIN_INFO: Record<TrainId, TrainInfo & { name: string; tagline: st
     liveries: [{ name: 'レモンイエロー', body: '#f2b705', band: '#f2b705', band2: '#c8102e' }],
     // the head lamps sit high on the roof dome
     lamps: { head: { x: 0.16, y: 3.28, w: 0.26, h: 0.26, round: true }, tail: { x: 1.05, y: 1.19, w: 0.15, h: 0.15, round: true }, windows: [1.8, 2.82], windowLum: 0.32 },
-    // a Toshiba IGBT VVVF (JR West 223-2000; no recording of the Ginza line's PMSM drive exists): 2.7 km/h/s to 50
-    motorSound: {
-      file: 'motor_ginza1000', knots: [[2, 0], [20.5, 50], [24, 58.6], [28, 67.2], [32.5, 75.7]],
-      credit: { title: '223系2000番台 東芝VVVF 発車', author: '321keiHIKARI', license: 'CC BY-SA 3.0', url: "https://commons.wikimedia.org/wiki/File:TOSHIBA_Omi_imazu-Shin_asahi_M'_222-3031Hassya.ogg" },
+    // the inverter synthesised from its control pattern (vehicle/vvvf.ts): a Toshiba stand-in (no PMSM pattern exists)
+    vvvf: GINZA_TOSHIBA_STANDIN,
+    runningSound: {
+      file: 'run_emu', loop: [0.3, 63.3], speed: 110,
+      credit: { title: '223系2000番台 東芝VVVF 惰性走行', author: '321keiHIKARI', license: 'CC BY-SA 3.0', url: "https://commons.wikimedia.org/wiki/File:TOSHIBA_Omi_imazu-Shin_asahi_M'_222-3031Dasei.ogg" },
     },
     model: { title: 'Japan Train Tokyo Metro Ginza Line (low poly)', author: 'ditovirnantio', url: 'https://sketchfab.com/3d-models/dc622d519f8d4b7ab1fd478815d129f8', license: 'CC BY 4.0' },
   },
@@ -153,10 +176,10 @@ export const TRAIN_INFO: Record<TrainId, TrainInfo & { name: string; tagline: st
     liveries: [{ name: '白＋青帯', body: '#f4f5f6', band: '#1f3d8f' }],
     // lamps low on the sides of the nose
     lamps: { head: { x: 0.85, y: 1.05, w: 0.36, h: 0.12, round: true }, tail: { x: 0.85, y: 1.05, w: 0.36, h: 0.12, round: true }, windows: [1.72, 2.26] },
-    // a 700 series (the N700's predecessor) leaving Kyoto, on board; speeds from a motor line (8.5 Hz per km/h)
-    // (quiet at low speed, where the N700 spends the pass: louder)
-    motorSound: {
-      file: 'motor_n700', knots: [[5, 0], [50, 90], [60, 110.7], [100, 152.8], [130, 178.6], [170, 201.4]], gain: 2,
+    // the inverter synthesised from its control pattern (vehicle/vvvf.ts): an approximation (none published)
+    vvvf: N700_APPROX,
+    runningSound: {
+      file: 'run_n700', loop: [0.3, 61.3], speed: 203,
       credit: { title: '700系 のぞみ 車内走行音', author: 'spaceaero2', license: 'CC BY 3.0', url: 'https://commons.wikimedia.org/wiki/File:JR_central_700series_nozomi_387_717-53_shinosaka.ogg' },
     },
     model: { title: 'N700-3000 Series Shinkansen', author: 'Layo', url: 'https://sketchfab.com/3d-models/f70820be44e0467d8b1614f2aa3045bd', license: 'CC BY 4.0' },

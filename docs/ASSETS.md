@@ -161,21 +161,34 @@ written to `frontend/public/models/trains/<id>.glb`. Credits also in the car lis
 Train performance figures (vehicle/trains.ts) are from Japanese Wikipedia (2026-11-03); masses marked as estimates
 in the game where no per-car figure is published.
 
-### Train motor sounds (Wikimedia Commons recordings)
-Found by a search of Commons / Freesound / Japanese free sound sites (2026-11-03; Freesound needs a login, the
-Japanese sites only have generic train sounds; no recording of a Ginza line 1000 PMSM drive exists). Downloaded from
-Commons (no login), one acceleration from a stop cut out of each, mono 32 kHz, loudness −18 LUFS, MP3 96 kbps:
-`frontend/public/audio/motor_<train>.mp3`. Played by speed (`TrainInfo.motorSound`: the clip's speed at each point,
-from a motor tone line proportional to speed or the train's real acceleration). Credits also in the settings screen.
-The clips cut from CC BY-SA files are themselves CC BY-SA 3.0.
+### Train sounds (Wikimedia Commons recordings, VVVF patterns)
+Found by searches of Commons / Freesound / Japanese free sound sites / VVVF simulators (2026-11-03; Freesound needs
+a login, the Japanese sites only have generic train sounds and forbid redistribution, BVE sound sets have no open
+licence). Downloaded from Commons (no login), cut, mono 32 kHz, MP3 96 kbps, `frontend/public/audio/`. Credits
+also in the settings screen. The files cut from CC BY-SA recordings are themselves CC BY-SA 3.0.
+
+Motor (under power / braking), resistor-control trains: a recording of a start followed by speed
+(`TrainInfo.motorSound`, speed from a motor tone line or the real acceleration):
 
 | Train | Recording (Commons file) | Author | License | Clip |
 |---|---|---|---|---|
-| E231 | [E231.ogg](https://commons.wikimedia.org/wiki/File:E231.ogg) (E231 suburban type pulling away) | Sulho (ja.wikipedia) | CC BY-SA 3.0 | 0–22.3 s |
-| 117 | [JR_west_117_shinkaisoku_moha117-15_akashi.ogg](https://commons.wikimedia.org/wiki/File:JR_west_117_shinkaisoku_moha117-15_akashi.ogg) (on board MoHa 117-15) | spaceaero2 | CC BY 3.0 | 700–862 s |
-| 京成3300 (stand-in: Keikyu's first 1000 series) | [Keikyu_kyu1000kei_rokuon.ogg](https://commons.wikimedia.org/wiki/File:Keikyu_kyu1000kei_rokuon.ogg) | toshinori baba | Public domain | 198–248 s |
-| 銀座線1000 (stand-in: Toshiba VVVF of a 223-2000) | [TOSHIBA_Omi_imazu-Shin_asahi_M'_222-3031Hassya.ogg](https://commons.wikimedia.org/wiki/File:TOSHIBA_Omi_imazu-Shin_asahi_M%27_222-3031Hassya.ogg) | 321keiHIKARI (ja.wikipedia) | CC BY-SA 3.0 | 3–35.5 s |
-| N700 (stand-in: 700 series) | [JR_central_700series_nozomi_387_717-53_shinosaka.ogg](https://commons.wikimedia.org/wiki/File:JR_central_700series_nozomi_387_717-53_shinosaka.ogg) (on board, leaving Kyoto) | spaceaero2 | CC BY 3.0 | 120–300 s |
+| 117 | [JR_west_117_shinkaisoku_moha117-15_akashi.ogg](https://commons.wikimedia.org/wiki/File:JR_west_117_shinkaisoku_moha117-15_akashi.ogg) (on board MoHa 117-15) | spaceaero2 | CC BY 3.0 | `motor_jr117`: 700–862 s |
+| 京成3300 (stand-in: Keikyu's first 1000 series) | [Keikyu_kyu1000kei_rokuon.ogg](https://commons.wikimedia.org/wiki/File:Keikyu_kyu1000kei_rokuon.ogg) | toshinori baba | Public domain | `motor_keisei3300`: 198–248 s |
+
+Motor, VVVF trains (E231, 銀座線1000, N700): synthesised from the inverter's control pattern (`vehicle/vvvf.ts`,
+`public/audio/vvvf-worklet.js`). Pattern figures retyped from VvvfGeeks / YAML-Files
+(https://github.com/VvvfGeeks/YAML-Files, fans' recreations of real trains; no licence file, the figures are used as
+facts about the trains with a credit and link, non-commercial): JRE_E231_MITSUBISHI for the E231, JRW_207-2000_TOSHIBA_IGBT
+as a stand-in for the Ginza line 1000 (no PMSM pattern published); the N700's is an estimate from public facts
+(3-level IGBT, ~1.5 kHz switching, ~25 s asynchronous after a start: Nagoya Univ. OCW lecture, Wikipedia).
+
+Running noise (always while moving; `TrainInfo.runningSound`, a seamless loop played faster or slower with speed):
+
+| Trains | Recording (Commons file) | Author | License | Loop |
+|---|---|---|---|---|
+| E231, 銀座線1000 | [TOSHIBA_Omi_imazu-Shin_asahi_M'_222-3031Dasei.ogg](https://commons.wikimedia.org/wiki/File:TOSHIBA_Omi_imazu-Shin_asahi_M%27_222-3031Dasei.ogg) (223-2000 coasting) | 321keiHIKARI (ja.wikipedia) | CC BY-SA 3.0 | `run_emu`: 22–88 s, ~110 km/h |
+| 117, 京成3300 | the 117 recording above | spaceaero2 | CC BY 3.0 | `run_jr117`: 898–962 s, ~105 km/h |
+| N700 | [JR_central_700series_nozomi_387_717-53_shinosaka.ogg](https://commons.wikimedia.org/wiki/File:JR_central_700series_nozomi_387_717-53_shinosaka.ogg) (700 series, on board) | spaceaero2 | CC BY 3.0 | `run_n700`: 338–402 s, ~203 km/h |
 
 ### Cockroach model (joke entry, Sketchfab)
 Downloaded by the owner on 2026-11-03 (the owner asked for it; picked from a shortlist of CC models). Optimised with

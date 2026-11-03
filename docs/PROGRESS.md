@@ -2,6 +2,29 @@
 
 Newest first. "Verified" means actually executed in this environment; anything else is marked as unverified.
 
+## Session 5g (2026-11-03) — train sound rework (owner: choppy, silent when coasting, use analysed sources)
+
+- The 0.12 s grains of Session 5d made the motor sound choppy, and nothing played but a faint synthesis while
+  coasting. Researched analysed sources (agent): VvvfGeeks / YAML-Files has fans' per-train VVVF control patterns
+  (E231 Mitsubishi 3-level among 30 trains; no Ginza line PMSM, no N700; no licence file); BVE sound sets have no open
+  licence; Commons has running-noise recordings.
+- VVVF trains (E231, 銀座線1000, N700): the inverter synthesised in an AudioWorklet (`public/audio/vvvf-worklet.js`):
+  the 2-/3-level PWM line voltage itself (sine references against a triangle carrier, asynchronous with random
+  modulation or synchronous N-pulse / 1-pulse, 4× oversampled), filtered like the motor windings; driven by
+  `vehicle/vvvf.ts` (speed → inverter Hz from gear, wheel and poles, + slip; bands of the pattern; V/f modulation).
+  E231 = Mitsubishi pattern (the old clip was a Hitachi-equipped suburban E231), Ginza = Toshiba 207-2000 stand-in,
+  N700 = estimate. Gates shut when coasting (silent motor, like the real thing).
+- Resistor-control trains (117, 京成3300): the recording followed continuously (`RecordingFollower`): one voice, its
+  rate pitching the recording to the speed and up to ±20 % to catch up; a 0.45 s crossfade re-cues it only when it
+  drifts 0.9 s away; braking plays it backwards; a power cut keeps it running faded for 1.5 s.
+- Every train: a running-noise loop (wheels, rails, rumble) whenever it moves, rate and loudness by speed
+  (`RunningLoop`; seamless loops cut from Commons recordings, ASSETS.md). Clips decode at 22.05 kHz (memory).
+- Checked by rendering each train's sound alone through an OfflineAudioContext along a scripted run (power → coast
+  → brake → power): VVVF spectra show the patterns (randomised rising carrier, then the 3-pulse / 1-pulse harmonic
+  fans; falling when braking); re-cues per 44 s: VVVF 0, 117 5, 3300 12 (was a grain every 0.06 s); coasting
+  −21…−26 dBFS (was a faint synthesis); in-game capture confirms E231 = synthesis + running, 117 = recording +
+  running. Not listened to by a person. Tests: pattern bands and carrier ramps, clips shipped.
+
 ## Session 5f (2026-11-03) — fullscreen toggle (owner's request: PC and phones alike)
 
 - `ui/fullscreen.ts`: on / off from a button on every menu screen (bottom left; on phones above ◀ 戻る), the F key

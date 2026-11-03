@@ -77,11 +77,13 @@ export function SettingsScreen() {
         <div className="credits">
           背景の3Dモデル（Sketchfab, CC BY 4.0）: {PROP_CREDITS.map((c) => `“${c.title}” by ${c.author}`).join(' / ')}
           <br />
-          電車のモーター音（Wikimedia Commons の録音を切り出し・加工）:{' '}
-          {TRAIN_ORDER.flatMap((id) => {
-            const c = TRAIN_INFO[id].motorSound?.credit;
-            return c ? [`${TRAIN_INFO[id].name}: “${c.title}” by ${c.author} (${c.license})`] : [];
-          }).join(' / ')}
+          電車の音（Wikimedia Commons の録音を切り出し・加工）:{' '}
+          {[...new Set(TRAIN_ORDER.flatMap((id) => [TRAIN_INFO[id].motorSound?.credit, TRAIN_INFO[id].runningSound?.credit]))]
+            .flatMap((c) => (c ? [`“${c.title}” by ${c.author} (${c.license})`] : []))
+            .filter((c, i, all) => all.indexOf(c) === i)
+            .join(' / ')}
+          <br />
+          VVVFインバータ音の制御パターンの数値: VvvfGeeks / YAML-Files（https://github.com/VvvfGeeks/YAML-Files）を参照（E231系 三菱・JR西日本207系2000番台 東芝）
         </div>
       </div>
       <Hint items={[['↑↓', '項目'], ['←→', '変更'], ['Esc', '戻る']]} />

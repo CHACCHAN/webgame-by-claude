@@ -1,16 +1,15 @@
 import type { MotorKind } from '../vehicle/trains';
-
-/** grain length (s) of the recorded motor sound; grains overlap by half */
-const GRAIN = 0.12;
+import { vvvfAt, type VvvfPattern } from '../vehicle/vvvf';
+import { RecordingFollower, RunningLoop } from './TrainRecordings';
 
 /**
- * Traction sound of a train (joke entries). Under power or braking the equipment sings: once its recording is
- * loaded (`setRecording`), the stretch of a real train pulling away that matches the current speed, played as
- * overlapping grains (so it follows the speed whatever the acceleration; past the recorded top speed the last
- * stretch is pitched up); until then, or without one, a synthesis: a VVVF inverter's carrier (asynchronous at a
- * fixed pitch, then synchronous modes that step down through 27/15/9/5/3 pulses), a chopper's steady tone, or the
- * growl of DC motors on resistance control. Gear whine and rolling rumble rise with speed. `speed` below is the
- * motor speed as a share of the design top speed.
+ * Traction sound of a train (joke entries). Always, while it moves: running noise (a recorded loop once loaded,
+ * `setRunning`; else synthesised rumble). Under power or braking the equipment sings on top: a VVVF inverter
+ * synthesised from its control pattern (`setVvvf`: the PWM voltage itself, public/audio/vvvf-worklet.js), or a
+ * recording of the real train pulling away followed at the point matching the speed (`setRecording`,
+ * audio/TrainRecordings.ts), or until one is ready a simple synthesis: carrier tones stepping through the pulse
+ * modes, a chopper's steady tone, or the growl of DC motors on resistance control. `speed` below is the motor speed
+ * as a share of the design top speed.
  */
 export class TrainSound {
   private ctx: AudioContext;
@@ -27,8 +26,10 @@ export class TrainSound {
   private rollGain: GainNode;
   private rollFilter: BiquadFilterNode;
   private load = 0;
-  private rec: { buffer: AudioBuffer; knots: [number, number][]; out: GainNode } | null = null;
-  private nextGrain = 0;
+  private follower: RecordingFollower | null = null;
+  private vvvf: { node: AudioWorkletNode; gain: GainNode; pattern: VvvfPattern; sent: string } | null = null;
+  private running: RunningLoop | null = null;
+  private lastT = 0;
 
   constructor(ctx: AudioContext, private kind: MotorKind, noise: AudioBuffer, destination: AudioNode, private vmax: number) {
     this.ctx = ctx;
@@ -96,44 +97,48 @@ export class TrainSound {
     const out = this.ctx.createGain();
     out.gain.value = 0.9 * gain;
     out.connect(this.out);
-    this.rec = { buffer, knots, out };
+    this.follower = new RecordingFollower(this.ctx, out, buffer, knots);
   }
 
-  /** Point of the recording at a speed (km/h) and the pitch factor beyond its last point. */
-  private recordedAt(kmh: number) {
-    const k = this.rec!.knots;
-    const last = k[k.length - 1];
-    // past the recorded top speed: grains from anywhere in its last 2 s (a fixed spot repeats as a buzz), pitched up
-    if (kmh >= last[1]) return { pos: last[0] - GRAIN - Math.random() * Math.min(2, last[0] - k[0][0]), rate: Math.min(2.2, kmh / last[1]) };
-    let i = 1;
-    while (i < k.length - 1 && k[i][1] < kmh) i++;
-    const [t0, v0] = k[i - 1], [t1, v1] = k[i];
-    return { pos: t0 + ((t1 - t0) * Math.max(0, kmh - v0)) / (v1 - v0), rate: 1 };
+  /** The inverter synthesis (an AudioWorkletNode of 'vvvf') driven by a control pattern. */
+  setVvvf(node: AudioWorkletNode, pattern: VvvfPattern) {
+    // the motor's windings smooth the voltage: no fundamental rumble, softened edges
+    const hp = this.ctx.createBiquadFilter();
+    hp.type = 'highpass';
+    hp.frequency.value = 140;
+    const lp = this.ctx.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.value = 2600;
+    lp.Q.value = 0.6;
+    const gain = this.ctx.createGain();
+    gain.gain.value = 0;
+    node.connect(hp).connect(lp).connect(gain).connect(this.out);
+    node.port.postMessage({ level: pattern.level });
+    this.vvvf = { node, gain, pattern, sent: '' };
   }
 
-  /** Schedule the overlapping grains up to a little ahead of now. */
-  private grains(kmh: number, level: number) {
-    const rec = this.rec!;
-    const now = this.ctx.currentTime;
-    if (this.nextGrain < now) this.nextGrain = now;
-    while (this.nextGrain < now + 0.1) {
-      const at = this.nextGrain;
-      this.nextGrain += GRAIN / 2;
-      if (level < 0.002) continue;
-      const { pos, rate } = this.recordedAt(kmh);
-      const src = this.ctx.createBufferSource();
-      src.buffer = rec.buffer;
-      src.playbackRate.value = rate;
-      const g = this.ctx.createGain();
-      g.gain.setValueAtTime(0, at);
-      g.gain.linearRampToValueAtTime(level, at + GRAIN / 2);
-      g.gain.linearRampToValueAtTime(0, at + GRAIN);
-      src.connect(g).connect(rec.out);
-      // a little jitter keeps overlapping grains from combing
-      const offset = Math.max(0, Math.min(rec.buffer.duration - GRAIN * rate, pos - (GRAIN * rate) / 2 + (Math.random() - 0.5) * 0.02));
-      src.start(at, offset, GRAIN * rate);
-      src.onended = () => g.disconnect();
+  private driveVvvf(kmh: number, dir: 1 | -1 | 0, level: number) {
+    const v = this.vvvf!;
+    const t = this.ctx.currentTime;
+    const p = v.pattern;
+    const f = Math.max(0, kmh * p.hzPerKmh + p.slip * (dir === -1 ? -1 : 1));
+    const m = vvvfAt(dir === -1 ? p.brake : p.power, f);
+    const key = `${m.pulses}|${m.random}`;
+    if (key !== v.sent) {
+      v.node.port.postMessage({ pulses: m.pulses, random: m.random });
+      v.sent = key;
     }
+    const prm = v.node.parameters;
+    prm.get('freq')!.setTargetAtTime(f, t, 0.03);
+    prm.get('carrier')!.setTargetAtTime(m.carrier, t, 0.03);
+    prm.get('amp')!.setTargetAtTime(m.amp, t, 0.03);
+    // the gates shut when the power or the brake is off: silent coasting
+    v.gain.gain.setTargetAtTime(dir === 0 || (dir === -1 && kmh < 3) ? 0 : 0.35 * level, t, 0.04);
+  }
+
+  /** A loop of running noise (`loop`: its seamless window, s) recorded at `speed` km/h. */
+  setRunning(buffer: AudioBuffer, loop: [number, number], speed: number, gain = 1) {
+    this.running = new RunningLoop(this.ctx, this.out, buffer, loop, speed, 0.5 * gain);
   }
 
   update(rpm: number, throttle: number, _boost: number, volume: number, redline: number, brake = 0) {
@@ -145,11 +150,19 @@ export class TrainSound {
     this.load += ((Math.max(throttle, brake * 0.8) > 0.05 ? 1 : 0) - this.load) * 0.2;
     const lv = this.load * Math.min(1, speed * 12);
     this.out.gain.setTargetAtTime(volume, t, 0.05);
-    // the recording replaces the synthesised motor and inverter (braking: the same equipment, a little softer)
-    const recorded = !!this.rec;
-    if (this.rec) this.grains(speed * this.vmax, lv * (throttle > 0.05 ? 1 : 0.7));
+    const dt = Math.min(0.1, Math.max(0, t - this.lastT));
+    this.lastT = t;
+    const kmh = speed * this.vmax;
+    // the recordings replace the synthesised motor and inverter (braking: the same equipment, a little softer)
+    // and the synthesised rumble
+    const recorded = !!this.follower || !!this.vvvf;
+    const dir = throttle > 0.05 ? 1 : brake > 0.05 ? -1 : 0;
+    this.follower?.update(kmh, dir, lv * (throttle > 0.05 ? 1 : 0.7), dt);
+    if (this.vvvf) this.driveVvvf(kmh, dir, Math.max(0.35, this.load));
+    this.running?.update(kmh);
     this.gear.frequency.setTargetAtTime(Math.max(20, mesh), t, 0.02);
-    this.gearGain.gain.setTargetAtTime(Math.min(1, speed * 4) * (recorded ? 0.02 : 0.03 + 0.05 * lv), t, 0.05);
+    // (the recordings carry the real gear whine)
+    this.gearGain.gain.setTargetAtTime(this.running ? 0 : Math.min(1, speed * 4) * (recorded ? 0.02 : 0.03 + 0.05 * lv), t, 0.05);
     const dc = this.kind === 'resistor' || this.kind === 'chopper';
     this.motor.frequency.setTargetAtTime(Math.max(20, dc ? fOut * 2 : fOut), t, 0.02);
     this.motorFilter.frequency.setTargetAtTime(300 + speed * (dc ? 1800 : 900), t, 0.05);
@@ -162,7 +175,7 @@ export class TrainSound {
     const invLevel = this.kind === 'sic' ? 0.035 : this.kind === 'chopper' ? 0.02 : 0.06;
     this.invGain.gain.setTargetAtTime(f > 0 && !recorded ? lv * invLevel : 0, t, 0.03);
     this.rollFilter.frequency.setTargetAtTime(200 + speed * 900, t, 0.1);
-    this.rollGain.gain.setTargetAtTime(Math.min(1, speed * 3) * 0.12, t, 0.1);
+    this.rollGain.gain.setTargetAtTime(this.running ? 0 : Math.min(1, speed * 3) * 0.12, t, 0.1);
   }
 
   /** no turbo */
@@ -171,6 +184,9 @@ export class TrainSound {
   }
 
   dispose() {
+    this.follower?.stop();
+    this.running?.stop();
+    this.vvvf?.node.disconnect();
     for (const o of [this.gear, this.motor, this.inv]) o.stop();
     this.roll.stop();
     this.out.disconnect();

@@ -224,13 +224,46 @@ export class AudioEngine {
     return sound;
   }
 
-  /** A train's traction sound; its recording (if any) joins once decoded. */
+  /** A train's traction sound; its recordings (if any) join once decoded. */
   private trainSound(spec: CarSpec) {
     const t = spec.train!;
     const sound = new TrainSound(this.ctx, t.sound, this.noise, this.sfx, t.vmax);
-    const rec = t.motorSound;
-    if (rec) void this.loadTrack(rec.file).then((buffer) => buffer && sound.setRecording(buffer, rec.knots, rec.gain));
+    const rec = t.motorSound, run = t.runningSound, pattern = t.vvvf;
+    if (pattern) {
+      void this.vvvfModule().then((ok) => ok && sound.setVvvf(new AudioWorkletNode(this.ctx, 'vvvf', { numberOfInputs: 0, outputChannelCount: [1] }), pattern));
+    } else if (rec) void this.loadClip(rec.file).then((buffer) => buffer && sound.setRecording(buffer, rec.knots, rec.gain));
+    if (run) void this.loadClip(run.file).then((buffer) => buffer && sound.setRunning(buffer, run.loop, run.speed, run.gain));
     return sound;
+  }
+
+  private vvvfReady: Promise<boolean> | null = null;
+
+  /** The inverter synthesis' worklet (public/audio/vvvf-worklet.js), loaded once; false where unsupported. */
+  private vvvfModule() {
+    this.vvvfReady ??= this.ctx.audioWorklet
+      ? this.ctx.audioWorklet.addModule('/audio/vvvf-worklet.js').then(() => true, () => false)
+      : Promise.resolve(false);
+    return this.vvvfReady;
+  }
+
+  private clips = new Map<string, Promise<AudioBuffer | null>>();
+
+  /** A long sound effect from /audio decoded at 22.05 kHz (a minute at the context's rate is ~10 MB). */
+  private loadClip(name: string): Promise<AudioBuffer | null> {
+    let p = this.clips.get(name);
+    if (!p) {
+      p = (async () => {
+        try {
+          const res = await fetch(`/audio/${name}.mp3`);
+          if (!res.ok || (res.headers.get('content-type') ?? '').includes('text/html')) return null;
+          return await new OfflineAudioContext(1, 1, 22050).decodeAudioData(await res.arrayBuffer());
+        } catch {
+          return null;
+        }
+      })();
+      this.clips.set(name, p);
+    }
+    return p;
   }
 
   removeEngine(id: string) {
