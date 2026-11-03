@@ -6,9 +6,10 @@
 ## 1. 現在の状態
 - ブランチ: `ccr-de1f3a33-58aazj`（ここで開発・コミット・プッシュする。オーナーの明示依頼がない限り PR は作らない）。
 - テスト結果:
-  - フロント単体テスト（vitest）: 26/26（Session 4、2026-11-02）
-  - E2E（Playwright、Docker 上）: 9/9、オンライン 3 人対戦を含む（Session 4、公開スタックとは別のテスト用スタックで実行）
-  - バックエンド（`php artisan test`）: 13/13（Session 4、コンテナで実行）
+  - フロント単体テスト（vitest）: 26/26（Session 5、2026-11-03）
+  - E2E（Playwright、Docker 上）: 9/9、オンライン 3 人対戦を含む（Session 5、公開スタックとは別のテスト用スタックで実行。
+    全体で 8 本、ソケット接続の順序を戻した後にオンラインの 1 本を単独で）
+  - バックエンド（`php artisan test`）: 14/14（Session 5、`--build` 付きでコンテナで実行）
   - E2E をオーナーの PC で流すときは、公開中のスタックの DB を汚さないよう別プロジェクトで立てる:
     `docker compose -p touge-e2e -f docker-compose.yml -f <override>` + `COMPOSE_PROFILES=test WEB_PORT=8090`。
     override で `networks.edge.ipam.config` を `!override` で別のサブネット（例 172.30.78.0/24）にする（公開側が 172.30.77.0/24 を使用）。
@@ -21,7 +22,7 @@
   - モード: タイムアタック、AI ライバル戦、ゴーストバトル、オンライン対戦（最大 3 人）
   - Laravel 側: ランキング、ゴースト、対戦ルーム
 - オーナーは実 GPU（60fps）で遊んでおり、Cloudflare Tunnel で公開済み（オーナー自身が設定）。
-- 公開中のサイトには Session 4 の修正を反映済み（オーナーの PC で `docker compose up -d --build`）。
+- 公開中のサイトには Session 5 の修正まで反映済み（オーナーの PC で `docker compose up -d --build`、マイグレーション 2 本適用）。
 - 音楽は全部 Suno（オーナーの Pro 契約）で作り直したもの: BGM 11 曲（モード・天気・画面ごと）とジングル 5 本（ASSETS.md）。
   E2E 9/9（2026-11-02、テスト用スタック）を通して公開サイトに反映済み。
 
