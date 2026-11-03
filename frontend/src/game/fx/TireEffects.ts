@@ -90,7 +90,9 @@ export class TireSmoke {
         continue;
       }
       this.life[i] -= dt;
-      const t = 1 - this.life[i] / this.maxLife[i];
+      // capped: in the frame a puff dies life < 0, and (1 - t) ** 1.3 of a negative base is NaN. A NaN alpha on
+      // a puff next to the camera (drawn screen-sized) turned the whole frame NaN, which bloom made black.
+      const t = Math.min(1, 1 - this.life[i] / this.maxLife[i]);
       const drag = Math.exp(-dt * 1.6);
       this.vel[i * 3] *= drag;
       this.vel[i * 3 + 2] *= drag;
