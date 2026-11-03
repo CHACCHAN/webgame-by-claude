@@ -653,11 +653,13 @@ export class Game {
         // allow revving on the line, but hold the car
         const tmp = this.input.poll(dt, emptyInput());
         this.player.input.throttle = tmp.throttle;
-        this.player.input.brake = 1;
+        this.player.input.brake = 0;
         this.player.input.steer = 0;
         this.player.input.handbrake = true;
       }
     }
+    // every car is held on the line until the green light
+    for (const r of this.racers()) r.input.hold = phase === 'countdown';
 
     // ---- fixed-step physics (AI and race timing run per step, independent of frame rate)
     this.accumulator += dt;
@@ -741,7 +743,7 @@ export class Game {
       if (!r || !r.ai) continue;
       if (phase === 'countdown') {
         r.input.throttle = 0.3;
-        r.input.brake = 1;
+        r.input.brake = 0;
         r.input.handbrake = true;
         continue;
       }

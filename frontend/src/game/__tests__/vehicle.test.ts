@@ -67,6 +67,21 @@ describe('VehicleSim', () => {
     expect(abuse.maxSlip).toBeLessThan(1.6);
   });
 
+  it('held on the line it revs but neither moves nor drops into reverse', () => {
+    for (const car of [...CAR_ORDER, ...TRAIN_ORDER]) {
+      let maxRpm = 0;
+      const { v } = drive(car, 4, (_t, sim, i) => {
+        i.hold = true;
+        i.handbrake = true;
+        i.throttle = 0.8;
+        maxRpm = Math.max(maxRpm, sim.rpm);
+      });
+      expect(v.gear).not.toBe(-1);
+      expect(Math.abs(v.forwardSpeed)).toBeLessThan(0.2);
+      if (!CAR_SPECS[car].engine.electric) expect(maxRpm).toBeGreaterThan(3000);
+    }
+  });
+
   it('reverses when braking from standstill', () => {
     const { v } = drive('raijin', 3, (_t, _v, i) => (i.brake = 1));
     expect(v.gear).toBe(-1);

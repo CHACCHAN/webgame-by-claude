@@ -11,6 +11,8 @@ export interface VehicleInput {
   handbrake: boolean;
   shiftUp?: boolean;
   shiftDown?: boolean;
+  /** held on the line (countdown): brakes on, the engine revs freely, never into reverse */
+  hold?: boolean;
 }
 
 export const emptyInput = (): VehicleInput => ({ throttle: 0, brake: 0, steer: 0, handbrake: false });
@@ -234,7 +236,13 @@ export class VehicleSim {
     // ---------------- gearbox / reverse logic
     let throttle = clamp(inp.throttle, 0, 1);
     let brake = clamp(inp.brake, 0, 1);
-    if (this.gear === -1) {
+    if (inp.hold) {
+      // on the grid: brakes on, clutch out. (Holding the brake used to count as asking for reverse after 0.35 s,
+      // and in reverse the brake pedal drives: cars backed away from the line before the start.)
+      this.reverseTimer = 0;
+      if (this.gear === -1) this.gear = 1;
+      brake = 1;
+    } else if (this.gear === -1) {
       // in reverse the pedals swap roles
       [throttle, brake] = [brake, throttle];
       if (inp.throttle > 0.1 && fwdSpeed > -1) this.gear = 1;
@@ -276,7 +284,8 @@ export class VehicleSim {
     // a clutch slips at launch (revs up); an electric motor gives full torque from standstill
     const launch = spec.engine.electric ? 0 : spec.engine.idleRpm + throttle * 3800 * (1 - smoothstep(4, 14, Math.abs(fwdSpeed)));
     let targetRpm = Math.max(wheelRpm * (1 + this.wheelSpin * 0.6), launch, spec.engine.idleRpm);
-    if (this.gear === 0) targetRpm = spec.engine.idleRpm + throttle * (spec.engine.redline - spec.engine.idleRpm);
+    const freeRevving = this.gear === 0 || !!inp.hold;
+    if (freeRevving) targetRpm = spec.engine.idleRpm + throttle * (spec.engine.redline - spec.engine.idleRpm);
     this.rpm = damp(this.rpm, Math.min(targetRpm, spec.engine.redline + 250), 18, dt);
     if (this.rpm > spec.engine.redline) this.limiterCut = 0.08;
     if (this.limiterCut > 0) {
@@ -289,7 +298,7 @@ export class VehicleSim {
     if (spec.engine.turbo) engineTorque *= 0.72 + 0.28 * this.boost;
     // engine braking
     engineTorque -= (1 - throttle) * (this.rpm / spec.engine.redline) * 38 * smoothstep(1, 5, Math.abs(fwdSpeed));
-    const driveForceTotal = this.gear === 0 ? 0 : (engineTorque * ratio * 0.86) / spec.wheelRadius;
+    const driveForceTotal = freeRevving ? 0 : (engineTorque * ratio * 0.86) / spec.wheelRadius;
 
     // ---------------- steering
     const steerTarget = clamp(inp.steer, -1, 1);
