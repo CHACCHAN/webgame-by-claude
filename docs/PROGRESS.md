@@ -2,6 +2,44 @@
 
 Newest first. "Verified" means actually executed in this environment; anything else is marked as unverified.
 
+## Session 5d (2026-11-03) — real train motor sounds (owner's request)
+
+- Searched Commons, Freesound and Japanese free sound sites for recordings of the five trains' traction equipment
+  (agent); Commons has labelled clips downloadable without login. Picked: an E231 pulling away, on board a 117
+  (MoHa 117-15), Keikyu's first 1000 series for the Keisei 3300 (same era, all motor cars, resistor control), a
+  Toshiba IGBT VVVF (223-2000) for the Ginza line 1000 (no PMSM recording exists) and on board a 700 series for the
+  N700. One acceleration from a stop cut from each (ASSETS.md).
+- Speed along each clip: from a motor tone line proportional to speed (ridge followed on the spectrogram; E231: a
+  straight line from 2.2 s = constant 2.5 km/h/s; 117 and 700: lines calibrated by the real starting acceleration),
+  else from the real acceleration and the end of the constant-torque range.
+- `TrainSound` plays the stretch matching the current speed as 0.12 s grains overlapping by half (so it follows any
+  acceleration); past the clip's top speed grains come from its last 2 s, pitched up (a fixed spot buzzed);
+  braking plays it softer; coasting fades it out. The synthesised motor/inverter stays as the fallback until the
+  clip is decoded. N700 clip ×2 (the 700 is quiet below 150 km/h, where the N700 spends the pass).
+- Checked by recording the game's output in the browser (MediaRecorder) during starts with each train and comparing
+  spectrograms: the E231 clip's pattern (steady carrier, falling sweep, jump) comes at the game's speeds; the others
+  show their rising lines. Not listened to by a person. Test: clips shipped, speed points rising.
+
+## Session 5c (2026-11-03) — the cockroach (joke entry, owner's request)
+
+- Model: the owner downloaded "Cockroach" by CK (xcellf, CC BY 4.0) from the shortlist; optimised to a 0.5 MB GLB
+  keeping its skin and scuttle cycle (ASSETS.md). `render/RoachModel.ts` clones it per vehicle (SkeletonUtils),
+  scales it to 5.6 m over antennae and legs (body ~3.4 m), runs the legs with the distance covered (at most 9 cycles
+  a second so they do not strobe), puts glowing eyes on the foremost head bone as its headlights; procedural
+  stand-in without the model. Colours: ワモン (texture), クロ (per-channel gains on the texture), チャバネ and 黄金
+  (plain colour over the bump map; gold metallic) — a plain tint could only darken the deep red-brown texture.
+- Physics (`vehicle/roach.ts`): 700 kg, all six legs drive through one fixed ratio (no AT/MT), grip 1.75 (sports
+  cars ~1.3), downforce, low centre of mass (at grip 2.0 / centre 0.3 m the legend AI rolled it in hairpins).
+  Flat pad: 0→100 km/h 1.58 s, 414 km/h, 100→0 in 20.7 m (R34: 4.47 s, 225 km/h, 41 m). Test: quicker, faster and
+  shorter-stopping than every car and the N700.
+- Legend AI (capped at 223 km/h like for every vehicle): 朧峠 75.9 s, 霧降湖 62.9 s, 天狼 55.3 s, no flips or respawns
+  (cars' best ~93 / 76 / 68 s) → `ROACH_MEDALS`. Backend: `roach` in `game.cars`; the plausible minimum times lowered
+  to 50 / 42 / 38 s (were 60 / 50 / 45: a player at 400 km/h on the straights could beat them); test.
+- Sound (`audio/BugSound.ts`): patter of six legs (a loop of clicks played faster with speed), a wing-like buzz from
+  ~60 km/h, rush of air. Not heard by a person yet.
+- Checked on the real GPU: car list (all four colours), a night race (legs move while driving: 19 of 31 bones change
+  between frames), side and front views with the eyes lit.
+
 ## Session 5b (2026-11-03) — owner's reports: sliding, train lights, bus stop, colour row, online AT/MT
 
 ### "The cars slide a lot" + road grip per course and weather

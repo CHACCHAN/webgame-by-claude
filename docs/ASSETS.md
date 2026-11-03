@@ -161,6 +161,32 @@ written to `frontend/public/models/trains/<id>.glb`. Credits also in the car lis
 Train performance figures (vehicle/trains.ts) are from Japanese Wikipedia (2026-11-03); masses marked as estimates
 in the game where no per-car figure is published.
 
+### Train motor sounds (Wikimedia Commons recordings)
+Found by a search of Commons / Freesound / Japanese free sound sites (2026-11-03; Freesound needs a login, the
+Japanese sites only have generic train sounds; no recording of a Ginza line 1000 PMSM drive exists). Downloaded from
+Commons (no login), one acceleration from a stop cut out of each, mono 32 kHz, loudness −18 LUFS, MP3 96 kbps:
+`frontend/public/audio/motor_<train>.mp3`. Played by speed (`TrainInfo.motorSound`: the clip's speed at each point,
+from a motor tone line proportional to speed or the train's real acceleration). Credits also in the settings screen.
+The clips cut from CC BY-SA files are themselves CC BY-SA 3.0.
+
+| Train | Recording (Commons file) | Author | License | Clip |
+|---|---|---|---|---|
+| E231 | [E231.ogg](https://commons.wikimedia.org/wiki/File:E231.ogg) (E231 suburban type pulling away) | Sulho (ja.wikipedia) | CC BY-SA 3.0 | 0–22.3 s |
+| 117 | [JR_west_117_shinkaisoku_moha117-15_akashi.ogg](https://commons.wikimedia.org/wiki/File:JR_west_117_shinkaisoku_moha117-15_akashi.ogg) (on board MoHa 117-15) | spaceaero2 | CC BY 3.0 | 700–862 s |
+| 京成3300 (stand-in: Keikyu's first 1000 series) | [Keikyu_kyu1000kei_rokuon.ogg](https://commons.wikimedia.org/wiki/File:Keikyu_kyu1000kei_rokuon.ogg) | toshinori baba | Public domain | 198–248 s |
+| 銀座線1000 (stand-in: Toshiba VVVF of a 223-2000) | [TOSHIBA_Omi_imazu-Shin_asahi_M'_222-3031Hassya.ogg](https://commons.wikimedia.org/wiki/File:TOSHIBA_Omi_imazu-Shin_asahi_M%27_222-3031Hassya.ogg) | 321keiHIKARI (ja.wikipedia) | CC BY-SA 3.0 | 3–35.5 s |
+| N700 (stand-in: 700 series) | [JR_central_700series_nozomi_387_717-53_shinosaka.ogg](https://commons.wikimedia.org/wiki/File:JR_central_700series_nozomi_387_717-53_shinosaka.ogg) (on board, leaving Kyoto) | spaceaero2 | CC BY 3.0 | 120–300 s |
+
+### Cockroach model (joke entry, Sketchfab)
+Downloaded by the owner on 2026-11-03 (the owner asked for it; picked from a shortlist of CC models). Optimised with
+the glTF-Transform CLI (meshopt, WebP textures at 1024 px, skin and the "Take 001" scuttle cycle kept) to
+`frontend/public/models/roach/roach.glb` (9.9 MB → 0.5 MB); scaled and tinted at runtime (`render/RoachModel.ts`).
+Credit also in the car list (CarSpec.model).
+
+| Vehicle | Model | Author | License |
+|---|---|---|---|
+| ゴキブリ (`roach`) | [Cockroach](https://sketchfab.com/3d-models/cockroach-cead55b8aa8643d48d67240bad028592) | CK (xcellf) | CC BY 4.0 |
+
 ### Music: Suno Pro (batch 3)
 All music was remade by the owner with Suno (Pro plan, which grants commercial use of songs made while subscribed)
 from the prompts in `docs/ASSET_REQUESTS.md` (batch 3: frenchcore / uptempo hardcore / speedcore), generated and

@@ -92,9 +92,16 @@ pending. `docs/PLAN.md` holds the design.
   `frontend/tools/train-import.json` (axis, scale to metres, three [from, to] ranges along the axis at the gangways,
   `frontAtMin` / `flip`), then with `vite preview` on :4173: `node tools/import-trains.cjs <srcRoot> [ids]`.
   The models' lamps are only painted on: `TrainInfo.lamps` (head/tail lamp positions measured on head-on renders,
-  lenses put on the surface by a ray; the side-window band and its luminance limit for the night interior glow). Medals: `TRAIN_MEDALS` in courses.ts (re-run tools/sim-run.ts
+  lenses put on the surface by a ray; the side-window band and its luminance limit for the night interior glow).
+  Motor sound: `TrainInfo.motorSound` = a recording of a start (`public/audio/motor_*.mp3`) and its [s, km/h] points;
+  `TrainSound` plays the stretch matching the speed as overlapping grains (the synthesis is the fallback). Medals: `TRAIN_MEDALS` in courses.ts (re-run tools/sim-run.ts
   with the train ids after physics or course changes). `CAR_ORDER` = cars only (AI, bots, GLBs), `VEHICLE_ORDER` =
   cars + trains (player-facing lists); the backend's `game.cars` lists both.
+- The cockroach (joke entry, `vehicle/roach.ts`, id `roach`, last in `VEHICLE_ORDER`): a car-like sim on one fixed
+  ratio (`singleRatio` → no AT/MT) with ~1.3× a sports car's grip, ~410 km/h; drawn by `render/RoachModel.ts` from a
+  skinned GLB (`public/models/roach/roach.glb`; legs run with the distance covered, eyes are the headlights; colours
+  via `CreatureInfo.liveries`), heard through `audio/BugSound.ts`; medals in `ROACH_MEDALS`. The backend's
+  `min_time_ms` per course leaves room for it.
 - Particles: any per-particle value raised to a power must have its base clamped (a NaN alpha on a puff drawn next to
   the camera covers the screen, and bloom turns a NaN frame black).
 - Race timing/splits/AI run per physics step (`Game.raceStep`, `driveAI`); keep frame-time logic out of timing.
