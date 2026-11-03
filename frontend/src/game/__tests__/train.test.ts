@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import * as THREE from 'three';
 import { CAR_SPECS } from '../vehicle/carSpecs';
-import { TRAIN_ORDER } from '../vehicle/trains';
+import { TRAIN_ORDER, trainBogiePath, trainNoseZ, trainTailZ } from '../vehicle/trains';
 import { buildTrain, fitLamps, TRAIN } from '../render/TrainModel';
 
 /** Car centres (world) of a built train after its anchor drove along `path`. */
@@ -144,5 +144,22 @@ describe('trains', () => {
       expect(back[k].z).toBeCloseTo(c.z - 30, 0);
       expect(Math.abs(back[k].x)).toBeLessThan(0.01);
     });
+  });
+
+  it('cars of unequal length meet at their couplers', () => {
+    // equal cars: bogies at 0 / 13.8, 20 / 33.8, 40 / 53.8; nose and tail half a car from the origin
+    const even = { carLength: 20, bogies: 13.8 };
+    expect(trainBogiePath(even)).toEqual([[0, 13.8], [20, 33.8], [40, 53.8]]);
+    expect(trainNoseZ(even)).toBeCloseTo(10, 9);
+    expect(trainTailZ(even)).toBeCloseTo(10, 9);
+    // long-nosed end cars (the trailing one runs turned round: its nose last)
+    const consist = [{ length: 26.5, bogies: 17.5, front: 7 }, { length: 25, bogies: 17.5, front: 3.75 }, { length: 26.5, bogies: 17.5, front: 2 }];
+    const path = trainBogiePath({ carLength: 25, bogies: 17.5, consist });
+    // car 0's rear coupler is 26.5 - 7 = 19.5 m behind its leading bogie; car 1's leading bogie 3.75 m behind that
+    expect(path[0]).toEqual([0, 17.5]);
+    expect(path[1][0]).toBeCloseTo(23.25, 9);
+    expect(path[2][0]).toBeCloseTo(23.25 + 25 - 3.75 + 2, 9);
+    expect(trainNoseZ({ carLength: 25, bogies: 17.5, consist })).toBeCloseTo(8.75 + 7, 9);
+    expect(trainTailZ({ carLength: 25, bogies: 17.5, consist })).toBeCloseTo(26.5 - 2 - 8.75, 9);
   });
 });

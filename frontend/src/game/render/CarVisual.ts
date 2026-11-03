@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import type { CarSpec } from '../vehicle/carSpecs';
+import { trainNoseZ } from '../vehicle/trains';
 import type { VehicleSim } from '../vehicle/VehicleSim';
 import { buildCar, type CarRig } from './CarModel';
 import { clamp, damp } from '../util/math';
@@ -70,7 +71,7 @@ export class CarVisual {
 
     if (opts.headlights && !opts.ghost) {
       // a train's lamps can sit back on a long nose: its light starts at the tip, clear of the body's shadow
-      const front = spec.train ? spec.train.carLength / 2 + 0.2 : (this.rig.anchors.headlights[0]?.z ?? 2);
+      const front = spec.train ? trainNoseZ(spec.train) + 0.2 : (this.rig.anchors.headlights[0]?.z ?? 2);
       const spot = new THREE.SpotLight('#fff1dc', 260, 140, 0.48, 0.55, 1.4);
       spot.position.set(0, spec.train ? 1.1 : 0.75, front + 0.1);
       spot.target.position.set(0, -0.4, front + 30);

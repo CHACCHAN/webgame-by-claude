@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { CarSpec } from '../vehicle/carSpecs';
-import type { LampPair, Livery, TrainInfo } from '../vehicle/trains';
+import { trainBogiePath, trainCars, trainNoseZ, trainTailZ, type LampPair, type Livery, type TrainInfo } from '../vehicle/trains';
 import { createCarMaterials, type CarRig } from './CarModel';
 
 /**
@@ -12,7 +12,7 @@ import { createCarMaterials, type CarRig } from './CarModel';
  */
 export const TRAIN = { cars: 3, pitch: 20, bogies: 13.8, body: 19.5, floor: 1.15, bottom: 0.95, eave: 3.12, roof: 3.62 };
 /** front of the leading car ahead of the simulated bogie (m) */
-export const trainNose = (t: TrainInfo) => t.carLength / 2 - t.bogies / 2;
+export const trainNose = (t: TrainInfo) => trainCars(t)[0].front;
 
 /** Cars cut from third-party models (public/models/trains/<id>.glb: nodes car0..car2), by train id. */
 const models = new Map<string, THREE.Object3D[]>();
@@ -326,7 +326,7 @@ function lightWindows(mat: THREE.Material, uniforms: { uWinGlow: { value: number
  * Lenses for a pair of lamps on a model's cab end (`end` 1 = front, -1 = rear): each sits on the surface a ray from
  * ahead of the cab hits, a hair off it and facing out. Returns the lens centres (car frame).
  */
-export function fitLamps(car: THREE.Object3D, pair: LampPair, end: number, carLength: number, mat: THREE.Material) {
+export function fitLamps(car: THREE.Object3D, pair: LampPair, end: number, reach: number, mat: THREE.Material) {
   car.updateMatrixWorld(true);
   const meshes: THREE.Object3D[] = [];
   car.traverse((o) => {
@@ -336,7 +336,7 @@ export function fitLamps(car: THREE.Object3D, pair: LampPair, end: number, carLe
   const ray = new THREE.Raycaster();
   const out: THREE.Vector3[] = [];
   for (const s of [1, -1]) {
-    ray.set(new THREE.Vector3(s * pair.x, pair.y, end * (carLength / 2 + 3)), new THREE.Vector3(0, 0, -end));
+    ray.set(new THREE.Vector3(s * pair.x, pair.y, end * (reach + 3)), new THREE.Vector3(0, 0, -end));
     const hit = ray.intersectObjects(meshes, false)[0];
     if (!hit) continue;
     const n = hit.face ? hit.face.normal.clone().transformDirection(hit.object.matrixWorld) : new THREE.Vector3(0, 0, end);
@@ -407,7 +407,7 @@ export function buildTrain(spec: CarSpec, opts: { bodyColor?: string } = {}): Ca
     running(parts, t, [k > 0 ? 1 : 0, k < TRAIN.cars - 1 ? 1 : 0], k === 1);
     for (const [mat, geos] of parts) {
       // drawn at the standard 20 m, stretched to the train's car length
-      const mesh = new THREE.Mesh(mergeGeometries(geos)!.scale(1, 1, t.carLength / TRAIN.pitch), all[mat]);
+      const mesh = new THREE.Mesh(mergeGeometries(geos)!.scale(1, 1, trainCars(t)[k].length / TRAIN.pitch), all[mat]);
       mesh.castShadow = true;
       mesh.receiveShadow = true;
       car.add(mesh);
@@ -417,6 +417,7 @@ export function buildTrain(spec: CarSpec, opts: { bodyColor?: string } = {}): Ca
   }
 
   const path = new TrainPath();
+  const bogiePath = trainBogiePath(t);
   const train: TrainRig = {
     update(anchor) {
       anchor.updateWorldMatrix(true, false);
@@ -426,8 +427,8 @@ export function buildTrain(spec: CarSpec, opts: { bodyColor?: string } = {}): Ca
       consist.matrix.copy(anchor.matrixWorld).invert();
       consist.matrixWorldNeedsUpdate = true;
       cars.forEach((car, k) => {
-        const front = path.at(k * t.carLength, _d);
-        const rear = path.at(k * t.carLength + t.bogies, _r);
+        const front = path.at(bogiePath[k][0], _d);
+        const rear = path.at(bogiePath[k][1], _r);
         _z.subVectors(front, rear).normalize();
         _x.crossVectors(UP, _z).normalize();
         _y.crossVectors(_z, _x);
@@ -449,9 +450,9 @@ export function buildTrain(spec: CarSpec, opts: { bodyColor?: string } = {}): Ca
     },
   };
 
-  // headlights on the leading car (its own frame: the nose at +carLength/2), so in a bend they turn with the body;
+  // headlights on the leading car (its own frame: the nose at trainNoseZ), so in a bend they turn with the body;
   // on the simulated bogie they swung across the front of the car
-  const nose = t.carLength / 2 - 0.2;
+  const nose = trainNoseZ(t) - 0.2;
   const anchors = {
     exhaust: new THREE.Vector3(),
     headlights: [new THREE.Vector3(0.95, 1.42, nose), new THREE.Vector3(-0.95, 1.42, nose)],
@@ -459,9 +460,9 @@ export function buildTrain(spec: CarSpec, opts: { bodyColor?: string } = {}): Ca
   };
   // a model's own lamps are only painted on: glowing lenses over them (head lamps lead, tail lamps trail)
   if (model && t.lamps) {
-    const head = fitLamps(cars[0], t.lamps.head, 1, t.carLength, carMats.headlight);
+    const head = fitLamps(cars[0], t.lamps.head, 1, trainNoseZ(t), carMats.headlight);
     if (head.length) anchors.headlights = head;
-    anchors.taillights = fitLamps(cars[TRAIN.cars - 1], t.lamps.tail, -1, t.carLength, carMats.taillight);
+    anchors.taillights = fitLamps(cars[TRAIN.cars - 1], t.lamps.tail, -1, trainTailZ(t), carMats.taillight);
   }
   return { root, body, wheels, materials: carMats, headlightTargets: [], anchors, train, lampParent: cars[0] };
 }

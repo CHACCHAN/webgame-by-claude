@@ -70,6 +70,8 @@ export interface TrainInfo {
   /** car length (m, coupler to coupler) and distance between its bogie centres */
   carLength: number;
   bogies: number;
+  /** cars of unequal length (a Shinkansen's long-nosed end cars), in running order: see `trainCars` */
+  consist?: TrainCar[];
   front: FrontStyle;
   liveries: Livery[];
   /**
@@ -89,6 +91,46 @@ export interface TrainInfo {
   /** VVVF inverter: VVVF-Simulator's calculation on a control pattern (instead of a motor recording) */
   vvvf?: TrainVvvf;
 }
+
+/**
+ * One car of the three, in running order: its length (coupler to coupler; an end car's from the nose tip), the
+ * distance between its bogie centres, and how far its leading bogie sits behind its leading end (the trailing car
+ * runs turned round: its leading end is its coupler end).
+ */
+export interface TrainCar {
+  length: number;
+  bogies: number;
+  front: number;
+}
+
+/** The three cars of a train (equal cars with centred bogies unless `consist` says otherwise). */
+export function trainCars(t: Pick<TrainInfo, 'carLength' | 'bogies' | 'consist'>): TrainCar[] {
+  return t.consist ?? [0, 1, 2].map(() => ({ length: t.carLength, bogies: t.bogies, front: (t.carLength - t.bogies) / 2 }));
+}
+
+/**
+ * Where each car runs, as distances back along the driven path from the leading bogie (the simulated vehicle): its
+ * leading and trailing bogie. Cars meet at their couplers.
+ */
+export function trainBogiePath(t: Pick<TrainInfo, 'carLength' | 'bogies' | 'consist'>): [number, number][] {
+  let s = 0;
+  return trainCars(t).map((c, k, cars) => {
+    if (k > 0) s += cars[k - 1].length - cars[k - 1].front + c.front;
+    return [s, s + c.bogies];
+  });
+}
+
+/** The leading car's nose ahead of its origin (the midpoint between its bogies), m. */
+export const trainNoseZ = (t: Pick<TrainInfo, 'carLength' | 'bogies' | 'consist'>) => {
+  const c = trainCars(t)[0];
+  return c.bogies / 2 + c.front;
+};
+
+/** The trailing car's tail behind its origin, m. */
+export const trainTailZ = (t: Pick<TrainInfo, 'carLength' | 'bogies' | 'consist'>) => {
+  const c = trainCars(t)[2];
+  return c.length - c.front - c.bogies / 2;
+};
 
 /**
  * The trains with a 3D model (public/models/trains/<id>.glb: cut from a third-party model by tools/import-trains.cjs,
