@@ -371,6 +371,8 @@ export interface CarRig {
   popUps?: { hinges: THREE.Object3D[]; lens: THREE.MeshStandardMaterial | null; closed: number };
   /** a train: its cars follow the leading bogie (render/TrainModel.ts) */
   train?: TrainRig;
+  /** where the headlights hang (a train's leading car; anchors.headlights are then in its frame), else root */
+  lampParent?: THREE.Object3D;
 }
 
 export function buildCar(spec: CarSpec, opts: { bodyColor?: string; procedural?: boolean } = {}): CarRig {

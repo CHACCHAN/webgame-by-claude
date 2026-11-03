@@ -78,7 +78,9 @@ export class CarVisual {
       spot.shadow.camera.near = 0.5;
       spot.shadow.camera.far = 140;
       spot.shadow.bias = -0.0006;
-      this.rig.root.add(spot, spot.target);
+      // a train's lamps sit on its leading car, which follows the path and not the simulated bogie's yaw
+      const lamps = this.rig.lampParent ?? this.rig.root;
+      lamps.add(spot, spot.target);
       this.headlights.push(spot);
       // volumetric-ish beam cones
       const beamMat = new THREE.ShaderMaterial({
@@ -113,7 +115,7 @@ export class CarVisual {
         const cone = new THREE.Mesh(new THREE.ConeGeometry(3.2, 22, 24, 1, true), beamMat);
         cone.rotation.x = -Math.PI / 2 - 0.05;
         cone.position.set(hl.x, hl.y, hl.z + 11);
-        this.rig.root.add(cone);
+        lamps.add(cone);
         this.beams.push(cone);
       }
     }

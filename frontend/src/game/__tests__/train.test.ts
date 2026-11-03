@@ -51,6 +51,31 @@ describe('trains', () => {
     }
   });
 
+  it('the headlights turn with the leading car in a bend (not with the simulated bogie)', async () => {
+    const { CarVisual } = await import('../render/CarVisual');
+    const visual = new CarVisual(CAR_SPECS.e231, { headlights: true, shadows: false, rideHeight: 0 });
+    const scene = new THREE.Group();
+    scene.add(visual.root);
+    const R = 40;
+    let worst = 0;
+    for (let k = 0; k <= 600; k++) {
+      const a = (k / 600) * Math.PI * 1.2;
+      // the bogie's own yaw wanders (steering, slides): ±0.25 rad off the tangent
+      visual.root.position.set(R * Math.cos(a), 0, R * Math.sin(a));
+      visual.root.rotation.set(0, Math.atan2(-Math.sin(a), Math.cos(a)) + 0.25 * Math.sin(k * 0.3), 0);
+      visual.syncFromPose({ position: visual.root.position, quaternion: visual.root.quaternion }, 1 / 60);
+      if (k < 300) continue;
+      scene.updateMatrixWorld(true);
+      // the leading car: first car of the consist (the container that cancels the rig's own transform)
+      const car = visual.rig.root.children.find((c) => !c.matrixAutoUpdate && c.children.length === TRAIN.cars)!.children[0];
+      const fwd = new THREE.Vector3(0, 0, 1).transformDirection(car.matrixWorld).setY(0).normalize();
+      const spot = visual.headlights[0];
+      const beam = new THREE.Vector3().setFromMatrixPosition(spot.target.matrixWorld).sub(new THREE.Vector3().setFromMatrixPosition(spot.matrixWorld)).setY(0).normalize();
+      worst = Math.max(worst, fwd.angleTo(beam));
+    }
+    expect(worst).toBeLessThan(0.01);
+  });
+
   it('backing up pulls the cars back along the same path', () => {
     const out = (t: number) => ({ p: new THREE.Vector3(0, 0, t * 60), heading: 0 });
     const ahead = drive(out, 300);

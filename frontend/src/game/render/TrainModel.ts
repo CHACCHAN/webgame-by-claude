@@ -382,11 +382,14 @@ export function buildTrain(spec: CarSpec, opts: { bodyColor?: string } = {}): Ca
     },
   };
 
+  // headlights on the leading car (its own frame: the nose at +carLength/2), so in a bend they turn with the body;
+  // on the simulated bogie they swung across the front of the car
+  const nose = t.carLength / 2 - 0.2;
   const anchors = {
     exhaust: new THREE.Vector3(),
-    headlights: [new THREE.Vector3(0.95, 1.42, trainNose(t)), new THREE.Vector3(-0.95, 1.42, trainNose(t))],
+    headlights: [new THREE.Vector3(0.95, 1.42, nose), new THREE.Vector3(-0.95, 1.42, nose)],
     taillights: [] as THREE.Vector3[],
   };
-  return { root, body, wheels, materials: carMats, headlightTargets: [], anchors, train };
+  return { root, body, wheels, materials: carMats, headlightTargets: [], anchors, train, lampParent: cars[0] };
 }
 
