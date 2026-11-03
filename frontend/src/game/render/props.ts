@@ -21,6 +21,11 @@ interface PropDef {
   origin?: [number, number];
   /** node whose meshes turn on their own (a turbine's rotor): kept apart, pivoting at that node */
   moving?: string;
+  /**
+   * Box in prop coordinates (x0, x1, z0, z1; metres, after scaling and yaw) whose triangles are left out, e.g. a
+   * utility pole that came with the model. The scale still comes from the whole model.
+   */
+  drop?: [number, number, number, number];
   /** Sketchfab title and author (CC BY 4.0), shown in the settings screen */
   credit: [string, string];
 }
@@ -32,7 +37,8 @@ const PROPS: Record<PropId, PropDef> = {
   vending: { file: 'vending_machine.glb', height: 1.83, credit: ['Japan Vending Machine Soft Drink', 'ditovirnantio'] },
   torii: { file: 'torii.glb', height: 4.6, yaw: Math.PI / 2, credit: ['Japanese Torii Gate', 'Sahir Virmani'] },
   stoneLantern: { file: 'stone_lantern.glb', height: 1.6, credit: ['Stone Lantern', 'Jamie McFarlane'] },
-  busStop: { file: 'bus_stop.glb', height: 8.8, origin: [-4, -15], credit: ['Kyoto Cityscene: Bus Stop', 'Mikail Karaca'] },
+  // the open side faces −Z in the source; its utility pole (with crossarm and lamp) stood at the front corner
+  busStop: { file: 'bus_stop.glb', height: 8.8, yaw: Math.PI, origin: [-4, -15], drop: [-5, -2.6, -3.4, -2.2], credit: ['Kyoto Cityscene: Bus Stop', 'Mikail Karaca'] },
   cone: { file: 'traffic_cone.glb', height: 0.7, credit: ['Traffic Cone', 'Jamie McFarlane'] },
 };
 
@@ -92,6 +98,22 @@ function plain(geo: THREE.BufferGeometry) {
   return out;
 }
 
+/** The geometry without the triangles whose centre lies in the box (x0, x1, z0, z1), or null if none is left. */
+function withoutBox(geo: THREE.BufferGeometry, [x0, x1, z0, z1]: [number, number, number, number]) {
+  const pos = geo.getAttribute('position');
+  const index = geo.index ? Array.from(geo.index.array) : [...Array(pos.count).keys()];
+  const keep: number[] = [];
+  for (let t = 0; t + 2 < index.length; t += 3) {
+    const [a, b, c] = [index[t], index[t + 1], index[t + 2]];
+    const x = (pos.getX(a) + pos.getX(b) + pos.getX(c)) / 3, z = (pos.getZ(a) + pos.getZ(b) + pos.getZ(c)) / 3;
+    if (x >= x0 && x <= x1 && z >= z0 && z <= z1) continue;
+    keep.push(a, b, c);
+  }
+  if (!keep.length) return null;
+  geo.setIndex(keep);
+  return geo;
+}
+
 function normalise(scene: THREE.Object3D, def: PropDef): PropModel {
   scene.updateMatrixWorld(true);
   const box = new THREE.Box3().setFromObject(scene);
@@ -109,7 +131,9 @@ function normalise(scene: THREE.Object3D, def: PropDef): PropModel {
     if (!m.isMesh) return;
     let inMoving = false;
     for (let p: THREE.Object3D | null = m; p; p = p.parent) if (p === moving) inMoving = true;
-    const geo = plain(m.geometry).applyMatrix4(new THREE.Matrix4().multiplyMatrices(toProp, m.matrixWorld));
+    const full = plain(m.geometry).applyMatrix4(new THREE.Matrix4().multiplyMatrices(toProp, m.matrixWorld));
+    const geo = def.drop ? withoutBox(full, def.drop) : full;
+    if (!geo) return;
     if (inMoving && pivot) geo.translate(-pivot.x, -pivot.y, -pivot.z);
     const material = m.material as THREE.MeshStandardMaterial;
     const key = `${material.uuid}|${inMoving}`;
