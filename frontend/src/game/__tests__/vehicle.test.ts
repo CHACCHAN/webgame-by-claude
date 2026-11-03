@@ -3,6 +3,7 @@ import { Vector3 } from 'three';
 import { RAPIER, initRapier, groups, GROUP_GROUND, GROUP_CAR, PHYSICS_DT, PhysicsWorld } from '../vehicle/PhysicsWorld';
 import { VehicleSim, emptyInput, type VehicleInput } from '../vehicle/VehicleSim';
 import { CAR_ORDER, CAR_SPECS, type CarId } from '../vehicle/carSpecs';
+import { TRAIN_INFO, TRAIN_ORDER } from '../vehicle/trains';
 import { Track } from '../track/Track';
 import { OBORO_DOWNHILL } from '../track/courseDesign';
 import { RacingLine } from '../ai/RacingLine';
@@ -17,7 +18,8 @@ beforeAll(async () => {
 function flatPad() {
   const world = new RAPIER.World({ x: 0, y: -9.81, z: 0 });
   world.timestep = PHYSICS_DT;
-  world.createCollider(RAPIER.ColliderDesc.cuboid(4000, 1, 4000).setTranslation(0, -1, 0).setCollisionGroups(groups(GROUP_GROUND, GROUP_CAR)));
+  // 40 km square: a Shinkansen at full power covers kilometres
+  world.createCollider(RAPIER.ColliderDesc.cuboid(20000, 1, 20000).setTranslation(0, -1, 0).setCollisionGroups(groups(GROUP_GROUND, GROUP_CAR)));
   return { world } as unknown as PhysicsWorld;
 }
 
@@ -69,6 +71,38 @@ describe('VehicleSim', () => {
     const { v } = drive('raijin', 3, (_t, _v, i) => (i.brake = 1));
     expect(v.gear).toBe(-1);
     expect(v.forwardSpeed).toBeLessThan(-1);
+  });
+});
+
+describe('trains (joke entries) perform like the real ones on level ground', () => {
+  it.each(TRAIN_ORDER)('%s: starting acceleration, top speed, emergency brake', (id) => {
+    const t = TRAIN_INFO[id];
+    // 0 → 30 km/h is inside the constant-torque region: the starting acceleration (km/h/s)
+    let t30 = 0;
+    drive(id, 30, (time, car, i) => {
+      i.throttle = 1;
+      if (!t30 && car.forwardSpeed * 3.6 >= 30) t30 = time;
+    });
+    expect(t30).toBeGreaterThan(0);
+    expect(30 / t30).toBeGreaterThan(t.accel * 0.85);
+    expect(30 / t30).toBeLessThan(t.accel * 1.15);
+    // flat out it settles around the design top speed (the motor runs out of revs there)
+    // (a Shinkansen needs minutes to get there: the peak speed counts)
+    let peak = 0;
+    drive(id, t.vmax > 200 ? 300 : 150, (_t, car, i) => {
+      i.throttle = 1;
+      peak = Math.max(peak, car.forwardSpeed * 3.6);
+    });
+    expect(peak).toBeGreaterThan(t.vmax * 0.85);
+    expect(peak).toBeLessThan(t.vmax * 1.08);
+    // full brake from 80 km/h: the emergency rate (km/h/s)
+    let tStop = 0;
+    drive(id, 30, (time, car, i) => {
+      i.brake = car.forwardSpeed > 0.3 ? 1 : 0;
+      if (!tStop && time > 0.1 && car.forwardSpeed <= 0.3) tStop = time;
+    }, 80 / 3.6);
+    expect(80 / tStop).toBeGreaterThan(t.brake[1] * 0.9);
+    expect(80 / tStop).toBeLessThan(t.brake[1] * 1.25);
   });
 });
 

@@ -53,6 +53,13 @@ test('menu navigation, settings persistence and controls screen', async ({ page 
   await page.mouse.move(380, 320, { steps: 5 });
   await page.mouse.up();
   expect(await page.evaluate(() => (window as any).__game.garageOrbit !== null)).toBe(true);
+  // the trains (joke entries) follow the cars: two to the left of the S15 is the last one, the N700
+  await page.keyboard.press('ArrowLeft');
+  await page.keyboard.press('ArrowLeft');
+  await expect(page.locator('.cars .car-name')).toHaveText('新幹線N700系');
+  await expect(page.locator('.train-badge')).toBeVisible();
+  await expect(page.locator('.spec-table')).toContainText('起動加速度');
+  expect(await page.evaluate(() => !!(window as any).__game.garageCar.rig.train)).toBe(true);
   await page.keyboard.press('Escape');
   await expect(page.locator('.menu-list')).toBeVisible();
 });

@@ -527,3 +527,5 @@ kbd {
   .choice-cards, .choice-cards.two { inset: 16vh 4vw auto; grid-template-columns: 1fr; gap: 12px; }
   .choice-card { min-height: 0; }
 }
+
+.train-badge { margin-left: 12px; padding: 2px 8px; border-radius: 3px; background: #2f8f4f; color: #fff; font-size: 11px; letter-spacing: 0.12em; vertical-align: middle; }

@@ -208,8 +208,20 @@ export class CarVisual {
     this.applyBeams(lit);
   }
 
-  /** Per-frame animation (pop-up lamps take ~0.6 s). */
+  /** Re-place the parts that follow the pose (a train's cars) after moving the root by hand (garage). */
+  refresh() {
+    this.rig.train?.update(this.rig.root);
+  }
+
+  /** Recolour: the paint, or a train's livery. */
+  setColor(color: string) {
+    if (this.rig.train) this.rig.train.setLivery(color);
+    else this.rig.materials.paint.color.set(color);
+  }
+
+  /** Per-frame animation (pop-up lamps take ~0.6 s; a train's cars follow the leading bogie). */
   private tick(dt: number) {
+    this.rig.train?.update(this.rig.root);
     if (!this.pods.length || this.podOpen === this.podTarget) return;
     const step = dt / 0.6;
     this.podOpen = this.podTarget > this.podOpen ? Math.min(this.podTarget, this.podOpen + step) : Math.max(this.podTarget, this.podOpen - step);

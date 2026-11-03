@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useApp } from '../../store/app';
 import { useMenuInput, hoverSelect } from '../useMenuInput';
 import { api, loadLocalBest, loadPlayer, type LeaderboardEntry } from '../../api/client';
-import { CAR_ORDER, CAR_SPECS, type CarId } from '../../game/vehicle/carSpecs';
+import { CAR_SPECS, VEHICLE_ORDER, type CarId } from '../../game/vehicle/carSpecs';
 import { formatTime } from '../format';
 import { COURSES, COURSE_ORDER, type CourseId } from '../../game/track/courses';
 import { currentCourseId } from '../../store/settings';
@@ -34,7 +34,7 @@ export function LeaderboardScreen() {
     };
   }, [filter, course]);
 
-  const filters: (CarId | null)[] = [null, ...CAR_ORDER];
+  const filters: (CarId | null)[] = [null, ...VEHICLE_ORDER];
   const rows = entries ?? [];
   const selectable = ghostMode ? rows.filter((r) => r.has_ghost) : rows;
 

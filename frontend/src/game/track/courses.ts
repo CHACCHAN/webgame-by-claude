@@ -2,6 +2,7 @@ import type { AILevel } from '../ai/AIDriver';
 import type { CarId } from '../vehicle/carSpecs';
 import { KIRIFURI_LAKESIDE, OBORO_DOWNHILL, TENROU_SKYLINE, type CourseDesign } from './courseDesign';
 import { BAY, CALDERA, RIDGE, type Landform } from './landforms';
+import type { TrainId } from '../vehicle/trains';
 
 export type CourseId = 'oboro-downhill' | 'kirifuri-lakeside' | 'tenrou-skyline';
 
@@ -27,7 +28,8 @@ export interface CourseInfo {
   landform: Landform;
   rivals: Record<AILevel, RivalInfo>;
   /** medal target times per car (ms, standing start) */
-  medals: Record<CarId, { gold: number; silver: number; bronze: number }>;
+  /** per car; the trains' come from TRAIN_MEDALS below (filled from simulated runs) */
+  medals: Record<Exclude<CarId, TrainId>, { gold: number; silver: number; bronze: number }>;
   music: string;
   /** optional course key art (public path) */
   art: string;
@@ -110,3 +112,32 @@ export const COURSES: Record<CourseId, CourseInfo> = {
 
 export const COURSE_ORDER: CourseId[] = ['oboro-downhill', 'kirifuri-lakeside', 'tenrou-skyline'];
 export const DEFAULT_COURSE: CourseId = 'oboro-downhill';
+
+/**
+ * Medal times of the trains (joke entries) per course: gold = the legend AI's time with that train
+ * (tools/sim-run.ts, 2026-11-03), silver +7 %, bronze +16 %. Runs where the AI could not stop in time and
+ * respawned (N700 on 朧峠; E231, 117 and 3300 on 天狼) were replaced by their clean earlier runs or an estimate.
+ */
+export const TRAIN_MEDALS: Record<CourseId, Record<TrainId, { gold: number; silver: number; bronze: number }>> = {
+  'oboro-downhill': {
+    e231: { gold: 151_500, silver: 162_000, bronze: 175_500 },
+    jr117: { gold: 152_000, silver: 162_500, bronze: 176_500 },
+    keisei3300: { gold: 154_500, silver: 165_000, bronze: 179_000 },
+    ginza1000: { gold: 147_500, silver: 158_000, bronze: 171_000 },
+    n700: { gold: 148_000, silver: 158_500, bronze: 171_500 },
+  },
+  'kirifuri-lakeside': {
+    e231: { gold: 126_500, silver: 135_500, bronze: 146_500 },
+    jr117: { gold: 130_500, silver: 140_000, bronze: 151_500 },
+    keisei3300: { gold: 116_500, silver: 124_500, bronze: 135_000 },
+    ginza1000: { gold: 128_500, silver: 137_500, bronze: 149_000 },
+    n700: { gold: 114_500, silver: 122_500, bronze: 133_000 },
+  },
+  'tenrou-skyline': {
+    e231: { gold: 127_500, silver: 136_500, bronze: 148_000 },
+    jr117: { gold: 128_000, silver: 137_000, bronze: 148_500 },
+    keisei3300: { gold: 119_500, silver: 128_000, bronze: 138_500 },
+    ginza1000: { gold: 127_000, silver: 136_000, bronze: 147_000 },
+    n700: { gold: 125_000, silver: 134_000, bronze: 145_000 },
+  },
+};

@@ -18,7 +18,7 @@ import { RemoteRacers, SLOT_COLORS, type NetState, type Peer } from './net/Remot
 
 /** lateral grid positions of the (up to three) online racers, by slot */
 const ONLINE_LANES = [-2.7, 2.7, 0];
-import { ChaseCamera } from './camera/ChaseCamera';
+import { CAR_CAMERA, ChaseCamera, TRAIN_CAMERA } from './camera/ChaseCamera';
 import { InputManager } from './input/Input';
 import { TireSmoke, SkidMarks } from './fx/TireEffects';
 import { ExhaustFX, newExhaustState, type ExhaustState } from './fx/Exhaust';
@@ -27,6 +27,8 @@ import { AudioEngine } from './audio/AudioEngine';
 import { GhostPlayer, GhostRecorder, type GhostData } from './race/Ghost';
 import { clamp, damp, lerp, smoothstep } from './util/math';
 import type { TrackProjection } from './track/Track';
+import { loadTrainModels, trainNose } from './render/TrainModel';
+import { TRAIN_ORDER } from './vehicle/trains';
 
 export type GamePhase = 'loading' | 'attract' | 'garage' | 'countdown' | 'racing' | 'finished' | 'replay';
 export type RaceMode = 'time_attack' | 'rival' | 'ghost' | 'online';
@@ -46,6 +48,8 @@ export interface RaceConfig {
   mode: RaceMode;
   carId: CarId;
   rivalLevel?: AILevel;
+  /** body colour (a train: its livery) chosen in the car select */
+  color?: string;
   ghost?: { data: GhostData; label: string; carId: CarId; timeMs: number; splits?: number[] } | null;
   /** online battle: shared green light (performance.now() ms), this client's grid slot, the others */
   online?: { startAt: number; slot: number; peers: Peer[] };
@@ -178,8 +182,13 @@ export class Game {
   private garageAngle = 0;
   /** world yaw of the camera offset that looks from the hillside out over the valley */
   private garageViewYaw = 0;
+  /** the chase camera was last set up for a train (cab view by default) */
+  private cameraForTrain = false;
   /** camera dragged around the car (car list, car select); null = the slow automatic swing */
   private garageOrbit: { yaw: number; pitch: number; dist: number } | null = null;
+  /** garage camera distance factor (a train is far longer than a car) and the point it frames */
+  private garageScale = 1;
+  private garageFocus = new THREE.Vector3();
   private garageLight = new THREE.SpotLight('#fff1e0', 0, 30, 0.55, 0.8, 1.2);
   private lampLights: THREE.PointLight[] = [];
   /** lamp index each pooled light is attached to (-1 = free) */
@@ -235,7 +244,7 @@ export class Game {
     await this.yieldFrame(0.05, '物理エンジンを初期化中');
     await initRapier();
     await this.yieldFrame(0.08, '車両モデルを読み込み中');
-    await Promise.all([loadCarTemplates(CAR_ORDER), loadSurfaceTextures(), loadProps()]);
+    await Promise.all([loadCarTemplates(CAR_ORDER), loadTrainModels(TRAIN_ORDER), loadSurfaceTextures(), loadProps()]);
     this.root.add(this.smoke.points, this.skids.mesh, this.rain.mesh, this.exhaust.group);
     this.exhaust.density = this.quality.treeDensity < 0.6 ? 0.6 : 1;
     this.remotes = new RemoteRacers(this.root, (id) => this.rideHeightOf(id), false);
@@ -475,13 +484,19 @@ export class Game {
     const s = this.track.startS - 14;
     const p = this.track.pointAt(s, 0.6);
     this.garageCar.root.position.copy(p);
-    this.garageCar.root.rotation.y = this.track.headingAt(s) + 0.35;
+    // a train stands straight along the road (its cars trail behind the root)
+    this.garageCar.root.rotation.y = this.track.headingAt(s) + (spec.train ? 0 : 0.35);
     this.root.add(this.garageCar.root);
+    this.garageCar.refresh();
+    this.garageScale = spec.train ? 2.6 : 1;
+    // a train is framed on its leading car (the root is its front bogie)
+    this.garageFocus.copy(p).addScaledVector(_f.set(Math.sin(this.track.headingAt(s)), 0, Math.cos(this.track.headingAt(s))), spec.train ? -7 : 0);
     void ride;
     // showroom key light above and in front of the car
-    this.garageLight.position.copy(p).add(new THREE.Vector3(0, 7, 0));
+    // (higher over a train: right above its roof it burnt a white patch into it)
+    this.garageLight.position.copy(p).add(new THREE.Vector3(0, spec.train ? 16 : 7, 0));
     this.garageLight.target.position.copy(p);
-    this.garageLight.intensity = 70;
+    this.garageLight.intensity = spec.train ? 120 : 70;
     this.garageLight.castShadow = this.quality.shadows;
     if (!this.garageLight.parent) this.root.add(this.garageLight, this.garageLight.target);
     // put the camera on the uphill side so the background is the valley, not the cutting
@@ -518,8 +533,16 @@ export class Game {
     const lane = cfg.online ? ONLINE_LANES[cfg.online.slot % ONLINE_LANES.length] : cfg.mode === 'rival' ? 2.0 : 0;
     this.player = this.createRacer(cfg.carId, gridS, lane, {
       headlights: true,
-      color: cfg.online ? SLOT_COLORS[cfg.online.slot % SLOT_COLORS.length] : undefined,
+      // the colour picked in the car select (it used to be ignored); online: the slot colour tells players apart
+      color: cfg.online ? SLOT_COLORS[cfg.online.slot % SLOT_COLORS.length] : cfg.color,
     });
+    // a train: the high chase, and its first race starts in the cab view
+    const train = !!CAR_SPECS[cfg.carId].train;
+    const t = CAR_SPECS[cfg.carId].train;
+    // the cab view sits just behind the nose of the leading car
+    this.chase.profile = t ? { ...TRAIN_CAMERA, front: { ...TRAIN_CAMERA.front, ahead: trainNose(t) - 0.35 } } : CAR_CAMERA;
+    if (train !== this.cameraForTrain) this.chase.mode = train ? 'bumper' : 'chase';
+    this.cameraForTrain = train;
     if (cfg.online) {
       this.remotes.setPeers(cfg.online.peers, (slot) => ({
         position: this.track.pointAt(gridS, ONLINE_LANES[slot % ONLINE_LANES.length]),
@@ -568,8 +591,8 @@ export class Game {
       void this.audio.playMusic(this.raceMusic(cfg.mode), { fallback: this.course.music });
       this.audio.preload('jingle_finish', 'jingle_lose', 'jingle_rival_win', 'jingle_medal', 'jingle_record');
       const spec = CAR_SPECS[cfg.carId];
-      this.audio.engine('player', spec.engine.cylinders, spec.engine.turbo);
-      if (this.rival) this.audio.engine('rival', this.rival.sim.spec.engine.cylinders, this.rival.sim.spec.engine.turbo);
+      this.audio.engine('player', spec);
+      if (this.rival) this.audio.engine('rival', this.rival.sim.spec);
     }
     this.setPhase('countdown');
   }
@@ -1047,23 +1070,23 @@ export class Game {
       // camera shake and contact bookkeeping must run with or without sound
       if (!this.paused) this.carContactFeedback(dt);
       if (this.audio && !this.paused) {
-        const e = this.audio.engine('player', sim.spec.engine.cylinders, sim.spec.engine.turbo);
+        const e = this.audio.engine('player', sim.spec);
         if (e.blowOff(sim.input.throttle, sim.boost)) this.audio.blowOff();
-        e.update(sim.rpm, sim.input.throttle, sim.boost, 1, sim.spec.engine.redline);
+        e.update(sim.rpm, sim.input.throttle, sim.boost, 1, sim.spec.engine.redline, sim.input.brake);
         let skid = 0;
         for (const w of sim.wheels) if (w.grounded) skid = Math.max(skid, w.skid);
         this.audio.updateTyres(skid, sim.speed);
         this.audio.updateWind(sim.speed);
         if (sim.impact > 0.15) this.audio.impact(Math.min(1, sim.impact * 1.5));
         if (this.rival) {
-          const re = this.audio.engine('rival', this.rival.sim.spec.engine.cylinders, this.rival.sim.spec.engine.turbo);
+          const re = this.audio.engine('rival', this.rival.sim.spec);
           const d = this.rival.sim.position.distanceTo(this.camera.position);
           re.update(this.rival.sim.rpm, this.rival.input.throttle, this.rival.sim.boost, clamp(1 - d / 140, 0, 1) * 0.8, this.rival.sim.spec.engine.redline);
         }
       }
     } else if (this.audio && this.attractCar && this.phase === 'attract') {
       const sim = this.attractCar.sim;
-      const e = this.audio.engine('attract', sim.spec.engine.cylinders, sim.spec.engine.turbo);
+      const e = this.audio.engine('attract', sim.spec);
       const d = sim.position.distanceTo(this.camera.position);
       e.update(sim.rpm, sim.input.throttle, sim.boost, clamp(1 - d / 160, 0, 1) * 0.5, sim.spec.engine.redline);
     }
@@ -1072,6 +1095,7 @@ export class Game {
   /** Exhaust puffs and backfires from the tailpipe (with a pop when the camera is close). */
   private emitExhaust(r: Racer, dt: number) {
     const sim = r.sim;
+    if (sim.spec.train) return;
     const rig = r.visual.rig, root = r.visual.root;
     // tailpipe in world space from the car's pose (the model only sits lower by the ride height)
     _tip.copy(rig.anchors.exhaust).add(rig.root.position).applyQuaternion(root.quaternion).add(root.position);
@@ -1213,33 +1237,34 @@ export class Game {
 
   /** Drag the garage camera around the car (pixels); it stays where it is left until the garage reopens. */
   orbitGarage(dx: number, dy: number) {
-    const o = (this.garageOrbit ??= { yaw: Math.sin(this.garageAngle) * 0.75, pitch: 0.13, dist: 8.6 });
+    const o = (this.garageOrbit ??= { yaw: Math.sin(this.garageAngle) * 0.75, pitch: 0.13, dist: 8.6 * this.garageScale });
     o.yaw -= dx * 0.008;
     o.pitch = clamp(o.pitch + dy * 0.005, 0.02, 1.2);
   }
 
   /** Wheel zoom of the garage camera: factor on the distance. */
   zoomGarage(factor: number) {
-    const o = (this.garageOrbit ??= { yaw: Math.sin(this.garageAngle) * 0.75, pitch: 0.13, dist: 8.6 });
-    o.dist = clamp(o.dist * factor, 5.5, 13);
+    const o = (this.garageOrbit ??= { yaw: Math.sin(this.garageAngle) * 0.75, pitch: 0.13, dist: 8.6 * this.garageScale });
+    o.dist = clamp(o.dist * factor, 5.5 * this.garageScale, 13 * this.garageScale);
   }
 
   private garageCamera(dt: number) {
-    const car = this.garageCar!.root.position;
+    const car = this.garageFocus;
     const o = this.garageOrbit;
     // swing slowly from the uphill side; the car sits left of centre beside the UI card
     this.garageAngle += dt * 0.2;
     const a = this.garageViewYaw + (o ? o.yaw : Math.sin(this.garageAngle) * 0.75);
     const cam = this.camera;
-    const flat = o ? Math.cos(o.pitch) * o.dist : 8.6;
-    _v.set(car.x + Math.sin(a) * flat, car.y + (o ? 0.6 + Math.sin(o.pitch) * o.dist : 1.7), car.z + Math.cos(a) * flat);
+    const k = this.garageScale;
+    const flat = o ? Math.cos(o.pitch) * o.dist : 8.6 * k;
+    _v.set(car.x + Math.sin(a) * flat, car.y + (o ? 0.6 * k + Math.sin(o.pitch) * o.dist : 1.7 * k), car.z + Math.cos(a) * flat);
     // steep cuttings (ridge courses) would swallow the camera: keep it, and its glide in, above ground
     _v.y = Math.max(_v.y, this.terrain.heightAt(_v.x, _v.z) + 1.4);
     cam.position.lerp(_v, 1 - Math.exp(-dt * (o ? 14 : 3)));
     cam.position.y = Math.max(cam.position.y, this.terrain.heightAt(cam.position.x, cam.position.z) + 1.2);
     // aim to the right of the car so it is framed in the left part of the screen
-    _f.set(-Math.cos(a), 0, Math.sin(a)).multiplyScalar(-2.4 * (o ? o.dist / 8.6 : 1));
-    cam.lookAt(car.x + _f.x, car.y + 0.6, car.z + _f.z);
+    _f.set(-Math.cos(a), 0, Math.sin(a)).multiplyScalar(-2.4 * (o ? o.dist / 8.6 : k));
+    cam.lookAt(car.x + _f.x, car.y + 0.6 * k, car.z + _f.z);
     if (Math.abs(cam.fov - 38) > 0.01) {
       cam.fov = damp(cam.fov, 38, 3, dt);
       cam.updateProjectionMatrix();
@@ -1247,7 +1272,7 @@ export class Game {
   }
 
   setGarageColor(color: string) {
-    this.garageCar?.rig.materials.paint.color.set(color);
+    this.garageCar?.setColor(color);
   }
 
   /** Move the pooled point lights to the lamps nearest the camera. */

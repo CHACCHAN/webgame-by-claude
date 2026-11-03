@@ -1,6 +1,8 @@
 // The original three ids are kept (records, ghosts and medals stay valid); the cars now carry the
 // names of the real cars whose models replace them (see docs/ASSETS.md).
-export type CarId = 'hayate' | 'raijin' | 'shiden' | 'supra' | 'r34' | 's15';
+import { TRAIN_ORDER, trainSpec, type TrainId, type TrainInfo } from './trains';
+
+export type CarId = 'hayate' | 'raijin' | 'shiden' | 'supra' | 'r34' | 's15' | TrainId;
 
 export interface CarSpec {
   id: CarId;
@@ -30,6 +32,8 @@ export interface CarSpec {
     /** sound character: number of cylinders and growl */
     cylinders: number;
     turbo: boolean;
+    /** electric traction: full torque from standstill, no clutch slip at launch */
+    electric?: boolean;
   };
   gears: number[];
   finalDrive: number;
@@ -40,6 +44,10 @@ export interface CarSpec {
   brakeForce: number;
   dragCoef: number;
   downforce: number;
+  /** linear damping of the body (default 0.02: ~0.4 m/s² at 70 km/h, part of the cars' tuning) */
+  damping?: number;
+  /** rolling resistance as a share of the wheel load (default 0.015, tyres; steel wheels far less) */
+  rolling?: number;
   /** 0..1, how much the car wants to rotate (rear slip tendency) */
   driftiness: number;
   /** UI stat bars 0..10 */
@@ -56,9 +64,11 @@ export interface CarSpec {
   tailLampGain?: number;
   /** tailpipe tip on the 3D model (body-local m, +x = left) where no part is named like an exhaust */
   exhaust?: [number, number, number];
+  /** a train (joke entry, vehicle/trains.ts): drawn as three cars following the simulated front bogie */
+  train?: TrainInfo;
 }
 
-export const CAR_SPECS: Record<CarId, CarSpec> = {
+const CARS: Record<Exclude<CarId, TrainId>, CarSpec> = {
   hayate: {
     id: 'hayate',
     name: 'SPRINTER TRUENO AE86',
@@ -286,7 +296,12 @@ export const CAR_SPECS: Record<CarId, CarSpec> = {
   },
 };
 
+export const CAR_SPECS: Record<CarId, CarSpec> = { ...CARS, ...(Object.fromEntries(TRAIN_ORDER.map((id) => [id, trainSpec(id)])) as Record<TrainId, CarSpec>) };
+
+/** the cars (AI rivals, bot ghosts and models use these) */
 export const CAR_ORDER: CarId[] = ['hayate', 's15', 'shiden', 'supra', 'raijin', 'r34'];
+/** everything a player can drive: the cars, then the trains */
+export const VEHICLE_ORDER: CarId[] = [...CAR_ORDER, ...TRAIN_ORDER];
 
 export function torqueAt(spec: CarSpec, rpm: number): number {
   const t = spec.engine.torque;

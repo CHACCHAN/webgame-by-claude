@@ -13,6 +13,25 @@ export interface CameraSubject {
   impact: number;
 }
 
+/** Camera placement per vehicle: distances and heights of the chase views, the eye point of the bumper/cab view. */
+export interface CameraProfile {
+  chase: { dist: number; perKmh: number; height: number };
+  near: { dist: number; perKmh: number; height: number };
+  /** forward and up offsets of the bumper view (a train: the driver's cab) */
+  front: { ahead: number; up: number };
+}
+export const CAR_CAMERA: CameraProfile = {
+  chase: { dist: 6.4, perKmh: 0.008, height: 2.15 },
+  near: { dist: 4.6, perKmh: 0.005, height: 1.55 },
+  front: { ahead: 0.6, up: 0.75 },
+};
+/** a 60 m train: chase from high above the leading car, the front view from the cab (2.85 m ahead of the bogie) */
+export const TRAIN_CAMERA: CameraProfile = {
+  chase: { dist: 15, perKmh: 0.03, height: 7.5 },
+  near: { dist: 9, perKmh: 0.02, height: 5 },
+  front: { ahead: 2.5, up: 2.55 },
+};
+
 const _fwd = new THREE.Vector3(), _desired = new THREE.Vector3(), _look = new THREE.Vector3(), _up = new THREE.Vector3();
 
 /**
@@ -29,6 +48,7 @@ export class ChaseCamera {
   private impactShake = 0;
   private lookHeight = 1;
   fovBase = 60;
+  profile = CAR_CAMERA;
 
   constructor(readonly camera: THREE.PerspectiveCamera, private groundAt: (x: number, z: number) => number) {}
 
@@ -60,7 +80,7 @@ export class ChaseCamera {
 
     if (this.mode === 'bumper') {
       _up.set(0, 1, 0).applyQuaternion(s.quaternion);
-      _desired.copy(s.position).addScaledVector(_fwd, 0.6).addScaledVector(_up, 0.75);
+      _desired.copy(s.position).addScaledVector(_fwd, this.profile.front.ahead).addScaledVector(_up, this.profile.front.up);
       this.pos.copy(_desired);
       _look.copy(_desired).addScaledVector(_fwd, 20);
       cam.position.copy(this.pos);
@@ -68,8 +88,9 @@ export class ChaseCamera {
       cam.lookAt(_look);
       cam.up.set(0, 1, 0);
     } else {
-      const dist = this.mode === 'chase' ? 6.4 + kmh * 0.008 : 4.6 + kmh * 0.005;
-      const height = this.mode === 'chase' ? 2.15 : 1.55;
+      const view = this.mode === 'chase' ? this.profile.chase : this.profile.near;
+      const dist = view.dist + kmh * view.perKmh;
+      const height = view.height;
       const dir = new THREE.Vector3(Math.sin(this.yaw), 0, Math.cos(this.yaw));
       _desired.copy(s.position).addScaledVector(dir, -dist);
       _desired.y += height;

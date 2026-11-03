@@ -2,12 +2,15 @@ import { useEffect, useRef, useState, type PointerEvent, type WheelEvent } from 
 import { useApp } from '../../store/app';
 import { useMenuInput } from '../useMenuInput';
 import { gameHolder } from '../GameCanvas';
-import { CAR_ORDER, CAR_SPECS, type CarId, type CarSpec } from '../../game/vehicle/carSpecs';
+import { CAR_SPECS, VEHICLE_ORDER, type CarId, type CarSpec } from '../../game/vehicle/carSpecs';
 import { Hint } from './Menus';
+import { TRAIN_INFO, TRAIN_ORDER, type TrainId } from '../../game/vehicle/trains';
 import { sfx } from '../sfx';
 
 /** Body colours offered for each car (first = default). */
 export const COLORS: Record<CarId, string[]> = {
+  // trains: one swatch per paint scheme (the band colour identifies it)
+  ...(Object.fromEntries(TRAIN_ORDER.map((id) => [id, TRAIN_INFO[id].liveries.map((l) => l.band)])) as Record<TrainId, string[]>),
   hayate: ['#e8e6e1', '#b3121c', '#1b1d22', '#2f6db5', '#e0b400'],
   raijin: ['#d9dbde', '#1d4fa8', '#0c0c0e', '#8f1218', '#5e6b3a'],
   shiden: ['#f5c400', '#c8102e', '#f2f2f0', '#121214', '#3a7d44'],
@@ -47,15 +50,47 @@ function Stat({ label, v }: { label: string; v: number }) {
   );
 }
 
+const two = (n: number) => String(n).padStart(2, '0');
+/** km/h/s with at least one decimal (3.0, 2.23) */
+const rate = (v: number) => (Number.isInteger(v * 10) ? v.toFixed(1) : String(v));
+
+/** A train's figures: the real ones (vehicle/trains.ts). */
+function TrainFigures({ spec, full }: { spec: CarSpec; full: boolean }) {
+  const t = spec.train!;
+  if (!full) {
+    return (
+      <div className="specs-row">
+        <div><small>ACCEL</small><b>{rate(t.accel)} km/h/s</b></div>
+        <div><small>TOP SPEED</small><b>{t.vmax} km/h</b></div>
+        <div><small>WEIGHT</small><b>{t.mass} t</b></div>
+      </div>
+    );
+  }
+  return (
+    <dl className="spec-table">
+      <dt>形式</dt><dd>{t.operator} {t.series}</dd>
+      <dt>編成</dt><dd>3両（Tc＋M＋Tc）</dd>
+      <dt>起動加速度</dt><dd>{rate(t.accel)} km/h/s</dd>
+      <dt>設計最高速度</dt><dd>{t.vmax} km/h</dd>
+      <dt>減速度（常用／非常）</dt><dd>{rate(t.brake[0])} ／ {rate(t.brake[1])} km/h/s</dd>
+      <dt>編成重量</dt><dd>{t.mass} t</dd>
+      <dt>主電動機</dt><dd>{t.motor}</dd>
+      <dt>制御方式</dt><dd>{t.control}</dd>
+      <dt>歯車比</dt><dd>{t.gearRatio}</dd>
+      <dt>車体幅</dt><dd>{t.width.toFixed(2)} m</dd>
+    </dl>
+  );
+}
+
 /** Name, character and figures of a car: `full` adds the whole specification table (car list). */
 export function CarSheet({ spec, index, full = false }: { spec: CarSpec; index: number; full?: boolean }) {
   const power = peakPower(spec);
   const [trqRpm, trq] = peakTorque(spec);
   return (
     <>
-      <div className="car-index">0{index + 1} / 0{CAR_ORDER.length}</div>
+      <div className="car-index">{two(index + 1)} / {two(VEHICLE_ORDER.length)}{spec.train && <span className="train-badge">TRAIN ・ ネタ枠</span>}</div>
       <h2 className="car-name">{spec.name}</h2>
-      <div className="car-tag">{spec.tagline} ・ {spec.drive}</div>
+      <div className="car-tag">{spec.tagline} ・ {spec.train ? spec.train.operator : spec.drive}</div>
       <p className="car-desc">{spec.description}</p>
       <div className="stats">
         <Stat label="POWER" v={spec.stats.power} />
@@ -63,7 +98,9 @@ export function CarSheet({ spec, index, full = false }: { spec: CarSpec; index: 
         <Stat label="DRIFT" v={spec.stats.drift} />
         <Stat label="LIGHTNESS" v={spec.stats.weight} />
       </div>
-      {full ? (
+      {spec.train ? (
+        <TrainFigures spec={spec} full={full} />
+      ) : full ? (
         <dl className="spec-table">
           <dt>エンジン</dt><dd>{spec.engineName}</dd>
           <dt>最高出力</dt><dd>{power.ps} PS / {power.rpm} rpm</dd>
@@ -125,9 +162,9 @@ export function useGarageOrbit() {
 /** Car list from the main menu: every car with its figures, turned around by dragging. */
 export function CarsScreen() {
   const { go, carId } = useApp();
-  const [i, setI] = useState(Math.max(0, CAR_ORDER.indexOf(carId)));
+  const [i, setI] = useState(Math.max(0, VEHICLE_ORDER.indexOf(carId)));
   const [c, setC] = useState(0);
-  const id = CAR_ORDER[i];
+  const id = VEHICLE_ORDER[i];
   const palette = COLORS[id];
   const color = palette[c % palette.length];
   const orbit = useGarageOrbit();
@@ -142,7 +179,7 @@ export function CarsScreen() {
     void gameHolder.game?.audio?.playMusic('bgm_garage');
   }, []);
   const turn = (d: number) => {
-    setI((x) => (x + d + CAR_ORDER.length) % CAR_ORDER.length);
+    setI((x) => (x + d + VEHICLE_ORDER.length) % VEHICLE_ORDER.length);
     setC(0);
     sfx.move();
   };

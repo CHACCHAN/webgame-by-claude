@@ -32,6 +32,33 @@ Newest first. "Verified" means actually executed in this environment; anything e
   gears, size; drag to orbit the camera around the car, wheel to zoom (also in the car select).
 - Online lobby: conditions chips next to the course when creating a room; AT/MT chips for each player.
 
+### Trains (joke entries, owner's request)
+- Five three-car trains as vehicles, each with a third-party model (ASSETS.md): JR E231, 117 (サンライナー),
+  京成3300 (赤電), 東京メトロ銀座線1000, 新幹線N700 (`vehicle/trains.ts`). The owner first asked for E235 and Tobu
+  trains; no usable models exist for them (and the 103), so the owner left the choice open: lineup of five.
+  Real figures from Japanese Wikipedia: starting acceleration, design top speed, service/emergency brake rates,
+  motors, control, gear ratio, car length; masses are marked as estimates where no per-car figure exists.
+- Physics: only the leading car's front bogie is simulated (a 4.2 t vehicle); the motor torque curve gives the real
+  acceleration (constant torque, constant power, then ∝1/v²; the N700 keeps full power to 300 km/h), the redline is
+  the motor speed at the design top speed, full brake = the emergency rate. Added to `VehicleSim`: `engine.electric`
+  (full torque from standstill, symmetric reverse), `CarSpec.damping` and `CarSpec.rolling` (the cars' body damping
+  and 1.5 % tyre rolling resistance capped a train near 70 km/h; steel wheels 0.2 %). Tests on level ground for
+  every train: starting acceleration ±15 %, peak speed 85–108 % of the design speed (N700 330 km/h included),
+  emergency stop 90–125 % of the real rate.
+- Drawing (`render/TrainModel.ts`): the model's cars (or a procedural stand-in per series when a model is missing),
+  placed every frame along the path the front bogie drove, at the train's car length and bogie spacing (so the train
+  follows the road like rails, also for ghosts, replays and online peers); reversing hands the path back. Tests:
+  on a 40 m bend every car centre stays on the arc, 20 m apart; backing up 30 m moves every car 30 m back.
+- Import (`tools/import-trains.cjs` + `render/trainImport.ts`): cars cut at the gangways (positions from the bogie
+  spacing, checked on side renders), clipped, turned so +Z is forward. First import mirrored the x-long models
+  (axes swapped instead of a quarter turn: inside-out shells); fixed and re-imported.
+- Camera: high chase and a cab view just behind each train's nose (`ChaseCamera.profile`); a train's first race starts
+  in the cab. Sound (`audio/TrainSound.ts`): gear whine and rumble, plus VVVF carrier steps or DC-motor growl by
+  control type. No exhaust; AT/MT is skipped (one ratio).
+- Medals per course from the legend AI with each train (`TRAIN_MEDALS`); with the real weak brakes the AI sometimes
+  could not stop and respawned: those runs were replaced by clean runs or estimates.
+- Fixed on the way: the colour picked in the car select was never used in the race (`RaceConfig.color`).
+
 ### Tests
 - Backend: the `backend-test` image bakes the code in, so earlier runs without `--build` tested old code. With
   `--build`: 14/14 (new: ready gating, rejoin, room conditions).

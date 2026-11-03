@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { gameHolder } from '../GameCanvas';
 import { useApp } from '../../store/app';
 import { useMenuInput } from '../useMenuInput';
-import { CAR_ORDER, CAR_SPECS, type CarId } from '../../game/vehicle/carSpecs';
+import { CAR_SPECS, VEHICLE_ORDER, type CarId } from '../../game/vehicle/carSpecs';
 import { COURSES, COURSE_ORDER, type CourseId } from '../../game/track/courses';
 import { currentCourseId, useSettings } from '../../store/settings';
 import { loadPlayer } from '../../api/client';
@@ -19,7 +19,7 @@ const MAX_PLAYERS = 3;
 function CarPicker({ carId, disabled }: { carId: CarId; disabled?: boolean }) {
   return (
     <div className="ol-cars">
-      {CAR_ORDER.map((id) => (
+      {VEHICLE_ORDER.map((id) => (
         <button key={id} className={`chip ${id === carId ? 'on' : ''}`} disabled={disabled} onClick={() => { sfx.move(); chooseCar(id); }}>
           {CAR_SPECS[id].name}
         </button>
@@ -61,8 +61,8 @@ export function OnlineLobbyScreen() {
   useMenuInput((a) => {
     if (a === 'back') { sfx.back(); go('modes'); }
     if (a === 'left' || a === 'right') {
-      const i = CAR_ORDER.indexOf(useOnline.getState().carId);
-      chooseCar(CAR_ORDER[(i + (a === 'left' ? CAR_ORDER.length - 1 : 1)) % CAR_ORDER.length]);
+      const i = VEHICLE_ORDER.indexOf(useOnline.getState().carId);
+      chooseCar(VEHICLE_ORDER[(i + (a === 'left' ? VEHICLE_ORDER.length - 1 : 1)) % VEHICLE_ORDER.length]);
       sfx.move();
     }
   });
@@ -145,8 +145,8 @@ export function OnlineRoomScreen() {
   useMenuInput((a) => {
     if (a === 'back') exit();
     if ((a === 'left' || a === 'right') && room?.status === 'waiting') {
-      const i = CAR_ORDER.indexOf(carId);
-      chooseCar(CAR_ORDER[(i + (a === 'left' ? CAR_ORDER.length - 1 : 1)) % CAR_ORDER.length]);
+      const i = VEHICLE_ORDER.indexOf(carId);
+      chooseCar(VEHICLE_ORDER[(i + (a === 'left' ? VEHICLE_ORDER.length - 1 : 1)) % VEHICLE_ORDER.length]);
       sfx.move();
     }
   });

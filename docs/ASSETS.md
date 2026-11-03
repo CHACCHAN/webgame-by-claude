@@ -143,6 +143,24 @@ for commercial use.
 | `img/courses/kirifuri.webp` | ChatGPT (batch 2, re-sent) | 1672×941 PNG → 1600×900 WebP q84 | 霧降湖 course card, loading screen |
 | `img/courses/tenrou.webp` | ChatGPT (batch 2) | 1536×1024 WebP q84 | 天狼 course card, loading screen |
 
+### Train models (joke entries, Sketchfab)
+Downloaded by the owner on 2026-11-03; three cars (leading, middle, trailing) cut out of each with
+`frontend/tools/import-trains.cjs` (`tools/train-import.json`: cuts at the gangways found from the bogie spacing,
+triangles crossing a cut clipped, materials collapsed to vertex colours + one mesh per texture, glass made dark,
+E231 converted from spec-gloss to metal-rough, N700 simplified to 35 %), scaled to the real car length / width,
+written to `frontend/public/models/trains/<id>.glb`. Credits also in the car list (CarSpec.model).
+
+| Train | Model | Author | License |
+|---|---|---|---|
+| E231 (`e231`) | [JR東日本E231系電車](https://sketchfab.com/3d-models/98d47a9e4aca454d9c02eb2c690fdaee) | own.guest | CC BY 4.0 |
+| 117 (`jr117`) | [117系 サンライナー](https://sketchfab.com/3d-models/6434932c06974d10927c2fe36c2c7f8e) | own.guest | CC BY 4.0 |
+| 京成3300 (`keisei3300`) | 京成3300形(赤電) [先頭車1](https://sketchfab.com/3d-models/366d6c3ecfc5415ab21627a5c1165a7d)・[中間車1](https://sketchfab.com/3d-models/8e8c924b5ce145e99738b9a23c73c685)・[先頭車2](https://sketchfab.com/3d-models/86b11eb7639642e897cc2ef5ae2ad23f) | V3B4 | CC BY-NC 4.0 (non-commercial: the owner confirmed the site is non-commercial) |
+| 銀座線1000 (`ginza1000`) | [Japan Train Tokyo Metro Ginza Line (low poly)](https://sketchfab.com/3d-models/dc622d519f8d4b7ab1fd478815d129f8) | ditovirnantio | CC BY 4.0 |
+| N700 (`n700`) | [N700-3000 Series Shinkansen](https://sketchfab.com/3d-models/f70820be44e0467d8b1614f2aa3045bd) | Layo (bciarfello) | CC BY 4.0 |
+
+Train performance figures (vehicle/trains.ts) are from Japanese Wikipedia (2026-11-03); masses marked as estimates
+in the game where no per-car figure is published.
+
 ### Music: Suno Pro (batch 3)
 All music was remade by the owner with Suno (Pro plan, which grants commercial use of songs made while subscribed)
 from the prompts in `docs/ASSET_REQUESTS.md` (batch 3: frenchcore / uptempo hardcore / speedcore), generated and

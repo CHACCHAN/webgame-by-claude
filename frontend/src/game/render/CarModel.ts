@@ -1,3 +1,5 @@
+import type { TrainId } from '../vehicle/trains';
+import { buildTrain, type TrainRig } from './TrainModel';
 import * as THREE from 'three';
 import type { CarId, CarSpec } from '../vehicle/carSpecs';
 
@@ -64,7 +66,7 @@ const BASE_STYLES = {
 } satisfies Record<'hayate' | 'raijin' | 'shiden', BodyStyle>;
 
 /** Fallback bodies for the newer cars until their GLB models are in place. */
-const STYLES: Record<CarId, BodyStyle> = {
+const STYLES: Record<Exclude<CarId, TrainId>, BodyStyle> = {
   ...BASE_STYLES,
   supra: { ...BASE_STYLES.shiden, front: 2.15, rear: -2.35, halfWidth: 0.9, headlights: 'slim' },
   r34: { ...BASE_STYLES.raijin },
@@ -367,16 +369,19 @@ export interface CarRig {
   fromModel?: boolean;
   /** pop-up lamps of the model itself, modelled raised: hinges, their lens and the folding angle (rad) */
   popUps?: { hinges: THREE.Object3D[]; lens: THREE.MeshStandardMaterial | null; closed: number };
+  /** a train: its cars follow the leading bogie (render/TrainModel.ts) */
+  train?: TrainRig;
 }
 
 export function buildCar(spec: CarSpec, opts: { bodyColor?: string; procedural?: boolean } = {}): CarRig {
+  if (spec.train) return buildTrain(spec, opts);
   const tpl = opts.procedural ? null : carTemplate(spec.id);
   if (tpl) return rigFromTemplate(tpl, spec, opts);
   return buildProceduralCar(spec, opts);
 }
 
 export function buildProceduralCar(spec: CarSpec, opts: { bodyColor?: string } = {}): CarRig {
-  const st = STYLES[spec.id];
+  const st = STYLES[spec.id as Exclude<CarId, TrainId>];
   const mats = createCarMaterials(spec, opts.bodyColor);
   const root = new THREE.Group();
   root.name = `car-${spec.id}`;

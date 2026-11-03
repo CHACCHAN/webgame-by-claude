@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { gameHolder } from '../GameCanvas';
 import { useApp } from '../../store/app';
 import { useMenuInput, hoverSelect } from '../useMenuInput';
-import { CAR_ORDER, CAR_SPECS } from '../../game/vehicle/carSpecs';
+import { CAR_SPECS, VEHICLE_ORDER, type CarId } from '../../game/vehicle/carSpecs';
 import type { AILevel } from '../../game/ai/AIDriver';
 import { COURSES, COURSE_ORDER, type CourseId } from '../../game/track/courses';
 import { Track } from '../../game/track/Track';
@@ -147,8 +147,8 @@ export function Hint({ items }: { items: [string, string][] }) {
 
 export function GarageScreen() {
   const { go, set, carId, mode, carColor } = useApp();
-  const [i, setI] = useState(CAR_ORDER.indexOf(carId));
-  const id = CAR_ORDER[i];
+  const [i, setI] = useState(Math.max(0, VEHICLE_ORDER.indexOf(carId)));
+  const id = VEHICLE_ORDER[i];
   const spec = CAR_SPECS[id];
   const palette = COLORS[id];
   const color = carColor && palette.includes(carColor) ? carColor : palette[0];
@@ -171,11 +171,14 @@ export function GarageScreen() {
   const orbit = useGarageOrbit();
   const confirm = () => {
     sfx.confirm();
-    go('transmission');
+    // a train has a single gear ratio: no AT/MT choice
+    if (!spec.train) go('transmission');
+    else if (mode === 'rival') go('rivals');
+    else void startRaceFromState();
   };
   useMenuInput((a) => {
-    if (a === 'left') { setI((x) => (x + CAR_ORDER.length - 1) % CAR_ORDER.length); sfx.move(); }
-    if (a === 'right') { setI((x) => (x + 1) % CAR_ORDER.length); sfx.move(); }
+    if (a === 'left') { setI((x) => (x + VEHICLE_ORDER.length - 1) % VEHICLE_ORDER.length); sfx.move(); }
+    if (a === 'right') { setI((x) => (x + 1) % VEHICLE_ORDER.length); sfx.move(); }
     if (a === 'up') cycleColor(-1);
     if (a === 'down') cycleColor(1);
     if (a === 'confirm') confirm();
@@ -198,8 +201,8 @@ export function GarageScreen() {
           この車に決定 <span>▶</span>
         </button>
       </div>
-      <button className="arrow left" onClick={() => setI((x) => (x + CAR_ORDER.length - 1) % CAR_ORDER.length)}>‹</button>
-      <button className="arrow right" onClick={() => setI((x) => (x + 1) % CAR_ORDER.length)}>›</button>
+      <button className="arrow left" onClick={() => setI((x) => (x + VEHICLE_ORDER.length - 1) % VEHICLE_ORDER.length)}>‹</button>
+      <button className="arrow right" onClick={() => setI((x) => (x + 1) % VEHICLE_ORDER.length)}>›</button>
       <Hint items={[['←→', '車両'], ['↑↓', 'カラー'], ['ドラッグ', '視点'], ['Enter', '決定'], ['Esc', '戻る']]} />
     </div>
   );
@@ -219,7 +222,7 @@ export function RivalsScreen() {
     if (a === 'left' || a === 'up') { setI((x) => (x + 2) % 3); sfx.move(); }
     if (a === 'right' || a === 'down') { setI((x) => (x + 1) % 3); sfx.move(); }
     if (a === 'confirm') start();
-    if (a === 'back') { sfx.back(); go('transmission'); }
+    if (a === 'back') { sfx.back(); go(CAR_SPECS[useApp.getState().carId].train ? 'garage' : 'transmission'); }
   });
   return (
     <div className="screen rivals">
@@ -391,7 +394,8 @@ export async function startRaceFromState(rival?: AILevel) {
     console.warn('ghost unavailable', e);
   }
   game.initAudio();
-  game.startRace({ mode: app.mode, carId: app.carId, rivalLevel: app.mode === 'rival' ? (rival ?? app.rivalLevel) : undefined, ghost });
+  const color = app.carColor && COLORS[app.carId].includes(app.carColor) ? app.carColor : undefined;
+  game.startRace({ mode: app.mode, carId: app.carId, color, rivalLevel: app.mode === 'rival' ? (rival ?? app.rivalLevel) : undefined, ghost });
   app.set({ screen: 'race', result: null, paused: false });
 }
 
@@ -448,7 +452,7 @@ export function useLocalBestLabel() {
   return lb ? `${formatTime(lb.timeMs)} (${CAR_SPECS[lb.carId].name})` : null;
 }
 
-function CarRecord({ id }: { id: (typeof CAR_ORDER)[number] }) {
+function CarRecord({ id }: { id: CarId }) {
   const course = currentCourseId();
   const best = loadCarBests(course)[id] ?? null;
   const medal = best !== null ? medalFor(course, id, best) : null;

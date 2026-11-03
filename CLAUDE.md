@@ -83,6 +83,14 @@ pending. `docs/PLAN.md` holds the design.
   (`TransmissionScreen`) → rival (rival mode) → race; ghost battles pick the ghost between conditions and car. The last
   choices persist in settings (`timeOfDay`, `autoShift`) but are no longer in the settings screen. Online rooms carry the
   host's `time_of_day`; AT/MT stays each player's. The host can start only when every member reported `ready`.
+- Trains (joke entries, `vehicle/trains.ts`): the sim is only the leading front bogie; `TrainModel` draws three cars
+  along its driven path every frame (`CarVisual.tick` → `rig.train.update`; call `CarVisual.refresh()` after moving
+  a root by hand). Performance comes from the real figures via `trainSpec` (torque curve, redline, brake force);
+  check with the train tests in `vehicle.test.ts`. Models: unpack each glTF zip into a folder, describe the cuts in
+  `frontend/tools/train-import.json` (axis, scale to metres, three [from, to] ranges along the axis at the gangways,
+  `frontAtMin` / `flip`), then with `vite preview` on :4173: `node tools/import-trains.cjs <srcRoot> [ids]`. Medals: `TRAIN_MEDALS` in courses.ts (re-run tools/sim-run.ts
+  with the train ids after physics or course changes). `CAR_ORDER` = cars only (AI, bots, GLBs), `VEHICLE_ORDER` =
+  cars + trains (player-facing lists); the backend's `game.cars` lists both.
 - Particles: any per-particle value raised to a power must have its base clamped (a NaN alpha on a puff drawn next to
   the camera covers the screen, and bloom turns a NaN frame black).
 - Race timing/splits/AI run per physics step (`Game.raceStep`, `driveAI`); keep frame-time logic out of timing.

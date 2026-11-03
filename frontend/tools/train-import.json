@@ -1,0 +1,60 @@
+{
+  "e231": {
+    "dir": "e231",
+    "metalrough": true,
+    "config": {
+      "files": ["scene.gltf"], "axis": "x", "scale": [1.237, 1.237, 1.5],
+      "cars": [
+        { "file": 0, "from": 73.95, "to": 90.3 },
+        { "file": 0, "from": 57.45, "to": 73.95 },
+        { "file": 0, "from": -41.2, "to": -24.87 }
+      ]
+    }
+  },
+  "jr117": {
+    "dir": "jr117",
+    "config": {
+      "files": ["scene.gltf"], "axis": "x", "scale": [0.137, 0.137, 0.137], "frontAtMin": true,
+      "cars": [
+        { "file": 0, "from": -365.3, "to": -218.6 },
+        { "file": 0, "from": -72.5, "to": 73.8 },
+        { "file": 0, "from": -365.3, "to": -218.6, "flip": true }
+      ]
+    }
+  },
+  "keisei3300": {
+    "dir": ".",
+    "config": {
+      "files": ["keisei-tc1/scene.gltf", "keisei-m1/scene.gltf", "keisei-tc2/scene.gltf"], "axis": "z", "scale": [1, 1, 1],
+      "cars": [
+        { "file": 0, "from": -1, "to": 19 },
+        { "file": 1, "from": -1, "to": 19 },
+        { "file": 2, "from": -1, "to": 19 }
+      ]
+    }
+  },
+  "ginza1000": {
+    "dir": "ginza",
+    "textureSize": 1024,
+    "config": {
+      "files": ["scene.gltf"], "axis": "x", "scale": [0.0098, 0.0098, 0.0086],
+      "cars": [
+        { "file": 0, "from": 7239.2, "to": 8871 },
+        { "file": 0, "from": 5574.5, "to": 7239.2 },
+        { "file": 0, "from": -934, "to": 710 }
+      ]
+    }
+  },
+  "n700": {
+    "dir": "n700",
+    "simplify": 0.35,
+    "config": {
+      "files": ["scene.gltf"], "axis": "x", "scale": [2.814, 2.814, 2.814],
+      "cars": [
+        { "file": 0, "from": 124.92, "to": 134 },
+        { "file": 0, "from": 116.04, "to": 124.92 },
+        { "file": 0, "from": -8.4, "to": 0.55 }
+      ]
+    }
+  }
+}

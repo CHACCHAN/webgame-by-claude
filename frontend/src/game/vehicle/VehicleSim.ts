@@ -119,7 +119,7 @@ export class VehicleSim {
         .setTranslation(position.x, position.y + this.rideHeight + 0.05, position.z)
         .setRotation({ x: q.x, y: q.y, z: q.z, w: q.w })
         .setCcdEnabled(true)
-        .setLinearDamping(0.02)
+        .setLinearDamping(spec.damping ?? 0.02)
         .setAngularDamping(0.6)
         .setCanSleep(false),
     );
@@ -205,7 +205,8 @@ export class VehicleSim {
   }
 
   private gearRatio(g = this.gear) {
-    if (g === -1) return -3.4;
+    // electric traction reverses the motors: same ratio both ways
+    if (g === -1) return this.spec.engine.electric ? -this.spec.gears[0] : -3.4;
     if (g === 0) return 0;
     return this.spec.gears[g - 1];
   }
@@ -272,7 +273,8 @@ export class VehicleSim {
     }
     drivenRot /= Math.max(1, drivenCount);
     const wheelRpm = (Math.abs(drivenRot) * Math.abs(ratio) * 60) / (Math.PI * 2);
-    const launch = spec.engine.idleRpm + throttle * 3800 * (1 - smoothstep(4, 14, Math.abs(fwdSpeed)));
+    // a clutch slips at launch (revs up); an electric motor gives full torque from standstill
+    const launch = spec.engine.electric ? 0 : spec.engine.idleRpm + throttle * 3800 * (1 - smoothstep(4, 14, Math.abs(fwdSpeed)));
     let targetRpm = Math.max(wheelRpm * (1 + this.wheelSpin * 0.6), launch, spec.engine.idleRpm);
     if (this.gear === 0) targetRpm = spec.engine.idleRpm + throttle * (spec.engine.redline - spec.engine.idleRpm);
     this.rpm = damp(this.rpm, Math.min(targetRpm, spec.engine.redline + 250), 18, dt);
@@ -439,8 +441,8 @@ export class VehicleSim {
       let brakeF = brake * spec.brakeForce * brakeShare * 0.5;
       const stopLong = (Math.abs(vF) * wheelMass) / dt;
       fx -= Math.sign(vF) * Math.min(brakeF, stopLong);
-      // rolling resistance (roughly constant, ~1.5% of load)
-      fx -= Math.sign(vF) * Math.min(Math.abs(vF) * 40, load * 0.015);
+      // rolling resistance (roughly constant, ~1.5% of load for tyres)
+      fx -= Math.sign(vF) * Math.min(Math.abs(vF) * 40, load * (spec.rolling ?? 0.015));
       const locked = handbrake && !w.front && Math.abs(vF) > 1;
 
       // --- friction circle (lateral keeps a share of grip even when spinning)

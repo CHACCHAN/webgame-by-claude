@@ -37,7 +37,8 @@ class GameApiTest extends TestCase
         $this->getJson('/api/content')->assertOk()
             ->assertJsonPath('tracks.0.id', 'oboro-downhill')
             ->assertJsonCount(3, 'tracks')
-            ->assertJsonCount(6, 'cars');
+            // 6 cars and the 5 trains (joke entries)
+            ->assertJsonCount(11, 'cars');
     }
 
     public function test_player_registration_and_profile(): void
@@ -100,6 +101,11 @@ class GameApiTest extends TestCase
 
         $raijin = $this->getJson('/api/tracks/oboro-downhill/leaderboard?car_id=raijin')->json('entries');
         $this->assertCount(1, $raijin);
+
+        // the trains (joke entries) are vehicles like the cars
+        $d = $this->register('Delta');
+        $this->withToken($d)->postJson('/api/runs', $this->runPayload(152_000, ['car_id' => 'n700']))->assertCreated();
+        $this->assertSame(['Delta'], array_column($this->getJson('/api/tracks/oboro-downhill/leaderboard?car_id=n700')->json('entries'), 'player_name'));
 
         $this->getJson('/api/tracks/nowhere/leaderboard')->assertNotFound();
         // leaderboards are per course
