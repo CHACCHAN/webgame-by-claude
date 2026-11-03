@@ -4,13 +4,15 @@ import { useApp } from '../../store/app';
 import { useMenuInput } from '../useMenuInput';
 import { CAR_ORDER, CAR_SPECS, type CarId } from '../../game/vehicle/carSpecs';
 import { COURSES, COURSE_ORDER, type CourseId } from '../../game/track/courses';
-import { currentCourseId } from '../../store/settings';
+import { currentCourseId, useSettings } from '../../store/settings';
 import { loadPlayer } from '../../api/client';
 import { SLOT_COLORS } from '../../game/net/RemoteRacers';
 import { formatTime } from '../format';
 import { sfx } from '../sfx';
 import { Hint } from './Menus';
 import { chooseCar, createRoom, joinRoom, leaveRoom, registerName, rematch, startOnlineRace, useOnline } from '../../store/online';
+import { CONDITIONS } from './RaceSetup';
+import type { TimeOfDay } from '../../game/render/Environment';
 
 const MAX_PLAYERS = 3;
 
@@ -26,12 +28,29 @@ function CarPicker({ carId, disabled }: { carId: CarId; disabled?: boolean }) {
   );
 }
 
+/** AT / MT: each player's own choice (the course and conditions are the room's). */
+function GearboxPicker({ disabled }: { disabled?: boolean }) {
+  const autoShift = useSettings((s) => s.autoShift);
+  const pick = (auto: boolean) => {
+    sfx.move();
+    useSettings.getState().set({ autoShift: auto });
+    if (gameHolder.game) gameHolder.game.autoShift = auto;
+  };
+  return (
+    <div className="ol-cars ol-gearbox">
+      <button className={`chip ${autoShift ? 'on' : ''}`} disabled={disabled} onClick={() => pick(true)}>AT オートマ</button>
+      <button className={`chip ${!autoShift ? 'on' : ''}`} disabled={disabled} onClick={() => pick(false)}>MT マニュアル</button>
+    </div>
+  );
+}
+
 /** Name, car, then create a room on a course or join one with its code. */
 export function OnlineLobbyScreen() {
   const { player, carId, busy, error } = useOnline();
   const go = useApp((s) => s.go);
   const [name, setName] = useState(() => loadPlayer()?.name ?? '');
   const [course, setCourse] = useState<CourseId>(currentCourseId());
+  const [tod, setTod] = useState<TimeOfDay>(useSettings.getState().timeOfDay);
   const [code, setCode] = useState('');
   useEffect(() => {
     const stored = loadPlayer();
@@ -65,6 +84,7 @@ export function OnlineLobbyScreen() {
               <label>エントリー</label>
               <div className="ol-me"><b>{player.name}</b></div>
               <CarPicker carId={carId} />
+              <GearboxPicker />
             </div>
             <div className="ol-split">
               <div className="ol-section">
@@ -76,7 +96,14 @@ export function OnlineLobbyScreen() {
                     </button>
                   ))}
                 </div>
-                <button className="cta small ol-create" disabled={busy} onClick={() => { sfx.confirm(); void createRoom(course); }}>
+                <div className="ol-courses ol-tod">
+                  {CONDITIONS.map((c) => (
+                    <button key={c.id} className={`chip ${c.id === tod ? 'on' : ''}`} onClick={() => { sfx.move(); setTod(c.id); }}>
+                      {c.jp}
+                    </button>
+                  ))}
+                </div>
+                <button className="cta small ol-create" disabled={busy} onClick={() => { sfx.confirm(); void createRoom(course, tod); }}>
                   ルームを作成
                 </button>
               </div>
@@ -125,11 +152,13 @@ export function OnlineRoomScreen() {
   });
   if (!room || !player) return null;
   const isHost = room.host_id === player.id;
-  const canStart = room.players.length >= 2;
+  const enough = room.players.length >= 2;
+  const loading = room.players.filter((p) => !p.ready);
+  const canStart = enough && !loading.length;
   const course = COURSES[room.track_id as CourseId];
   return (
     <div className="screen online-room">
-      <div className="crumb center">ONLINE ROOM ― {course?.name ?? room.track_id} <RealtimeBadge /></div>
+      <div className="crumb center">ONLINE ROOM ― {course?.name ?? room.track_id} ・ {CONDITIONS.find((c) => c.id === room.time_of_day)?.jp ?? ''} <RealtimeBadge /></div>
       <div className="ol-panel">
         <div className="ol-code-big">
           <small>ROOM CODE</small>
@@ -146,6 +175,7 @@ export function OnlineRoomScreen() {
                   <>
                     <b>{p.name}</b>
                     <span>{CAR_SPECS[p.car_id].name}</span>
+                    {!p.ready && <em className="loading">ロード中…</em>}
                     {p.id === room.host_id && <em>HOST</em>}
                     {p.id === player.id && <em className="you">YOU</em>}
                   </>
@@ -157,10 +187,11 @@ export function OnlineRoomScreen() {
           })}
         </ul>
         <CarPicker carId={carId} disabled={room.status !== 'waiting'} />
+        <GearboxPicker disabled={room.status !== 'waiting'} />
         <div className="ol-actions">
           {isHost ? (
             <button className="cta" disabled={busy || !canStart} onClick={() => { sfx.confirm(); void startOnlineRace(); }}>
-              {canStart ? 'レース開始' : '2人以上でスタートできます'}
+              {!enough ? '2人以上でスタートできます' : loading.length ? 'コースの読み込みを待っています…' : 'レース開始'}
             </button>
           ) : (
             <div className="ol-waiting">ホストのスタートを待っています…</div>

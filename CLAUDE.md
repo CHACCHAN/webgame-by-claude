@@ -18,7 +18,8 @@ pending. `docs/PLAN.md` holds the design.
 ## Commands
 - Stack: `docker compose up --build` → http://localhost:8080
 - Dev with HMR: `docker compose --profile dev up` → http://localhost:5173 (proxies /api to web)
-- Backend tests: `cd backend && php artisan test` or `docker compose --profile test run --rm backend-test`
+- Backend tests: `cd backend && php artisan test` or `docker compose --profile test run --rm --build backend-test`
+  (the image bakes the code in: without `--build` it tests the last built code)
 - Frontend: `cd frontend && npx tsc -b && npm run build && npx vitest run`
 - Headless driving sim: `cd frontend && npx tsx tools/sim-run.ts [cars] [levels]`
 - E2E: `docker compose --profile test run --rm e2e` (stack must be up)
@@ -78,6 +79,12 @@ pending. `docs/PLAN.md` holds the design.
   engine side `game/net/RemoteRacers.ts`. Online race time = max(physics clock, wall clock since the shared green light).
 - Public access: Cloudflare Tunnel, started by plain `docker compose up` when `.env` has `COMPOSE_PROFILES=tunnel` and `CLOUDFLARE_TUNNEL_TOKEN` (dashboard route → `http://web:80`); an explicit `--profile dev|test` replaces it.
   nginx restores the visitor IP from `CF-Connecting-IP`, trusting only cloudflared's fixed address `172.30.77.10`: keep `docker-compose.yml` and `docker/web/nginx.conf` in sync.
+- Race setup order (single player): mode → course → time & weather (`ConditionsScreen`) → car (`GarageScreen`) → AT/MT
+  (`TransmissionScreen`) → rival (rival mode) → race; ghost battles pick the ghost between conditions and car. The last
+  choices persist in settings (`timeOfDay`, `autoShift`) but are no longer in the settings screen. Online rooms carry the
+  host's `time_of_day`; AT/MT stays each player's. The host can start only when every member reported `ready`.
+- Particles: any per-particle value raised to a power must have its base clamped (a NaN alpha on a puff drawn next to
+  the camera covers the screen, and bloom turns a NaN frame black).
 - Race timing/splits/AI run per physics step (`Game.raceStep`, `driveAI`); keep frame-time logic out of timing.
 - Cars are solid (collision groups in `PhysicsWorld.ts`: GROUND, WALL, CAR, PROXY). Online peers become `net/ProxyCar`
   bodies (group PROXY, collide with CAR only) steered toward the extrapolated network pose; after a teleport or the local

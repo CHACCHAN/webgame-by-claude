@@ -24,6 +24,7 @@ class RoomController extends Controller
     {
         $data = $request->validate([
             'track_id' => ['required', 'string', Rule::in(array_keys(config('game.tracks')))],
+            'time_of_day' => ['sometimes', 'string', Rule::in(config('game.times_of_day'))],
             'car_id' => ['required', 'string', Rule::in(array_keys(config('game.cars')))],
         ]);
         $player = $this->player($request);
@@ -36,6 +37,7 @@ class RoomController extends Controller
                 'code' => Room::newCode(),
                 'host_player_id' => $player->id,
                 'track_id' => $data['track_id'],
+                'time_of_day' => $data['time_of_day'] ?? 'night',
                 'status' => 'waiting',
                 'race_no' => 0,
             ]);
@@ -59,7 +61,13 @@ class RoomController extends Controller
         ]);
         $player = $this->player($request);
         $room = $this->room($code);
-        if ($room->memberFor($player)) {
+        if ($member = $room->memberFor($player)) {
+            // back in after a reload: loading the course again
+            if ($member->ready) {
+                $member->update(['ready' => false]);
+                $this->broadcastRoom($room);
+            }
+
             return response()->json($room->payload());
         }
         $this->leaveAllRooms($player);
@@ -99,16 +107,18 @@ class RoomController extends Controller
         return response()->json($room->payload());
     }
 
+    /** The member's car, and `ready` once their game has loaded the room's course. */
     public function update(Request $request, string $code): JsonResponse
     {
         $data = $request->validate([
-            'car_id' => ['required', 'string', Rule::in(array_keys(config('game.cars')))],
+            'car_id' => ['required_without:ready', 'string', Rule::in(array_keys(config('game.cars')))],
+            'ready' => ['sometimes', 'boolean'],
         ]);
         [$room, $member] = $this->membership($request, $code);
-        if ($room->status === 'racing') {
+        if (isset($data['car_id']) && $room->status === 'racing') {
             return response()->json(['message' => 'レース中は車を変更できません'], 409);
         }
-        $member->update(['car_id' => $data['car_id']]);
+        $member->update($data);
         $room->touch();
         $this->broadcastRoom($room);
 
@@ -135,6 +145,13 @@ class RoomController extends Controller
         $min = (int) config('game.online.min_players_to_start');
         if ($room->members()->count() < $min) {
             return response()->json(['message' => "{$min}人以上そろうとスタートできます"], 409);
+        }
+        // nobody may start the countdown while another game is still loading the course
+        if ($room->members()->where('ready', false)->exists()) {
+            $this->pruneDisconnected($room);
+            if ($room->members()->where('ready', false)->exists()) {
+                return response()->json(['message' => 'まだコースを読み込んでいるプレイヤーがいます'], 409);
+            }
         }
 
         DB::transaction(function () use ($room) {

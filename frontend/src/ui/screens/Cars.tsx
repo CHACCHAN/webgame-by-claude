@@ -1,0 +1,181 @@
+import { useEffect, useRef, useState, type PointerEvent, type WheelEvent } from 'react';
+import { useApp } from '../../store/app';
+import { useMenuInput } from '../useMenuInput';
+import { gameHolder } from '../GameCanvas';
+import { CAR_ORDER, CAR_SPECS, type CarId, type CarSpec } from '../../game/vehicle/carSpecs';
+import { Hint } from './Menus';
+import { sfx } from '../sfx';
+
+/** Body colours offered for each car (first = default). */
+export const COLORS: Record<CarId, string[]> = {
+  hayate: ['#e8e6e1', '#b3121c', '#1b1d22', '#2f6db5', '#e0b400'],
+  raijin: ['#d9dbde', '#1d4fa8', '#0c0c0e', '#8f1218', '#5e6b3a'],
+  shiden: ['#f5c400', '#c8102e', '#f2f2f0', '#121214', '#3a7d44'],
+  supra: ['#eeeeee', '#d8481c', '#c40d1e', '#121214', '#1f5fb5'],
+  r34: ['#2f4fa6', '#e9e9ea', '#121214', '#8a8f96', '#4a2a63'],
+  s15: ['#f5cf30', '#e9e9ea', '#121214', '#b3121c', '#2f6db5'],
+};
+
+/** Peak power from the torque curve (linear between the points, up to the redline). */
+export function peakPower(spec: CarSpec) {
+  const t = spec.engine.torque;
+  let best = { kw: 0, rpm: 0 };
+  for (let rpm = t[0][0]; rpm <= spec.engine.redline; rpm += 50) {
+    let k = 0;
+    while (k < t.length - 2 && t[k + 1][0] < rpm) k++;
+    const f = Math.min(1, Math.max(0, (rpm - t[k][0]) / (t[k + 1][0] - t[k][0])));
+    const kw = ((t[k][1] + (t[k + 1][1] - t[k][1]) * f) * rpm * 2 * Math.PI) / 60 / 1000;
+    if (kw > best.kw) best = { kw, rpm };
+  }
+  return { ps: Math.round(best.kw * 1.36), kw: Math.round(best.kw), rpm: Math.round(best.rpm / 100) * 100 };
+}
+
+/** [rpm, Nm] of the highest point of the torque curve */
+export function peakTorque(spec: CarSpec) {
+  return spec.engine.torque.reduce((a, b) => (b[1] > a[1] ? b : a));
+}
+
+function Stat({ label, v }: { label: string; v: number }) {
+  return (
+    <div className="stat">
+      <span>{label}</span>
+      <div className="stat-bar">
+        <div style={{ width: `${v * 10}%` }} />
+      </div>
+      <b>{v}</b>
+    </div>
+  );
+}
+
+/** Name, character and figures of a car: `full` adds the whole specification table (car list). */
+export function CarSheet({ spec, index, full = false }: { spec: CarSpec; index: number; full?: boolean }) {
+  const power = peakPower(spec);
+  const [trqRpm, trq] = peakTorque(spec);
+  return (
+    <>
+      <div className="car-index">0{index + 1} / 0{CAR_ORDER.length}</div>
+      <h2 className="car-name">{spec.name}</h2>
+      <div className="car-tag">{spec.tagline} ・ {spec.drive}</div>
+      <p className="car-desc">{spec.description}</p>
+      <div className="stats">
+        <Stat label="POWER" v={spec.stats.power} />
+        <Stat label="GRIP" v={spec.stats.grip} />
+        <Stat label="DRIFT" v={spec.stats.drift} />
+        <Stat label="LIGHTNESS" v={spec.stats.weight} />
+      </div>
+      {full ? (
+        <dl className="spec-table">
+          <dt>エンジン</dt><dd>{spec.engineName}</dd>
+          <dt>最高出力</dt><dd>{power.ps} PS / {power.rpm} rpm</dd>
+          <dt>最大トルク</dt><dd>{trq} Nm / {trqRpm} rpm</dd>
+          <dt>レッドゾーン</dt><dd>{spec.engine.redline} rpm</dd>
+          <dt>車両重量</dt><dd>{spec.mass} kg</dd>
+          <dt>パワーウェイトレシオ</dt><dd>{(spec.mass / power.ps).toFixed(2)} kg/PS</dd>
+          <dt>駆動方式</dt><dd>{spec.drive === 'AWD' ? '4WD' : 'FR'}</dd>
+          <dt>変速機</dt><dd>{spec.gears.length}速</dd>
+          <dt>全長 × 全幅</dt><dd>{spec.size.length.toFixed(2)} × {spec.size.width.toFixed(2)} m</dd>
+          <dt>ホイールベース</dt><dd>{spec.wheelbase.toFixed(2)} m</dd>
+        </dl>
+      ) : (
+        <div className="specs-row">
+          <div><small>MAX POWER</small><b>{power.ps} PS</b></div>
+          <div><small>WEIGHT</small><b>{spec.mass} kg</b></div>
+          <div><small>REDLINE</small><b>{spec.engine.redline} rpm</b></div>
+        </div>
+      )}
+      {spec.model && (
+        <p className="car-credit">
+          3D model: “{spec.model.title}” by {spec.model.author} ({spec.model.license}, Sketchfab)
+        </p>
+      )}
+    </>
+  );
+}
+
+/**
+ * Pointer handlers for a garage screen: hold the mouse (or a finger) on the empty part of the screen and
+ * drag to look around the car; the wheel zooms.
+ */
+export function useGarageOrbit() {
+  const last = useRef<{ x: number; y: number } | null>(null);
+  const [dragging, setDragging] = useState(false);
+  return {
+    dragging,
+    handlers: {
+      onPointerDown: (e: PointerEvent<HTMLDivElement>) => {
+        if (e.target !== e.currentTarget) return; // the card, buttons and arrows keep their clicks
+        e.currentTarget.setPointerCapture(e.pointerId);
+        last.current = { x: e.clientX, y: e.clientY };
+        setDragging(true);
+      },
+      onPointerMove: (e: PointerEvent<HTMLDivElement>) => {
+        if (!last.current) return;
+        gameHolder.game?.orbitGarage(e.clientX - last.current.x, e.clientY - last.current.y);
+        last.current = { x: e.clientX, y: e.clientY };
+      },
+      onPointerUp: () => {
+        last.current = null;
+        setDragging(false);
+      },
+      onWheel: (e: WheelEvent<HTMLDivElement>) => gameHolder.game?.zoomGarage(Math.exp(e.deltaY * 0.001)),
+    },
+  };
+}
+
+/** Car list from the main menu: every car with its figures, turned around by dragging. */
+export function CarsScreen() {
+  const { go, carId } = useApp();
+  const [i, setI] = useState(Math.max(0, CAR_ORDER.indexOf(carId)));
+  const [c, setC] = useState(0);
+  const id = CAR_ORDER[i];
+  const palette = COLORS[id];
+  const color = palette[c % palette.length];
+  const orbit = useGarageOrbit();
+  useEffect(() => {
+    gameHolder.game?.showGarage(id, color);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
+  useEffect(() => {
+    gameHolder.game?.setGarageColor(color);
+  }, [color]);
+  useEffect(() => {
+    void gameHolder.game?.audio?.playMusic('bgm_garage');
+  }, []);
+  const turn = (d: number) => {
+    setI((x) => (x + d + CAR_ORDER.length) % CAR_ORDER.length);
+    setC(0);
+    sfx.move();
+  };
+  const back = () => {
+    sfx.back();
+    gameHolder.game?.startAttract();
+    go('modes');
+  };
+  useMenuInput((a) => {
+    if (a === 'left') turn(-1);
+    if (a === 'right') turn(1);
+    if (a === 'up') { setC((x) => x + palette.length - 1); sfx.move(); }
+    if (a === 'down') { setC((x) => x + 1); sfx.move(); }
+    if (a === 'back') back();
+  });
+  return (
+    <div className={`screen garage cars ${orbit.dragging ? 'orbiting' : ''}`} {...orbit.handlers}>
+      <div className="garage-top">
+        <div className="crumb">CAR LIST ― 車両一覧</div>
+      </div>
+      <div className="garage-card">
+        <CarSheet spec={CAR_SPECS[id]} index={i} full />
+        <div className="colors">
+          {palette.map((col, k) => (
+            <button key={col} className={col === color ? 'swatch on' : 'swatch'} style={{ background: col }} onClick={() => setC(k)} aria-label={`color ${col}`} />
+          ))}
+        </div>
+        <button className="cta small ghost" onClick={back}>メニューに戻る</button>
+      </div>
+      <button className="arrow left" onClick={() => turn(-1)}>‹</button>
+      <button className="arrow right" onClick={() => turn(1)}>›</button>
+      <div className="orbit-hint">ドラッグで車を見回す ・ ホイールでズーム</div>
+      <Hint items={[['←→', '車両'], ['↑↓', 'カラー'], ['ドラッグ', '視点'], ['Esc', '戻る']]} />
+    </div>
+  );
+}

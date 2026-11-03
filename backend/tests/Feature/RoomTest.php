@@ -59,8 +59,16 @@ class RoomTest extends TestCase
 
         // the host alone cannot start, guests cannot start at all
         $this->postJson("/api/rooms/{$code}/start", [], $h)->assertStatus(409);
-        $this->postJson("/api/rooms/{$code}/join", ['car_id' => 'hayate'], $b)->assertOk();
+        $this->postJson("/api/rooms/{$code}/join", ['car_id' => 'hayate'], $b)->assertOk()->assertJsonPath('players.1.ready', false);
         $this->postJson("/api/rooms/{$code}/start", [], $b)->assertForbidden();
+        // not before every game has loaded the course
+        $this->patchJson("/api/rooms/{$code}/me", ['ready' => true], $h)->assertOk()->assertJsonPath('players.0.ready', true);
+        $this->postJson("/api/rooms/{$code}/start", [], $h)->assertStatus(409)->assertJsonPath('status', null);
+        $this->patchJson("/api/rooms/{$code}/me", ['ready' => true], $b)->assertOk();
+        // rejoining after a reload means loading again
+        $this->postJson("/api/rooms/{$code}/join", ['car_id' => 'hayate'], $b)->assertOk()->assertJsonPath('players.1.ready', false);
+        $this->postJson("/api/rooms/{$code}/start", [], $h)->assertStatus(409);
+        $this->patchJson("/api/rooms/{$code}/me", ['ready' => true], $b)->assertOk()->assertJsonPath('players.1.car_id', 'hayate');
         $start = $this->postJson("/api/rooms/{$code}/start", [], $h)->assertOk()->assertJsonPath('status', 'racing');
         $this->assertGreaterThan($start->json('server_time_ms'), $start->json('start_at_ms'));
         $raceNo = $start->json('race_no');
@@ -94,6 +102,18 @@ class RoomTest extends TestCase
         $this->postJson("/api/rooms/{$code}/leave", [], $b)->assertOk();
         $this->getJson("/api/rooms/{$code}", $b)->assertNotFound();
         $this->assertDatabaseMissing('room_players', ['player_id' => $host->id]);
+    }
+
+    public function test_the_room_keeps_the_hosts_time_of_day_for_everyone(): void
+    {
+        [, $h] = $this->player('HOST');
+        [, $b] = $this->player('B');
+        $code = $this->postJson('/api/rooms', ['track_id' => 'oboro-downhill', 'time_of_day' => 'rain', 'car_id' => 'hayate'], $h)
+            ->assertCreated()->assertJsonPath('time_of_day', 'rain')->json('code');
+        $this->postJson("/api/rooms/{$code}/join", ['car_id' => 'shiden'], $b)->assertOk()->assertJsonPath('time_of_day', 'rain');
+        $this->postJson('/api/rooms', ['track_id' => 'oboro-downhill', 'time_of_day' => 'noon', 'car_id' => 'hayate'], $h)->assertStatus(422);
+        // older clients send no conditions: night
+        $this->assertSame('night', $this->postJson('/api/rooms', ['track_id' => 'oboro-downhill', 'car_id' => 'hayate'], $b)->json('time_of_day'));
     }
 
     public function test_presence_channel_auth_is_signed_for_members_only(): void

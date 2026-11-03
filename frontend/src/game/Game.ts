@@ -178,6 +178,8 @@ export class Game {
   private garageAngle = 0;
   /** world yaw of the camera offset that looks from the hillside out over the valley */
   private garageViewYaw = 0;
+  /** camera dragged around the car (car list, car select); null = the slow automatic swing */
+  private garageOrbit: { yaw: number; pitch: number; dist: number } | null = null;
   private garageLight = new THREE.SpotLight('#fff1e0', 0, 30, 0.55, 0.8, 1.2);
   private lampLights: THREE.PointLight[] = [];
   /** lamp index each pooled light is attached to (-1 = free) */
@@ -502,7 +504,10 @@ export class Game {
       return true;
     };
     this.garageViewYaw = [side, side + Math.PI, ahead, ahead + Math.PI].find(clear) ?? side;
-    if (this.phase !== 'garage') this.garageAngle = 0.6;
+    if (this.phase !== 'garage') {
+      this.garageAngle = 0.6;
+      this.garageOrbit = null;
+    }
     this.setPhase('garage');
   }
 
@@ -1206,19 +1211,34 @@ export class Game {
     }
   }
 
+  /** Drag the garage camera around the car (pixels); it stays where it is left until the garage reopens. */
+  orbitGarage(dx: number, dy: number) {
+    const o = (this.garageOrbit ??= { yaw: Math.sin(this.garageAngle) * 0.75, pitch: 0.13, dist: 8.6 });
+    o.yaw -= dx * 0.008;
+    o.pitch = clamp(o.pitch + dy * 0.005, 0.02, 1.2);
+  }
+
+  /** Wheel zoom of the garage camera: factor on the distance. */
+  zoomGarage(factor: number) {
+    const o = (this.garageOrbit ??= { yaw: Math.sin(this.garageAngle) * 0.75, pitch: 0.13, dist: 8.6 });
+    o.dist = clamp(o.dist * factor, 5.5, 13);
+  }
+
   private garageCamera(dt: number) {
     const car = this.garageCar!.root.position;
+    const o = this.garageOrbit;
     // swing slowly from the uphill side; the car sits left of centre beside the UI card
     this.garageAngle += dt * 0.2;
-    const a = this.garageViewYaw + Math.sin(this.garageAngle) * 0.75;
+    const a = this.garageViewYaw + (o ? o.yaw : Math.sin(this.garageAngle) * 0.75);
     const cam = this.camera;
-    _v.set(car.x + Math.sin(a) * 8.6, car.y + 1.7, car.z + Math.cos(a) * 8.6);
+    const flat = o ? Math.cos(o.pitch) * o.dist : 8.6;
+    _v.set(car.x + Math.sin(a) * flat, car.y + (o ? 0.6 + Math.sin(o.pitch) * o.dist : 1.7), car.z + Math.cos(a) * flat);
     // steep cuttings (ridge courses) would swallow the camera: keep it, and its glide in, above ground
     _v.y = Math.max(_v.y, this.terrain.heightAt(_v.x, _v.z) + 1.4);
-    cam.position.lerp(_v, 1 - Math.exp(-dt * 3));
+    cam.position.lerp(_v, 1 - Math.exp(-dt * (o ? 14 : 3)));
     cam.position.y = Math.max(cam.position.y, this.terrain.heightAt(cam.position.x, cam.position.z) + 1.2);
     // aim to the right of the car so it is framed in the left part of the screen
-    _f.set(-Math.cos(a), 0, Math.sin(a)).multiplyScalar(-2.4);
+    _f.set(-Math.cos(a), 0, Math.sin(a)).multiplyScalar(-2.4 * (o ? o.dist / 8.6 : 1));
     cam.lookAt(car.x + _f.x, car.y + 0.6, car.z + _f.z);
     if (Math.abs(cam.fov - 38) > 0.01) {
       cam.fov = damp(cam.fov, 38, 3, dt);

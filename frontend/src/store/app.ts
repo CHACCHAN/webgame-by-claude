@@ -3,7 +3,7 @@ import type { CarId } from '../game/vehicle/carSpecs';
 import type { AILevel } from '../game/ai/AIDriver';
 import type { GamePhase, RaceMode, RaceResult } from '../game/Game';
 
-export type Screen = 'boot' | 'title' | 'modes' | 'garage' | 'rivals' | 'leaderboard' | 'settings' | 'controls' | 'race' | 'results' | 'replay' | 'courses' | 'loading' | 'online' | 'onlineRoom' | 'onlineResults';
+export type Screen = 'boot' | 'title' | 'modes' | 'conditions' | 'garage' | 'transmission' | 'cars' | 'rivals' | 'leaderboard' | 'settings' | 'controls' | 'race' | 'results' | 'replay' | 'courses' | 'loading' | 'online' | 'onlineRoom' | 'onlineResults';
 
 export interface GhostChoice {
   runId: number | 'local';
@@ -22,7 +22,7 @@ interface AppState {
   carColor: string | null;
   rivalLevel: AILevel;
   ghostChoice: GhostChoice | null;
-  /** screen to open once a course switch has finished loading */
+  /** screen after the race conditions (car select, or the ghost list in ghost battles) */
   afterLoad: Screen;
   result: RaceResult | null;
   paused: boolean;

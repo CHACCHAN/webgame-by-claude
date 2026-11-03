@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { gameHolder } from '../GameCanvas';
 import { useApp } from '../../store/app';
 import { useMenuInput, hoverSelect } from '../useMenuInput';
-import { CAR_ORDER, CAR_SPECS, type CarId } from '../../game/vehicle/carSpecs';
+import { CAR_ORDER, CAR_SPECS } from '../../game/vehicle/carSpecs';
 import type { AILevel } from '../../game/ai/AIDriver';
 import { COURSES, COURSE_ORDER, type CourseId } from '../../game/track/courses';
 import { Track } from '../../game/track/Track';
@@ -12,6 +12,7 @@ import { api, loadCarBests, loadLocalBest } from '../../api/client';
 import { MEDAL_LABEL, medalFor, nextTarget } from '../../game/race/medals';
 import { formatTime } from '../format';
 import { sfx } from '../sfx';
+import { CarSheet, COLORS, useGarageOrbit } from './Cars';
 
 export function BootScreen() {
   const loading = useApp((s) => s.loading);
@@ -86,8 +87,9 @@ export function ModesScreen() {
     { id: 'rival', label: 'RIVAL BATTLE', jp: 'ライバルバトル', desc: '峠に棲む走り屋と1対1のダウンヒルバトル。先にゴールした方が勝ち。', action: () => { set({ mode: 'rival', ghostChoice: null, afterLoad: 'garage' }); go('courses'); } },
     { id: 'ghost', label: 'GHOST BATTLE', jp: 'ゴーストバトル', desc: 'ランキング上位者や自己ベストの走りを半透明のゴーストで再現。その背中を追え。', action: () => { set({ mode: 'ghost', afterLoad: 'leaderboard' }); go('courses'); } },
     { id: 'online', label: 'ONLINE BATTLE', jp: 'オンライン対戦', desc: '最大3人でルームを作って同時にダウンヒル。ルームコードを友達に伝えて一緒に走ろう。', action: () => { set({ mode: 'online', ghostChoice: null }); go('online'); } },
+    { id: 'cars', label: 'CAR LIST', jp: '車両一覧', desc: '用意されている車の性能と詳細を見る。ドラッグで車をぐるりと見回せる。', action: () => go('cars') },
     { id: 'rank', label: 'RANKING', jp: 'ランキング', desc: 'オンラインランキングを確認する。', action: () => { set({ mode: 'time_attack' }); go('leaderboard'); } },
-    { id: 'settings', label: 'SETTINGS', jp: '設定', desc: 'グラフィック品質、時間帯、サウンド、運転アシスト。', action: () => go('settings') },
+    { id: 'settings', label: 'SETTINGS', jp: '設定', desc: 'グラフィック品質、サウンド、運転アシスト、表示。', action: () => go('settings') },
     { id: 'controls', label: 'CONTROLS', jp: '操作方法', desc: 'キーボード / ゲームパッドの操作を確認する。', action: () => go('controls') },
   ];
   useMenuInput((a) => {
@@ -142,14 +144,6 @@ export function Hint({ items }: { items: [string, string][] }) {
   );
 }
 
-const COLORS: Record<CarId, string[]> = {
-  hayate: ['#e8e6e1', '#b3121c', '#1b1d22', '#2f6db5', '#e0b400'],
-  raijin: ['#d9dbde', '#1d4fa8', '#0c0c0e', '#8f1218', '#5e6b3a'],
-  shiden: ['#f5c400', '#c8102e', '#f2f2f0', '#121214', '#3a7d44'],
-  supra: ['#eeeeee', '#d8481c', '#c40d1e', '#121214', '#1f5fb5'],
-  r34: ['#2f4fa6', '#e9e9ea', '#121214', '#8a8f96', '#4a2a63'],
-  s15: ['#f5cf30', '#e9e9ea', '#121214', '#b3121c', '#2f6db5'],
-};
 
 export function GarageScreen() {
   const { go, set, carId, mode, carColor } = useApp();
@@ -174,10 +168,10 @@ export function GarageScreen() {
     set({ carColor: palette[k] });
     sfx.move();
   };
+  const orbit = useGarageOrbit();
   const confirm = () => {
     sfx.confirm();
-    if (mode === 'rival') go('rivals');
-    else startRaceFromState();
+    go('transmission');
   };
   useMenuInput((a) => {
     if (a === 'left') { setI((x) => (x + CAR_ORDER.length - 1) % CAR_ORDER.length); sfx.move(); }
@@ -185,43 +179,15 @@ export function GarageScreen() {
     if (a === 'up') cycleColor(-1);
     if (a === 'down') cycleColor(1);
     if (a === 'confirm') confirm();
-    if (a === 'back') { sfx.back(); go(mode === 'ghost' ? 'leaderboard' : 'courses'); }
+    if (a === 'back') { sfx.back(); go(mode === 'ghost' ? 'leaderboard' : 'conditions'); }
   });
-  const stat = (label: string, v: number) => (
-    <div className="stat" key={label}>
-      <span>{label}</span>
-      <div className="stat-bar">
-        <div style={{ width: `${v * 10}%` }} />
-      </div>
-      <b>{v}</b>
-    </div>
-  );
   return (
-    <div className="screen garage">
+    <div className={`screen garage ${orbit.dragging ? 'orbiting' : ''}`} {...orbit.handlers}>
       <div className="garage-top">
         <div className="crumb">SELECT YOUR CAR ― 車両選択</div>
       </div>
       <div className="garage-card">
-        <div className="car-index">0{i + 1} / 0{CAR_ORDER.length}</div>
-        <h2 className="car-name">{spec.name}</h2>
-        <div className="car-tag">{spec.tagline} ・ {spec.drive}</div>
-        <p className="car-desc">{spec.description}</p>
-        {spec.model && (
-          <p className="car-credit">
-            3D model: “{spec.model.title}” by {spec.model.author} ({spec.model.license}, Sketchfab)
-          </p>
-        )}
-        <div className="stats">
-          {stat('POWER', spec.stats.power)}
-          {stat('GRIP', spec.stats.grip)}
-          {stat('DRIFT', spec.stats.drift)}
-          {stat('LIGHTNESS', spec.stats.weight)}
-        </div>
-        <div className="specs-row">
-          <div><small>MAX TORQUE</small><b>{Math.max(...spec.engine.torque.map((t) => t[1]))} Nm</b></div>
-          <div><small>WEIGHT</small><b>{spec.mass} kg</b></div>
-          <div><small>REDLINE</small><b>{spec.engine.redline} rpm</b></div>
-        </div>
+        <CarSheet spec={spec} index={i} />
         <CarRecord id={id} />
         <div className="colors">
           {palette.map((c) => (
@@ -229,12 +195,12 @@ export function GarageScreen() {
           ))}
         </div>
         <button className="cta" onClick={confirm}>
-          {mode === 'rival' ? 'ライバルを選ぶ' : 'この車で出走'} <span>▶</span>
+          この車に決定 <span>▶</span>
         </button>
       </div>
       <button className="arrow left" onClick={() => setI((x) => (x + CAR_ORDER.length - 1) % CAR_ORDER.length)}>‹</button>
       <button className="arrow right" onClick={() => setI((x) => (x + 1) % CAR_ORDER.length)}>›</button>
-      <Hint items={[['←→', '車両'], ['↑↓', 'カラー'], ['Enter', '決定'], ['Esc', '戻る']]} />
+      <Hint items={[['←→', '車両'], ['↑↓', 'カラー'], ['ドラッグ', '視点'], ['Enter', '決定'], ['Esc', '戻る']]} />
     </div>
   );
 }
@@ -253,7 +219,7 @@ export function RivalsScreen() {
     if (a === 'left' || a === 'up') { setI((x) => (x + 2) % 3); sfx.move(); }
     if (a === 'right' || a === 'down') { setI((x) => (x + 1) % 3); sfx.move(); }
     if (a === 'confirm') start();
-    if (a === 'back') { sfx.back(); go('garage'); }
+    if (a === 'back') { sfx.back(); go('transmission'); }
   });
   return (
     <div className="screen rivals">
@@ -319,7 +285,7 @@ function CourseMap({ id }: { id: CourseId }) {
 }
 
 export function CoursesScreen() {
-  const { go, set, afterLoad, mode } = useApp();
+  const { go, set, mode } = useApp();
   const [i, setI] = useState(Math.max(0, COURSE_ORDER.indexOf(currentCourseId())));
   const stats = (id: CourseId) => {
     const t = new Track(COURSES[id].design);
@@ -341,7 +307,7 @@ export function CoursesScreen() {
       game.startAttract();
     }
     set({ loading: null });
-    go(afterLoad);
+    go('conditions');
   };
   useMenuInput((a) => {
     if (a === 'left' || a === 'up') { setI((x) => (x + COURSE_ORDER.length - 1) % COURSE_ORDER.length); sfx.move(); }

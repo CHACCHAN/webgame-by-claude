@@ -23,11 +23,14 @@ const game = (page: Page) => page.evaluate(() => {
   return { phase: g.phase, course: g.course.id, remotes: g.remotes.standings(), standings: g.hud.online };
 });
 
-/** A fourth player straight through the API: the room must turn them away. */
-async function fourthPlayer(request: APIRequestContext, code: string) {
-  const reg = await request.post('/api/players', { data: { name: 'FOURTH' } });
-  const { token } = await reg.json();
-  return request.post(`/api/rooms/${code}/join`, { data: { car_id: 'hayate' }, headers: { Authorization: `Bearer ${token}` } });
+/** A player straight through the API (no game: never reports the course loaded). */
+async function apiPlayer(request: APIRequestContext, name: string) {
+  const reg = await request.post('/api/players', { data: { name } });
+  const headers = { Authorization: `Bearer ${(await reg.json()).token}` };
+  return {
+    join: (code: string) => request.post(`/api/rooms/${code}/join`, { data: { car_id: 'hayate' }, headers }),
+    leave: (code: string) => request.post(`/api/rooms/${code}/leave`, { headers }),
+  };
 }
 
 test('online battle: three players join one room by code and race together', async ({ browser, request }) => {
@@ -35,12 +38,21 @@ test('online battle: three players join one room by code and race together', asy
   const tag = String(Date.now() % 10000);
   const host = await openPlayer(browser, `HOST${tag}`);
   await host.page.locator('.ol-courses .chip', { hasText: '天狼スカイライン' }).click();
+  await host.page.locator('.ol-tod .chip', { hasText: '深夜・雨' }).click();
   await host.page.locator('button', { hasText: 'ルームを作成' }).click();
   const code = (await host.page.locator('.ol-code-big b').textContent({ timeout: 180_000 }))!.trim();
   expect(code).toMatch(/^[A-Z2-9]{4}$/);
   await expect(host.page.locator('.rt-badge')).toHaveText('LIVE', { timeout: 60_000 });
   // alone, the host cannot start yet
   await expect(host.page.locator('.ol-actions .cta').first()).toBeDisabled();
+  // nor while another player's game is still loading the course
+  const slow = await apiPlayer(request, `SLOW${tag}`);
+  expect((await slow.join(code)).status()).toBe(200);
+  await expect(host.page.locator('.ol-slots em.loading')).toHaveCount(1, { timeout: 30_000 });
+  await expect(host.page.locator('.ol-actions .cta').first()).toBeDisabled();
+  await expect(host.page.locator('.ol-actions .cta').first()).toHaveText('コースの読み込みを待っています…');
+  expect((await slow.leave(code)).status()).toBe(200);
+  await expect(host.page.locator('.ol-slots li:not(.empty)')).toHaveCount(1, { timeout: 30_000 });
 
   const guests = [];
   for (const name of [`B${tag}`, `C${tag}`]) {
@@ -55,15 +67,20 @@ test('online battle: three players join one room by code and race together', asy
   for (const p of all) await expect(p.page.locator('.ol-slots li:not(.empty)')).toHaveCount(3, { timeout: 30_000 });
   for (const p of guests) await expect(p.page.locator('.ol-waiting')).toBeVisible();
   // a fourth player is turned away
-  const full = await fourthPlayer(request, code);
+  const full = await (await apiPlayer(request, 'FOURTH')).join(code);
   expect(full.status()).toBe(409);
   expect((await full.json()).message).toContain('満員');
 
+  // the start waits until every game has loaded the course (the guests came from another course)
+  await expect(host.page.locator('.ol-slots em.loading')).toHaveCount(0, { timeout: 60_000 });
+  await expect(host.page.locator('button', { hasText: 'レース開始' })).toBeEnabled();
   await host.page.locator('button', { hasText: 'レース開始' }).click();
   for (const p of all) {
     await p.page.waitForFunction(() => (window as any).__game.phase === 'racing', null, { timeout: 120_000 });
     const st = await game(p.page);
     expect(st.course).toBe('tenrou-skyline');
+    // everyone races in the host's conditions, whatever their own last choice was
+    expect(await p.page.evaluate(() => (window as any).__game.timeOfDay)).toBe('rain');
     expect(st.remotes).toHaveLength(2);
   }
   // car states flow between all three clients and the live order lists everybody

@@ -11,7 +11,7 @@ class Room extends Model
     /** unambiguous characters for spoken / typed room codes */
     private const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
-    protected $fillable = ['code', 'host_player_id', 'track_id', 'status', 'race_no', 'start_at_ms'];
+    protected $fillable = ['code', 'host_player_id', 'track_id', 'time_of_day', 'status', 'race_no', 'start_at_ms'];
 
     protected function casts(): array
     {
@@ -59,6 +59,7 @@ class Room extends Model
         return [
             'code' => $this->code,
             'track_id' => $this->track_id,
+            'time_of_day' => $this->time_of_day ?? 'night',
             'status' => $this->status,
             'race_no' => $this->race_no,
             'host_id' => $this->host_player_id,
@@ -70,6 +71,7 @@ class Room extends Model
                 'name' => $m->player->name,
                 'car_id' => $m->car_id,
                 'slot' => $m->slot,
+                'ready' => $m->ready,
                 'finish_ms' => $m->finish_ms,
             ])->values()->all(),
         ];

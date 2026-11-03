@@ -8,6 +8,8 @@ import { SettingsScreen } from './ui/screens/Settings';
 import { ReplayOverlay, ResultsScreen } from './ui/screens/Results';
 import { Hud, PauseMenu } from './ui/hud/Hud';
 import { OnlineLobbyScreen, OnlineResultsScreen, OnlineRoomScreen } from './ui/screens/Online';
+import { ConditionsScreen, TransmissionScreen } from './ui/screens/RaceSetup';
+import { CarsScreen } from './ui/screens/Cars';
 
 export function App() {
   const screen = useApp((s) => s.screen);
@@ -76,7 +78,10 @@ export function App() {
         {screen === 'modes' && <ModesScreen />}
         {screen === 'courses' && <CoursesScreen />}
         {screen === 'loading' && <CourseLoadingScreen />}
+        {screen === 'conditions' && <ConditionsScreen />}
         {screen === 'garage' && <GarageScreen />}
+        {screen === 'transmission' && <TransmissionScreen />}
+        {screen === 'cars' && <CarsScreen />}
         {screen === 'rivals' && <RivalsScreen />}
         {screen === 'leaderboard' && <LeaderboardScreen />}
         {screen === 'settings' && <SettingsScreen />}

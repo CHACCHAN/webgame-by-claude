@@ -7,11 +7,11 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class RoomPlayer extends Model
 {
-    protected $fillable = ['room_id', 'player_id', 'car_id', 'slot', 'finish_ms'];
+    protected $fillable = ['room_id', 'player_id', 'car_id', 'slot', 'ready', 'finish_ms'];
 
     protected function casts(): array
     {
-        return ['slot' => 'integer', 'finish_ms' => 'integer'];
+        return ['slot' => 'integer', 'ready' => 'boolean', 'finish_ms' => 'integer'];
     }
 
     public function room(): BelongsTo

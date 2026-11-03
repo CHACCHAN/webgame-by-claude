@@ -62,7 +62,7 @@ export function LeaderboardScreen() {
     if (a === 'confirm' && ghostMode && selectable[sel]) challenge(selectable[sel]);
     if (a === 'back') {
       sfx.back();
-      go(ghostMode ? 'courses' : 'modes');
+      go(ghostMode ? 'conditions' : 'modes');
     }
   });
 

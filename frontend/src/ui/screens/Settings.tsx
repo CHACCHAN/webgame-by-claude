@@ -3,7 +3,6 @@ import { useApp } from '../../store/app';
 import { useSettings, type QualityLevel } from '../../store/settings';
 import { useMenuInput, hoverSelect } from '../useMenuInput';
 import { gameHolder } from '../GameCanvas';
-import type { TimeOfDay } from '../../game/render/Environment';
 import { Hint } from './Menus';
 import { sfx } from '../sfx';
 import { PROP_CREDITS } from '../../game/render/props';
@@ -29,18 +28,7 @@ export function SettingsScreen() {
   const rows: Row[] = [
     { label: 'グラフィック品質', value: qLabel[s.quality], note: '影・木の密度・ポストエフェクト', change: (d) => { s.set({ quality: cycle(qualities, s.quality, d) }); setNeedsReload(true); } },
     { label: '解像度スケール', value: pct(s.resolutionScale), change: (d) => s.set({ resolutionScale: step(s.resolutionScale, d, 0.1, 0.5, 1) }) },
-    {
-      label: '時間帯・天候',
-      value: { night: '深夜（夜景）', rain: '深夜（雨）', dawn: '夜明け（雲海）' }[s.timeOfDay],
-      note: '雨の日は路面が滑りやすくなります',
-      change: (d) => {
-        const tod = cycle<TimeOfDay>(['night', 'rain', 'dawn'], s.timeOfDay, d);
-        s.set({ timeOfDay: tod });
-        game?.applyTimeOfDay(tod);
-      },
-    },
     { label: '運転アシスト', value: ['オフ', '標準', '強'][s.assist], note: 'カウンターステア補助・スピン防止', change: (d) => { const v = ((s.assist + d + 3) % 3) as 0 | 1 | 2; s.set({ assist: v }); if (game) game.assist = v; } },
-    { label: 'トランスミッション', value: s.autoShift ? 'オートマチック' : 'マニュアル (E/Q)', change: () => { s.set({ autoShift: !s.autoShift }); if (game) game.autoShift = !s.autoShift; } },
     { label: 'ゴースト表示（タイムアタック）', value: s.showGhost ? 'オン' : 'オフ', change: () => { s.set({ showGhost: !s.showGhost }); if (game) game.showGhost = !s.showGhost; } },
     { label: '操作ガイド（スタート時）', value: s.controlsGuide !== false ? 'オン' : 'オフ', note: 'レース開始時に操作方法をしばらく表示します', change: () => s.set({ controlsGuide: s.controlsGuide === false }) },
     { label: 'コーナー予告', value: s.cornerGuide ? 'オン' : 'オフ', note: '急カーブの手前で標識と警告音を出します', change: () => { s.set({ cornerGuide: !s.cornerGuide }); if (game) game.cornerGuide = !s.cornerGuide; } },

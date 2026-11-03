@@ -2,6 +2,39 @@
 
 Newest first. "Verified" means actually executed in this environment; anything else is marked as unverified.
 
+## Session 5 (2026-11-03) — owner's requests: flicker, online start, race setup, car list
+
+### Screen flicker near lights: black frames from tyre smoke (found and fixed)
+- Measured again on the real GPU (night, high, autopilot rival race, every frame read back): 霧降湖 still had 16
+  whole-screen black frames (around 4 %, 14 % and 20–29 % of the course); 朧峠 and 天狼 none in that run.
+- Reading the half-float scene buffer while driving: those frames were NaN over 0.5–2 million of the 2.07 million
+  pixels. Nothing was non-finite in matrices, lights or uniforms; re-rendering with single things switched off
+  cleared it only without the tyre-smoke `Points`. Cause: `TireSmoke.update` computed `(1 - t) ** 1.3` in the frame
+  a puff died (life < 0 → t > 1 → negative base → NaN alpha); a dying puff next to the chase camera is drawn
+  screen-sized, so the whole frame went NaN and bloom spread it black. Drifts put smoke around the camera, which
+  is why it looked like flicker. `t` is capped at 1 now (the exhaust already capped it).
+- After: NaN frames in the same stretches 13 → 0 (441 frames checked).
+
+### Online: the race could start while a player was still loading
+- The host could press start as soon as a guest joined, while the guest's game was still building the room's
+  course; the guest only connected to the room after loading, so it saw the start late or after the green light.
+- `room_players.ready` (migration): set by the client after loading the course (`PATCH /rooms/{code}/me`,
+  re-sent by the room poll if that failed), reset on a rejoin; `start` refuses with 409 while anyone is not ready
+  (after dropping members no longer on the presence channel). Clients join the room's channel before loading.
+  Room screen: "ロード中…" next to such players, the start button says it is waiting.
+- Rooms keep the host's `time_of_day` (migration, validated, default night): everyone races in the same conditions.
+
+### Race setup order, settings, car list
+- New order: mode → course → time & weather → car → AT/MT → (rival) → race. Time & weather and the gearbox left
+  the settings screen; the last choices are preselected. The conditions screen switches the world behind it.
+- Car list (main menu): every car with engine, power (from the torque curve), torque, weight, power-to-weight, drive,
+  gears, size; drag to orbit the camera around the car, wheel to zoom (also in the car select).
+- Online lobby: conditions chips next to the course when creating a room; AT/MT chips for each player.
+
+### Tests
+- Backend: the `backend-test` image bakes the code in, so earlier runs without `--build` tested old code. With
+  `--build`: 14/14 (new: ready gating, rejoin, room conditions).
+
 ## Session 4 (2026-11-02) — real-GPU performance pass on the owner's PC
 
 ### Music remade with Suno (batch 3) — done & verified in the browser

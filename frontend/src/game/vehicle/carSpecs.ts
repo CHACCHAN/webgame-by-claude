@@ -8,6 +8,8 @@ export interface CarSpec {
   tagline: string;
   description: string;
   drive: 'RWD' | 'AWD';
+  /** engine as shown in the car list (layout, displacement, aspiration) */
+  engineName: string;
   /** fraction of drive torque sent to the front axle (AWD only) */
   frontTorqueSplit: number;
   mass: number;
@@ -63,6 +65,7 @@ export const CAR_SPECS: Record<CarId, CarSpec> = {
     tagline: '軽量FRハッチバック',
     description: 'ハチロク。非力だが素直なハンドリングと軽さが武器。ドリフトの入りやすさは随一で、峠デビューに最適な一台。',
     drive: 'RWD',
+    engineName: '直列4気筒 DOHC 1.6L 自然吸気',
     frontTorqueSplit: 0,
     mass: 1040,
     size: { width: 1.66, height: 0.62, length: 4.2 },
@@ -100,6 +103,7 @@ export const CAR_SPECS: Record<CarId, CarSpec> = {
     tagline: 'ターボ4WDセダン',
     description: '強烈なトルクと4WDのトラクションで立ち上がりが圧倒的。安定志向で、タイムを狙いやすい。',
     drive: 'AWD',
+    engineName: '水平対向4気筒 2.0L ターボ',
     frontTorqueSplit: 0.38,
     mass: 1320,
     size: { width: 1.78, height: 0.66, length: 4.45 },
@@ -135,6 +139,7 @@ export const CAR_SPECS: Record<CarId, CarSpec> = {
     tagline: 'ロータリーFRスポーツ',
     description: '甲高く吹け上がるロータリーと低い重心。速いがピーキーで、腕次第で最速を狙えるじゃじゃ馬。',
     drive: 'RWD',
+    engineName: '2ローター 1.3L ツインターボ',
     frontTorqueSplit: 0,
     mass: 1230,
     size: { width: 1.76, height: 0.58, length: 4.3 },
@@ -171,6 +176,7 @@ export const CAR_SPECS: Record<CarId, CarSpec> = {
     tagline: '直6ツインターボFR',
     description: '分厚いトルクで坂を押し切る重量級FR。直線は最速クラスだが、重さを感じさせない丁寧なブレーキングが鍵。',
     drive: 'RWD',
+    engineName: '直列6気筒 3.0L ツインターボ',
     frontTorqueSplit: 0,
     mass: 1510,
     size: { width: 1.81, height: 0.64, length: 4.52 },
@@ -206,6 +212,7 @@ export const CAR_SPECS: Record<CarId, CarSpec> = {
     tagline: '直6ツインターボ4WD',
     description: '電子制御4WDが路面をつかみ、どこからでも加速する。重いがとにかく安定し、速さを引き出しやすい。',
     drive: 'AWD',
+    engineName: '直列6気筒 2.6L ツインターボ',
     frontTorqueSplit: 0.3,
     mass: 1560,
     size: { width: 1.785, height: 0.66, length: 4.6 },
@@ -241,6 +248,7 @@ export const CAR_SPECS: Record<CarId, CarSpec> = {
     tagline: 'ターボFRクーペ',
     description: '軽い車体にほどよいターボ。テールの出方が素直で扱いやすい、ドリフトの教科書のような一台。',
     drive: 'RWD',
+    engineName: '直列4気筒 2.0L ターボ',
     frontTorqueSplit: 0,
     mass: 1240,
     size: { width: 1.695, height: 0.6, length: 4.445 },

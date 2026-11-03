@@ -34,6 +34,9 @@ return [
     ],
 
     // ids are stable (stored runs and ghosts refer to them); names follow the car models in use
+    // race conditions a room can be created with (the client's TimeOfDay)
+    'times_of_day' => ['night', 'rain', 'dawn'],
+
     'cars' => [
         'hayate' => ['name' => 'SPRINTER TRUENO AE86'],
         's15' => ['name' => 'SILVIA spec-R (S15)'],

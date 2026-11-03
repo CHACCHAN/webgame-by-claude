@@ -1,6 +1,7 @@
 // Thin client for the Laravel API (served under /api by nginx).
 import type { CarId } from '../game/vehicle/carSpecs';
 import type { EncodedGhost } from '../game/race/Ghost';
+import type { TimeOfDay } from '../game/render/Environment';
 
 export const CLIENT_VERSION = '1.0.0';
 const BASE = (import.meta.env.VITE_API_BASE as string | undefined) ?? '/api';
@@ -87,12 +88,16 @@ export interface RoomMember {
   name: string;
   car_id: CarId;
   slot: number;
+  /** their game has loaded the room's course */
+  ready: boolean;
   finish_ms: number | null;
 }
 
 export interface RoomState {
   code: string;
   track_id: string;
+  /** conditions the host chose: the same for everyone in the room */
+  time_of_day: TimeOfDay;
   status: 'waiting' | 'racing' | 'finished';
   race_no: number;
   host_id: number;
@@ -141,13 +146,15 @@ export const api = {
   realtime: () => request<{ realtime?: RealtimeInfo }>('/content').then((r) => r.realtime ?? { enabled: false, key: null, max_players: 3 }),
 
   rooms: {
-    create: (p: StoredPlayer, trackId: string, carId: CarId) =>
-      request<RoomState>('/rooms', { method: 'POST', body: JSON.stringify({ track_id: trackId, car_id: carId }) }, p.token),
+    create: (p: StoredPlayer, trackId: string, timeOfDay: TimeOfDay, carId: CarId) =>
+      request<RoomState>('/rooms', { method: 'POST', body: JSON.stringify({ track_id: trackId, time_of_day: timeOfDay, car_id: carId }) }, p.token),
     get: (p: StoredPlayer, code: string) => request<RoomState>(`/rooms/${encodeURIComponent(code)}`, {}, p.token),
     join: (p: StoredPlayer, code: string, carId: CarId) =>
       request<RoomState>(`/rooms/${encodeURIComponent(code)}/join`, { method: 'POST', body: JSON.stringify({ car_id: carId }) }, p.token),
     setCar: (p: StoredPlayer, code: string, carId: CarId) =>
       request<RoomState>(`/rooms/${encodeURIComponent(code)}/me`, { method: 'PATCH', body: JSON.stringify({ car_id: carId }) }, p.token),
+    setReady: (p: StoredPlayer, code: string) =>
+      request<RoomState>(`/rooms/${encodeURIComponent(code)}/me`, { method: 'PATCH', body: JSON.stringify({ ready: true }) }, p.token),
     leave: (p: StoredPlayer, code: string) => request<{ left: boolean }>(`/rooms/${encodeURIComponent(code)}/leave`, { method: 'POST' }, p.token),
     start: (p: StoredPlayer, code: string) => request<RoomState>(`/rooms/${encodeURIComponent(code)}/start`, { method: 'POST' }, p.token),
     finish: (p: StoredPlayer, code: string, raceNo: number, timeMs: number) =>

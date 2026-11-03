@@ -8,6 +8,7 @@ import type { NetState } from '../game/net/RemoteRacers';
 import type { CarId } from '../game/vehicle/carSpecs';
 import type { CourseId } from '../game/track/courses';
 import type { Game } from '../game/Game';
+import type { TimeOfDay } from '../game/render/Environment';
 
 /**
  * Online battle session (UI side). Lobby actions go through the Laravel API; while racing, car
@@ -92,9 +93,9 @@ export function chooseCar(carId: CarId) {
   }
 }
 
-export function createRoom(trackId: CourseId) {
+export function createRoom(trackId: CourseId, timeOfDay: TimeOfDay) {
   return run(async () => {
-    const room = await timed(() => api.rooms.create(onlinePlayer(), trackId, st().carId));
+    const room = await timed(() => api.rooms.create(onlinePlayer(), trackId, timeOfDay, st().carId));
     await enterRoom(room);
   });
 }
@@ -127,10 +128,16 @@ export async function leaveRoom() {
   pusher = null;
   st().set({ room: null, realtime: 'off', error: null });
   gameHolder.game?.remotes.clear();
+  // back to the player's own conditions
+  const tod = useSettings.getState().timeOfDay;
+  if (room && gameHolder.game && gameHolder.game.timeOfDay !== tod) gameHolder.game.applyTimeOfDay(tod);
   if (room && st().player) await api.rooms.leave(st().player!, room.code).catch(() => undefined);
 }
 
-/** The world must show the room's course before anyone can start. */
+/**
+ * The world must show the room's course before anyone can start: the server lets the host start only once
+ * every member has reported `ready` (sent here after loading, and again by the poll if that failed).
+ */
 async function enterRoom(room: RoomState) {
   const app = useApp.getState();
   const game = gameHolder.game;
@@ -138,19 +145,23 @@ async function enterRoom(room: RoomState) {
   const me = room.players.find((p) => p.id === st().player?.id);
   if (me) st().set({ carId: me.car_id });
   useSettings.getState().set({ courseId: room.track_id as CourseId });
+  // on the room's channel while loading: the others see who is still loading, and a full room keeps this player
+  connectRealtime(room.code);
   if (game && game.course.id !== room.track_id) {
     app.set({ loading: { progress: 0, label: '' } });
     app.go('loading');
     await game.switchCourse(room.track_id as CourseId);
     app.set({ loading: null });
   }
+  // everyone races in the conditions the host chose
+  if (game && game.timeOfDay !== room.time_of_day) game.applyTimeOfDay(room.time_of_day);
   game?.showGarage(st().carId);
   useApp.getState().set({ mode: 'online' });
   useApp.getState().go('onlineRoom');
   hookGame();
-  connectRealtime(room.code);
   startPolling();
   applyRoom(room);
+  if (st().room?.code === room.code) applyRoom(await api.rooms.setReady(onlinePlayer(), room.code));
 }
 
 function connectRealtime(code: string) {
@@ -226,6 +237,7 @@ function beginRace(room: RoomState) {
   const me = room.players.find((p) => p.id === player?.id);
   if (!game || !player || !me || !room.start_at_ms) return;
   startedRace = room.race_no;
+  if (game.timeOfDay !== room.time_of_day) game.applyTimeOfDay(room.time_of_day);
   const startAt = performance.now() + (room.start_at_ms - (Date.now() + clockOffset));
   const peers = room.players.filter((p) => p.id !== me.id).map((p) => ({ id: p.id, name: p.name, carId: p.car_id, slot: p.slot }));
   game.initAudio();
@@ -257,7 +269,10 @@ function startPolling() {
     const screen = useApp.getState().screen;
     // racing state comes from the cars themselves; the lobby and results need the room
     if (screen !== 'onlineRoom' && screen !== 'onlineResults') return;
-    void timed(() => api.rooms.get(player, room.code))
+    const me = room.players.find((p) => p.id === player.id);
+    // the room's course is on screen here: report ready if the server has not got it (failed call, rejoin)
+    const ask = me && !me.ready && gameHolder.game?.course.id === room.track_id ? api.rooms.setReady(player, room.code) : api.rooms.get(player, room.code);
+    void timed(() => ask)
       .then(applyRoom)
       .catch((e) => {
         if (e instanceof ApiError && (e.status === 404 || e.status === 403)) {
