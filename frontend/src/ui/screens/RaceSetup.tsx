@@ -11,7 +11,7 @@ import { sfx } from '../sfx';
 /** Race conditions shown before the car select (the online lobby offers the same list). */
 export const CONDITIONS: { id: TimeOfDay; en: string; jp: string; desc: string }[] = [
   { id: 'night', en: 'CLEAR NIGHT', jp: '深夜・晴れ', desc: '眼下に街の夜景。街灯とヘッドライトだけが頼りの定番コンディション。' },
-  { id: 'rain', en: 'RAIN', jp: '深夜・雨', desc: '濡れた路面はグリップが約14%低下。ライトが路面に映り込み、ラインが読みにくい。' },
+  { id: 'rain', en: 'RAIN', jp: '深夜・雨', desc: '濡れた路面はグリップが2割落ちて滑りやすい。ライトが路面に映り込み、ラインが読みにくい。' },
   { id: 'dawn', en: 'DAWN', jp: '夜明け', desc: '雲海の向こうから朝日が昇る。視界は良いが、街灯は消えている。' },
 ];
 

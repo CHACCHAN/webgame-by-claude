@@ -99,11 +99,11 @@ describe('VehicleSim', () => {
     }
   });
 
-  it('a power slide settles at a holdable angle, and the 4WD cars drift too', () => {
+  it('a power slide (a stab of the throttle mid-corner) settles at a holdable angle, and the 4WD cars drift too', () => {
     const slide = (car: CarId) => {
       let held = 0, peak = 0;
       drive(car, 4, (t, v, i) => {
-        i.throttle = 1;
+        i.throttle = t < 0.4 ? 0.3 : 1;
         i.steer = t < 2.5 ? 0.7 : 0;
         const s = Math.abs((v.slipAngle * 180) / Math.PI);
         if (s > 15 && v.speed > 5) held += PHYSICS_DT;
@@ -119,6 +119,25 @@ describe('VehicleSim', () => {
     }
     // (before: the Impreza and the R34 could not power over at all)
     for (const car of ['raijin', 'r34'] as CarId[]) expect(slide(car).held).toBeGreaterThan(1.5);
+  });
+
+  it('a bend taken flat out at full lock, or braked into, stays a grip corner (no slide unless asked for)', () => {
+    const corner = (car: CarId, kmh: number, control: (t: number, i: VehicleInput) => void) => {
+      let peak = 0;
+      drive(car, 3, (t, v, i) => {
+        control(t, i);
+        peak = Math.max(peak, Math.abs((v.slipAngle * 180) / Math.PI));
+      }, kmh / 3.6);
+      return peak;
+    };
+    for (const car of CAR_ORDER) {
+      // keyboard style: floored on the straight, then full lock (before: every car slid to 32–54°)
+      expect(corner(car, 60, (t, i) => { i.throttle = 1; i.steer = t > 0.5 ? 1 : 0; })).toBeLessThan(15);
+      // braking into the bend with the wheel turned (before: 25–47° at 90 km/h)
+      expect(corner(car, 90, (t, i) => { i.brake = t < 0.6 ? 0.7 : 0; i.steer = 0.8; i.throttle = t > 0.6 ? 0.6 : 0; })).toBeLessThan(15);
+    }
+    // a short tap of the brake with a big steer is still a feint into a drift
+    expect(corner('s15', 70, (t, i) => { i.brake = t < 0.3 ? 0.8 : 0; i.steer = 0.8; i.throttle = t > 0.3 ? 0.9 : 0; })).toBeGreaterThan(30);
   });
 
   it('held on the line it revs but neither moves nor drops into reverse', () => {
@@ -251,7 +270,10 @@ describe('car to car contact', () => {
       phys.world.step();
       rammer.postStep(PHYSICS_DT);
       parked.postStep(PHYSICS_DT);
-      minGap = Math.min(minGap, parked.position.z - rammer.position.z);
+      // nose to tail (within a car's width across): once the parked car is shoved aside, centres may come closer
+      if (Math.abs(parked.position.x - rammer.position.x) < (CAR_SPECS.hayate.size.width + CAR_SPECS.raijin.size.width) / 2) {
+        minGap = Math.min(minGap, parked.position.z - rammer.position.z);
+      }
     }
     // the parked car was pushed down the road
     expect(parked.position.z).toBeGreaterThan(16);

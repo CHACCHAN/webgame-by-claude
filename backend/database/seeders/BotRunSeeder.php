@@ -10,7 +10,8 @@ use Illuminate\Support\Facades\DB;
 /**
  * Seeds the leaderboard with the "house" rivals so a fresh install has times
  * (and ghosts) to chase. Records are produced by the AI driver running the
- * real vehicle simulation: see tools/gen-bot-ghosts.ts.
+ * real vehicle simulation: see tools/gen-bot-ghosts.ts. A bot keeps one run per
+ * course and car: regenerated records (new physics or road grip) replace the old.
  */
 class BotRunSeeder extends Seeder
 {
@@ -30,13 +31,16 @@ class BotRunSeeder extends Seeder
                 $player = Player::where('name', $rec['player_name'])->where('is_bot', true)->first()
                     ?? Player::register($rec['player_name'], true)[0];
 
-                $exists = Run::where('player_id', $player->id)
+                $existing = Run::where('player_id', $player->id)
                     ->where('track_id', $rec['track_id'])
                     ->where('car_id', $rec['car_id'])
-                    ->where('time_ms', $rec['time_ms'])
-                    ->exists();
-                if ($exists) {
+                    ->get();
+                if ($existing->contains('time_ms', $rec['time_ms'])) {
                     continue;
+                }
+                foreach ($existing as $old) {
+                    $old->ghost()->delete();
+                    $old->delete();
                 }
 
                 $run = Run::create([

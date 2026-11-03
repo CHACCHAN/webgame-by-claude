@@ -340,6 +340,10 @@ export function CoursesScreen() {
                   <span><small>DROP</small>{info[id].drop} m</span>
                   <span><small>BEST</small>{isFinite(best) ? formatTime(best) : '--:--.---'}</span>
                 </div>
+                <div className="cc-road">
+                  <small>ROAD</small>
+                  {c.surface.label}・グリップ {Math.round(c.surface.grip * 100)}%
+                </div>
               </div>
             </div>
           );

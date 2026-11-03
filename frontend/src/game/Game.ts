@@ -123,6 +123,8 @@ const _v = new THREE.Vector3(), _q = new THREE.Quaternion(), _f = new THREE.Vect
 const _tip = new THREE.Vector3(), _back = new THREE.Vector3();
 /** real-time lamp lights hang this far (m) below the lamp fixture */
 const LAMP_LIGHT_DROP = 0.9;
+/** tyre grip on a wet road (rain) as a share of the dry grip */
+export const WET_GRIP = 0.8;
 const _zero = new THREE.Vector3();
 
 export class Game {
@@ -140,7 +142,7 @@ export class Game {
   exhaust = new ExhaustFX();
   skids = new SkidMarks(8);
   rain = new Rain();
-  /** tyre grip multiplier from the weather (wet roads) */
+  /** tyre grip multiplier from the weather (wet roads); the course's own surface multiplies in (`roadGrip`) */
   weatherGrip = 1;
   course!: CourseInfo;
   private dryMaterials: { road?: { roughness: number; color: THREE.Color; normal: number; env: number }; terrain?: number } = {};
@@ -356,7 +358,7 @@ export class Game {
     this.dryMaterials.terrain ??= terrain.roughness;
     terrain.roughness = lerp(this.dryMaterials.terrain, 0.62, wet);
     this.rain.setIntensity(wet);
-    this.weatherGrip = lerp(1, 0.86, wet);
+    this.weatherGrip = lerp(1, WET_GRIP, wet);
     this.audio?.setRain(wet);
   }
 
@@ -387,7 +389,7 @@ export class Game {
     const p = this.track.pointAt(s, lateral);
     const sim = new VehicleSim(this.physics, spec, p, this.track.headingAt(s));
     sim.assist = this.assist;
-    sim.gripScale = this.weatherGrip;
+    sim.gripScale = this.roadGrip;
     const visual = new CarVisual(spec, {
       headlights: opts.headlights,
       shadows: this.quality.shadows,
@@ -1356,6 +1358,11 @@ export class Game {
       const target = 170 * lampsOn * smoothstep(200, 90, Math.sqrt(lamps[lamp].position.distanceToSquared(cam)));
       l.intensity += (target - l.intensity) * fade;
     });
+  }
+
+  /** tyre grip of this course's surface in the current weather */
+  get roadGrip() {
+    return this.weatherGrip * this.course.surface.grip;
   }
 
   get currentConfig() {

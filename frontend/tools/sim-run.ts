@@ -22,7 +22,8 @@ for (const [car, level] of pairs) {
     const physics = new PhysicsWorld(track);
     const start = track.pointAt(track.startS - 12);
     const v = new VehicleSim(physics, CAR_SPECS[car], start, track.headingAt(track.startS - 12));
-    v.gripScale = Number(process.env.GRIP ?? 1);
+    // the course's surface (GRIP=<factor> overrides it)
+    v.gripScale = Number(process.env.GRIP ?? course.surface.grip);
     v.powerScale = Number(process.env.POWER ?? 1);
     const ai = new AIDriver(track, line, AI_PROFILES[level]);
     ai.calibrate(v);

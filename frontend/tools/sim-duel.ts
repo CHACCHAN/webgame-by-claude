@@ -21,6 +21,7 @@ const physics = new PhysicsWorld(track);
 const cars = entries.map(([car, level], k) => {
   const s0 = track.startS - 12 - k * 8; // chaser 8 m behind, same lane
   const sim = new VehicleSim(physics, CAR_SPECS[car], track.pointAt(s0), track.headingAt(s0));
+  sim.gripScale = course.surface.grip;
   const ai = new AIDriver(track, line, AI_PROFILES[level]);
   ai.calibrate(sim);
   const proj: TrackProjection = { index: -1, s: 0, lateral: 0, height: 0 };

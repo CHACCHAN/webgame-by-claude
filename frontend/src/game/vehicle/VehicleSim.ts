@@ -84,6 +84,10 @@ export class VehicleSim {
   /** time since the current drift began (entry: lighter yaw damping) */
   private driftAge = 0;
   private lastHandbrake = false;
+  /** time since the throttle was last below half (a stab — lift, then floor it — starts a power-over) */
+  private sinceLift = 9;
+  /** how long the brake pedal has been held firmly (a short tap with a big steer is a feint) */
+  private brakeTime = 0;
   /** touching a wall (and a moment after): bounce taken back, yaw rate capped */
   private wallTimer = 0;
 
@@ -339,17 +343,22 @@ export class VehicleSim {
     // sharp steer), power + steer, or an existing slide puts the car into a drift
     const steerAbs = Math.abs(this.steerSmoothed);
     const fast = planarSpeed > 8.5 && fwdSpeed > 0;
-    // (4WD cars too: they were left out below a driftiness of 0.55 and could not power over at all)
-    const powerTrigger = throttle > 0.85 && steerAbs > 0.6 && this.gear > 0 && this.gear <= 3 && spec.driftiness > 0.35 && planarSpeed > 11;
+    // (the driver's pedals: a gear change cuts the engine's throttle for a moment, which is no stab)
+    this.sinceLift = inp.throttle < 0.5 ? 0 : this.sinceLift + dt;
+    const feint = inp.brake <= 0.5 && this.brakeTime > 0.04 && this.brakeTime < 0.45 && steerAbs > 0.7 && planarSpeed > 15;
+    this.brakeTime = inp.brake > 0.5 ? this.brakeTime + dt : 0;
+    // Starting a drift takes a deliberate input: a pull on the handbrake, a feint (a short firm tap of the brake,
+    // released with a big steer), a stab of the throttle mid-corner (4WD cars too), or a slide already past ~16°.
+    // Taking a bend flat out at full lock, or braking into it, stays a grip corner (it used to slide every keyboard
+    // corner).
+    const powerTrigger = throttle > 0.85 && this.sinceLift < 0.35 && steerAbs > 0.6 && this.gear > 0 && this.gear <= 3 && spec.driftiness > 0.35 && planarSpeed > 11;
     const trigger = this.gripDriver
       ? Math.abs(this.slipAngle) > 0.3
-      : (inp.handbrake && steerAbs > 0.2) ||
-        (brake > 0.35 && steerAbs > 0.5 && planarSpeed > 13) ||
-        powerTrigger ||
-        Math.abs(this.slipAngle) > 0.2;
+      : (inp.handbrake && steerAbs > 0.2) || feint || powerTrigger || Math.abs(this.slipAngle) > 0.28;
     if (fast && trigger) this.driftHold = 0.3;
     else this.driftHold = Math.max(0, this.driftHold - dt);
-    const sustain = fast && (this.driftHold > 0 || (this.driftState > 0.3 && Math.abs(this.slipAngle) > 0.08 && throttle > 0.2));
+    // the drift lasts while it is driven (throttle) and the tail is out; once the car straightens to ~7° it grips
+    const sustain = fast && (this.driftHold > 0 || (this.driftState > 0.3 && Math.abs(this.slipAngle) > 0.12 && throttle > 0.2));
     this.driftState = damp(this.driftState, sustain ? 1 : 0, sustain ? 7 : 2.5, dt);
     this.driftAge = this.driftState > 0.3 ? this.driftAge + dt : 0;
     // throttle widens the angle, lifting tightens it
@@ -364,6 +373,10 @@ export class VehicleSim {
       body.applyTorqueImpulse(_imp.copy(this.up).multiplyScalar(-Math.sign(this.steerSmoothed) * iy * 0.9), true);
     }
     this.lastHandbrake = inp.handbrake;
+    // grip assist (players with the assist on, outside a drift): the driven wheels only get the force the friction
+    // circle leaves beside the cornering force, so flooring it in a bend no longer spins the rears and swings the
+    // tail out. A deliberate drift (handbrake, feint, throttle stab) switches it off.
+    const gripAssist = this.assist > 0 && !this.gripDriver && this.driftState < 0.3;
     let spinDemand = 0;
 
     for (const w of this.wheels) {
@@ -472,6 +485,11 @@ export class VehicleSim {
 
       // --- friction circle (lateral keeps a share of grip even when spinning)
       const maxF = mu * load * 1.05;
+      if (gripAssist && w.driven && fx > 0 && maxF > 1) {
+        // only while cornering hard (a third of the grip and up): straight-line launches and pushes are unchanged
+        const u = clamp((Math.abs(fy) / maxF - 0.3) / 0.7, 0, 1);
+        fx = Math.min(fx, maxF * Math.max(Math.sqrt(1 - u * u), 0.25));
+      }
       let spinning = 0;
       if (Math.abs(fx) > maxF) {
         spinning = (Math.abs(fx) - maxF) / Math.max(maxF, 1);

@@ -1,5 +1,6 @@
 // Feel numbers on a flat pad: wall hits (rebound, speed kept, how much the car is spun) and drift entries
-// (time held in a drift, peak slip, spins). Usage: npx tsx tools/handling-feel.ts [cars]
+// (time held in a drift, peak slip, spins) and ordinary corners taken at full lock (should not slide).
+// Usage: npx tsx tools/handling-feel.ts [cars]
 import { Quaternion, Vector3 } from 'three';
 import { RAPIER, initRapier, groups, GROUP_GROUND, GROUP_CAR, GROUP_WALL, PHYSICS_DT } from '../src/game/vehicle/PhysicsWorld';
 import type { PhysicsWorld } from '../src/game/vehicle/PhysicsWorld';
@@ -73,11 +74,18 @@ for (const car of cars) {
   }
   // drift entries at 70 km/h: [label, control]
   const entries: [string, (t: number, v: VehicleSim, i: VehicleInput) => void][] = [
-    ['power', (t, _v, i) => { i.throttle = 1; i.steer = t < 2.5 ? 0.7 : 0; }],
+    // turn in on part throttle, then stab it to the floor
+    ['power', (t, _v, i) => { i.throttle = t < 0.4 ? 0.3 : 1; i.steer = t < 2.5 ? 0.7 : 0; }],
     ['handbrake', (t, v, i) => { i.handbrake = t < 0.35; i.steer = t < 2.5 ? (t < 0.6 ? 0.8 : -0.35 * Math.sign(v.slipAngle || 1) * -1) : 0; i.throttle = t > 0.35 ? 0.8 : 0; }],
     ['feint', (t, _v, i) => { i.brake = t < 0.4 ? 0.6 : 0; i.steer = t < 2.5 ? 0.8 : 0; i.throttle = t > 0.4 ? 0.9 : 0; }],
     // steer into the bend, a short pull on the handbrake, then power with the wheel held in
     ['handbrake-held', (t, _v, i) => { i.steer = t < 1.2 ? 0.8 : 0.25; i.handbrake = t < 0.3; i.throttle = t > 0.3 ? 0.9 : 0; }],
+  ];
+  // ordinary cornering, as on a keyboard (full lock): should stay a grip corner, not turn into a drift
+  const corners: [string, (t: number, v: VehicleSim, i: VehicleInput) => void][] = [
+    ['full-throttle', (t, _v, i) => { i.throttle = 1; i.steer = t > 0.5 && t < 3 ? 1 : 0; }],
+    ['part-throttle', (t, _v, i) => { i.throttle = 0.6; i.steer = t < 2.5 ? 1 : 0; }],
+    ['brake-in', (t, _v, i) => { i.brake = t < 0.6 ? 0.7 : 0; i.steer = t < 2.5 ? 0.8 : 0; i.throttle = t > 0.6 ? 0.6 : 0; }],
   ];
   const row: string[] = [];
   for (const [label, control] of entries) {
@@ -91,4 +99,18 @@ for (const car of cars) {
     row.push(`${label}: drift ${held.toFixed(1)}s peak ${peak.toFixed(0)}°${spun ? ' SPIN' : ''}`);
   }
   console.log('  drift @70: ' + row.join(' | '));
+  for (const kmh of [60, 90]) {
+    const crow: string[] = [];
+    for (const [label, control] of corners) {
+      let held = 0, peak = 0, spun = false;
+      sim(car, false, new Vector3(0, 0, 0), 0, kmh / 3.6, 3, control, (_t, v) => {
+        const s = Math.abs((v.slipAngle * 180) / Math.PI);
+        if (s > 15 && v.speed > 5) held += PHYSICS_DT;
+        peak = Math.max(peak, s);
+        if (s > 100) spun = true;
+      });
+      crow.push(`${label}: slide ${held.toFixed(1)}s peak ${peak.toFixed(0)}°${spun ? ' SPIN' : ''}`);
+    }
+    console.log(`  corner @${kmh}: ` + crow.join(' | '));
+  }
 }

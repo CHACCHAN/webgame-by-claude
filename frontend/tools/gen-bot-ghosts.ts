@@ -49,6 +49,8 @@ for (const course of COURSE_ORDER.map((id) => COURSES[id])) {
     const gridS = track.startS - 6;
     const v = new VehicleSim(physics, CAR_SPECS[b.car], track.pointAt(gridS), track.headingAt(gridS));
     v.powerScale = b.power ?? 1;
+    // a dry road of the course's surface (the leaderboard's bots raced on a clear night)
+    v.gripScale = course.surface.grip;
     const ai = new AIDriver(track, line, b.profile, b.seed * 31);
     ai.calibrate(v);
     const input = emptyInput();

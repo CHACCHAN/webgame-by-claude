@@ -30,4 +30,20 @@ class SeederTest extends TestCase
         // ~20 Hz samples over the whole run
         $this->assertEqualsWithDelta($top['time_ms'] / 50, $ghost['frame_count'], 5);
     }
+
+    public function test_a_regenerated_bot_record_replaces_the_old_run(): void
+    {
+        $this->seed(BotRunSeeder::class);
+        $runs = Run::count();
+        // a run from an older bot_runs.json (before a physics or road grip change)
+        $old = Run::first();
+        $fresh = $old->time_ms;
+        $old->update(['time_ms' => $fresh + 1234]);
+
+        $this->seed(BotRunSeeder::class);
+        $this->assertSame($runs, Run::count());
+        $same = Run::where('player_id', $old->player_id)->where('track_id', $old->track_id)->where('car_id', $old->car_id);
+        $this->assertSame([$fresh], $same->pluck('time_ms')->all());
+        $this->assertSame($runs, Run::has('ghost')->count());
+    }
 }
