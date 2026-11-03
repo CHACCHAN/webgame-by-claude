@@ -121,6 +121,13 @@ describe('curve mirrors', () => {
       for (let k = 1; k < spots.length; k++) expect(spots[k].i - spots[k - 1].i).toBeGreaterThan(20);
       // on the inside of the bend: curvature > 0 turns left, lateral > 0 is right of the centreline
       for (const s of spots) expect(Math.sign(s.lateral)).toBe(-Math.sign(t.curvature[s.i]));
+      // the glass (model +Z turned by yaw) looks at the road, on both sides
+      for (const s of spots) {
+        const at = t.pointAt(s.i, s.lateral), centre = t.pointAt(s.i, 0);
+        const toRoad = centre.sub(at).setY(0).normalize();
+        expect(Math.sin(s.yaw) * toRoad.x + Math.cos(s.yaw) * toRoad.z).toBeGreaterThan(0.9);
+      }
+      expect(new Set(spots.map((s) => Math.sign(s.lateral))).size).toBe(2);
     }
   });
 });

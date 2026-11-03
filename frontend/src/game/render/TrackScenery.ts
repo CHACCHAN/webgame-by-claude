@@ -646,14 +646,19 @@ function lampHead(model: PropModel) {
 }
 
 /**
- * Curve mirrors (カーブミラー): one on the inside of each bend tighter than 30 m, at its sharpest point.
- * (A per-sample curvature peak test put one every metre along constant-radius arcs: ~200 per course,
- * a fence of orange poles and 600 draw calls.)
+ * Curve mirrors (カーブミラー): one on the inside of each bend tighter than 30 m, at its sharpest point, the glass
+ * (+Z of the model) turned to the road. (A per-sample curvature peak test put one every metre along
+ * constant-radius arcs: ~200 per course, a fence of orange poles and 600 draw calls.)
  */
 export function curveMirrorSpots(track: Track) {
   return findCorners(track, 30)
     .filter((c) => c.apex >= 30 && c.apex < track.count - 30)
-    .map((c) => ({ i: c.apex, lateral: -c.dir * (track.width[c.apex] / 2 + SHOULDER + 0.8) }));
+    .map((c) => {
+      const lateral = -c.dir * (track.width[c.apex] / 2 + SHOULDER + 0.8);
+      // +lateral is the road's right: a mirror there looks left (heading + π/2), one on the left looks right
+      // (every mirror used to get heading + π/2, so those on the left turned their back to the road)
+      return { i: c.apex, lateral, yaw: track.heading[c.apex] + (lateral > 0 ? Math.PI / 2 : -Math.PI / 2) };
+    });
 }
 
 const nightEmissiveSigns: THREE.MeshStandardMaterial[] = [];
@@ -789,9 +794,9 @@ function buildSigns(track: Track, sides: ReturnType<typeof classifySides>, group
   const glassGeo = new THREE.CircleGeometry(0.38, 24).translate(0, 3.1, 0);
   const mirrors: THREE.Matrix4[] = [];
   const q = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0), one = new THREE.Vector3(1, 1, 1);
-  for (const { i, lateral } of curveMirrorSpots(track)) {
+  for (const { i, lateral, yaw } of curveMirrorSpots(track)) {
     track.pointAt(i, lateral, p);
-    q.setFromAxisAngle(up, track.heading[i] + Math.PI / 2);
+    q.setFromAxisAngle(up, yaw);
     mirrors.push(new THREE.Matrix4().compose(p, q, one));
   }
   const mirrorModel = prop('curveMirror');
