@@ -91,10 +91,12 @@ pending. `docs/PLAN.md` holds the design.
   check with the train tests in `vehicle.test.ts`. Models: unpack each glTF zip into a folder, describe the cuts in
   `frontend/tools/train-import.json` (axis, scale to metres, three [from, to] ranges along the axis at the gangways,
   `frontAtMin` / `flip`), then with `vite preview` on :4173: `node tools/import-trains.cjs <srcRoot> [ids]`.
-  Own models (`keikyu1000`; `TrainInfo.model.own`) are Blender Python scripts: `tools/blender/train_kit.py` (loft,
-  bevel, rake, decals projected on the body, bogies) + `tools/blender/<id>.py` → `BLENDER=<bin> node tools/blender-trains.cjs
-  <id> [--render]` (Blender 5.2 headless → GLB → meshopt). Same contract as imports: nodes car0..car2, origin at the
-  bogie midpoint on the ground, front +Z (Blender: game x, −z, y → Blender x, y, z).
+  Own models (`keikyu1000`; `TrainInfo.model.own`) are Blender Python scripts: `tools/blender/<id>.py` (assembly, CLI
+  `--out/--render/--views`) + part modules `tools/blender/parts/` + `train_kit.py` (frame, materials, export) +
+  `showcase.py` (trackside check renders) → `BLENDER=<bin> node tools/blender-models.cjs trains <id> [--render]`
+  (Blender 5.2 headless → GLB → palette, WebP, meshopt; deterministic). Same contract as imports: nodes car0..car2,
+  origin at the bogie midpoint on the ground, front +Z (Blender: game x, −z, y → Blender x, y, z). Cars of unequal
+  length (E5): `TrainInfo.consist` (`trainBogiePath`).
   The models' lamps are only painted on: `TrainInfo.lamps` (head/tail lamp positions measured on head-on renders,
   lenses put on the surface by a ray; the side-window band and its luminance limit for the night interior glow).
   Sound (`audio/TrainSound.ts`): VVVF trains run a port of VVVF-Simulator (`audio/vvvf/`: AudioWorklet `vvvf-sim`
