@@ -59,6 +59,21 @@ Newest first. "Verified" means actually executed in this environment; anything e
   could not stop and respawned: those runs were replaced by clean runs or estimates.
 - Fixed on the way: the colour picked in the car select was never used in the race (`RaceConfig.color`).
 
+### Owner's report: the car backs away before the start; handling too hard (walls, drifting)
+- Start: the countdown held cars with full brake, and a held brake at a standstill engages reverse after 0.35 s
+  (where the brake pedal drives): every car rolled 2.6–3.5 m back and started in reverse. `VehicleInput.hold`
+  (brakes on, engine revving freely, never reverse). In-game: 0.05 m, first gear at the green light.
+- Measured first (`tools/handling-feel.ts`, flat pad, wall with the course walls' material): 45° hits at 100 km/h
+  threw the S15 / RX-7 back off the wall at ~35 km/h, turned them 92° and 6 m into the road; power slides of the
+  RWD cars swung out to 73–77° (edge of a spin); the Impreza and R34 could not drift at all.
+- Changes (`VehicleSim`): wall contacts take back most of the motion away from the wall and cap the yaw rate at
+  1.6 rad/s while touching and 0.35 s after; rear grip comes back beyond ~32° of slip (angle governor, player
+  only); a handbrake pull with steering gives a yaw kick; lighter yaw damping in the first half second of a drift;
+  spin protection from 45°; 4WD cars may power over and lose less rear grip.
+- After: 45° @100 km/h bounce ~1 km/h, turned 42–44° (lined up with the wall), 0.9 m from it; power slides held
+  3.2 s at 51–53°; Impreza: 3.0 s power slide, 2.6 s feint, 2.8 s handbrake entry. Impact sounds unchanged (2 per
+  hit). Legend AI lap times within ±2 s of before (medals unchanged). Tests for both (fail on the old code).
+
 ### Smaller fixes
 - Curve mirrors on the left of the road faced away from it (all were turned to the road's left); test checks both
   sides.

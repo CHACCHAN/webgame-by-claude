@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { Vector3 } from 'three';
-import { RAPIER, initRapier, groups, GROUP_GROUND, GROUP_CAR, PHYSICS_DT, PhysicsWorld } from '../vehicle/PhysicsWorld';
+import { RAPIER, initRapier, groups, GROUP_GROUND, GROUP_CAR, GROUP_WALL, PHYSICS_DT, PhysicsWorld } from '../vehicle/PhysicsWorld';
 import { VehicleSim, emptyInput, type VehicleInput } from '../vehicle/VehicleSim';
 import { CAR_ORDER, CAR_SPECS, type CarId } from '../vehicle/carSpecs';
 import { TRAIN_INFO, TRAIN_ORDER } from '../vehicle/trains';
@@ -65,6 +65,60 @@ describe('VehicleSim', () => {
     expect(maxSlip).toBeGreaterThan(0.3);
     const abuse = drive('shiden', 4, (_t, _v, i) => { i.throttle = 1; i.steer = 1; }, 80 / 3.6);
     expect(abuse.maxSlip).toBeLessThan(1.6);
+  });
+
+  it('a 45° wall hit at 100 km/h glances off: no bounce, not spun round, not thrown out into the road', () => {
+    for (const car of ['hayate', 's15', 'shiden'] as CarId[]) {
+      const world = new RAPIER.World({ x: 0, y: -9.81, z: 0 });
+      world.timestep = PHYSICS_DT;
+      world.createCollider(RAPIER.ColliderDesc.cuboid(5000, 1, 5000).setTranslation(0, -1, 0).setCollisionGroups(groups(GROUP_GROUND, GROUP_CAR)));
+      // a long wall along z at x = 0, the course walls' material
+      world.createCollider(RAPIER.ColliderDesc.cuboid(0.2, 1, 2000).setTranslation(-0.2, 1, 0).setCollisionGroups(groups(GROUP_WALL, GROUP_CAR)).setFriction(0.05).setRestitution(0.15));
+      const phys = { world } as unknown as PhysicsWorld;
+      const heading = -Math.PI / 4;
+      const v = new VehicleSim(phys, CAR_SPECS[car], new Vector3(4, 0, 0), heading);
+      v.reset(new Vector3(4, 0, 0), heading, 100 / 3.6);
+      const input = emptyInput();
+      input.throttle = 0.4;
+      let hit = -1, bounce = 0, yaw0 = 0, yaw1 = 0, off = 0;
+      const yawOf = () => { const f = new Vector3(0, 0, 1).applyQuaternion(v.quaternion); return Math.atan2(f.x, f.z); };
+      for (let t = 0; t < 3; t += PHYSICS_DT) {
+        v.input = input;
+        v.preStep(PHYSICS_DT);
+        world.step();
+        v.postStep(PHYSICS_DT);
+        if (hit < 0 && v.impact > 0) { hit = t; yaw0 = yawOf(); }
+        if (hit >= 0 && t - hit <= 1) { bounce = Math.max(bounce, v.velocity.x); yaw1 = yawOf(); off = v.position.x; }
+      }
+      world.free();
+      expect(hit).toBeGreaterThan(0);
+      // (before: S15 and RX-7 bounced off at ~35 km/h, turned 92° and ended 6 m from the wall)
+      expect(bounce * 3.6).toBeLessThan(5);
+      expect(Math.abs(yaw1 - yaw0)).toBeLessThan((55 * Math.PI) / 180);
+      expect(off).toBeLessThan(2);
+    }
+  });
+
+  it('a power slide settles at a holdable angle, and the 4WD cars drift too', () => {
+    const slide = (car: CarId) => {
+      let held = 0, peak = 0;
+      drive(car, 4, (t, v, i) => {
+        i.throttle = 1;
+        i.steer = t < 2.5 ? 0.7 : 0;
+        const s = Math.abs((v.slipAngle * 180) / Math.PI);
+        if (s > 15 && v.speed > 5) held += PHYSICS_DT;
+        peak = Math.max(peak, s);
+      }, 70 / 3.6);
+      return { held, peak };
+    };
+    for (const car of ['hayate', 's15', 'shiden'] as CarId[]) {
+      const { held, peak } = slide(car);
+      // (before: 73–77°, at the edge of a spin)
+      expect(held).toBeGreaterThan(2);
+      expect(peak).toBeLessThan(60);
+    }
+    // (before: the Impreza and the R34 could not power over at all)
+    for (const car of ['raijin', 'r34'] as CarId[]) expect(slide(car).held).toBeGreaterThan(1.5);
   });
 
   it('held on the line it revs but neither moves nor drops into reverse', () => {

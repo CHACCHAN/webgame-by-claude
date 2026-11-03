@@ -43,7 +43,7 @@ export type AssistLevel = 0 | 1 | 2;
 
 const UP = new Vector3(0, 1, 0);
 const _v = new Vector3(), _f = new Vector3(), _lat = new Vector3(), _r = new Vector3(), _w = new Vector3();
-const _imp = new Vector3(), _p = new Vector3(), _n = new Vector3();
+const _imp = new Vector3(), _p = new Vector3(), _n = new Vector3(), _away = new Vector3();
 const _q = new Quaternion(), _qs = new Quaternion();
 
 /**
@@ -81,6 +81,11 @@ export class VehicleSim {
   /** 0..1 drift state: while set, the rear tyres let go so slides are easy to start and hold */
   driftState = 0;
   private driftHold = 0;
+  /** time since the current drift began (entry: lighter yaw damping) */
+  private driftAge = 0;
+  private lastHandbrake = false;
+  /** touching a wall (and a moment after): bounce taken back, yaw rate capped */
+  private wallTimer = 0;
 
   // derived state (read by HUD/audio/fx/camera)
   speed = 0;
@@ -334,7 +339,8 @@ export class VehicleSim {
     // sharp steer), power + steer, or an existing slide puts the car into a drift
     const steerAbs = Math.abs(this.steerSmoothed);
     const fast = planarSpeed > 8.5 && fwdSpeed > 0;
-    const powerTrigger = throttle > 0.85 && steerAbs > 0.6 && this.gear > 0 && this.gear <= 3 && spec.driftiness > 0.55 && planarSpeed > 11;
+    // (4WD cars too: they were left out below a driftiness of 0.55 and could not power over at all)
+    const powerTrigger = throttle > 0.85 && steerAbs > 0.6 && this.gear > 0 && this.gear <= 3 && spec.driftiness > 0.35 && planarSpeed > 11;
     const trigger = this.gripDriver
       ? Math.abs(this.slipAngle) > 0.3
       : (inp.handbrake && steerAbs > 0.2) ||
@@ -345,9 +351,19 @@ export class VehicleSim {
     else this.driftHold = Math.max(0, this.driftHold - dt);
     const sustain = fast && (this.driftHold > 0 || (this.driftState > 0.3 && Math.abs(this.slipAngle) > 0.08 && throttle > 0.2));
     this.driftState = damp(this.driftState, sustain ? 1 : 0, sustain ? 7 : 2.5, dt);
+    this.driftAge = this.driftState > 0.3 ? this.driftAge + dt : 0;
     // throttle widens the angle, lifting tightens it
-    const character = lerp(0.55, 1, spec.driftiness) * (spec.drive === 'AWD' ? 0.8 : 1);
-    const rearGripDrift = 1 - this.driftState * (0.26 + 0.2 * throttle) * character;
+    const character = lerp(0.55, 1, spec.driftiness) * (spec.drive === 'AWD' ? 0.95 : 1);
+    let rearGripDrift = 1 - this.driftState * (0.26 + 0.2 * throttle) * character;
+    // angle governor: the rear bites back beyond ~32° of slip (full grip by 50°), so a power slide settles at a
+    // holdable angle instead of swinging out to 75° and spinning
+    if (!this.gripDriver) rearGripDrift = lerp(rearGripDrift, 1.05, smoothstep(0.55, 0.87, Math.abs(this.slipAngle)));
+    // a pull on the handbrake with steering starts the rotation (the rear alone barely turned the car)
+    if (inp.handbrake && !this.lastHandbrake && fast && steerAbs > 0.2 && !this.gripDriver) {
+      const iy = (spec.mass / 12) * (spec.size.width ** 2 + spec.size.length ** 2);
+      body.applyTorqueImpulse(_imp.copy(this.up).multiplyScalar(-Math.sign(this.steerSmoothed) * iy * 0.9), true);
+    }
+    this.lastHandbrake = inp.handbrake;
     let spinDemand = 0;
 
     for (const w of this.wheels) {
@@ -509,14 +525,15 @@ export class VehicleSim {
         _imp.copy(lin).setY(0).normalize().multiplyScalar(push * dt);
         body.applyImpulse(_imp, true);
       }
-      // spin-out protection beyond ~50 degrees of slip
-      const over = Math.abs(this.slipAngle) - 0.85;
+      // spin-out protection beyond ~45 degrees of slip
+      const over = Math.abs(this.slipAngle) - 0.78;
       if (over > 0) {
         const tq = -Math.sign(this.slipAngle) * over * spec.mass * 9 * level;
         body.applyTorqueImpulse(_imp.copy(this.up).multiplyScalar(tq * dt), true);
       }
-      // yaw damping while sliding so the car doesn't snap back
-      const yd = -this.yawRate * spec.mass * 0.55 * drifting * level;
+      // yaw damping while sliding so the car doesn't snap back (lighter for the first half second: it used to
+      // kill handbrake and feint entries before they turned the car)
+      const yd = -this.yawRate * spec.mass * 0.55 * drifting * level * lerp(0.35, 1, smoothstep(0.2, 0.6, this.driftAge));
       body.applyTorqueImpulse(_imp.copy(this.up).multiplyScalar(yd * dt), true);
     }
     if (grounded === 0) {
@@ -532,8 +549,50 @@ export class VehicleSim {
     this.shiftCooldown = 0.35;
   }
 
+  /**
+   * Arcade wall contact. The solver bounced a car off a wall it hit at an angle and spun it round (45° at
+   * 100 km/h: ~35 km/h back off the wall, turned 90°, 6 m out into the road). While touching (and a moment after),
+   * most of the motion away from the wall is taken back and the yaw rate is capped, so the car glances off and
+   * lines up with the wall instead.
+   */
+  private softenWallHit(dt: number) {
+    const world = this.physics.world;
+    let touching = false;
+    _away.set(0, 0, 0);
+    world.contactPairsWith(this.collider, (other) => {
+      if (((other.collisionGroups() >>> 16) & GROUP_WALL) === 0) return;
+      world.contactPair(this.collider, other, (m, flipped) => {
+        if (m.numContacts() === 0) return;
+        const n = m.normal();
+        // the normal points from the first collider to the second: away from the wall is wall → car
+        const k = flipped ? 1 : -1;
+        _away.x += n.x * k;
+        _away.z += n.z * k;
+        touching = true;
+      });
+    });
+    if (touching && _away.lengthSq() > 1e-6) {
+      _away.normalize();
+      const lv = this.body.linvel();
+      const out = lv.x * _away.x + lv.z * _away.z;
+      // keep a little separation speed (0.5 m/s) so the car does not stick
+      if (out > 0.5) this.body.setLinvel({ x: lv.x - _away.x * (out - 0.5), y: lv.y, z: lv.z - _away.z * (out - 0.5) }, true);
+      this.wallTimer = 0.35;
+    } else this.wallTimer = Math.max(0, this.wallTimer - dt);
+    if (this.wallTimer > 0) {
+      const av = this.body.angvel();
+      const yaw = av.x * this.up.x + av.y * this.up.y + av.z * this.up.z;
+      const cap = 1.6;
+      if (Math.abs(yaw) > cap) {
+        const cut = yaw - Math.sign(yaw) * cap;
+        this.body.setAngvel({ x: av.x - this.up.x * cut, y: av.y - this.up.y * cut, z: av.z - this.up.z * cut }, true);
+      }
+    }
+  }
+
   /** Post-step bookkeeping (call after world.step). */
   postStep(dt: number) {
+    this.softenWallHit(dt);
     this.syncState();
     const dv = _v.copy(this.velocity).sub(this.lastVel).length() / dt;
     // anything well above braking/cornering accelerations is an impact

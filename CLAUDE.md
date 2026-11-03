@@ -22,6 +22,7 @@ pending. `docs/PLAN.md` holds the design.
   (the image bakes the code in: without `--build` it tests the last built code)
 - Frontend: `cd frontend && npx tsc -b && npm run build && npx vitest run`
 - Headless driving sim: `cd frontend && npx tsx tools/sim-run.ts [cars] [levels]`
+- Handling numbers (wall hits: bounce / spin / thrown out; drift entries: time held, peak angle): `npx tsx tools/handling-feel.ts [cars]`
 - E2E: `docker compose --profile test run --rm e2e` (stack must be up)
 - Real-GPU performance (needs a host GPU + Google Chrome): `cd frontend && node tools/perf-gpu.cjs <course|quality|ab|census>`
   (`vite preview` on :4173; compare builds with `URL=before@http://…:4174/,after@http://…:4173/`, see the file header).
