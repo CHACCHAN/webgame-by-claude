@@ -28,14 +28,15 @@ function CarPicker({ carId, disabled }: { carId: CarId; disabled?: boolean }) {
   );
 }
 
-/** AT / MT: each player's own choice (the course and conditions are the room's). */
-function GearboxPicker({ disabled }: { disabled?: boolean }) {
+/** AT / MT: each player's own choice (the course and conditions are the room's); a train has one gear ratio. */
+function GearboxPicker({ carId, disabled }: { carId: CarId; disabled?: boolean }) {
   const autoShift = useSettings((s) => s.autoShift);
   const pick = (auto: boolean) => {
     sfx.move();
     useSettings.getState().set({ autoShift: auto });
     if (gameHolder.game) gameHolder.game.autoShift = auto;
   };
+  if (CAR_SPECS[carId].train) return <div className="ol-gearbox-none">電車は変速なし（AT/MT の選択はありません）</div>;
   return (
     <div className="ol-cars ol-gearbox">
       <button className={`chip ${autoShift ? 'on' : ''}`} disabled={disabled} onClick={() => pick(true)}>AT オートマ</button>
@@ -84,7 +85,7 @@ export function OnlineLobbyScreen() {
               <label>エントリー</label>
               <div className="ol-me"><b>{player.name}</b></div>
               <CarPicker carId={carId} />
-              <GearboxPicker />
+              <GearboxPicker carId={carId} />
             </div>
             <div className="ol-split">
               <div className="ol-section">
@@ -187,7 +188,7 @@ export function OnlineRoomScreen() {
           })}
         </ul>
         <CarPicker carId={carId} disabled={room.status !== 'waiting'} />
-        <GearboxPicker disabled={room.status !== 'waiting'} />
+        <GearboxPicker carId={carId} disabled={room.status !== 'waiting'} />
         <div className="ol-actions">
           {isHost ? (
             <button className="cta" disabled={busy || !canStart} onClick={() => { sfx.confirm(); void startOnlineRace(); }}>
