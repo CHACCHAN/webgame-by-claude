@@ -131,6 +131,8 @@ export const CAR_SPECS: Record<CarId, CarSpec> = {
     driftiness: 0.45,
     stats: { power: 9, grip: 9, drift: 5, weight: 5 },
     colors: { body: '#d9dbde', accent: '#1d4fa8' },
+    // the HKS tip on the left (the rear-right guess was the wrong side)
+    exhaust: [0.36, 0.31, -2.26],
     model: { title: 'Subaru Impreza WRX STi 2004 Custom', author: 'Mac CGI', url: 'https://sketchfab.com/3d-models/subaru-impreza-wrx-sti-2004-custom-08296bc950364621b6174a3078bb19e0', license: 'CC BY 4.0' },
   },
   shiden: {
@@ -168,6 +170,7 @@ export const CAR_SPECS: Record<CarId, CarSpec> = {
     stats: { power: 8, grip: 7, drift: 8, weight: 6 },
     colors: { body: '#f5c400', accent: '#111111' },
     popUpLamps: { x: 0.57, z: 0.5 },
+    exhaust: [-0.515, 0.3, -2.16],
     model: { title: 'Mazda RX-7 FD', author: 'Lexyc16', url: 'https://sketchfab.com/3d-models/mazda-rx-7-fd-d35ff630df614771b82e7b2f59035b1e', license: 'CC BY 4.0' },
   },
   supra: {
@@ -240,6 +243,8 @@ export const CAR_SPECS: Record<CarId, CarSpec> = {
     driftiness: 0.4,
     stats: { power: 10, grip: 9, drift: 4, weight: 4 },
     colors: { body: '#2f4fa6', accent: '#111111' },
+    // tip on the left (the rear-right guess was the wrong side)
+    exhaust: [0.43, 0.29, -2.29],
     model: { title: 'Nissan Skyline R34 GT-R', author: 'Lexyc16', url: 'https://sketchfab.com/3d-models/nissan-skyline-r34-gt-r-ff8fb2251dfa4bb9979e7022c5a6666c', license: 'CC BY 4.0' },
   },
   s15: {

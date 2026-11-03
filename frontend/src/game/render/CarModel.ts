@@ -222,7 +222,7 @@ function modelPopUps(root: THREE.Object3D): CarRig['popUps'] {
 /**
  * The model optimiser prunes empty nodes, so imported GLBs arrive without their anchor empties:
  * rebuild them from the geometry — lamps from the lamp-material meshes (left/right halves), the
- * tailpipe from a muffler/exhaust mesh at the back if there is one, else low at the rear right
+ * tailpipe from a muffler/exhaust part (mesh or material name) at the back if there is one, else low at the rear right
  * (CarSpec.exhaust overrides it).
  */
 function deriveAnchors(root: THREE.Object3D, mats: CarMaterials, anchors: CarRig['anchors']) {
@@ -252,7 +252,9 @@ function deriveAnchors(root: THREE.Object3D, mats: CarMaterials, anchors: CarRig
     const body = boxOf(() => true);
     if (body.isEmpty()) return;
     const len = body.max.z - body.min.z;
-    const pipe = boxOf((m) => /muffler|exhaust|tailpipe/i.test(m.name) && new THREE.Box3().setFromObject(m).max.z < body.min.z + len * 0.25);
+    // by mesh or material name: some models name only the material ("TwinExitExhaust1Mtl" on an "Object_56")
+    const named = (m: THREE.Mesh) => [m.name, ...([] as THREE.Material[]).concat(m.material).map((x) => x.name)].join(' ');
+    const pipe = boxOf((m) => /muffler|exhaust|tailpipe/i.test(named(m)) && new THREE.Box3().setFromObject(m).max.z < body.min.z + len * 0.25);
     if (!pipe.isEmpty() && pipe.max.y < 0.8) {
       anchors.exhaust.set((pipe.min.x + pipe.max.x) / 2, (pipe.min.y + pipe.max.y) / 2, pipe.min.z - 0.02);
     } else {
