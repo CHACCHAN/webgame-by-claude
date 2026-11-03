@@ -2,6 +2,47 @@
 
 Newest first. "Verified" means actually executed in this environment; anything else is marked as unverified.
 
+## Session 5b (2026-11-03) — owner's reports: sliding, train lights, bus stop, colour row, online AT/MT
+
+### "The cars slide a lot" + road grip per course and weather
+- Measured first (`tools/handling-feel.ts`, now with ordinary corners at full lock): taking a bend flat out at full
+  lock (the keyboard way) slid every car to 32–54° for ~2 s; braking into a bend at 90 km/h with the wheel turned
+  slid them to 25–47°. Causes: the power-over trigger fired on any held full throttle (also after each automatic
+  shift), the feint trigger on any firm brake with steering, the slip trigger from 11°; full throttle in a low gear
+  spun the rears, whose cornering grip collapsed.
+- Changes (`VehicleSim`, players only; the AI drives as a grip driver and is unaffected): a power-over needs a stab
+  of the pedal (lift, then floor it within 0.35 s); a feint needs a short tap of the brake (< 0.45 s) released with
+  a big steer; the slip trigger starts at 16°; a drift ends below ~7°; grip assist (assist on, outside a drift):
+  while cornering hard the driven wheels only get the force the friction circle leaves beside the cornering force.
+- After: flat-out and braked-into corners 2–10° of slip for every car; deliberate drifts unchanged (throttle stab
+  2.7–3.1 s, feint 2.2–3.0 s, handbrake 2.8–3.1 s); wall hits unchanged. Test: corners stay grip corners (fails on
+  the old code); the power-slide test now stabs the throttle; the car-to-car test measures the gap only nose to tail
+  (the parked car is shoved aside, centres come closer without overlap).
+- Road grip per course (`CourseInfo.surface`): 朧峠 1.00 (old pass asphalt), 霧降湖 0.92 (damp from the lake mist),
+  天狼 1.04 (new toll-road asphalt); rain now takes 20 % off (was 14 %; `WET_GRIP`). Shown on the course cards and the
+  rain card. Headless tools use the course's grip (`GRIP=` overrides). Legend AI laps at grip 1 vs the new grip:
+  霧降湖 +1.4 %, 天狼 −0.5 % on average (each car within ±2.5 %, run-to-run noise ~1 %): those medals (cars and
+  trains) scaled by that. Bot leaderboard runs and ghosts regenerated (`npm run seed:bots`); the seeder now replaces
+  a bot's run for the same course and car instead of adding a second one (test).
+
+### Train lights ("光が甘い")
+- The imported trains had no lit lamps (the import flattens materials to colours: the lamps were only painted on),
+  no tail lamps at all, and dark windows at night.
+- Lamps: positions measured on head-on renders with a grid per model (`TrainInfo.lamps`); lenses are placed on the
+  surface a ray from ahead of the cab hits (`fitLamps`, works on the N700's sloped nose): head lamps on the leading
+  cab (the headlight material), tail lamps on the trailing cab (taillight material, `tailLampGain` 1.6). Beams start
+  at the lamps and dip towards the road from high lamps (the cones of every car used to tilt slightly upwards).
+- Interior light at night: on side-facing texels in each model's window band that are dark (per-model luminance
+  limit) the train's material glows warm white (`lightWindows`, shader patch; meshopt leaves a scale on each mesh,
+  so positions are taken through the mesh's own transform). Checked on night renders of all five trains.
+
+### Smaller fixes
+- Colour row in the car list / car select: the selected swatch (scaled 1.18 with a 3 px ring) was clipped at the
+  card's left edge (the card scrolls, which clips both axes); the row is inset by the ring.
+- Online: a train no longer offers AT/MT (it has one ratio); a note says so.
+- Bus stop: the model's open side faced away from the road (source faces −Z) and its utility pole (with crossarm
+  and lamp) is gone at the owner's request (`PropDef.drop`, a box of triangles left out); now 2.6 m off the edge.
+
 ## Session 5 (2026-11-03) — owner's requests: flicker, online start, race setup, car list
 
 ### Screen flicker near lights: black frames from tyre smoke (found and fixed)

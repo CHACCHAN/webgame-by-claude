@@ -116,7 +116,7 @@ the same licence. Credits (as the licence files give them):
 | vending machines at the summit (front lit at night) | Japan Vending Machine Soft Drink | ditovirnantio | https://sketchfab.com/3d-models/431394ee886141349e187fb8dcc2307a | 12 |
 | roadside shrine, one per course | Japanese Torii Gate | Sahir Virmani | https://sketchfab.com/3d-models/2027a248de1b4b70985ff97e708fb50d | 1.3 k |
 | roadside shrine (two lanterns) | Stone Lantern | Jamie McFarlane | https://sketchfab.com/3d-models/4e674d91b33a450781aebd9c490b0f05 | 1.2 k |
-| bus shelter with utility pole, one per course | Kyoto Cityscene: Bus Stop | Mikail Karaca (Xavaltir) | https://sketchfab.com/3d-models/5eb07fc3b28f474dbf15b1bbac814c82 | 6.6 k |
+| bus shelter, one per course (its utility pole, crossarm and lamp are left out at load: `PropDef.drop`) | Kyoto Cityscene: Bus Stop | Mikail Karaca (Xavaltir) | https://sketchfab.com/3d-models/5eb07fc3b28f474dbf15b1bbac814c82 | 6.6 k |
 | cones at the start and finish gantries | Traffic Cone | Jamie McFarlane | https://sketchfab.com/3d-models/66b282e65d3b4da8a883ae8579bfb33c | 0.7 k |
 
 Delivered, not used: Various Low-Poly Street Lights (KMB3D, https://sketchfab.com/3d-models/1173b0c4d9b0400bbeaafbee0e94ca59)

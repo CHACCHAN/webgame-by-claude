@@ -54,7 +54,8 @@ pending. `docs/PLAN.md` holds the design.
 - Scenery models (street lights, turbines, mirrors, vending machines, shrine, bus stop, cones): glTF folders →
   `node tools/import-props.cjs <srcRoot> [ids]` (`tools/props-import.json`) → `public/models/props/*.glb`; size,
   facing (+Z = front) and origin are set in `PROPS` (`render/props.ts`), placement in `TrackScenery.ts`. Each model
-  falls back to the procedural shape when it fails to load. Credits: `PROPS[].credit` (settings screen) + ASSETS.md.
+  falls back to the procedural shape when it fails to load. `PropDef.drop` leaves out a box of a model's triangles
+  (the bus stop's utility pole). Credits: `PROPS[].credit` (settings screen) + ASSETS.md.
 - Car models with pop-up lamps modelled raised: `popUps` in `car-import.json` (box around the pods, lens pattern,
   folding angle); modelled closed instead: `CarSpec.popUpLamps` (runtime pods). Exhaust guess wrong: `CarSpec.exhaust`.
 - Never leave a transmissive (refractive) material in the scene: three.js then renders every opaque object a second
@@ -89,12 +90,20 @@ pending. `docs/PLAN.md` holds the design.
   a root by hand). Performance comes from the real figures via `trainSpec` (torque curve, redline, brake force);
   check with the train tests in `vehicle.test.ts`. Models: unpack each glTF zip into a folder, describe the cuts in
   `frontend/tools/train-import.json` (axis, scale to metres, three [from, to] ranges along the axis at the gangways,
-  `frontAtMin` / `flip`), then with `vite preview` on :4173: `node tools/import-trains.cjs <srcRoot> [ids]`. Medals: `TRAIN_MEDALS` in courses.ts (re-run tools/sim-run.ts
+  `frontAtMin` / `flip`), then with `vite preview` on :4173: `node tools/import-trains.cjs <srcRoot> [ids]`.
+  The models' lamps are only painted on: `TrainInfo.lamps` (head/tail lamp positions measured on head-on renders,
+  lenses put on the surface by a ray; the side-window band and its luminance limit for the night interior glow). Medals: `TRAIN_MEDALS` in courses.ts (re-run tools/sim-run.ts
   with the train ids after physics or course changes). `CAR_ORDER` = cars only (AI, bots, GLBs), `VEHICLE_ORDER` =
   cars + trains (player-facing lists); the backend's `game.cars` lists both.
 - Particles: any per-particle value raised to a power must have its base clamped (a NaN alpha on a puff drawn next to
   the camera covers the screen, and bloom turns a NaN frame black).
 - Race timing/splits/AI run per physics step (`Game.raceStep`, `driveAI`); keep frame-time logic out of timing.
+- Tyre grip = course surface (`CourseInfo.surface.grip`) × weather (`WET_GRIP` in rain): `Game.roadGrip` → `VehicleSim.gripScale`
+  (before `AIDriver.calibrate`). Headless tools take the course's grip. Changing a grip: re-check medals with the sim
+  and regenerate the bots (`npm run seed:bots`; the seeder replaces a bot's old run).
+- Player drifts start only on a deliberate input (handbrake, brake tap + big steer, throttle stab, slip > 16°); the
+  grip assist keeps flat-out corners from sliding. The AI drives as `gripDriver` and skips both. Check feel with
+  `npx tsx tools/handling-feel.ts` (ordinary corners should stay under ~15° of slip).
 - Cars are solid (collision groups in `PhysicsWorld.ts`: GROUND, WALL, CAR, PROXY). Online peers become `net/ProxyCar`
   bodies (group PROXY, collide with CAR only) steered toward the extrapolated network pose; after a teleport or the local
   player's respawn they are ghosted (collider off) until clear. `Game.detectCarContact` → thud/shake/scrape. The AI
