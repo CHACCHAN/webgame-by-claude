@@ -165,7 +165,7 @@ export class Game {
   private recorder = new GhostRecorder();
   private rivalRecorder = new GhostRecorder();
   private replay: {
-    cars: { player: GhostPlayer; visual: CarVisual; wheelRot: number; last: THREE.Vector3 }[];
+    cars: { player: GhostPlayer; visual: CarVisual; wheelRot: number; last: THREE.Vector3; exhaust: ExhaustState & { speed: number } }[];
     t: number;
     duration: number;
     proj: TrackProjection;
@@ -934,6 +934,8 @@ export class Game {
       st: r(pl.sim.wheels[0]?.steer ?? 0, 1e3),
       s: r(pl.proj.s, 10),
       br: pl.sim.input.brake > 0.2 ? 1 : 0,
+      th: r(pl.sim.input.throttle, 100),
+      rp: r(clamp(pl.sim.rpm / pl.sim.spec.engine.redline, 0, 1), 100),
     };
     if (pl.finished) st.fin = Math.round(pl.finishTime * 1000);
     return st;
@@ -1035,6 +1037,7 @@ export class Game {
     }
     if (this.config?.online && (this.phase === 'countdown' || this.phase === 'racing' || this.phase === 'finished')) {
       this.remotes.update(performance.now(), dt);
+      if (!this.paused) this.remotes.forEachExhaust((visual, fx, state) => this.emitExhaustFromPose(visual, state, fx.speed, dt, fx.th, fx.rp));
     }
     if (!this.paused) {
       this.smoke.update(dt);
@@ -1095,14 +1098,32 @@ export class Game {
   /** Exhaust puffs and backfires from the tailpipe (with a pop when the camera is close). */
   private emitExhaust(r: Racer, dt: number) {
     const sim = r.sim;
-    if (sim.spec.train) return;
-    const rig = r.visual.rig, root = r.visual.root;
-    // tailpipe in world space from the car's pose (the model only sits lower by the ride height)
-    _tip.copy(rig.anchors.exhaust).add(rig.root.position).applyQuaternion(root.quaternion).add(root.position);
-    _back.copy(sim.forward).negate();
     const rpm = clamp(sim.rpm / sim.spec.engine.redline, 0, 1);
     const throttle = sim.gear === -1 ? 0.2 : sim.input.throttle;
-    const bang = this.exhaust.emit(r.exhaust, _tip, _back, sim.velocity, throttle, rpm, sim.spec.engine.turbo, dt);
+    this.puff(r.visual, r.exhaust, sim.velocity, throttle, rpm, dt);
+  }
+
+  /**
+   * Exhaust of a car known only by its pose (online peers, replays): the throttle and engine speed are sent by
+   * peers; otherwise they are read from the speed change (pulling away = throttle, a hard slow-down = lifted).
+   */
+  private emitExhaustFromPose(visual: CarVisual, state: ExhaustState & { speed: number }, speed: number, dt: number, throttle?: number, rpm?: number) {
+    const accel = dt > 0 ? (speed - state.speed) / dt : 0;
+    state.speed = speed;
+    const th = throttle ?? (accel > 0.4 ? 1 : accel > -1 ? 0.3 : 0);
+    const rp = rpm ?? clamp(0.3 + speed / 70, 0.3, 1);
+    _v.set(0, 0, 1).applyQuaternion(visual.root.quaternion).multiplyScalar(speed);
+    this.puff(visual, state, _v, th, rp, dt);
+  }
+
+  /** Puffs and backfires from a car's tailpipe (with a pop when the camera is close). */
+  private puff(visual: CarVisual, state: ExhaustState, velocity: THREE.Vector3, throttle: number, rpm: number, dt: number) {
+    if (visual.spec.train) return;
+    const rig = visual.rig, root = visual.root;
+    // tailpipe in world space from the car's pose (the model only sits lower by the ride height)
+    _tip.copy(rig.anchors.exhaust).add(rig.root.position).applyQuaternion(root.quaternion).add(root.position);
+    _back.set(0, 0, -1).applyQuaternion(root.quaternion);
+    const bang = this.exhaust.emit(state, _tip, _back, velocity, throttle, rpm, visual.spec.engine.turbo, dt);
     if (bang && this.audio) {
       const d = _tip.distanceTo(this.camera.position);
       const gain = clamp(1 - d / 60, 0, 1);
@@ -1145,7 +1166,7 @@ export class Game {
       });
       visual.setHeadlights(this.env.preset.lampsOn > 0.5 ? 1 : 0.6);
       this.root.add(visual.root);
-      return { player: new GhostPlayer(data), visual, wheelRot: 0, last: new THREE.Vector3() };
+      return { player: new GhostPlayer(data), visual, wheelRot: 0, last: new THREE.Vector3(), exhaust: { ...newExhaustState(), speed: 0 } };
     });
     this.replay = { cars, t: 0, duration: cars[0].player.duration, proj: { index: -1, s: 0, lateral: 0, height: 0 } };
     this.cinematic.shot = 0;
@@ -1166,6 +1187,8 @@ export class Game {
       c.wheelRot += moved / 0.3;
       c.last.copy(_v);
       c.visual.syncFromPose({ position: _v, quaternion: _q, steer: pose.steer, wheelRotations: [c.wheelRot, c.wheelRot, c.wheelRot, c.wheelRot] }, dt);
+      // (a jump back to the start when the replay loops is no speed)
+      if (dt > 0 && moved < 5) this.emitExhaustFromPose(c.visual, c.exhaust, moved / dt, dt);
       if (i === 0) rp.proj = this.track.project(_v.x, _v.y, _v.z, rp.proj.index, rp.proj);
     });
     this.cinematicCamera(dt, rp.cars[0].visual.root, rp.proj.s);

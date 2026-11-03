@@ -4,6 +4,7 @@ import { CAR_SPECS, type CarId } from '../vehicle/carSpecs';
 import { clamp } from '../util/math';
 import type { PhysicsWorld, RAPIER } from '../vehicle/PhysicsWorld';
 import { ProxyCar } from './ProxyCar';
+import { newExhaustState, type ExhaustState } from '../fx/Exhaust';
 
 /** Paint per grid slot so identical cars stay distinguishable (also shown in the lobby and HUD). */
 export const SLOT_COLORS = ['#2a62d8', '#d6283c', '#ecedef'];
@@ -21,6 +22,9 @@ export interface NetState {
   /** progress along the course (m) and braking flag */
   s: number;
   br: 0 | 1;
+  /** throttle and engine speed as a share of the redline (for the exhaust; absent from older clients) */
+  th?: number;
+  rp?: number;
   /** finish time (ms) once across the line */
   fin?: number;
 }
@@ -45,6 +49,9 @@ interface RemoteCar {
   lastHeard: number;
   /** physical stand-in (online contact); when present the visual follows it */
   proxy: ProxyCar | null;
+  /** what the exhaust needs this frame: forward speed (m/s), throttle and rpm share when the peer sends them */
+  fx: { speed: number; th?: number; rp?: number };
+  exhaust: ExhaustState & { speed: number };
 }
 
 /** Interpolation delay: render other cars this far in the past so two snapshots bracket the time. */
@@ -86,7 +93,7 @@ export class RemoteRacers {
       tag.position.set(0, 2.1, 0);
       visual.root.add(tag);
       this.root.add(visual.root);
-      this.cars.set(peer.id, { peer, visual, tag, buf: [], offset: Infinity, wheelSpin: 0, s: 0, fin: null, lastHeard: 0, proxy: null });
+      this.cars.set(peer.id, { peer, visual, tag, buf: [], offset: Infinity, wheelSpin: 0, s: 0, fin: null, lastHeard: 0, proxy: null, fx: { speed: 0 }, exhaust: { ...newExhaustState(), speed: 0 } });
     }
   }
 
@@ -155,6 +162,7 @@ export class RemoteRacers {
       if (car.proxy) {
         // contact mode: draw the car where its physical stand-in is
         const v = buf[buf.length - 1].v;
+        car.fx = { speed: v, th: buf[buf.length - 1].th, rp: buf[buf.length - 1].rp };
         car.wheelSpin += (v / CAR_SPECS[car.peer.carId].wheelRadius) * dt;
         car.visual.syncFromPose({ position: car.proxy.position, quaternion: car.proxy.quaternion, steer: buf[buf.length - 1].st, wheelRotations: [car.wheelSpin, car.wheelSpin, car.wheelSpin, car.wheelSpin] }, dt);
         car.visual.setBrakeLights(buf[buf.length - 1].br === 1);
@@ -173,10 +181,16 @@ export class RemoteRacers {
       const pos = _a.lerp(_b, k);
       const q = _qa.slerp(_qb, Math.min(k, 1));
       const v = a.v + (b.v - a.v) * Math.min(k, 1);
+      car.fx = { speed: v, th: b.th, rp: b.rp };
       car.wheelSpin += (v / CAR_SPECS[car.peer.carId].wheelRadius) * dt;
       car.visual.syncFromPose({ position: pos, quaternion: q, steer: b.st, wheelRotations: [car.wheelSpin, car.wheelSpin, car.wheelSpin, car.wheelSpin] }, dt);
       car.visual.setBrakeLights(b.br === 1);
     }
+  }
+
+  /** Every remote car's visual with what its exhaust needs (see Game.emitExhaustFromPose). */
+  forEachExhaust(cb: (visual: CarVisual, fx: RemoteCar['fx'], state: RemoteCar['exhaust']) => void) {
+    for (const car of this.cars.values()) if (car.buf.length) cb(car.visual, car.fx, car.exhaust);
   }
 
   /** Progress of every remote car for live positions. */
