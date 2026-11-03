@@ -2,8 +2,8 @@ import { clamp } from '../util/math';
 import type { VehicleInput } from '../vehicle/VehicleSim';
 
 /**
- * Keyboard + gamepad input with analogue-like smoothing for keys so that
- * steering on a keyboard is progressive instead of on/off.
+ * Keyboard + gamepad + touch input with analogue-like smoothing for keys (and touch buttons) so that
+ * steering on a keyboard or a phone is progressive instead of on/off.
  */
 export class InputManager {
   private keys = new Set<string>();
@@ -15,7 +15,7 @@ export class InputManager {
   lastDevice: 'keyboard' | 'gamepad' = 'keyboard';
   private prevPadButtons: boolean[] = [];
   private padPressed = new Set<number>();
-  /** set by the touch overlay */
+  /** set by the touch overlay (ui/hud/TouchControls.tsx): held buttons, driven like the keys */
   touch = { steer: 0, throttle: 0, brake: 0, handbrake: false, active: false };
 
   constructor(private target: Window = window) {
@@ -60,6 +60,11 @@ export class InputManager {
     return hit;
   }
 
+  /** A press from the touch overlay (shift, camera): handled like that key's press. */
+  press(code: string) {
+    this.pressed.add(code);
+  }
+
   consumePad(button: number) {
     if (this.padPressed.has(button)) {
       this.padPressed.delete(button);
@@ -70,10 +75,11 @@ export class InputManager {
 
   /** Call once per frame. */
   poll(dt: number, out: VehicleInput) {
-    const left = this.isDown('ArrowLeft', 'KeyA');
-    const right = this.isDown('ArrowRight', 'KeyD');
-    const up = this.isDown('ArrowUp', 'KeyW');
-    const down = this.isDown('ArrowDown', 'KeyS');
+    const t = this.touch.active ? this.touch : null;
+    const left = this.isDown('ArrowLeft', 'KeyA') || (t ? t.steer < -0.5 : false);
+    const right = this.isDown('ArrowRight', 'KeyD') || (t ? t.steer > 0.5 : false);
+    const up = this.isDown('ArrowUp', 'KeyW') || (t ? t.throttle > 0.5 : false);
+    const down = this.isDown('ArrowDown', 'KeyS') || (t ? t.brake > 0.5 : false);
     const target = (right ? 1 : 0) - (left ? 1 : 0);
     // keys ramp the steering; releasing returns faster
     const rate = target === 0 ? 7 : Math.sign(target) !== Math.sign(this.steerKey) ? 10 : 4.6;
@@ -84,7 +90,7 @@ export class InputManager {
     out.steer = this.steerKey;
     out.throttle = this.throttleKey;
     out.brake = this.brakeKey;
-    out.handbrake = this.isDown('Space');
+    out.handbrake = this.isDown('Space') || !!t?.handbrake;
     out.shiftUp = this.consume('KeyE', 'ShiftRight');
     out.shiftDown = this.consume('KeyQ', 'ControlRight');
 
@@ -112,12 +118,6 @@ export class InputManager {
         out.shiftUp = out.shiftUp || this.consumePad(3);
         out.shiftDown = out.shiftDown || this.consumePad(4);
       }
-    }
-    if (this.touch.active) {
-      out.steer = this.touch.steer;
-      out.throttle = this.touch.throttle;
-      out.brake = this.touch.brake;
-      out.handbrake = this.touch.handbrake;
     }
     return out;
   }

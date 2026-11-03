@@ -4,6 +4,7 @@ import type { TimeOfDay } from '../game/render/Environment';
 import type { AssistLevel } from '../game/vehicle/VehicleSim';
 import type { QualitySettings } from '../game/Game';
 import { COURSES, DEFAULT_COURSE, type CourseId } from '../game/track/courses';
+import { isTouchDevice } from '../ui/touch';
 
 export type QualityLevel = 'low' | 'medium' | 'high' | 'ultra';
 
@@ -27,7 +28,8 @@ export interface Settings {
 export const useSettings = create<Settings>()(
   persist(
     (set) => ({
-      quality: 'high',
+      // phones and tablets start light (changeable in the settings)
+      quality: isTouchDevice() ? 'low' : 'high',
       resolutionScale: 1,
       timeOfDay: 'night',
       masterVolume: 0.8,

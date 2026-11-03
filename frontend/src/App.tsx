@@ -10,11 +10,14 @@ import { Hud, PauseMenu } from './ui/hud/Hud';
 import { OnlineLobbyScreen, OnlineResultsScreen, OnlineRoomScreen } from './ui/screens/Online';
 import { ConditionsScreen, TransmissionScreen } from './ui/screens/RaceSetup';
 import { CarsScreen } from './ui/screens/Cars';
+import { TouchControls } from './ui/hud/TouchControls';
+import { useTouch } from './ui/touch';
 
 export function App() {
   const screen = useApp((s) => s.screen);
   const paused = useApp((s) => s.paused);
   const phase = useApp((s) => s.phase);
+  const touch = useTouch();
 
   // pause handling during races
   useEffect(() => {
@@ -69,8 +72,10 @@ export function App() {
   }, []);
 
   const inRace = screen === 'race' || (screen === 'results' && phase !== 'replay') || screen === 'onlineResults';
+  // phones have no Esc key: a back button on the menu screens sends it (every screen maps Esc to its "back")
+  const touchBack = touch && !['boot', 'title', 'loading', 'race', 'results', 'replay', 'onlineResults'].includes(screen);
   return (
-    <div className={`app screen-${screen}`}>
+    <div className={`app screen-${screen}${touch ? ' touch' : ''}`}>
       <GameCanvas />
       <div className="overlay">
         {screen === 'boot' && <BootScreen />}
@@ -93,7 +98,25 @@ export function App() {
         {screen === 'results' && <ResultsScreen />}
         {screen === 'replay' && <ReplayOverlay />}
         {screen === 'race' && paused && <PauseMenu />}
+        {touch && screen === 'race' && !paused && (phase === 'countdown' || phase === 'racing') && <TouchControls />}
       </div>
+      {touchBack && (
+        <button
+          className="touch-back"
+          onPointerDown={(e) => {
+            e.preventDefault();
+            window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', bubbles: true }));
+          }}
+        >
+          ◀ 戻る
+        </button>
+      )}
+      {touch && (
+        <div className="rotate-hint">
+          <div>📱↻</div>
+          横向きにしてプレイしてください
+        </div>
+      )}
     </div>
   );
 }

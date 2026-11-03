@@ -1,0 +1,11 @@
+{
+  "name": "TOUGE NOCTURNE ― 朧峠",
+  "short_name": "TOUGE",
+  "description": "夜の峠を駆け下りる、ブラウザ3Dダウンヒルレース",
+  "start_url": "/",
+  "display": "fullscreen",
+  "orientation": "landscape",
+  "background_color": "#05070c",
+  "theme_color": "#05070c",
+  "icons": [{ "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml" }]
+}

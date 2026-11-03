@@ -2,6 +2,23 @@
 
 Newest first. "Verified" means actually executed in this environment; anything else is marked as unverified.
 
+## Session 5e (2026-11-03) — phones (owner's request: スマホ対応)
+
+- Touch layout (`.touch` on the app when the primary pointer is coarse, `ui/touch.ts`; a laptop with a touch screen
+  keeps its mouse layout, any touch switches it on): race controls (`ui/hud/TouchControls.tsx`): steering pad bottom
+  left (the half under the finger steers, slide across to switch), accelerator / brake / handbrake bottom right, ▲▼
+  for MT, 復帰 / CAM / II top right; several fingers at once; they feed `InputManager.touch`, ramped like the keys.
+  The rev dial and the start guide are hidden on touch (the speed stays, bottom centre).
+- Menus: a ◀ 戻る button on every menu screen (no Esc key on a phone: it sends one, every screen maps Esc to back);
+  compact styles for short landscape screens (≤ 500 px high): menus, course / condition / gearbox / rival cards,
+  car select (its button stays in view), panels, online, results (the HUD behind is hidden).
+- Title tap: fullscreen + landscape lock where allowed (Android); portrait shows "横向きに"; viewport without zoom,
+  web app manifest (fullscreen, landscape); new players on touch start at quality 低.
+- Checked in Chrome's phone emulation (844×390, touch, real GPU): every screen by taps (title, menu, courses,
+  conditions, car select, gearbox, rivals, car list, settings, ranking, controls, online entry, pause, results after
+  an autopiloted race), held accelerator → throttle 1, second finger steers, sliding switches sides, release → 0.
+  E2E: a phone test (taps, back button, touch-driven race). Not tried on a real phone.
+
 ## Session 5d (2026-11-03) — real train motor sounds (owner's request)
 
 - Searched Commons, Freesound and Japanese free sound sites for recordings of the five trains' traction equipment

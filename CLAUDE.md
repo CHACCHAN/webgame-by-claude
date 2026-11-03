@@ -121,3 +121,7 @@ pending. `docs/PLAN.md` holds the design.
 - Units: meters, seconds, radians. +Y up, +Z south (towards the bay). Heading 0 = +Z; car local +Z forward, +X left.
 - Physics fixed step 120 Hz (`PHYSICS_DT`); visuals interpolate. Vehicle forces are applied as impulses.
 - Keep engine modules free of React; UI reads `game.hud` each animation frame (no per-frame React state).
+- Phones: `.touch` on the app (`ui/touch.ts`: coarse primary pointer, or the first touch); race buttons in
+  `ui/hud/TouchControls.tsx` feed `InputManager.touch`; menu screens get a ◀ 戻る button that sends Escape (every
+  screen must keep mapping Esc to its back action); compact styles under `@media (max-height: 500px)`. Check with
+  Playwright phone emulation (`viewport 844×390, hasTouch, isMobile`; `e2e/tests/mobile.spec.ts`).

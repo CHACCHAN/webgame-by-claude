@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { enterFullscreenLandscape, isTouchDevice } from '../touch';
 import { gameHolder } from '../GameCanvas';
 import { useApp } from '../../store/app';
 import { useMenuInput, hoverSelect } from '../useMenuInput';
@@ -44,6 +45,8 @@ export function BootScreen() {
 export function TitleScreen() {
   const go = useApp((s) => s.go);
   const start = () => {
+    // phones: fullscreen and landscape (where the browser allows it), from this tap
+    if (isTouchDevice()) enterFullscreenLandscape();
     const a = gameHolder.game?.initAudio();
     void a?.playMusic('bgm_menu');
     sfx.confirm();
@@ -62,7 +65,7 @@ export function TitleScreen() {
         </h1>
         <div className="title-jp">朧 峠 夜 想 曲</div>
       </div>
-      <div className="press-start">PRESS ENTER / CLICK TO START</div>
+      <div className="press-start">{isTouchDevice() ? 'TAP TO START' : 'PRESS ENTER / CLICK TO START'}</div>
       <div className="title-foot">
         <span>v1.0</span>
         <span>© 2026 Touge Nocturne Project ― 峠・人物は架空です。車名・車両デザインは各メーカーの商標・意匠です（私的利用の非公開作品）</span>
@@ -404,15 +407,16 @@ export async function startRaceFromState(rival?: AILevel) {
 }
 
 /** [action, keyboard, gamepad] — also shown briefly at every race start */
-export const CONTROL_ROWS: [string, string, string][] = [
-  ['アクセル', 'W / ↑', 'RT / A'],
-  ['ブレーキ・バック', 'S / ↓', 'LT / X'],
-  ['ステアリング', 'A D / ← →', '左スティック'],
-  ['サイドブレーキ', 'Space', 'B / RB'],
-  ['シフトアップ / ダウン（MT時）', 'E / Q', 'Y / LB'],
-  ['カメラ切替', 'C', '十字キー↑'],
-  ['コースに復帰', 'R', 'Back'],
-  ['ポーズ', 'Esc / P', 'Start'],
+/** action, keyboard, gamepad, touch screen */
+export const CONTROL_ROWS: [string, string, string, string][] = [
+  ['アクセル', 'W / ↑', 'RT / A', '右下 アクセル'],
+  ['ブレーキ・バック', 'S / ↓', 'LT / X', 'ブレーキ'],
+  ['ステアリング', 'A D / ← →', '左スティック', '左下 ◀ ▶'],
+  ['サイドブレーキ', 'Space', 'B / RB', 'サイド'],
+  ['シフトアップ / ダウン（MT時）', 'E / Q', 'Y / LB', '▲ / ▼'],
+  ['カメラ切替', 'C', '十字キー↑', '右上 CAM'],
+  ['コースに復帰', 'R', 'Back', '右上 復帰'],
+  ['ポーズ', 'Esc / P', 'Start', '右上 II'],
 ];
 
 export function ControlsScreen() {
@@ -427,11 +431,11 @@ export function ControlsScreen() {
         <div className="panel-title">CONTROLS <small>操作方法</small></div>
         <table className="controls-table">
           <thead>
-            <tr><th>操作</th><th>キーボード</th><th>ゲームパッド</th></tr>
+            <tr><th>操作</th><th>キーボード</th><th>ゲームパッド</th><th>スマホ</th></tr>
           </thead>
           <tbody>
-            {rows.map(([a, k, p]) => (
-              <tr key={a}><td>{a}</td><td><kbd>{k}</kbd></td><td><kbd>{p}</kbd></td></tr>
+            {rows.map(([a, k, p, t]) => (
+              <tr key={a}><td>{a}</td><td><kbd>{k}</kbd></td><td><kbd>{p}</kbd></td><td><kbd>{t}</kbd></td></tr>
             ))}
           </tbody>
         </table>
@@ -439,7 +443,8 @@ export function ControlsScreen() {
           <h3>ドリフトのコツ</h3>
           <ol>
             <li>コーナー手前でしっかり減速し、ステアを切り始める。</li>
-            <li>ステアを切ったままアクセルを踏み込むか、Spaceを一瞬引いてリアを流す。</li>
+            <li>リアを流すきっかけ: サイドブレーキを一瞬引く／ブレーキを短く踏んで離しながら大きく切る／コーナー中にアクセルを一度戻して踏み直す。
+              （アクセルを踏みっぱなしで曲がるだけなら滑らない）</li>
             <li>車が向きを変えたら、カウンターステア（逆ハンドル）とアクセルで角度を保つ。</li>
             <li>出口が見えたらステアを戻してアクセル全開。</li>
           </ol>
