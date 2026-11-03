@@ -1,6 +1,6 @@
 /**
  * A train's sound exactly as the game makes it (AudioEngine + TrainSound in Chrome: the VVVF AudioWorklet, the
- * convolver, the running-noise recording, the master compressor), rendered offline along the run of
+ * convolver, the running-noise synthesis, the master compressor), rendered offline along the run of
  * tools/vvvf-train-wav.ts, updated 60 times a second like the game. Needs `vite preview` on :4173 serving a build
  * (`API_PROXY=http://127.0.0.1:9 npx vite preview --port 4173 --strictPort`) and playwright-core:
  *   PW_MODULE=<…>/node_modules/playwright-core npx tsx tools/vvvf-game-wav.ts <trainId> <out.wav> [--top km/h] [--coast s]

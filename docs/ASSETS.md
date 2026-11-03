@@ -172,15 +172,12 @@ Dimensions and layout from public figures and photos (Japanese Wikipedia, 2026-1
 Train performance figures (vehicle/trains.ts) are from Japanese Wikipedia (2026-11-03); masses marked as estimates
 in the game where no per-car figure is published.
 
-### Train sounds (Wikimedia Commons recordings, VVVF patterns)
-Found by searches of Commons / Freesound / Japanese free sound sites / VVVF simulators (2026-11-03; Freesound needs
-a login, the Japanese sites only have generic train sounds and forbid redistribution, BVE sound sets have no open
-licence). Downloaded from Commons (no login), cut, mono 32 kHz, MP3 96 kbps, `frontend/public/audio/`. Credits
-also in the settings screen. The files cut from CC BY-SA recordings are themselves CC BY-SA 3.0.
-
-Motor (under power / braking), resistor-control trains: a recording of a start followed by speed
-(`TrainInfo.motorSound`). None in use since the 117 and 京成3300 were retired (their clips `motor_jr117`,
-`motor_keisei3300` and `run_jr117` were deleted); the mechanism stays for later trains.
+### Train sounds (VVVF patterns; the running noise is ours)
+No recorded audio is shipped for the trains. The running noise (wheels, rail joints, wind, the motors' hum, flange
+squeal, brakes; `frontend/src/game/audio/running.ts`) is synthesised from noise and filters, its levels fitted to
+measurements of two Wikimedia Commons recordings the game used to loop (223-2000 coasting by 321keiHIKARI, CC BY-SA
+3.0; 700 series on board by spaceaero2, CC BY 3.0). Those files and the earlier motor recordings (117, 京成3300) were
+deleted; only band levels measured from them are kept (`RECORDED` in `frontend/tools/train-run-wav.ts`).
 
 Motor, VVVF trains (E231, 京急新1000, 銀座線1000, N700): the in-train sound calculated by a port of **VVVF Simulator**
 (VvvfGeeks, https://github.com/VvvfGeeks/VVVF-Simulator; terms: free for non-commercial use only, link to the
@@ -200,13 +197,6 @@ tables (`Vvvf/SwitchAngle/*.bin`, solved by the simulator's authors; copied unch
 | N700 | `N700_ESTIMATE` (ours) | an estimate in the same format from public facts (3-level IGBT, ~1.5 kHz switching, ~25 s asynchronous after a start: Nagoya Univ. OCW lecture, Wikipedia) |
 
 Credits also in the settings screen.
-
-Running noise (always while moving; `TrainInfo.runningSound`, a seamless loop played faster or slower with speed):
-
-| Trains | Recording (Commons file) | Author | License | Loop |
-|---|---|---|---|---|
-| E231, 京急新1000, 銀座線1000 | [TOSHIBA_Omi_imazu-Shin_asahi_M'_222-3031Dasei.ogg](https://commons.wikimedia.org/wiki/File:TOSHIBA_Omi_imazu-Shin_asahi_M%27_222-3031Dasei.ogg) (223-2000 coasting) | 321keiHIKARI (ja.wikipedia) | CC BY-SA 3.0 | `run_emu`: 22–88 s, ~110 km/h |
-| N700 | [JR_central_700series_nozomi_387_717-53_shinosaka.ogg](https://commons.wikimedia.org/wiki/File:JR_central_700series_nozomi_387_717-53_shinosaka.ogg) (700 series, on board) | spaceaero2 | CC BY 3.0 | `run_n700`: 338–402 s, ~203 km/h |
 
 ### Cockroach model (joke entry, Sketchfab)
 Downloaded by the owner on 2026-11-03 (the owner asked for it; picked from a shortlist of CC models). Optimised with

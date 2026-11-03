@@ -108,10 +108,15 @@ pending. `docs/PLAN.md` holds the design.
   VVVF). A train's tractive effort builds up over `TRACTION_RISE` after a notch-on (jerk limit, `VehicleSim.traction`;
   the sound's slip follows it), so a start sweeps up from 0 Hz (the Keikyu doremifa, ~1.5 s as on recordings).
   `sim.ts` / `data.ts` / `math.ts` / `customPwm.ts` are a line-by-line port: keep them so (C# semantics: banker's rounding,
-  `List.Sort`); `vvvf.test.ts` compares with the C# build's output (`tools/vvvf-ref/README.md` to regenerate). Others
-  follow a recording of a start by speed (`motorSound`: clip + [s, km/h] points, `audio/TrainRecordings.ts`); all loop
-  `runningSound` by speed. Check a change by rendering, not by ear only: `tools/vvvf-train-wav.ts` (Node, inverter only,
-  levels per speed band) and `tools/vvvf-game-wav.ts` (Chrome + vite preview: the game's whole chain, offline). Medals: `TRAIN_MEDALS` in courses.ts (re-run tools/sim-run.ts
+  `List.Sort`); `vvvf.test.ts` compares with the C# build's output (`tools/vvvf-ref/README.md` to regenerate). The
+  running noise is synthesised, no recordings (`audio/running.ts` in AudioWorklet `train-running`: rolling roar by
+  octave bands, rail joints timed per axle from carLength / bogies / `TrainInfo.running.axle`, wind ∝ v⁶, the rotors'
+  hum from wheel and gear ratio, flange squeal from the lateral acceleration Game.ts passes, brake hiss);
+  `TrainInfo.running` is optional (defaults: commuter on jointed 25 m rails; `rail: 'welded'`, `sealed` for a
+  Shinkansen). Check a change by rendering, not by ear only: `tools/train-run-wav.ts` (Node: running noise at fixed
+  speeds, a run-up, a curve; band levels against the old recordings' numbers), `tools/vvvf-train-wav.ts` (Node,
+  inverter only, levels per speed band) and `tools/vvvf-game-wav.ts` (Chrome + vite preview: the game's whole chain,
+  offline). Medals: `TRAIN_MEDALS` in courses.ts (re-run tools/sim-run.ts
   with the train ids after physics or course changes). `CAR_ORDER` = cars only (AI, bots, GLBs), `VEHICLE_ORDER` =
   cars + trains (player-facing lists); the backend's `game.cars` lists both.
 - The cockroach (joke entry, `vehicle/roach.ts`, id `roach`, last in `VEHICLE_ORDER`): a car-like sim on one fixed

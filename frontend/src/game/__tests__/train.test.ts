@@ -98,25 +98,61 @@ describe('trains', () => {
     expect(Math.abs(out.y)).toBeCloseTo(Math.SQRT1_2, 2);
   });
 
-  it('each recorded motor sound and running loop is shipped; the motor maps rising time to rising speed', async () => {
-    const { existsSync } = await import('node:fs');
+  it('running noise: every axle of the three cars clicks over each rail joint, timed by speed and geometry', async () => {
+    const { RAIL_LENGTH, axles, clickTimes, runningParams } = await import('../audio/running');
     const { TRAIN_INFO } = await import('../vehicle/trains');
-    for (const id of TRAIN_ORDER) {
-      const run = TRAIN_INFO[id].runningSound;
-      if (run) {
-        expect(existsSync(`public/audio/${run.file}.mp3`)).toBe(true);
-        expect(run.loop[1] - run.loop[0]).toBeGreaterThan(10);
-        expect(run.speed).toBeGreaterThan(30);
-      }
-      const rec = TRAIN_INFO[id].motorSound;
-      if (!rec) continue;
-      expect(existsSync(`public/audio/${rec.file}.mp3`)).toBe(true);
-      expect(rec.knots[0][1]).toBe(0);
-      for (let k = 1; k < rec.knots.length; k++) {
-        expect(rec.knots[k][0]).toBeGreaterThan(rec.knots[k - 1][0]);
-        expect(rec.knots[k][1]).toBeGreaterThan(rec.knots[k - 1][1]);
-      }
+    // E231: 20 m cars, bogie centres 13.8 m, axles 2.1 m apart (the default), 25 m rails
+    const p = runningParams(TRAIN_INFO.e231);
+    expect([p.axle, p.jointSpacing]).toEqual([2.1, RAIL_LENGTH]);
+    const at = axles(p).map((a) => a.at);
+    expect(at.map((x) => +x.toFixed(2))).toEqual([2.05, 4.15, 15.85, 17.95, 22.05, 24.15, 35.85, 37.95, 42.05, 44.15, 55.85, 57.95]);
+    // the listener sits in the middle of the first car: its own bogies loudest, then the next car's
+    const g = axles(p).map((a) => a.gain);
+    expect(g[1]).toBeGreaterThan(g[4]);
+    expect(g[4]).toBeGreaterThan(g[8]);
+    // 90 km/h = 25 m/s: one rail length a second; each axle at its offset past a joint
+    const t = clickTimes(p, 90, 1);
+    const expected = [2.05, 4.15, 5.85, 7.95, 10.85, 12.95, 15.85, 17.05, 17.95, 19.15, 22.05, 24.15].map((s) => s / 25);
+    expect(t.length).toBe(12);
+    t.forEach((v, i) => expect(v).toBeCloseTo(expected[i], 9));
+    // "ta-tan": a bogie's two axles 2.1 m apart, 84 ms at 90 km/h, 63 ms at 120 km/h; the pattern repeats per rail
+    expect(t[1] - t[0]).toBeCloseTo(0.084, 9);
+    const t120 = clickTimes(p, 120, 3);
+    expect(t120[1] - t120[0]).toBeCloseTo(2.1 / (120 / 3.6), 9);
+    expect(t120[12] - t120[0]).toBeCloseTo(RAIL_LENGTH / (120 / 3.6), 9);
+    // welded rail (the N700): a joint every 400 m, 2.5 m bogies
+    const n = runningParams(TRAIN_INFO.n700);
+    expect([n.axle, n.jointSpacing, n.sealed]).toEqual([2.5, 400, true]);
+    // 2 s at 300 km/h (167 m) from 20 m before a joint: the 12 axles once
+    expect(clickTimes(n, 300, 2, 380).length).toBe(12);
+  });
+
+  it('running noise: the synthesis clicks at those times and plays at the recordings\' level', async () => {
+    const { RunningNoise, runningParams } = await import('../audio/running');
+    const { TRAIN_INFO } = await import('../vehicle/trains');
+    const rate = 48000;
+    const sim = new RunningNoise(runningParams(TRAIN_INFO.e231), rate, 7);
+    const hits: [number, number][] = [];
+    sim.onClick = (n, _amp, axle) => hits.push([n, axle]);
+    sim.kmh = 90;
+    const block = new Float32Array(128);
+    let ms = 0, count = 0;
+    for (let b = 0; b < (4 * rate) / 128; b++) {
+      sim.process(block);
+      if (b * 128 < rate) continue;
+      for (const v of block) (ms += v * v), count++;
     }
+    // after the speed has settled each axle meets a joint every 25 m / 25 m/s = 1 s, to the sample
+    const axle0 = hits.filter(([n, a]) => a === 0 && n > rate).map(([n]) => n);
+    expect(axle0.length).toBeGreaterThanOrEqual(2);
+    for (let i = 1; i < axle0.length; i++) expect(Math.abs(axle0[i] - axle0[i - 1] - rate)).toBeLessThanOrEqual(1);
+    // its partner axle 2.1 m behind: 84 ms later
+    const axle1 = hits.filter(([n, a]) => a === 1 && n > axle0[0]).map(([n]) => n);
+    expect(Math.abs(axle1[0] - axle0[0] - 0.084 * rate)).toBeLessThanOrEqual(1);
+    // the level: the commuter recording played at ~-22 dBFS at 110 km/h; 90 km/h is ~2-3 dB quieter
+    const db = 10 * Math.log10(ms / count);
+    expect(db).toBeGreaterThan(-27);
+    expect(db).toBeLessThan(-21);
   });
 
   it('the VVVF drive: speed → inverter Hz from gear, wheel and poles; slip under power and braking; coasting keeps the brake pattern', async () => {

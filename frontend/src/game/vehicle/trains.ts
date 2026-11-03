@@ -1,4 +1,5 @@
 import type { CarSpec } from './carSpecs';
+import type { TrainRunning } from '../audio/running';
 import { E231_MITSUBISHI, GINZA_TOSHIBA_STANDIN, KEIKYU_N1000_GTO, N700_ESTIMATE, type TrainVvvf } from './vvvf';
 
 /**
@@ -22,13 +23,6 @@ export interface Livery {
 
 /** Face of the procedural stand-in body (used when the model is missing). */
 export type FrontStyle = 'e235' | 'e231' | 'tobu50000' | 'tobu60000' | 'tobu8000' | 'tobu10000' | 'tobu30000' | 'jnr103';
-
-export interface SoundCredit {
-  title: string;
-  author: string;
-  license: string;
-  url: string;
-}
 
 /** A pair of lamps on a cab face (mirrored across the centre line): centre and size in metres; round = ellipse. */
 export interface LampPair {
@@ -81,14 +75,11 @@ export interface TrainInfo {
    */
   lamps?: { head: LampPair; tail: LampPair; windows: [number, number]; windowLum?: number };
   /**
-   * A recording of the traction equipment pulling away (public/audio/<file>.mp3, credits in docs/ASSETS.md) and
-   * when it reached which speed: [seconds into the clip, km/h], rising. Played at the point matching the speed.
+   * Running noise (wheels, rail joints, wind, rumble; synthesised by audio/running.ts): the track and body. Optional,
+   * the defaults suit a commuter train on jointed track.
    */
-  motorSound?: { file: string; knots: [number, number][]; gain?: number; credit: SoundCredit };
-  /** running noise (wheels, rails, rumble) heard whenever the train moves: a loop (public/audio/<file>.mp3, its seamless
-   * window `loop` in s) recorded at `speed` km/h, played faster or slower with the speed */
-  runningSound?: { file: string; loop: [number, number]; speed: number; gain?: number; credit: SoundCredit };
-  /** VVVF inverter: VVVF-Simulator's calculation on a control pattern (instead of a motor recording) */
+  running?: TrainRunning;
+  /** VVVF inverter: VVVF-Simulator's calculation on a control pattern */
   vvvf?: TrainVvvf;
 }
 
@@ -149,10 +140,6 @@ export const TRAIN_INFO: Record<TrainId, TrainInfo & { name: string; tagline: st
     lamps: { head: { x: 0.85, y: 1.19, w: 0.24, h: 0.14 }, tail: { x: 0.85, y: 1.19, w: 0.24, h: 0.14 }, windows: [1.78, 2.77] },
     // the in-train sound calculated from the inverter's control pattern (vehicle/vvvf.ts, audio/vvvf)
     vvvf: E231_MITSUBISHI,
-    runningSound: {
-      file: 'run_emu', loop: [0.3, 63.3], speed: 110,
-      credit: { title: '223系2000番台 東芝VVVF 惰性走行', author: '321keiHIKARI', license: 'CC BY-SA 3.0', url: "https://commons.wikimedia.org/wiki/File:TOSHIBA_Omi_imazu-Shin_asahi_M'_222-3031Dasei.ogg" },
-    },
     model: { title: 'JR東日本E231系電車', author: 'own.guest', url: 'https://sketchfab.com/3d-models/98d47a9e4aca454d9c02eb2c690fdaee', license: 'CC BY 4.0' },
   },
   keikyu1000: {
@@ -170,10 +157,6 @@ export const TRAIN_INFO: Record<TrainId, TrainInfo & { name: string; tagline: st
     // the in-train sound calculated from the inverter's control pattern (vehicle/vvvf.ts, audio/vvvf): the scale is the
     // asynchronous carrier stepping through F G A B♭ C D E♭ F at the start
     vvvf: KEIKYU_N1000_GTO,
-    runningSound: {
-      file: 'run_emu', loop: [0.3, 63.3], speed: 110,
-      credit: { title: '223系2000番台 東芝VVVF 惰性走行', author: '321keiHIKARI', license: 'CC BY-SA 3.0', url: "https://commons.wikimedia.org/wiki/File:TOSHIBA_Omi_imazu-Shin_asahi_M'_222-3031Dasei.ogg" },
-    },
     model: { title: '京急新1000形 1次車', author: 'TOUGE NOCTURNE', url: '', license: '自作', own: true },
   },
   ginza1000: {
@@ -186,10 +169,6 @@ export const TRAIN_INFO: Record<TrainId, TrainInfo & { name: string; tagline: st
     lamps: { head: { x: 0.16, y: 3.28, w: 0.26, h: 0.26, round: true }, tail: { x: 1.05, y: 1.19, w: 0.15, h: 0.15, round: true }, windows: [1.8, 2.82], windowLum: 0.32 },
     // the in-train sound calculated from a control pattern (vehicle/vvvf.ts): a Toshiba stand-in (no PMSM pattern exists)
     vvvf: GINZA_TOSHIBA_STANDIN,
-    runningSound: {
-      file: 'run_emu', loop: [0.3, 63.3], speed: 110,
-      credit: { title: '223系2000番台 東芝VVVF 惰性走行', author: '321keiHIKARI', license: 'CC BY-SA 3.0', url: "https://commons.wikimedia.org/wiki/File:TOSHIBA_Omi_imazu-Shin_asahi_M'_222-3031Dasei.ogg" },
-    },
     model: { title: 'Japan Train Tokyo Metro Ginza Line (low poly)', author: 'ditovirnantio', url: 'https://sketchfab.com/3d-models/dc622d519f8d4b7ab1fd478815d129f8', license: 'CC BY 4.0' },
   },
   n700: {
@@ -204,10 +183,8 @@ export const TRAIN_INFO: Record<TrainId, TrainInfo & { name: string; tagline: st
     lamps: { head: { x: 0.85, y: 1.05, w: 0.36, h: 0.12, round: true }, tail: { x: 0.85, y: 1.05, w: 0.36, h: 0.12, round: true }, windows: [1.72, 2.26] },
     // the in-train sound calculated from a control pattern (vehicle/vvvf.ts): our estimate (none published)
     vvvf: N700_ESTIMATE,
-    runningSound: {
-      file: 'run_n700', loop: [0.3, 61.3], speed: 203,
-      credit: { title: '700系 のぞみ 車内走行音', author: 'spaceaero2', license: 'CC BY 3.0', url: 'https://commons.wikimedia.org/wiki/File:JR_central_700series_nozomi_387_717-53_shinosaka.ogg' },
-    },
+    // welded rail on slab track, 2.5 m bogies, pressure-tight body (audio/running.ts)
+    running: { rail: 'welded', axle: 2.5, sealed: true },
     model: { title: 'N700-3000 Series Shinkansen', author: 'Layo', url: 'https://sketchfab.com/3d-models/f70820be44e0467d8b1614f2aa3045bd', license: 'CC BY 4.0' },
   },
 };

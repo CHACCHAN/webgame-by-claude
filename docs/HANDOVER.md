@@ -30,7 +30,7 @@
   - A = シミュレーターそのまま。インパルス応答が 150〜350Hz を約 25dB 持ち上げるため、3 パルス付近（E231 で 27〜35km/h）が他より約 20dB 大きい。
   - B = その帯域を −15dB（`TrainSound.ts` の `VVVF_BODY`）。**採用**。
   - 歯車の音は入れていない（シミュレーターの既定も無し。計算で出す歯車音は IR を通すとモーター音より 30〜50dB 大きい）。
-    走行音の録音に実物の歯車音が入っている。入れるなら `TrainVvvf.gearGain`。
+    走行音の合成（`audio/running.ts`）に弱い歯車のかみ合い音（ピニオン歯数 × 回転数）がある。VVVF 側に入れるなら `TrainVvvf.gearGain`。
 - 試聴ファイルの作り方: `npx tsx tools/vvvf-train-wav.ts <train> <out.wav>`（Node、インバータ音だけ。`--eq` `--os` `--gear` `--normalize`）、
   `PW_MODULE=… npx tsx tools/vvvf-game-wav.ts <train> <out.wav>`（vite preview + Chrome でゲームの音そのもの。`?export=1` のフック `__renderTrainSound`）。
 - まだのこと: 銀座線1000 は東芝 207-2000 の代用のまま。（117・京成3300 は Session 6b で廃止。）
@@ -71,7 +71,7 @@
     実車の録音（Commons `Keikyun1000.ogg` 約 1.35 秒、`Keikyu2100.ogg` 約 1.7 秒）に対し、ゲームは 0.85 秒 → 1.56 秒
     （ゲームの全処理のオフライン描画をピッチ解析）。電車 4 種のメダルを再計算（courses.ts のコメント）。
 - 117・京成3300（Sketchfab）は廃止し、モデルと録音（`motor_jr117`・`motor_keisei3300`・`run_jr117`）を削除。録音を追従する仕組み
-  （`motorSound`）は将来の抵抗制御の電車用に残した。**空いたもう 1 枠に何を作るかはオーナー待ち**。
+  （`motorSound`）も、作者表記の要る素材をなくすため走行音の録音と一緒に削除した（走行音は `audio/running.ts` の合成）。**空いたもう 1 枠に何を作るかはオーナー待ち**。
 - 次の候補: ほかの電車・車のモデルも自作に置き換えるか（オーナー判断）。0.2 の設計の見直しと合わせて進める。
 
 ## 1. 現在の状態
@@ -379,9 +379,9 @@ nohup npx vite preview --port 4173 --strictPort > /tmp/preview.log 2>&1 &   # �
 | 車の取り込み | `frontend/tools/import-cars.cjs`, `car-import.json`, `src/game/render/carImport.ts` |
 | 実 GPU での性能計測 | `frontend/tools/perf-gpu.cjs` |
 | 背景の3Dモデル（読み込み・配置） | `frontend/src/game/render/props.ts`, `TrackScenery.ts`（`buildLandmarks` など）, `tools/import-props.cjs` |
-| 電車の音（全体・VVVF・録音の追従と走行音） | `frontend/src/game/audio/TrainSound.ts`, `audio/TrainRecordings.ts`, `audio/AudioEngine.ts`（`vvvfNode`） |
+| 電車の音（全体・VVVF・走行音の合成） | `frontend/src/game/audio/TrainSound.ts`, `audio/running.ts`（走行音: 転動音・継目・風・主電動機のうなり・きしみ・ブレーキ）, `audio/running.worklet.ts`, `audio/AudioEngine.ts`（`vvvfNode`, `runningNode`）, `tools/train-run-wav.ts` |
 | VVVF Simulator の移植（計算・ワークレット・C# 版との突き合わせ） | `frontend/src/game/audio/vvvf/`（sim, data, math, engine, train, vvvf.worklet）, `tools/vvvf-ref/`, `src/game/__tests__/vvvf.test.ts` |
-| VVVF の制御パターン（YAML → JSON）・電車ごとの設定（歯数・すべり） | `frontend/tools/vvvf/*.yaml`, `tools/vvvf-patterns.ts`, `src/game/vehicle/vvvf.ts`, `vehicle/trains.ts`（`vvvf`, `motorSound`, `runningSound`） |
+| VVVF の制御パターン（YAML → JSON）・電車ごとの設定（歯数・すべり） | `frontend/tools/vvvf/*.yaml`, `tools/vvvf-patterns.ts`, `src/game/vehicle/vvvf.ts`, `vehicle/trains.ts`（`vvvf`, `running`） |
 | 自作の電車モデル（Blender のスクリプト・書き出し） | `frontend/tools/blender/train_kit.py`, `tools/blender/<id>.py`, `tools/blender-trains.cjs` |
 | VVVF の CHM（スイッチング角テーブル） | `frontend/src/game/audio/vvvf/customPwm.ts`, `public/audio/vvvf-tables/*.bin`, `tools/vvvf-tables.ts` |
 | 電車の音の試聴ファイル | `frontend/tools/vvvf-train-wav.ts`（Node）, `tools/vvvf-game-wav.ts`（Chrome でゲームの音そのもの） |

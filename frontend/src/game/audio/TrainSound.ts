@@ -1,6 +1,5 @@
 import type { MotorKind } from '../vehicle/trains';
 import { TRACTION_RISE, vvvfDrive, type TrainVvvf } from '../vehicle/vvvf';
-import { RecordingFollower, RunningLoop } from './TrainRecordings';
 import { SIM_RATE, type VvvfDrive } from './vvvf/engine';
 
 /**
@@ -12,13 +11,13 @@ export const VVVF_BODY = { db: -15, hz: 230, q: 0.8 };
 const VVVF_GAIN = 1.4;
 
 /**
- * Traction sound of a train (joke entries). Always, while it moves: running noise (a recorded loop once loaded,
- * `setRunning`; else synthesised rumble). Under power or braking the equipment sings on top: a VVVF train's in-train
+ * Traction sound of a train (joke entries). Always, while it moves: running noise (wheels, rail joints, wind, the
+ * motors' hum, flange squeal, brakes: synthesised in the AudioWorklet 'train-running', audio/running.ts, `setRunning`;
+ * until it is ready a simple rumble). Under power or braking the equipment sings on top: a VVVF train's in-train
  * sound calculated by VVVF-Simulator's model from the inverter's control pattern (`setVvvf`: audio/vvvf, an
- * AudioWorklet, then the simulator's impulse response), or a recording of the real train pulling away followed at
- * the point matching the speed (`setRecording`, audio/TrainRecordings.ts), or until one is ready a simple synthesis:
- * carrier tones stepping through the pulse modes, a chopper's steady tone, or the growl of DC motors on resistance
- * control. `speed` below is the motor speed as a share of the design top speed.
+ * AudioWorklet, then the simulator's impulse response), or until it is ready (or for other equipment) a simple
+ * synthesis: carrier tones stepping through the pulse modes, a chopper's steady tone, or the growl of DC motors on
+ * resistance control. `speed` below is the motor speed as a share of the design top speed.
  */
 export class TrainSound {
   private ctx: BaseAudioContext;
@@ -35,9 +34,10 @@ export class TrainSound {
   private rollGain: GainNode;
   private rollFilter: BiquadFilterNode;
   private load = 0;
-  private follower: RecordingFollower | null = null;
   private vvvf: { node: AudioWorkletNode; v: TrainVvvf; wheel: number; drive: VvvfDrive; notch: 1 | -1 | 0; slipShare: number } | null = null;
-  private running: RunningLoop | null = null;
+  private running: AudioWorkletNode | null = null;
+  /** lateral acceleration (m/s², `cornering`): the flange squeal */
+  private lateral = 0;
   private lastT = 0;
   private disposed = false;
 
@@ -108,15 +108,6 @@ export class TrainSound {
     return 0;
   }
 
-  /** A recording of the equipment pulling away and its [seconds, km/h] speed points (vehicle/trains.ts). */
-  setRecording(buffer: AudioBuffer, knots: [number, number][], gain = 1) {
-    if (this.disposed) return;
-    const out = this.ctx.createGain();
-    out.gain.value = 0.9 * gain;
-    out.connect(this.out);
-    this.follower = new RecordingFollower(this.ctx, out, buffer, knots);
-  }
-
   /**
    * The VVVF in-train sound: an AudioWorkletNode of 'vvvf-sim' (audio/vvvf/vvvf.worklet.ts) through the simulator's
    * impulse response (public/audio/vvvf-filter.wav, decoded at the context's rate).
@@ -159,10 +150,19 @@ export class TrainSound {
     prm.get('power')!.setValueAtTime(d.powerOff ? 0 : 1, t);
   }
 
-  /** A loop of running noise (`loop`: its seamless window, s) recorded at `speed` km/h. */
-  setRunning(buffer: AudioBuffer, loop: [number, number], speed: number, gain = 1) {
-    if (this.disposed) return;
-    this.running = new RunningLoop(this.ctx, this.out, buffer, loop, speed, 0.5 * gain);
+  /** The running noise: an AudioWorkletNode of 'train-running' (audio/running.worklet.ts). */
+  setRunning(node: AudioWorkletNode) {
+    if (this.disposed) {
+      node.port.postMessage('stop');
+      return;
+    }
+    node.connect(this.out);
+    this.running = node;
+  }
+
+  /** The train's lateral acceleration (m/s²; the game passes yaw rate × speed): tight curves make the flanges squeal. */
+  cornering(lateral: number) {
+    this.lateral = lateral;
   }
 
   update(rpm: number, throttle: number, _boost: number, volume: number, redline: number, brake = 0) {
@@ -177,27 +177,30 @@ export class TrainSound {
     const dt = Math.min(0.1, Math.max(0, t - this.lastT));
     this.lastT = t;
     const kmh = speed * this.vmax;
-    // the recordings replace the synthesised motor and inverter (braking: the same equipment, a little softer)
-    // and the synthesised rumble
-    const recorded = !!this.follower || !!this.vvvf;
+    // the VVVF calculation replaces the synthesised motor and inverter, the running noise the simple rumble
+    const calculated = !!this.vvvf;
     const dir = throttle > 0.05 ? 1 : brake > 0.05 ? -1 : 0;
-    this.follower?.update(kmh, dir, lv * (throttle > 0.05 ? 1 : 0.7), dt);
     if (this.vvvf) this.driveVvvf(kmh, dir, dt, throttle);
-    this.running?.update(kmh);
+    if (this.running) {
+      const prm = this.running.parameters;
+      prm.get('kmh')!.setValueAtTime(kmh, t);
+      prm.get('brake')!.setValueAtTime(Math.min(1, brake), t);
+      prm.get('lateral')!.setValueAtTime(this.lateral, t);
+    }
     this.gear.frequency.setTargetAtTime(Math.max(20, mesh), t, 0.02);
-    // (the recordings carry the real gear whine)
-    this.gearGain.gain.setTargetAtTime(this.running ? 0 : Math.min(1, speed * 4) * (recorded ? 0.02 : 0.03 + 0.05 * lv), t, 0.05);
+    // (the running noise has the gear mesh)
+    this.gearGain.gain.setTargetAtTime(this.running ? 0 : Math.min(1, speed * 4) * (calculated ? 0.02 : 0.03 + 0.05 * lv), t, 0.05);
     const dc = this.kind === 'resistor' || this.kind === 'chopper';
     this.motor.frequency.setTargetAtTime(Math.max(20, dc ? fOut * 2 : fOut), t, 0.02);
     this.motorFilter.frequency.setTargetAtTime(300 + speed * (dc ? 1800 : 900), t, 0.05);
-    this.motorGain.gain.setTargetAtTime(recorded ? 0 : lv * (dc ? 0.12 : 0.06), t, 0.05);
+    this.motorGain.gain.setTargetAtTime(calculated ? 0 : lv * (dc ? 0.12 : 0.06), t, 0.05);
     const f = this.carrier(speed, fOut);
     if (f > 0) {
       this.inv.frequency.setTargetAtTime(f, t, 0.008);
       this.invFilter.frequency.setTargetAtTime(f, t, 0.008);
     }
     const invLevel = this.kind === 'sic' ? 0.035 : this.kind === 'chopper' ? 0.02 : 0.06;
-    this.invGain.gain.setTargetAtTime(f > 0 && !recorded ? lv * invLevel : 0, t, 0.03);
+    this.invGain.gain.setTargetAtTime(f > 0 && !calculated ? lv * invLevel : 0, t, 0.03);
     this.rollFilter.frequency.setTargetAtTime(200 + speed * 900, t, 0.1);
     this.rollGain.gain.setTargetAtTime(this.running ? 0 : Math.min(1, speed * 3) * 0.12, t, 0.1);
   }
@@ -209,8 +212,10 @@ export class TrainSound {
 
   dispose() {
     this.disposed = true;
-    this.follower?.stop();
-    this.running?.stop();
+    if (this.running) {
+      this.running.port.postMessage('stop');
+      this.running.disconnect();
+    }
     if (this.vvvf) {
       this.vvvf.node.port.postMessage('stop');
       this.vvvf.node.disconnect();

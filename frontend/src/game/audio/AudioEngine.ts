@@ -8,6 +8,9 @@ import { oversampleFor } from './vvvf/engine';
 import { trainVvvfAudio } from './vvvf/train';
 import type { VvvfProcessorOptions } from './vvvf/vvvf.worklet';
 import vvvfWorkletUrl from './vvvf/vvvf.worklet.ts?worker&url';
+import { runningParams } from './running';
+import type { RunningProcessorOptions } from './running.worklet';
+import runningWorkletUrl from './running.worklet.ts?worker&url';
 
 /** the VVVF control patterns (JSON from tools/vvvf-patterns.ts), each loaded when a train needs it */
 const VVVF_PATTERNS = import.meta.glob<VvvfData>('./vvvf/patterns/*.json', { import: 'default' });
@@ -234,15 +237,27 @@ export class AudioEngine {
     return sound;
   }
 
-  /** A train's traction sound; its VVVF calculation or recordings (if any) join once loaded. */
+  /** A train's traction sound; its VVVF calculation (if any) and the synthesised running noise join once loaded. */
   private trainSound(spec: CarSpec) {
     const t = spec.train!;
     const sound = new TrainSound(this.ctx, t.sound, this.noise, this.sfx, t.vmax);
-    const rec = t.motorSound, run = t.runningSound, v = t.vvvf;
+    const v = t.vvvf;
     if (v) this.loading.push(this.vvvfNode(v).then((n) => n && sound.setVvvf(n.node, n.ir, v, t.wheel)));
-    else if (rec) this.loading.push(this.loadClip(rec.file).then((buffer) => buffer && sound.setRecording(buffer, rec.knots, rec.gain)));
-    if (run) this.loading.push(this.loadClip(run.file).then((buffer) => buffer && sound.setRunning(buffer, run.loop, run.speed, run.gain)));
+    this.loading.push(this.runningNode(t).then((node) => node && sound.setRunning(node)));
     return sound;
+  }
+
+  private runningReady: Promise<boolean> | null = null;
+
+  /**
+   * A train's running noise (AudioWorklet 'train-running', audio/running.ts: wheels, rail joints, wind, hum; about
+   * 1 % of a desktop core); null where AudioWorklet is missing (the train keeps its simple rumble).
+   */
+  private async runningNode(t: NonNullable<CarSpec['train']>) {
+    this.runningReady ??= this.ctx.audioWorklet ? this.ctx.audioWorklet.addModule(runningWorkletUrl).then(() => true, () => false) : Promise.resolve(false);
+    if (!(await this.runningReady)) return null;
+    const processorOptions: RunningProcessorOptions = { params: runningParams(t), seed: (Math.random() * 2 ** 32) >>> 0 };
+    return new AudioWorkletNode(this.ctx, 'train-running', { numberOfInputs: 0, outputChannelCount: [1], processorOptions });
   }
 
   private loading: Promise<unknown>[] = [];
@@ -290,26 +305,6 @@ export class AudioEngine {
         .then((r) => (r.ok && !(r.headers.get('content-type') ?? '').includes('text/html') ? r.arrayBuffer() : null))
         .catch(() => null);
       this.vvvfTables.set(name, p);
-    }
-    return p;
-  }
-
-  private clips = new Map<string, Promise<AudioBuffer | null>>();
-
-  /** A long sound effect from /audio decoded at 22.05 kHz (a minute at the context's rate is ~10 MB). */
-  private loadClip(name: string): Promise<AudioBuffer | null> {
-    let p = this.clips.get(name);
-    if (!p) {
-      p = (async () => {
-        try {
-          const res = await fetch(`/audio/${name}.mp3`);
-          if (!res.ok || (res.headers.get('content-type') ?? '').includes('text/html')) return null;
-          return await new OfflineAudioContext(1, 1, 22050).decodeAudioData(await res.arrayBuffer());
-        } catch {
-          return null;
-        }
-      })();
-      this.clips.set(name, p);
     }
     return p;
   }
