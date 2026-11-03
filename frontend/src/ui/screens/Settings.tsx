@@ -83,7 +83,7 @@ export function SettingsScreen() {
             .filter((c, i, all) => all.indexOf(c) === i)
             .join(' / ')}
           <br />
-          VVVF電車の音: VVVF Simulator（VvvfGeeks, https://github.com/VvvfGeeks/VVVF-Simulator）の計算（PWM・誘導電動機・車内音のインパルス応答）を移植して使用（非商用に限り無償の利用規約による）。制御パターン:{' '}
+          VVVF電車の音: VVVF Simulator（VvvfGeeks, https://github.com/VvvfGeeks/VVVF-Simulator）の計算（PWM・誘導電動機・車内音のインパルス応答）と同梱のスイッチング角テーブル（CHM）を移植して使用（非商用に限り無償の利用規約による）。制御パターン:{' '}
           {[...new Set(TRAIN_ORDER.flatMap((id) => (TRAIN_INFO[id].vvvf ? [TRAIN_INFO[id].vvvf!.source] : [])))].join('・')}
           （YAML-Files: VvvfGeeks, https://github.com/VvvfGeeks/YAML-Files、実車の再現で実物と同一ではありません）
         </div>

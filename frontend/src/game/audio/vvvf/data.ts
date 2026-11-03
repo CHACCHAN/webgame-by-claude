@@ -4,6 +4,7 @@
  * (https://github.com/VvvfGeeks/VVVF-Simulator; free for non-commercial use, link to the original required).
  * Field names are the YAML's; `normalizeVvvf` fills what a file leaves out with the simulator's defaults.
  */
+import { customPwmName } from './customPwm';
 
 export type FunctionType = 'Proportional' | 'Inv_Proportional' | 'Pow2_Exponential' | 'Sine';
 export interface FunctionValue {
@@ -126,6 +127,8 @@ export interface VvvfData {
   MinimumFrequency: { Accelerating: number; Braking: number };
   AcceleratePattern: PulseControl[];
   BrakingPattern: PulseControl[];
+  /** switching-angle tables the CHM / SHE modes need (audio/vvvf/customPwm.ts; files in public/audio/vvvf-tables/) */
+  CustomPwm: string[];
 }
 
 // ---- defaults (the C# initialisers) ----
@@ -284,11 +287,19 @@ export function normalizeVvvf(raw: unknown): VvvfData {
   const js = obj(o.JerkSetting);
   const br = obj(js.Braking), ac = obj(js.Accelerating);
   const mf = obj(o.MinimumFrequency);
-  return {
+  const data: VvvfData = {
     Level: num(o.Level, 2),
     JerkSetting: { Braking: { On: jerk(br.On as Raw), Off: jerk(br.Off as Raw) }, Accelerating: { On: jerk(ac.On as Raw), Off: jerk(ac.Off as Raw) } },
     MinimumFrequency: { Accelerating: num(mf.Accelerating, -1), Braking: num(mf.Braking, -1) },
     AcceleratePattern: (Array.isArray(o.AcceleratePattern) ? o.AcceleratePattern : []).map((p) => pulseControl(p as Raw)),
     BrakingPattern: (Array.isArray(o.BrakingPattern) ? o.BrakingPattern : []).map((p) => pulseControl(p as Raw)),
+    CustomPwm: [],
   };
+  const tables = new Set<string>();
+  for (const p of [...data.AcceleratePattern, ...data.BrakingPattern]) {
+    const m = p.PulseMode;
+    if (m.PulseType === 'CHM' || m.PulseType === 'SHE') tables.add(customPwmName(data.Level, m.PulseType, m.PulseCount, m.Alternative));
+  }
+  data.CustomPwm = [...tables].sort();
+  return data;
 }

@@ -269,10 +269,29 @@ export class AudioEngine {
     const load = VVVF_PATTERNS[`./vvvf/patterns/${v.pattern}.json`];
     const [ok, ir, data] = await Promise.all([this.vvvfReady, this.vvvfIr, load ? load().catch(() => null) : null]);
     if (!ok || !ir || !data) return null;
+    // the CHM / SHE switching-angle tables the pattern uses (public/audio/vvvf-tables/)
+    const tables: Record<string, ArrayBuffer> = {};
+    for (const [name, bin] of await Promise.all(data.CustomPwm.map(async (name) => [name, await this.vvvfTable(name)] as const))) {
+      if (!bin) return null;
+      tables[name] = bin;
+    }
     const phone = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
-    const processorOptions: VvvfProcessorOptions = { data, audio: trainVvvfAudio(v), oversample: oversampleFor(this.ctx.sampleRate, phone ? 2 : 4) };
+    const processorOptions: VvvfProcessorOptions = { data, audio: trainVvvfAudio(v), oversample: oversampleFor(this.ctx.sampleRate, phone ? 2 : 4), tables };
     const node = new AudioWorkletNode(this.ctx, 'vvvf-sim', { numberOfInputs: 0, outputChannelCount: [1], processorOptions });
     return { node, ir };
+  }
+
+  private vvvfTables = new Map<string, Promise<ArrayBuffer | null>>();
+
+  private vvvfTable(name: string) {
+    let p = this.vvvfTables.get(name);
+    if (!p) {
+      p = fetch(`/audio/vvvf-tables/${name}.bin`)
+        .then((r) => (r.ok && !(r.headers.get('content-type') ?? '').includes('text/html') ? r.arrayBuffer() : null))
+        .catch(() => null);
+      this.vvvfTables.set(name, p);
+    }
+    return p;
   }
 
   private clips = new Map<string, Promise<AudioBuffer | null>>();

@@ -157,7 +157,7 @@ export function CarSheet({ spec, index, full = false }: { spec: CarSpec; index: 
       )}
       {spec.model && (
         <p className="car-credit">
-          3D model: “{spec.model.title}” by {spec.model.author} ({spec.model.license}, Sketchfab)
+          {spec.model.own ? `3D model: Blender で自作（${spec.model.title}）` : `3D model: “${spec.model.title}” by ${spec.model.author} (${spec.model.license}, Sketchfab)`}
         </p>
       )}
     </>

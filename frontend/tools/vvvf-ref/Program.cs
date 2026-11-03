@@ -80,6 +80,13 @@ static class Program
         int g1 = a.Length > 7 ? int.Parse(a[6]) : 0, g2 = a.Length > 7 ? int.Parse(a[7]) : 0;
         if (a.Length > 8) VvvfSimulator.DetRandom.Seed = uint.Parse(a[8]);
         var data = VvvfSimulator.Data.Vvvf.Manager.Load(yaml, true)!;
+        // the CHM / SHE switching-angle tables (embedded resources, loaded on a task as in the GUI)
+        VvvfSimulator.Vvvf.Modulation.CustomPwmPresets.Load();
+        for (int wait = 0; !VvvfSimulator.Vvvf.Modulation.CustomPwmPresets.Loaded; wait++)
+        {
+            if (wait > 6000) { Console.Error.WriteLine("switching-angle tables did not load"); return 1; }
+            System.Threading.Thread.Sleep(10);
+        }
         var train = new TA();
         if (g1 > 0) train.SetCalculatedGearHarmonic(g1, g2);
         var control = new Domain(train.MotorSpec);

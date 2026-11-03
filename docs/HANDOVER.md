@@ -11,7 +11,8 @@
 - **やったこと**（`frontend/src/game/audio/vvvf/`）
   - VvvfGeeks/VVVF-Simulator（C#）の計算を 1 行ずつ JS に移植: 制御パターンの解釈（`Analyze.cs`）、キャリア（ランダム変調・ビブラート・テーブル）、
     2・3 レベルの PWM（同期の特殊モード・SVM・DPWM・HO・ΔΣ）、誘導電動機の dq モデル（RK4）、車内音（トルク脈動 `DiffTe`）。
-    CHM / SHE（30MB の角度テーブル）は省略（どの電車も使っていない）。
+    CHM（スイッチング角テーブル）も Session 6b で移植（京急新1000 のドレミファで使用、0.3）。テーブルは使うものだけ
+    `public/audio/vvvf-tables/`（8 本、365KB。パターンの JSON の `CustomPwm` に一覧、無いと `vvvf-patterns.ts` が失敗）。SHE は未使用。
   - **C# 版と 1 サンプルずつ一致を確認**: シミュレーター自身の C# ファイルをコンソールアプリにして Docker の .NET SDK で動かした
     （`frontend/tools/vvvf-ref/`、手順は README）。E231 の車内音（歯車 14:99）と 207-2000 の線間電圧が float32 で完全一致。
     単体テスト `vvvf.test.ts` が同じ比較を毎回行う（フィクスチャは C# 版の出力の間引き＋総和）。
@@ -32,7 +33,7 @@
     走行音の録音に実物の歯車音が入っている。入れるなら `TrainVvvf.gearGain`。
 - 試聴ファイルの作り方: `npx tsx tools/vvvf-train-wav.ts <train> <out.wav>`（Node、インバータ音だけ。`--eq` `--os` `--gear` `--normalize`）、
   `PW_MODULE=… npx tsx tools/vvvf-game-wav.ts <train> <out.wav>`（vite preview + Chrome でゲームの音そのもの。`?export=1` のフック `__renderTrainSound`）。
-- まだのこと: 117・京成3300 は抵抗制御なのでシミュレーターの対象外（録音の追従のまま）。銀座線1000 は東芝 207-2000 の代用のまま。
+- まだのこと: 銀座線1000 は東芝 207-2000 の代用のまま。（117・京成3300 は Session 6b で廃止。）
 
 ### 0.2 乗り物の設計を「基本ベース＋拡張」に（オーナー要望、提案済み・未着手）
 - オーナー: 「車、電車などの乗り物の設計方法ですが、基本ベース+拡張の形が理想かな？…検討してみてね」
@@ -44,18 +45,40 @@
   タイヤ痕、メダル）を登録制に。③ リトラ・排気位置などの個別機能は部品として足す。④ 車種一覧をフロントから JSON で出してバックエンドが読む＋一致テスト。
 - 進め方: 電車の音が終わってから、①挙動を変えずに登録制へ移す ②音のインターフェース ③一覧の一本化、の順で、毎回テスト・E2E・スクショで確認。
 
-### 0.3 Blender で自前のモデルを作る（オーナー要望、未着手）
+### 0.3 Blender で自前のモデルを作る（Session 6b で開始: 京急新1000形。オーナーの確認待ち）
 - オーナー: 「3dモデルの権利などが気になるならblender 入れてmcp 連携で使ってもいいですよ」
   「最終的に外部素材に頼らずとも製作できるようなblender 導入してあなたがモデルを作りなおすところ見てみたい」
-- オーナーの PC（`ubuntu-dev`）に Blender と MCP 連携を入れてよい。0.2 の後に着手。作ったモデルは GLB にしてリポジトリに入れる
-  （実行時に Blender は不要）。
+- Session 6b の依頼: 「Blender MCPでの作り込みをやるテストとして京急1000系のドレミファ作ってくれない？」
+  「117系と3300系は廃止してBlenderで作られたものに置き換えます」
+- **Blender**: 5.2.3 LTS をオーナーの PC のユーザー領域に入れた（`~/.local/bin/blender`、公式 tarball）。ヘッドレスで EEVEE・Cycles とも動く。
+- **MCP 連携は未導入（オーナーの判断待ち）**: 定番のアドオン（ahujasid/blender-mcp の `addon.py` と `pip install`）の導入が、
+  Claude Code の権限チェックで「外部コードの導入」として止められた。回避はしていない。入れる場合は `DISABLE_TELEMETRY=true` にし、
+  アドオンのクラウド連携（Meshy・Tripo・Sketchfab・Hyper3D・PolyHaven）は使わない。それまでは Blender の Python スクリプトで作る
+  （MCP も中身は Blender 内での Python 実行なので、作れる物は同じ。違いは対話的に 1 手ずつ見ながら進められること）。
+- **作り方**: `frontend/tools/blender/train_kit.py`（部品の道具）＋ `tools/blender/<id>.py`（電車ごとの寸法と部品）→
+  `node tools/blender-trains.cjs <id>`（Blender → GLB → gltf-transform で圧縮 → `public/models/trains/<id>.glb`）。
+  `--render` で組み立ての段階ごとの絵（`/tmp/<id>-stage*.png`）。GLB をコミットするので、実行時・ビルド時に Blender は要らない。
+  - 車体は断面を前後に伸ばした筒（屋根の肩の丸み）、端の面取り、運転台は前傾（rake）とふくらみ（bulge）。窓・ドア・帯・ライトは
+    車体の表面に投影した板（デカール）。台車・床下機器・クーラー・パンタグラフ・スカート・連結器も部品で。
+  - ゲームの電車モデルの約束（ノード car0〜car2、原点は台車中心の地面、前が +Z）は取り込みモデルと同じ。ライトは `TrainInfo.lamps`。
+- **京急新1000形 1 次車**（`keikyu1000`、GLB 79KB）: 赤＋窓まわり白、黒い前面窓まわり（貫通扉は左寄り）、方向幕、上部の前照灯 2 灯、
+  下部の標識灯（尾灯）。ゲーム内（Chrome・実 GPU）で夜明けと夜、ガレージと走行を確認: 前照灯・尾灯・夜の窓の明かり、3 両の並び。
+  車輪径 0.86m・台車中心間 12m は推定。「1000」の表記・ワイパー・手すり・ジャンパ栓などの細部は省略。
+- **ドレミファ**: シミュレーターの CHM を移植し、YAML-Files の `N1000_SIEMENS_GTO`（シーメンス GTO、歯車 14:83）をそのまま鳴らす。
+  C# 版と 1 サンプルずつ一致（`vvvf.test.ts` の 3 件目）。ノッチを入れるとすべり周波数が 0.8 秒かけて立ち上がる（`SLIP_RISE`、音だけ）ので、
+  0Hz から音階（ファ・ソ・ラ・シ♭・ド・レ・ミ♭・ファ・ソ）が鳴る。ゲーム内でワークレットと 8 本のテーブルの読み込みを確認。
+  - ゲームの電車は起動加速度に一気に達するので、音階は約 1 秒（実車は 1.5〜2 秒）。物理にも加速の立ち上がり（ジャーク制限）を入れれば
+    実車に近くなる（提案のみ。電車の加速感とメダルタイムが変わるのでオーナーの判断待ち）。
+- 117・京成3300（Sketchfab）は廃止し、モデルと録音（`motor_jr117`・`motor_keisei3300`・`run_jr117`）を削除。録音を追従する仕組み
+  （`motorSound`）は将来の抵抗制御の電車用に残した。**空いたもう 1 枠に何を作るかはオーナー待ち**。
+- 次の候補: ほかの電車・車のモデルも自作に置き換えるか（オーナー判断）。0.2 の設計の見直しと合わせて進める。
 
 ## 1. 現在の状態
 - ブランチ: `ccr-de1f3a33-58aazj`（ここで開発・コミット・プッシュする。オーナーの明示依頼がない限り PR は作らない）。
 - テスト結果:
-  - フロント単体テスト（vitest）: 50/50（Session 6、2026-11-03。VVVF の C# 版との突き合わせを含む）
+  - フロント単体テスト（vitest）: 50/50（Session 6b、2026-11-03。VVVF の C# 版との突き合わせ（CHM・京急を含む）を含む）
   - E2E（Playwright、Docker 上）: 10/10、オンライン 3 人対戦・スマホのタッチ操作を含む（Session 5g の最後、コミット `09ee8b3`。公開スタックとは別のテスト用スタックで実行）
-  - バックエンド（`php artisan test`）: 15/15（Session 5b、`--build` 付きでコンテナで実行。ボット記録の置き換えを含む）
+  - バックエンド（`php artisan test`）: 15/15（Session 6b、`--build` 付きでコンテナで実行。車種一覧 11 件）
   - E2E をオーナーの PC で流すときは、公開中のスタックの DB を汚さないよう別プロジェクトで立てる:
     `docker compose -p touge-e2e -f docker-compose.yml -f <override>` + `COMPOSE_PROFILES=test WEB_PORT=8090`。
     override で `networks.edge.ipam.config` を `!override` で別のサブネット（例 172.30.78.0/24）にする（公開側が 172.30.77.0/24 を使用）。
@@ -65,7 +88,7 @@
   - 車 6 台: すべて実車モデル（Sketchfab、CC BY）: ハチロク、RX-7、S15、インプレッサ、スープラ、R34
     - ハチロクとRX-7はリトラ（夜に開いて点灯、昼は閉じる）
   - 背景: 街灯・風車（天狼）・カーブミラー・自販機・鳥居と石灯籠・バス停・コーンが実物の3Dモデル（Sketchfab、CC BY）
-  - ネタ枠: 電車 5 両（E231・117・京成3300・銀座線1000・N700）とゴキブリ
+  - ネタ枠: 電車 4 形式（E231・京急新1000（Blender で自作）・銀座線1000・N700）とゴキブリ
   - モード: タイムアタック、AI ライバル戦、ゴーストバトル、オンライン対戦（最大 3 人）
   - Laravel 側: ランキング、ゴースト、対戦ルーム
 - オーナーは実 GPU（60fps）で遊んでおり、Cloudflare Tunnel で公開済み（オーナー自身が設定）。
@@ -151,6 +174,11 @@
   - 朧峠のキービジュアルの車が実在車に似ている（公開前に差し替え推奨）。
 
 ## 6. 最近の主な変更（新しい順。詳細は PROGRESS「Session 5b」「Session 5」「Session 4」）
+
+### 京急新1000形（ドレミファインバータ）と自作モデル（Session 6b、2026-11-03）
+- オーナーの依頼で、Blender で作った京急新1000形 1 次車を追加し、117・京成3300 を廃止（0.3）。
+- 音は VVVF Simulator の CHM まで移植して `N1000_SIEMENS_GTO` を鳴らす（発車時のドレミファ）。メダルは擬似走行の伝説 AI のタイム
+  （朧峠 147.93s・霧降湖 119.33s・天狼 118.73s、復帰なし）から。
 
 ### 電車の音を作り直し（Session 5g、2026-11-03）
 - 「細切れに聞こえる」「アクセル・ブレーキ時しか鳴らない」への対応。VVVF の電車（E231・銀座線・N700）は、ファンが実車を計測した
@@ -350,5 +378,7 @@ nohup npx vite preview --port 4173 --strictPort > /tmp/preview.log 2>&1 &   # �
 | 電車の音（全体・VVVF・録音の追従と走行音） | `frontend/src/game/audio/TrainSound.ts`, `audio/TrainRecordings.ts`, `audio/AudioEngine.ts`（`vvvfNode`） |
 | VVVF Simulator の移植（計算・ワークレット・C# 版との突き合わせ） | `frontend/src/game/audio/vvvf/`（sim, data, math, engine, train, vvvf.worklet）, `tools/vvvf-ref/`, `src/game/__tests__/vvvf.test.ts` |
 | VVVF の制御パターン（YAML → JSON）・電車ごとの設定（歯数・すべり） | `frontend/tools/vvvf/*.yaml`, `tools/vvvf-patterns.ts`, `src/game/vehicle/vvvf.ts`, `vehicle/trains.ts`（`vvvf`, `motorSound`, `runningSound`） |
+| 自作の電車モデル（Blender のスクリプト・書き出し） | `frontend/tools/blender/train_kit.py`, `tools/blender/<id>.py`, `tools/blender-trains.cjs` |
+| VVVF の CHM（スイッチング角テーブル） | `frontend/src/game/audio/vvvf/customPwm.ts`, `public/audio/vvvf-tables/*.bin`, `tools/vvvf-tables.ts` |
 | 電車の音の試聴ファイル | `frontend/tools/vvvf-train-wav.ts`（Node）, `tools/vvvf-game-wav.ts`（Chrome でゲームの音そのもの） |
 | 音のクレジット | `frontend/src/ui/screens/Settings.tsx`, `docs/ASSETS.md`（Train sounds） |

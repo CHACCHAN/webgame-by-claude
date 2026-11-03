@@ -2,6 +2,38 @@
 
 Newest first. "Verified" means actually executed in this environment; anything else is marked as unverified.
 
+## Session 6b (2026-11-03) — Keikyu N1000 "doremifa" modelled in Blender; 117 and 京成3300 retired (owner's requests)
+
+- Owner: "as a test of building models with Blender MCP, make the Keikyu 1000 doremifa", then "retire the 117 and the
+  3300 and replace them with trains made in Blender". Second replacement slot: open, the owner is to choose.
+- **Blender MCP not installed**: the Claude Code permission check refused installing the third-party addon
+  (ahujasid/blender-mcp `addon.py`, `pip install`) as external code. Not worked around; asked the owner. Built with
+  Blender's own Python instead (Blender 5.2.3 LTS, user space on ubuntu-dev, headless).
+- **CHM ported** (`audio/vvvf/customPwm.ts`: the simulator's `CustomPwm.cs`, its switching-angle `.bin` tables served from
+  `public/audio/vvvf-tables/`, listed per pattern in `VvvfData.CustomPwm`, handed to the worklet as processorOptions;
+  `AudioEngine.vvvfNode` plays no VVVF if a table is missing). Verified: the C# reference (`tools/vvvf-ref`, now loading
+  `CustomPwmPresets`) and the port agree sample by sample on the N1000 pattern through every CHM mode (1,584,128
+  samples identical); `vvvf.test.ts` has it as its third case (fixture regenerated).
+- **The doremifa**: YAML-Files `N1000_SIEMENS_GTO` unchanged (async 175…400 Hz steps to 24 Hz, CHM 15…3, sync 3 / 1),
+  `KEIKYU_N1000_GTO` (gear 14:83, 2 pole pairs). The slip frequency now ramps in over 0.8 s after a notch change
+  (`SLIP_RISE`, sound only), so the inverter starts at 0 Hz and the first notes play. Verified in a Node render
+  (`tools/vvvf-train-wav.ts keikyu1000`): the stepped scale is audible, ~1 s long (the real train's jerk-limited start
+  takes 1.5–2 s; a traction ramp in the train physics would match it — proposed, not done: it changes feel and times).
+- **Model** (`tools/blender/train_kit.py` + `tools/blender/keikyu1000.py`, `node tools/blender-trains.cjs keikyu1000`
+  → `public/models/trains/keikyu1000.glb`, 79 KB): lofted body with shoulder radius, bevelled ends, raked / bulged cab,
+  decals projected on the body (windows, doors, band, cab mask, rollsigns, lamps), bogies, underfloor boxes, ACs,
+  pantograph on the middle car, skirt, couplers. Stage renders checked at each step (Cycles). Blender's glTF exporter
+  orders materials / primitives differently on every run (same geometry): `blender-trains.cjs` sorts them by material
+  name before optimising, so a rebuild is byte-identical (checked: 3 builds, same SHA-1).
+  Verified in the game (Chrome on the RX 5700 XT, vite preview with the API cut off): garage from fixed poses and
+  races in chase / near view, by dawn and night: headlamps at the top of the cab, red tail lamps at the rear, window
+  glow at night, the three cars in line; no page errors. Estimates: wheel 0.86 m, bogie centres 12 m.
+- **Removed**: `jr117`, `keisei3300` (GLBs, `motor_jr117` / `motor_keisei3300` / `run_jr117`, train-import.json,
+  backend `game.cars`, medals). The `motorSound` mechanism stays. Backend test: 11 vehicles.
+- **Medals** `keikyu1000` (tools/sim-run.ts, legend AI, road grip on): 朧峠 147.93 s, 霧降湖 119.33 s, 天狼 118.73 s,
+  no respawns → gold 148.0 / 119.5 / 119.0 s, silver +7 %, bronze +16 %.
+- Checks: `tsc -b` clean, vitest 50/50, `vite build`, backend 15/15 (container, `--build`).
+
 ## Session 6 (2026-11-03) — VVVF Simulator ported for the trains' in-train sound (owner chose B: body resonance −15 dB; deployed)
 
 - Owner approved porting VvvfGeeks/VVVF-Simulator (non-commercial terms; credit + link in the settings screen and

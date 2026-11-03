@@ -1,15 +1,15 @@
 import type { CarSpec } from './carSpecs';
-import { E231_MITSUBISHI, GINZA_TOSHIBA_STANDIN, N700_ESTIMATE, type TrainVvvf } from './vvvf';
+import { E231_MITSUBISHI, GINZA_TOSHIBA_STANDIN, KEIKYU_N1000_GTO, N700_ESTIMATE, type TrainVvvf } from './vvvf';
 
 /**
  * Joke entries: three-car trains driven on the pass. The performance is the real train's (starting acceleration,
  * design top speed, emergency brake rate, gear ratio, wheel size); only the front bogie is simulated (a short heavy
  * vehicle), the three cars follow its path like rails (render/TrainModel.ts).
  */
-export type TrainId = 'e231' | 'jr117' | 'keisei3300' | 'ginza1000' | 'n700';
+export type TrainId = 'e231' | 'keikyu1000' | 'ginza1000' | 'n700';
 
 /** Sound of the traction equipment (audio/TrainSound.ts). */
-export type MotorKind = 'sic' | 'igbt3' | 'igbt' | 'chopper' | 'resistor';
+export type MotorKind = 'sic' | 'igbt3' | 'igbt' | 'gto' | 'chopper' | 'resistor';
 
 /** One paint scheme: the swatch colour is `band` (the body colour of painted cars). */
 export interface Livery {
@@ -91,11 +91,12 @@ export interface TrainInfo {
 }
 
 /**
- * The trains with a 3D model (public/models/trains/<id>.glb, cut by tools/import-trains.cjs). Figures from Japanese
- * Wikipedia (2026-11-03): starting acceleration, design top speed, brake rates, motors, control, gear ratio,
- * car length; masses as marked.
+ * The trains with a 3D model (public/models/trains/<id>.glb: cut from a third-party model by tools/import-trains.cjs,
+ * or our own built in Blender by tools/blender-trains.cjs, `model.own`). Figures from Japanese Wikipedia
+ * (2026-11-03): starting acceleration, design top speed, brake rates, motors, control, gear ratio, car length;
+ * masses as marked.
  */
-export const TRAIN_INFO: Record<TrainId, TrainInfo & { name: string; tagline: string; description: string; model: { title: string; author: string; url: string; license: string } }> = {
+export const TRAIN_INFO: Record<TrainId, TrainInfo & { name: string; tagline: string; description: string; model: { title: string; author: string; url: string; license: string; own?: boolean } }> = {
   e231: {
     name: 'E231系', series: 'E231系0番台（中央・総武緩行線）', operator: 'JR東日本', tagline: '首都圏の標準通勤形',
     description: '首都圏の通勤電車を一新した標準車両。IGBTのVVVFインバータの音はおなじみ。カナリアイエローの帯で峠を下る。',
@@ -112,43 +113,25 @@ export const TRAIN_INFO: Record<TrainId, TrainInfo & { name: string; tagline: st
     },
     model: { title: 'JR東日本E231系電車', author: 'own.guest', url: 'https://sketchfab.com/3d-models/98d47a9e4aca454d9c02eb2c690fdaee', license: 'CC BY 4.0' },
   },
-  jr117: {
-    name: '117系', series: '117系（快速サンライナー）', operator: '国鉄／JR西日本', tagline: '岡山の快速「サンライナー」',
-    description: '京阪神の新快速として登場した2扉の近郊形。この編成は岡山地区の快速「サンライナー」の白い塗装。抵抗制御のモーター音を響かせて峠を下る。',
-    // field weakening keeps the power up to high speed (it ran the 115 km/h rapid service)
-    traction: [45, 100],
-    accel: 2.0, vmax: 115, brake: [3.5, 5.0], mass: 115.5, motor: 'MT54D 120kW×4（直流直巻）', control: '抵抗制御（直並列・弱め界磁）', sound: 'resistor',
-    gearRatio: 4.82, wheel: 0.86, body: 'painted', width: 2.9, carLength: 20, bogies: 13.8, front: 'jnr103',
-    liveries: [{ name: 'サンライナー（白＋赤帯）', body: '#f2efe8', band: '#f2efe8', band2: '#d8261c' }],
-    lamps: { head: { x: 0.56, y: 1.99, w: 0.22, h: 0.22, round: true }, tail: { x: 1.0, y: 1.3, w: 0.18, h: 0.18, round: true }, windows: [1.94, 2.85], windowLum: 0.4 },
-    // on board a 117 motor car (MoHa 117-15) leaving a station; speeds from a motor line (0.237 km/h per Hz)
-    motorSound: {
-      file: 'motor_jr117', knots: [[3, 0], [25.5, 45], [35, 61], [45, 70.4], [55, 77.7], [65, 83.9], [75, 88.9], [85, 91.2], [105, 94.3], [120, 97.9], [135, 102.9], [150, 106.7], [160, 108.8]],
-      credit: { title: '117系 モハ117-15 走行音', author: 'spaceaero2', license: 'CC BY 3.0', url: 'https://commons.wikimedia.org/wiki/File:JR_west_117_shinkaisoku_moha117-15_akashi.ogg' },
-    },
+  keikyu1000: {
+    name: '京急新1000形', series: '新1000形 1次車（2002年）', operator: '京浜急行電鉄', tagline: '発車で音階を奏でる「ドレミファインバータ」',
+    description: '赤い車体に白い窓まわりの京急の主力。1・2次車はシーメンス製GTOのVVVFインバータで、発車のたびに「ファソラシドレミファソ～」と音階を奏でた。起動加速度3.5km/h/sの俊足で峠を下る。',
+    accel: 3.5, vmax: 130, brake: [4.0, 4.5],
+    // 4-car set of the 1st batch: Muc 33.0 t + Tpu 26.5 t + Msc 33.0 t (the formation's cars, one trailer left out)
+    mass: 92.5, motor: 'シーメンス 1TB2010 190kW×4（かご形三相誘導電動機）', control: 'GTO-VVVFインバータ（シーメンス SIBAS32・1C4M）', sound: 'gto',
+    // gear 83:14; wheel and bogie centres are our estimates (not published)
+    gearRatio: 5.93, wheel: 0.86, body: 'painted', width: 2.83, carLength: 18, bogies: 12, front: 'tobu50000',
+    liveries: [{ name: '京急レッド＋窓まわり白', body: '#d2192b', band: '#d2192b', band2: '#efeee8' }],
+    // our own model (tools/blender/keikyu1000.py): head lamps high in the windscreen, express / tail lamps low on the nose
+    lamps: { head: { x: 1.0, y: 3.2, w: 0.15, h: 0.15, round: true }, tail: { x: 0.95, y: 1.47, w: 0.34, h: 0.1 }, windows: [1.86, 2.9], windowLum: 0.06 },
+    // the in-train sound calculated from the inverter's control pattern (vehicle/vvvf.ts, audio/vvvf): the scale is the
+    // asynchronous carrier stepping through F G A B♭ C D E♭ F at the start
+    vvvf: KEIKYU_N1000_GTO,
     runningSound: {
-      file: 'run_jr117', loop: [0.3, 61.3], speed: 105,
-      credit: { title: '117系 モハ117-15 走行音', author: 'spaceaero2', license: 'CC BY 3.0', url: 'https://commons.wikimedia.org/wiki/File:JR_west_117_shinkaisoku_moha117-15_akashi.ogg' },
+      file: 'run_emu', loop: [0.3, 63.3], speed: 110,
+      credit: { title: '223系2000番台 東芝VVVF 惰性走行', author: '321keiHIKARI', license: 'CC BY-SA 3.0', url: "https://commons.wikimedia.org/wiki/File:TOSHIBA_Omi_imazu-Shin_asahi_M'_222-3031Dasei.ogg" },
     },
-    model: { title: '117系 サンライナー | 117 series『Sun Liner』', author: 'own.guest', url: 'https://sketchfab.com/3d-models/6434932c06974d10927c2fe36c2c7f8e', license: 'CC BY 4.0' },
-  },
-  keisei3300: {
-    name: '京成3300形', series: '3300形（赤電）', operator: '京成電鉄', tagline: '昭和の私鉄「赤電」',
-    description: '1968年登場、全車が電動車の京成の通勤車。起動加速度3.5km/h/sは今回の電車で最強。ファイヤーオレンジとモーンアイボリーの赤電塗装。',
-    accel: 3.5, vmax: 110, brake: [4.0, 4.5], mass: 99, massEstimated: true, motor: '100kW×4（全電動車）', control: '抵抗制御', sound: 'resistor',
-    gearRatio: 6.06, wheel: 0.86, body: 'painted', width: 2.8, carLength: 18, bogies: 12.6, front: 'jnr103',
-    liveries: [{ name: '赤電（ファイヤーオレンジ＋モーンアイボリー）', body: '#e05a1a', band: '#e05a1a', band2: '#efe3c4' }],
-    lamps: { head: { x: 0.8, y: 1.84, w: 0.22, h: 0.22 }, tail: { x: 1.1, y: 1.84, w: 0.22, h: 0.22 }, windows: [2.09, 3.08] },
-    // Keikyu's first 1000 series (1959, all motor cars, resistor control, ran with Keisei's cars): 3.5 km/h/s to 40
-    motorSound: {
-      file: 'motor_keisei3300', knots: [[3.7, 0], [15.1, 40], [20, 54.4], [30, 75.9], [40, 92.5], [45, 99.8]],
-      credit: { title: '京急旧1000形 走行音', author: 'toshinori baba', license: 'パブリックドメイン', url: 'https://commons.wikimedia.org/wiki/File:Keikyu_kyu1000kei_rokuon.ogg' },
-    },
-    runningSound: {
-      file: 'run_jr117', loop: [0.3, 61.3], speed: 105,
-      credit: { title: '117系 モハ117-15 走行音', author: 'spaceaero2', license: 'CC BY 3.0', url: 'https://commons.wikimedia.org/wiki/File:JR_west_117_shinkaisoku_moha117-15_akashi.ogg' },
-    },
-    model: { title: '京成3300形(赤電) 先頭車1・中間車1・先頭車2', author: 'V3B4', url: 'https://sketchfab.com/V3B4', license: 'CC BY-NC 4.0' },
+    model: { title: '京急新1000形 1次車', author: 'TOUGE NOCTURNE', url: '', license: '自作', own: true },
   },
   ginza1000: {
     name: '東京メトロ1000系', series: '1000系（銀座線）', operator: '東京メトロ', tagline: '黄色い地下鉄',
@@ -186,7 +169,7 @@ export const TRAIN_INFO: Record<TrainId, TrainInfo & { name: string; tagline: st
   },
 };
 
-export const TRAIN_ORDER: TrainId[] = ['e231', 'jr117', 'keisei3300', 'ginza1000', 'n700'];
+export const TRAIN_ORDER: TrainId[] = ['e231', 'keikyu1000', 'ginza1000', 'n700'];
 
 /** Simulated mass of the front bogie vehicle (kg): forces are scaled to give the real accelerations. */
 const PHYS_MASS = 4200;

@@ -91,13 +91,20 @@ pending. `docs/PLAN.md` holds the design.
   check with the train tests in `vehicle.test.ts`. Models: unpack each glTF zip into a folder, describe the cuts in
   `frontend/tools/train-import.json` (axis, scale to metres, three [from, to] ranges along the axis at the gangways,
   `frontAtMin` / `flip`), then with `vite preview` on :4173: `node tools/import-trains.cjs <srcRoot> [ids]`.
+  Own models (`keikyu1000`; `TrainInfo.model.own`) are Blender Python scripts: `tools/blender/train_kit.py` (loft,
+  bevel, rake, decals projected on the body, bogies) + `tools/blender/<id>.py` → `BLENDER=<bin> node tools/blender-trains.cjs
+  <id> [--render]` (Blender 5.2 headless → GLB → meshopt). Same contract as imports: nodes car0..car2, origin at the
+  bogie midpoint on the ground, front +Z (Blender: game x, −z, y → Blender x, y, z).
   The models' lamps are only painted on: `TrainInfo.lamps` (head/tail lamp positions measured on head-on renders,
   lenses put on the surface by a ray; the side-window band and its luminance limit for the night interior glow).
   Sound (`audio/TrainSound.ts`): VVVF trains run a port of VVVF-Simulator (`audio/vvvf/`: AudioWorklet `vvvf-sim`
   at ~192 kHz → the simulator's impulse response `public/audio/vvvf-filter.wav` → body EQ `VVVF_BODY`), driven by
   `TrainInfo.vvvf` (`vehicle/vvvf.ts`: pattern name, gear teeth, poles, slip; `vvvfDrive`). Patterns are the
   simulator's YAML (`tools/vvvf/*.yaml`; after editing run `npx tsx tools/vvvf-patterns.ts`, the test checks the
-  JSONs). `sim.ts` / `data.ts` / `math.ts` are a line-by-line port: keep them so (C# semantics: banker's rounding,
+  JSONs; CHM patterns list their switching-angle tables in `CustomPwm`: the simulator's `.bin` files in
+  `public/audio/vvvf-tables/`, `audio/vvvf/customPwm.ts`; a missing table fails the script and silences that train's
+  VVVF). The slip ramps in over `SLIP_RISE` after a notch change, so a start sweeps up from 0 Hz (the Keikyu doremifa).
+  `sim.ts` / `data.ts` / `math.ts` / `customPwm.ts` are a line-by-line port: keep them so (C# semantics: banker's rounding,
   `List.Sort`); `vvvf.test.ts` compares with the C# build's output (`tools/vvvf-ref/README.md` to regenerate). Others
   follow a recording of a start by speed (`motorSound`: clip + [s, km/h] points, `audio/TrainRecordings.ts`); all loop
   `runningSound` by speed. Check a change by rendering, not by ear only: `tools/vvvf-train-wav.ts` (Node, inverter only,

@@ -47,8 +47,7 @@ return [
         'r34' => ['name' => 'SKYLINE GT-R (BNR34)'],
         // joke entries: three-car trains (frontend vehicle/trains.ts)
         'e231' => ['name' => 'E231系'],
-        'jr117' => ['name' => '117系'],
-        'keisei3300' => ['name' => '京成3300形'],
+        'keikyu1000' => ['name' => '京急新1000形'],
         'ginza1000' => ['name' => '東京メトロ1000系'],
         'n700' => ['name' => '新幹線N700系'],
         // joke entry: the giant cockroach (frontend vehicle/roach.ts), the fastest vehicle

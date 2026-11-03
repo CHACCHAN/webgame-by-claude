@@ -57,7 +57,7 @@ export interface CarSpec {
   stats: { power: number; grip: number; drift: number; weight: number };
   colors: { body: string; accent: string };
   /** third-party 3D model in public/models/cars/<id>.glb (attribution shown in the garage) */
-  model?: { title: string; author: string; url: string; license: string };
+  model?: { title: string; author: string; url: string; license: string; /** our own (built in Blender, tools/blender) */ own?: boolean };
   /**
    * retractable headlamps on the 3D model (modelled closed): pods rise when the lights are on.
    * x = pod centre off the centre line, z = lid centre behind the front of the body (m)

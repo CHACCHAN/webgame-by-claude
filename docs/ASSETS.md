@@ -153,10 +153,21 @@ written to `frontend/public/models/trains/<id>.glb`. Credits also in the car lis
 | Train | Model | Author | License |
 |---|---|---|---|
 | E231 (`e231`) | [JR東日本E231系電車](https://sketchfab.com/3d-models/98d47a9e4aca454d9c02eb2c690fdaee) | own.guest | CC BY 4.0 |
-| 117 (`jr117`) | [117系 サンライナー](https://sketchfab.com/3d-models/6434932c06974d10927c2fe36c2c7f8e) | own.guest | CC BY 4.0 |
-| 京成3300 (`keisei3300`) | 京成3300形(赤電) [先頭車1](https://sketchfab.com/3d-models/366d6c3ecfc5415ab21627a5c1165a7d)・[中間車1](https://sketchfab.com/3d-models/8e8c924b5ce145e99738b9a23c73c685)・[先頭車2](https://sketchfab.com/3d-models/86b11eb7639642e897cc2ef5ae2ad23f) | V3B4 | CC BY-NC 4.0 (non-commercial: the owner confirmed the site is non-commercial) |
 | 銀座線1000 (`ginza1000`) | [Japan Train Tokyo Metro Ginza Line (low poly)](https://sketchfab.com/3d-models/dc622d519f8d4b7ab1fd478815d129f8) | ditovirnantio | CC BY 4.0 |
 | N700 (`n700`) | [N700-3000 Series Shinkansen](https://sketchfab.com/3d-models/f70820be44e0467d8b1614f2aa3045bd) | Layo (bciarfello) | CC BY 4.0 |
+
+The 117 and 京成3300 (both Sketchfab models) were retired on 2026-11-03 at the owner's request, to be replaced by
+trains we model ourselves.
+
+### Own train models (Blender, no third-party assets)
+Built from numbers by Python scripts in Blender 5.2 LTS (headless): `frontend/tools/blender/train_kit.py` (lofted
+body section, bevelled ends, raked / bulged cab, decals projected on the body, bogies, roof gear) and one script per
+train (`frontend/tools/blender/<id>.py`); `node tools/blender-trains.cjs <id>` exports and optimises the GLB.
+Dimensions and layout from public figures and photos (Japanese Wikipedia, 2026-11-03); no drawings or textures used.
+
+| Train | File | Notes |
+|---|---|---|
+| 京急新1000形 1次車 (`keikyu1000`) | `public/models/trains/keikyu1000.glb` (79 KB) | 18 m cars, 2.83 m wide; red + white window band, rollsign front; wheel 0.86 m and bogie centres 12 m are estimates |
 
 Train performance figures (vehicle/trains.ts) are from Japanese Wikipedia (2026-11-03); masses marked as estimates
 in the game where no per-car figure is published.
@@ -168,24 +179,23 @@ licence). Downloaded from Commons (no login), cut, mono 32 kHz, MP3 96 kbps, `fr
 also in the settings screen. The files cut from CC BY-SA recordings are themselves CC BY-SA 3.0.
 
 Motor (under power / braking), resistor-control trains: a recording of a start followed by speed
-(`TrainInfo.motorSound`, speed from a motor tone line or the real acceleration):
+(`TrainInfo.motorSound`). None in use since the 117 and 京成3300 were retired (their clips `motor_jr117`,
+`motor_keisei3300` and `run_jr117` were deleted); the mechanism stays for later trains.
 
-| Train | Recording (Commons file) | Author | License | Clip |
-|---|---|---|---|---|
-| 117 | [JR_west_117_shinkaisoku_moha117-15_akashi.ogg](https://commons.wikimedia.org/wiki/File:JR_west_117_shinkaisoku_moha117-15_akashi.ogg) (on board MoHa 117-15) | spaceaero2 | CC BY 3.0 | `motor_jr117`: 700–862 s |
-| 京成3300 (stand-in: Keikyu's first 1000 series) | [Keikyu_kyu1000kei_rokuon.ogg](https://commons.wikimedia.org/wiki/File:Keikyu_kyu1000kei_rokuon.ogg) | toshinori baba | Public domain | `motor_keisei3300`: 198–248 s |
-
-Motor, VVVF trains (E231, 銀座線1000, N700): the in-train sound calculated by a port of **VVVF Simulator**
+Motor, VVVF trains (E231, 京急新1000, 銀座線1000, N700): the in-train sound calculated by a port of **VVVF Simulator**
 (VvvfGeeks, https://github.com/VvvfGeeks/VVVF-Simulator; terms: free for non-commercial use only, link to the
 project; the owner approved the port on 2026-11-03): the inverter's PWM, the induction motor's torque ripple and the
 simulator's in-train impulse response (`Generation/Audio/TrainSound/Filter.wav` → `frontend/public/audio/vvvf-filter.wav`,
 unchanged). Code: `frontend/src/game/audio/vvvf/` (sim.ts, data.ts, math.ts are the port; checked sample by sample
 against the simulator's own C# files, `frontend/tools/vvvf-ref/`). Control patterns in the simulator's YAML format,
-`frontend/tools/vvvf/` → JSON in `audio/vvvf/patterns/`:
+`frontend/tools/vvvf/` → JSON in `audio/vvvf/patterns/`. CHM patterns also need the simulator's switching-angle
+tables (`Vvvf/SwitchAngle/*.bin`, solved by the simulator's authors; copied unchanged to
+`frontend/public/audio/vvvf-tables/`, the ones the patterns list: L2Chm3Alt1 … L2Chm15Default, 365 KB):
 
 | Train | Pattern | Source |
 |---|---|---|
 | E231 | `JRE_E231_MITSUBISHI` | VvvfGeeks / YAML-Files (https://github.com/VvvfGeeks/YAML-Files, fans' recreations, "not exactly the same as the original"; no licence file, used with credit and link, non-commercial) |
+| 京急新1000 | `N1000_SIEMENS_GTO` (the "ドレミファインバータ": asynchronous carrier in steps 175…400 Hz, then CHM 15 … 3, sync) | VvvfGeeks / YAML-Files |
 | 銀座線1000 | `JRW_207-2000_TOSHIBA_IGBT` (stand-in: no PMSM pattern published) | VvvfGeeks / YAML-Files |
 | N700 | `N700_ESTIMATE` (ours) | an estimate in the same format from public facts (3-level IGBT, ~1.5 kHz switching, ~25 s asynchronous after a start: Nagoya Univ. OCW lecture, Wikipedia) |
 
@@ -195,8 +205,7 @@ Running noise (always while moving; `TrainInfo.runningSound`, a seamless loop pl
 
 | Trains | Recording (Commons file) | Author | License | Loop |
 |---|---|---|---|---|
-| E231, 銀座線1000 | [TOSHIBA_Omi_imazu-Shin_asahi_M'_222-3031Dasei.ogg](https://commons.wikimedia.org/wiki/File:TOSHIBA_Omi_imazu-Shin_asahi_M%27_222-3031Dasei.ogg) (223-2000 coasting) | 321keiHIKARI (ja.wikipedia) | CC BY-SA 3.0 | `run_emu`: 22–88 s, ~110 km/h |
-| 117, 京成3300 | the 117 recording above | spaceaero2 | CC BY 3.0 | `run_jr117`: 898–962 s, ~105 km/h |
+| E231, 京急新1000, 銀座線1000 | [TOSHIBA_Omi_imazu-Shin_asahi_M'_222-3031Dasei.ogg](https://commons.wikimedia.org/wiki/File:TOSHIBA_Omi_imazu-Shin_asahi_M%27_222-3031Dasei.ogg) (223-2000 coasting) | 321keiHIKARI (ja.wikipedia) | CC BY-SA 3.0 | `run_emu`: 22–88 s, ~110 km/h |
 | N700 | [JR_central_700series_nozomi_387_717-53_shinosaka.ogg](https://commons.wikimedia.org/wiki/File:JR_central_700series_nozomi_387_717-53_shinosaka.ogg) (700 series, on board) | spaceaero2 | CC BY 3.0 | `run_n700`: 338–402 s, ~203 km/h |
 
 ### Cockroach model (joke entry, Sketchfab)

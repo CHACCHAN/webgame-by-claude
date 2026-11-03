@@ -11,28 +11,6 @@
       ]
     }
   },
-  "jr117": {
-    "dir": "jr117",
-    "config": {
-      "files": ["scene.gltf"], "axis": "x", "scale": [0.137, 0.137, 0.137], "frontAtMin": true,
-      "cars": [
-        { "file": 0, "from": -365.3, "to": -218.6 },
-        { "file": 0, "from": -72.5, "to": 73.8 },
-        { "file": 0, "from": -365.3, "to": -218.6, "flip": true }
-      ]
-    }
-  },
-  "keisei3300": {
-    "dir": ".",
-    "config": {
-      "files": ["keisei-tc1/scene.gltf", "keisei-m1/scene.gltf", "keisei-tc2/scene.gltf"], "axis": "z", "scale": [1, 1, 1],
-      "cars": [
-        { "file": 0, "from": -1, "to": 19 },
-        { "file": 1, "from": -1, "to": 19 },
-        { "file": 2, "from": -1, "to": 19 }
-      ]
-    }
-  },
   "ginza1000": {
     "dir": "ginza",
     "textureSize": 1024,

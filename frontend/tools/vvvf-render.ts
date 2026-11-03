@@ -8,8 +8,10 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { customPwmTables } from '../src/game/audio/vvvf/customPwm';
 import { normalizeVvvf } from '../src/game/audio/vvvf/data';
 import { roundEven, xorshift32 } from '../src/game/audio/vvvf/math';
+import { tableFiles } from './vvvf-tables';
 import { Domain, analyze, calculatedGearHarmonics, defaultTrainAudio, lineVoltageSample, realTimeFrequencyControl, trainSoundSample, type Mascon } from '../src/game/audio/vvvf/sim';
 
 const root = join(fileURLToPath(import.meta.url), '..', '..');
@@ -18,6 +20,7 @@ const data = normalizeVvvf(JSON.parse(readFileSync(join(root, 'src/game/audio/vv
 const audio = defaultTrainAudio();
 if (+g1 > 0) calculatedGearHarmonics(audio, +g1, +g2);
 const d = new Domain(audio.motor, xorshift32(+seed));
+d.customPwm = customPwmTables(tableFiles(data));
 const fs = +fsArg, calc = +calcArg, dt = 1 / fs;
 const m: Mascon = { FrequencyChangeRate: 0, IsBraking: false, IsFreeRunning: false };
 const lines = readFileSync(scen, 'utf8').split('\n');

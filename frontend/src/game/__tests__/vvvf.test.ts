@@ -1,6 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { convertPattern, patternFiles } from '../../../tools/vvvf-patterns';
+import { tableFiles } from '../../../tools/vvvf-tables';
+import { customPwmTables } from '../audio/vvvf/customPwm';
 import type { VvvfData } from '../audio/vvvf/data';
 import { BLOCK, VvvfEngine, decimationFilter, oversampleFor } from '../audio/vvvf/engine';
 import { roundEven, xorshift32 } from '../audio/vvvf/math';
@@ -19,12 +21,14 @@ describe('VVVF-Simulator port (audio/vvvf/sim.ts)', () => {
     for (const { yaml, json } of files) expect(readFileSync(json, 'utf8')).toBe(convertPattern(readFileSync(yaml, 'utf8')));
   });
 
-  // reference: the simulator's own C# files built as a console program (tools/vvvf-ref), float32 output
+  // reference: the simulator's own C# files built as a console program (tools/vvvf-ref), float32 output; the N1000
+  // case runs every CHM mode (switching-angle tables) under power and brake
   it.each(fixture.cases)('matches the C# build sample by sample: $pattern ($mode)', (c) => {
     const data = pattern(c.pattern);
     const audio = defaultTrainAudio();
     if (c.gear) calculatedGearHarmonics(audio, c.gear[0], c.gear[1]);
     const d = new Domain(audio.motor, xorshift32(fixture.seed));
+    d.customPwm = customPwmTables(tableFiles(data));
     const dt = 1 / fixture.fs, calc = fixture.calc;
     const m: Mascon = { FrequencyChangeRate: 0, IsBraking: false, IsFreeRunning: false };
     const f32 = new Float32Array(1);

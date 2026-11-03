@@ -1,5 +1,5 @@
 import type { MotorKind } from '../vehicle/trains';
-import { vvvfDrive, type TrainVvvf } from '../vehicle/vvvf';
+import { SLIP_RISE, vvvfDrive, type TrainVvvf } from '../vehicle/vvvf';
 import { RecordingFollower, RunningLoop } from './TrainRecordings';
 import { SIM_RATE, type VvvfDrive } from './vvvf/engine';
 
@@ -36,7 +36,7 @@ export class TrainSound {
   private rollFilter: BiquadFilterNode;
   private load = 0;
   private follower: RecordingFollower | null = null;
-  private vvvf: { node: AudioWorkletNode; v: TrainVvvf; wheel: number; drive: VvvfDrive } | null = null;
+  private vvvf: { node: AudioWorkletNode; v: TrainVvvf; wheel: number; drive: VvvfDrive; notch: 1 | -1 | 0; slipShare: number } | null = null;
   private running: RunningLoop | null = null;
   private lastT = 0;
   private disposed = false;
@@ -93,6 +93,12 @@ export class TrainSound {
       case 'igbt':
         if (speed < 0.12) return 1050;
         break;
+      case 'gto': {
+        // Siemens GTO (Keikyu N1000, "do-re-mi-fa"): the asynchronous carrier steps through a scale, then holds
+        const hz = speed * this.vmax * 1.22;
+        if (hz < 24) return hz < 0.5 ? 175 : hz < 1.5 ? 196 : hz < 2 ? 223 : hz < 2.7 ? 233 : hz < 3.4 ? 262 : hz < 4.3 ? 294 : hz < 5 ? 311 : hz < 5.6 ? 350 : 400;
+        break;
+      }
       case 'chopper':
         return 660;
       case 'resistor':
@@ -132,13 +138,15 @@ export class TrainSound {
     // the simulator convolves at 192 kHz: the same response at the context's rate sums proportionally fewer taps
     gain.gain.value = ((VVVF_BODY.db === 0 ? 0.35 : VVVF_GAIN) * SIM_RATE) / this.ctx.sampleRate;
     node.connect(conv).connect(body).connect(gain).connect(this.out);
-    this.vvvf = { node, v, wheel, drive: { hz: 0, rotorHz: 0, braking: false, powerOff: true } };
+    this.vvvf = { node, v, wheel, drive: { hz: 0, rotorHz: 0, braking: false, powerOff: true }, notch: 0, slipShare: 0 };
   }
 
-  /** speed and notch → the worklet's k-rate parameters (it smooths them itself) */
-  private driveVvvf(kmh: number, notch: 1 | -1 | 0) {
+  /** speed and notch → the worklet's k-rate parameters (it smooths them itself); the torque builds up over SLIP_RISE */
+  private driveVvvf(kmh: number, notch: 1 | -1 | 0, dt: number) {
     const s = this.vvvf!;
-    const d = vvvfDrive(s.v, s.wheel, kmh, notch, s.drive.braking, s.drive);
+    s.slipShare = notch === 0 || notch !== s.notch ? 0 : Math.min(1, s.slipShare + dt / SLIP_RISE);
+    s.notch = notch;
+    const d = vvvfDrive(s.v, s.wheel, kmh, notch, s.drive.braking, s.drive, s.slipShare);
     const t = this.ctx.currentTime;
     const prm = s.node.parameters;
     prm.get('hz')!.setValueAtTime(d.hz, t);
@@ -170,7 +178,7 @@ export class TrainSound {
     const recorded = !!this.follower || !!this.vvvf;
     const dir = throttle > 0.05 ? 1 : brake > 0.05 ? -1 : 0;
     this.follower?.update(kmh, dir, lv * (throttle > 0.05 ? 1 : 0.7), dt);
-    if (this.vvvf) this.driveVvvf(kmh, dir);
+    if (this.vvvf) this.driveVvvf(kmh, dir, dt);
     this.running?.update(kmh);
     this.gear.frequency.setTargetAtTime(Math.max(20, mesh), t, 0.02);
     // (the recordings carry the real gear whine)

@@ -5,11 +5,12 @@
  * `Modulation/SVM.cs`, `DeltaSigma.cs`, `CustomPwm.GetPwm`), the induction motor (`Model/Motor.cs`), the in-train
  * sound (`Generation/Audio/TrainSound/Audio.cs`) and the real-time frequency control
  * (`Generation/Audio/RealTime.cs`). Terms of use of the original: free for non-commercial use, link to it.
- * Left out: the CHM / SHE switching-angle tables (30 MB, used by none of the game's trains: those modes are silent,
- * as in the simulator before its tables load). Checked sample by sample against the C# build (vvvf.test.ts).
+ * The CHM / SHE switching-angle tables (`customPwm.ts`) are loaded per pattern, only the ones it uses (the simulator's
+ * 30 MB of them stay out). Checked sample by sample against the C# build (vvvf.test.ts).
  * DOM-free: runs in the AudioWorklet (vvvf.worklet.ts) and in Node.
  */
 import { ALT, type AmplitudeParameter, type FunctionValue, type JerkSettings, type PulseControl, type PulseDataKey, type VvvfData } from './data';
+import { CustomPwm, customPwmName } from './customPwm';
 import {
   M_2PI, M_2PI_3, M_2_PI, M_PI, M_PI_2, M_PI_3, M_PI_4, M_PI_6, M_SQRT3, M_SQRT3_2,
   compareTo, dotnetSort, roundEven, saw, sine, square, toInt, triangle,
@@ -460,6 +461,11 @@ export class Domain {
   readonly baseWave = new BaseWave();
   readonly carrier: Carrier;
   readonly deltaSigma = [new DeltaSigma(), new DeltaSigma(), new DeltaSigma()];
+  /** CHM / SHE switching-angle tables by name (customPwm.ts), as loaded for the pattern */
+  customPwm: Record<string, CustomPwm | undefined> = {};
+  customPwmFor: object | null = null;
+  customPwmLevel = 0;
+  customPwmNow: CustomPwm | undefined;
   /** the last phase state (CalculatePhsaseState) */
   U = 0;
   V = 0;
@@ -1092,6 +1098,17 @@ function l3Sync(d: Domain, ip: number, phase: number): number {
   return modulate(sineVal, carrierVal + 0.5) + modulate(sineVal, carrierVal - 0.5);
 }
 
+/** the CHM / SHE table of the current pulse mode (GetCustomPwm; none loaded → the mode is silent, as in the simulator) */
+function customPwmOf(d: Domain) {
+  const es = d.es, pm = es.pattern!.PulseMode;
+  if (d.customPwmFor !== pm || d.customPwmLevel !== es.pwmLevel) {
+    d.customPwmFor = pm;
+    d.customPwmLevel = es.pwmLevel;
+    d.customPwmNow = d.customPwm[customPwmName(es.pwmLevel, pm.PulseType, pm.PulseCount, pm.Alternative)];
+  }
+  return d.customPwmNow;
+}
+
 /** CalculatePhsaseState: the three legs' levels (0…2) into d.U / d.V / d.W, then the motor runs one step */
 export function calculatePhaseState(d: Domain, ip: number) {
   const es = d.es;
@@ -1117,8 +1134,16 @@ export function calculatePhaseState(d: Domain, ip: number) {
         U = l2DeltaSigma(d, ip, 0);
         V = l2DeltaSigma(d, ip, 1);
         W = l2DeltaSigma(d, ip, 2);
+      } else {
+        // CHM / SHE (FromCustomPwm)
+        const t = customPwmOf(d);
+        if (t) {
+          const m = es.baseWaveAmplitude!;
+          U = t.getPwm(m, baseWaveX(d, 0, ip));
+          V = t.getPwm(m, baseWaveX(d, 1, ip));
+          W = t.getPwm(m, baseWaveX(d, 2, ip));
+        }
       }
-      // CHM / SHE: no switching tables (zero output)
     } else {
       if (type === 'ASYNC') {
         d.carrier.processCarrierFrequency(d.t, es);
@@ -1135,6 +1160,14 @@ export function calculatePhaseState(d: Domain, ip: number) {
         U = l3Sync(d, ip, 0);
         V = l3Sync(d, ip, 1);
         W = l3Sync(d, ip, 2);
+      } else {
+        const t = customPwmOf(d);
+        if (t) {
+          const m = es.baseWaveAmplitude!;
+          U = t.getPwm(m, baseWaveX(d, 0, ip));
+          V = t.getPwm(m, baseWaveX(d, 1, ip));
+          W = t.getPwm(m, baseWaveX(d, 2, ip));
+        }
       }
     }
   }

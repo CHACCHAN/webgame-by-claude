@@ -13,7 +13,8 @@ import { xorshift32 } from '../src/game/audio/vvvf/math';
 import { BLOCK, SIM_RATE, VvvfEngine, oversampleFor } from '../src/game/audio/vvvf/engine';
 import { trainVvvfAudio } from '../src/game/audio/vvvf/train';
 import { TRAIN_INFO, type TrainId } from '../src/game/vehicle/trains';
-import { vvvfDrive } from '../src/game/vehicle/vvvf';
+import { SLIP_RISE, vvvfDrive } from '../src/game/vehicle/vvvf';
+import { tableFiles } from './vvvf-tables';
 
 const root = join(fileURLToPath(import.meta.url), '..', '..');
 
@@ -181,15 +182,19 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   const rate = opt('--rate', 48000);
   const os = opt('--os', oversampleFor(rate));
   const data = normalizeVvvf(JSON.parse(readFileSync(join(root, 'src/game/audio/vvvf/patterns', v.pattern + '.json'), 'utf8')));
-  const engine = new VvvfEngine(data, trainVvvfAudio(v), rate, os, xorshift32(), !args.includes('--free'));
+  const engine = new VvvfEngine(data, trainVvvfAudio(v), rate, os, xorshift32(), !args.includes('--free'), tableFiles(data));
   const profile = runProfile(id, opt('--top', Math.min(info.vmax, 110)), opt('--coast', 4));
   const n = profile.length * BLOCK;
   const raw = new Float32Array(n);
   let braking = false;
+  // the torque builds up as in the game (TrainSound.driveVvvf)
+  let slipShare = 0, lastNotch: 1 | 0 | -1 = 0;
   const t0 = performance.now();
   for (let b = 0; b < profile.length; b++) {
     const p = profile[b];
-    vvvfDrive(v, info.wheel, p.kmh, p.notch, braking, engine.drive);
+    slipShare = p.notch === 0 || p.notch !== lastNotch ? 0 : Math.min(1, slipShare + BLOCK / rate / SLIP_RISE);
+    lastNotch = p.notch;
+    vvvfDrive(v, info.wheel, p.kmh, p.notch, braking, engine.drive, slipShare);
     braking = engine.drive.braking;
     engine.process(raw.subarray(b * BLOCK, (b + 1) * BLOCK));
   }

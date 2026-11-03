@@ -56,22 +56,40 @@ export const N700_ESTIMATE: TrainVvvf = {
   source: 'N700系は公開情報からの独自の推定（3レベルIGBT・約1.5kHz）',
 };
 
+/**
+ * Keikyu New 1000, 1st and 2nd batch (2002–2003): Siemens SIBAS32 GTO, the "do-re-mi-fa inverter" (asynchronous
+ * carrier stepping through a scale at the start, then CHM 15 … 3 pulses). Gear 83:14.
+ */
+export const KEIKYU_N1000_GTO: TrainVvvf = {
+  pattern: 'N1000_SIEMENS_GTO',
+  gear: [14, 83],
+  polePairs: 2,
+  slip: 2,
+  source: '京急新1000形 1・2次車 シーメンスGTO（YAML-Files N1000_SIEMENS_GTO）',
+};
+
 /** inverter output Hz per km/h at no slip: wheel rev/s × gear ratio × pole pairs */
 export const hzPerKmh = (v: TrainVvvf, wheel: number) => ((v.gear[1] / v.gear[0]) * v.polePairs) / (Math.PI * wheel) / 3.6;
 
 /** below this speed (km/h) the electric brake hands over to the air brake: the inverter shuts down */
 export const ELECTRIC_BRAKE_FADE = 3;
 
+/** seconds the torque (the slip) takes to build up when power or the electric brake comes on (a train's jerk limit) */
+export const SLIP_RISE = 0.8;
+
 /**
  * The inverter's drive at a speed and notch (1 power, −1 brake, 0 coast). Coasting keeps the last direction's
  * pattern (as the simulator's notch N) with the gates off; the voltage then ramps down at the pattern's own rate.
+ * `slipShare`: how far the torque has built up (0…1, see SLIP_RISE): from standstill the inverter starts at 0 Hz,
+ * so a pattern's lowest steps (the N1000's first notes) are heard.
  */
-export function vvvfDrive(v: TrainVvvf, wheel: number, kmh: number, notch: 1 | 0 | -1, wasBraking: boolean, out: VvvfDrive) {
+export function vvvfDrive(v: TrainVvvf, wheel: number, kmh: number, notch: 1 | 0 | -1, wasBraking: boolean, out: VvvfDrive, slipShare = 1) {
   const rotor = Math.max(0, kmh) * hzPerKmh(v, wheel);
   const brakeOn = notch === -1 && kmh >= ELECTRIC_BRAKE_FADE;
+  const slip = v.slip * Math.min(1, Math.max(0, slipShare));
   out.rotorHz = rotor;
   out.braking = notch === 0 ? wasBraking : notch === -1;
   out.powerOff = !(notch === 1 || brakeOn);
-  out.hz = notch === 1 ? rotor + v.slip : brakeOn ? Math.max(0, rotor - v.slip) : rotor;
+  out.hz = notch === 1 ? rotor + slip : brakeOn ? Math.max(0, rotor - slip) : rotor;
   return out;
 }

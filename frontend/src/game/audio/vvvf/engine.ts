@@ -7,6 +7,7 @@
  * DOM-free: runs in the AudioWorklet (vvvf.worklet.ts) and in Node (tools/vvvf-train-wav.ts, tests).
  */
 import type { VvvfData } from './data';
+import { customPwmTables } from './customPwm';
 import { M_2PI } from './math';
 import { Domain, analyze, gameFrequencyControl, trainSoundSample, type MotorSpec, type Rng, type TrainAudio } from './sim';
 
@@ -83,11 +84,14 @@ export class VvvfEngine {
     rng: Rng = Math.random,
     /** the rotor turns with the wheels (else, as in the simulator, it runs free on its own torque) */
     readonly pinRotor = true,
+    /** the CHM / SHE switching-angle tables the pattern lists in `CustomPwm` (name → .bin bytes) */
+    tables: Record<string, ArrayBuffer> = {},
   ) {
     this.os = oversample;
     // the train's mass turns the motor: its speed follows the wheels, not its own torque
     const motor: MotorSpec = pinRotor ? { ...audio.motor, Inertia: 1e9 } : audio.motor;
     this.d = new Domain(motor, rng);
+    this.d.customPwm = customPwmTables(tables);
     this.dt = 1 / (sampleRate * oversample);
     // the ripple is a per-sample difference (∝ dt): at another rate it scales back to the simulator's 192 kHz
     this.teScale = 1 / (SIM_RATE * this.dt);

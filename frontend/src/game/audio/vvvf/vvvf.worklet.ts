@@ -1,7 +1,7 @@
 /**
  * AudioWorklet processor 'vvvf-sim': a train's in-train VVVF sound (engine.ts: VVVF-Simulator's calculation),
  * bundled by Vite (`?worker&url`, audio/AudioEngine.ts). Options: { data: the control pattern, audio: the motor and
- * gear sounds, oversample }. k-rate parameters, read once per 128-frame block: hz (inverter output), rotor (the
+ * gear sounds, oversample, tables: the pattern's CHM / SHE switching angles }. k-rate parameters, read once per 128-frame block: hz (inverter output), rotor (the
  * motor's electrical frequency from the wheels), braking and power (0 / 1). Message 'stop' ends the processor.
  */
 import type { VvvfData } from './data';
@@ -19,6 +19,8 @@ export interface VvvfProcessorOptions {
   data: VvvfData;
   audio: TrainAudio;
   oversample: number;
+  /** the CHM / SHE switching-angle tables of the pattern (name → .bin bytes) */
+  tables: Record<string, ArrayBuffer>;
 }
 
 class VvvfSimProcessor extends AudioWorkletProcessor {
@@ -37,7 +39,7 @@ class VvvfSimProcessor extends AudioWorkletProcessor {
   constructor(options: { processorOptions: VvvfProcessorOptions }) {
     super();
     const o = options.processorOptions;
-    this.engine = new VvvfEngine(o.data, o.audio, sampleRate, o.oversample);
+    this.engine = new VvvfEngine(o.data, o.audio, sampleRate, o.oversample, Math.random, true, o.tables);
     this.port.onmessage = (e: MessageEvent) => {
       if (e.data === 'stop') this.alive = false;
     };

@@ -21,9 +21,13 @@ docker run --rm -u $(id -u):$(id -g) -e HOME=/tmp -e DOTNET_CLI_HOME=/tmp -v "$P
 docker run --rm -u $(id -u):$(id -g) -e HOME=/tmp -e DOTNET_CLI_HOME=/tmp -v "$PWD/..:/t" -w /t/vvvf-ref \
   mcr.microsoft.com/dotnet/sdk:10.0 dotnet bin/RefSim.dll ../vvvf/JRE_E231_MITSUBISHI.yaml e231.f32 train scenario-test.txt 96000 256 14 99
 cd ../.. && npx tsx tools/vvvf-render.ts JRE_E231_MITSUBISHI train tools/vvvf-ref/scenario-test.txt 96000 256 /tmp/e231-js.f32 14 99
-# then compare the two float32 files; the fixture: node tools/vvvf-ref/fixture.cjs (see its header)
+# then compare the two float32 files; the fixture (three cases):
+# node tools/vvvf-ref/fixture.cjs src/game/__tests__/fixtures/vvvf-ref.json JRE_E231_MITSUBISHI train 14 99 e231.f32 \
+#   JRW_207-2000_TOSHIBA_IGBT line 0 0 w207.f32 N1000_SIEMENS_GTO train 14 83 n1000.f32
 ```
 
-Last check (2026-11-03, simulator commit fb8d0c9): E231 Mitsubishi in-train sound with gear 14:99 and
-JR West 207-2000 Toshiba line voltage, 16.5 s at 96 kHz: identical in float32; at 192 kHz over 75 s
-(power, coast, re-power, brake) the largest difference was 6e-11.
+Last check (2026-11-03, simulator commit fb8d0c9): E231 Mitsubishi in-train sound with gear 14:99,
+JR West 207-2000 Toshiba line voltage and Keikyu N1000 Siemens GTO in-train sound with gear 14:83 (async
+"do-re-mi" start, then CHM 15 … 3 under power and brake: the switching-angle tables), 16.5 s at 96 kHz:
+identical in float32; at 192 kHz over 75 s (power, coast, re-power, brake) the largest difference was 6e-11.
+`Program.cs` loads the tables (`CustomPwmPresets.Load`) before it starts.
