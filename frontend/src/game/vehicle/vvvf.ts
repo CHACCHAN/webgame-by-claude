@@ -74,13 +74,18 @@ export const hzPerKmh = (v: TrainVvvf, wheel: number) => ((v.gear[1] / v.gear[0]
 /** below this speed (km/h) the electric brake hands over to the air brake: the inverter shuts down */
 export const ELECTRIC_BRAKE_FADE = 3;
 
-/** seconds the torque (the slip) takes to build up when power or the electric brake comes on (a train's jerk limit) */
-export const SLIP_RISE = 0.8;
+/**
+ * Seconds a train's tractive effort (and with it the inverter's slip) takes to build up after a notch-on, and the
+ * electric brake's: a real EMU's jerk limit (~0.8 m/s³ at 3.5 km/h/s). `VehicleSim.traction` applies it to the
+ * physics. Measured on recordings of the Keikyu's start (Commons `Keikyun1000.ogg`, `Keikyu2100.ogg`): the doremifa
+ * takes 1.35–1.7 s from its first note to the top G; with this ramp the game's takes ~1.55 s (0.85 s without).
+ */
+export const TRACTION_RISE = 1.2;
 
 /**
  * The inverter's drive at a speed and notch (1 power, −1 brake, 0 coast). Coasting keeps the last direction's
  * pattern (as the simulator's notch N) with the gates off; the voltage then ramps down at the pattern's own rate.
- * `slipShare`: how far the torque has built up (0…1, see SLIP_RISE): from standstill the inverter starts at 0 Hz,
+ * `slipShare`: how far the torque has built up (0…1, see TRACTION_RISE): from standstill the inverter starts at 0 Hz,
  * so a pattern's lowest steps (the N1000's first notes) are heard.
  */
 export function vvvfDrive(v: TrainVvvf, wheel: number, kmh: number, notch: 1 | 0 | -1, wasBraking: boolean, out: VvvfDrive, slipShare = 1) {

@@ -1,5 +1,5 @@
 import type { MotorKind } from '../vehicle/trains';
-import { SLIP_RISE, vvvfDrive, type TrainVvvf } from '../vehicle/vvvf';
+import { TRACTION_RISE, vvvfDrive, type TrainVvvf } from '../vehicle/vvvf';
 import { RecordingFollower, RunningLoop } from './TrainRecordings';
 import { SIM_RATE, type VvvfDrive } from './vvvf/engine';
 
@@ -141,12 +141,16 @@ export class TrainSound {
     this.vvvf = { node, v, wheel, drive: { hz: 0, rotorHz: 0, braking: false, powerOff: true }, notch: 0, slipShare: 0 };
   }
 
-  /** speed and notch → the worklet's k-rate parameters (it smooths them itself); the torque builds up over SLIP_RISE */
-  private driveVvvf(kmh: number, notch: 1 | -1 | 0, dt: number) {
+  /**
+   * speed and notch → the worklet's k-rate parameters (it smooths them itself). The torque builds up over
+   * TRACTION_RISE; under power it is also capped by `share` (the player's train passes `VehicleSim.traction`, which
+   * ramps the same way, and a part notch; others pass their throttle).
+   */
+  private driveVvvf(kmh: number, notch: 1 | -1 | 0, dt: number, share: number) {
     const s = this.vvvf!;
-    s.slipShare = notch === 0 || notch !== s.notch ? 0 : Math.min(1, s.slipShare + dt / SLIP_RISE);
+    s.slipShare = notch === 0 || notch !== s.notch ? 0 : Math.min(1, s.slipShare + dt / TRACTION_RISE);
     s.notch = notch;
-    const d = vvvfDrive(s.v, s.wheel, kmh, notch, s.drive.braking, s.drive, s.slipShare);
+    const d = vvvfDrive(s.v, s.wheel, kmh, notch, s.drive.braking, s.drive, notch === 1 ? Math.min(s.slipShare, share) : s.slipShare);
     const t = this.ctx.currentTime;
     const prm = s.node.parameters;
     prm.get('hz')!.setValueAtTime(d.hz, t);
@@ -178,7 +182,7 @@ export class TrainSound {
     const recorded = !!this.follower || !!this.vvvf;
     const dir = throttle > 0.05 ? 1 : brake > 0.05 ? -1 : 0;
     this.follower?.update(kmh, dir, lv * (throttle > 0.05 ? 1 : 0.7), dt);
-    if (this.vvvf) this.driveVvvf(kmh, dir, dt);
+    if (this.vvvf) this.driveVvvf(kmh, dir, dt, throttle);
     this.running?.update(kmh);
     this.gear.frequency.setTargetAtTime(Math.max(20, mesh), t, 0.02);
     // (the recordings carry the real gear whine)

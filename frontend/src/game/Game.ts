@@ -1080,7 +1080,8 @@ export class Game {
       if (this.audio && !this.paused) {
         const e = this.audio.engine('player', sim.spec);
         if (e.blowOff(sim.input.throttle, sim.boost)) this.audio.blowOff();
-        e.update(sim.rpm, sim.input.throttle, sim.boost, 1, sim.spec.engine.redline, sim.input.brake);
+        // a train's sound follows its tractive effort (it builds up after a notch-on, as in VehicleSim)
+        e.update(sim.rpm, sim.spec.train ? sim.traction : sim.input.throttle, sim.boost, 1, sim.spec.engine.redline, sim.input.brake);
         let skid = 0;
         for (const w of sim.wheels) if (w.grounded) skid = Math.max(skid, w.skid);
         this.audio.updateTyres(skid, sim.speed);

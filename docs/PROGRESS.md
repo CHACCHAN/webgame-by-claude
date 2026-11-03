@@ -2,6 +2,22 @@
 
 Newest first. "Verified" means actually executed in this environment; anything else is marked as unverified.
 
+## Session 6c (2026-11-03) — the doremifa takes as long as on the real train (owner: "it reaches the F too fast")
+
+- Measured on Commons recordings (pitch track of the spectrogram, first note F → top G): `Keikyun1000.ogg` ~1.35 s,
+  `Keikyu2100.ogg` ~1.7 s. The game took 0.85 s: the trains reached full tractive effort at once and only the sound's
+  slip ramped in (`SLIP_RISE` 0.8 s).
+- **Traction ramp in the physics** (`VehicleSim.traction`): a train's tractive effort follows the notch at a limited
+  rate, `TRACTION_RISE` = 1.2 s to full (fades at twice that rate after a notch-off, so a quick re-notch keeps most of it;
+  the brake, the grid hold and a respawn cut it). The VVVF's slip follows the same share (`TrainSound.driveVvvf`,
+  `Game` hands the sound `sim.traction`), so sound and push build up together. `SLIP_RISE` is gone.
+  Verified: the game's whole chain rendered offline in Chrome (`tools/vvvf-game-wav.ts keikyu1000`), pitch track:
+  first F at 1.52 s, top G at 3.08 s → **1.56 s**; `tools/vvvf-train-wav.ts` uses the same ramp.
+- Medals of all four trains re-simulated (tools/sim-run.ts, legend AI): clean laps moved by −2…+3 % (the AI's own
+  spread); runs with respawns keep their earlier medals (see the comment above `TRAIN_MEDALS`).
+  朧峠 keikyu 145.40 / ginza 151.33; 霧降湖 e231 126.27, keikyu 121.21, ginza 131.28, n700 119.68; 天狼 keikyu 118.31.
+- Checks: `tsc -b` clean, vitest 50/50, `vite build`.
+
 ## Session 6b (2026-11-03) — Keikyu N1000 "doremifa" modelled in Blender; 117 and 京成3300 retired (owner's requests; deployed)
 
 - Owner: "as a test of building models with Blender MCP, make the Keikyu 1000 doremifa", then "retire the 117 and the

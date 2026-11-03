@@ -103,7 +103,8 @@ pending. `docs/PLAN.md` holds the design.
   simulator's YAML (`tools/vvvf/*.yaml`; after editing run `npx tsx tools/vvvf-patterns.ts`, the test checks the
   JSONs; CHM patterns list their switching-angle tables in `CustomPwm`: the simulator's `.bin` files in
   `public/audio/vvvf-tables/`, `audio/vvvf/customPwm.ts`; a missing table fails the script and silences that train's
-  VVVF). The slip ramps in over `SLIP_RISE` after a notch change, so a start sweeps up from 0 Hz (the Keikyu doremifa).
+  VVVF). A train's tractive effort builds up over `TRACTION_RISE` after a notch-on (jerk limit, `VehicleSim.traction`;
+  the sound's slip follows it), so a start sweeps up from 0 Hz (the Keikyu doremifa, ~1.5 s as on recordings).
   `sim.ts` / `data.ts` / `math.ts` / `customPwm.ts` are a line-by-line port: keep them so (C# semantics: banker's rounding,
   `List.Sort`); `vvvf.test.ts` compares with the C# build's output (`tools/vvvf-ref/README.md` to regenerate). Others
   follow a recording of a start by speed (`motorSound`: clip + [s, km/h] points, `audio/TrainRecordings.ts`); all loop

@@ -1,6 +1,7 @@
 import { Quaternion, Vector3 } from 'three';
 import { clamp, damp, lerp, smoothstep } from '../util/math';
 import { type CarSpec, torqueAt } from './carSpecs';
+import { TRACTION_RISE } from './vvvf';
 import { GROUP_CAR, GROUP_GROUND, GROUP_PROXY, GROUP_WALL, PhysicsWorld, RAPIER, groups } from './PhysicsWorld';
 
 export interface VehicleInput {
@@ -84,6 +85,8 @@ export class VehicleSim {
   /** time since the current drift began (entry: lighter yaw damping) */
   private driftAge = 0;
   private lastHandbrake = false;
+  /** trains: the share of the notch's tractive effort in use (0…1, follows the notch at a limited rate, TRACTION_RISE) */
+  traction = 0;
   /** time since the throttle was last below half (a stab — lift, then floor it — starts a power-over) */
   private sinceLift = 9;
   /** how long the brake pedal has been held firmly (a short tap with a big steer is a feint) */
@@ -189,6 +192,7 @@ export class VehicleSim {
     this.gear = 1;
     this.rpm = this.spec.engine.idleRpm;
     this.wheelSpin = 0;
+    this.traction = 0;
     for (const w of this.wheels) {
       w.compression = 0;
       w.angularVelocity = speed / this.spec.wheelRadius;
@@ -262,6 +266,16 @@ export class VehicleSim {
         this.reverseTimer = 0;
       }
     } else this.reverseTimer = 0;
+
+    // a train's tractive effort follows the notch at a limited rate (its jerk limit): it builds up over TRACTION_RISE
+    // and fades in half that after a notch-off (a quick re-notch keeps most of it); the brake or the grid hold cut it
+    if (spec.train) {
+      const want = throttle > 0.02 ? throttle : 0;
+      if (inp.hold || brake > 0.1) this.traction = 0;
+      else if (want >= this.traction) this.traction = Math.min(want, this.traction + dt / TRACTION_RISE);
+      else this.traction = Math.max(want, this.traction - (2 * dt) / TRACTION_RISE);
+      throttle = this.traction;
+    }
 
     this.shiftCooldown = Math.max(0, this.shiftCooldown - dt);
     if (this.shiftTimer > 0) {

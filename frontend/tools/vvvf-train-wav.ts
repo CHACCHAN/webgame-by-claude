@@ -13,7 +13,7 @@ import { xorshift32 } from '../src/game/audio/vvvf/math';
 import { BLOCK, SIM_RATE, VvvfEngine, oversampleFor } from '../src/game/audio/vvvf/engine';
 import { trainVvvfAudio } from '../src/game/audio/vvvf/train';
 import { TRAIN_INFO, type TrainId } from '../src/game/vehicle/trains';
-import { SLIP_RISE, vvvfDrive } from '../src/game/vehicle/vvvf';
+import { TRACTION_RISE, vvvfDrive } from '../src/game/vehicle/vvvf';
 import { tableFiles } from './vvvf-tables';
 
 const root = join(fileURLToPath(import.meta.url), '..', '..');
@@ -151,9 +151,11 @@ export function runProfile(id: TrainId, top: number, coast: number) {
     time += dt;
   };
   while (time < 1.5) push(0);
-  while (v < top) {
+  // the tractive effort builds up over TRACTION_RISE (as VehicleSim.traction)
+  for (let share = 0; v < top; ) {
     push(1);
-    v += accel(v) * dt;
+    share = Math.min(1, share + dt / TRACTION_RISE);
+    v += accel(v) * share * dt;
   }
   for (const end = time + coast; time < end; ) {
     push(0);
@@ -192,7 +194,7 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   const t0 = performance.now();
   for (let b = 0; b < profile.length; b++) {
     const p = profile[b];
-    slipShare = p.notch === 0 || p.notch !== lastNotch ? 0 : Math.min(1, slipShare + BLOCK / rate / SLIP_RISE);
+    slipShare = p.notch === 0 || p.notch !== lastNotch ? 0 : Math.min(1, slipShare + BLOCK / rate / TRACTION_RISE);
     lastNotch = p.notch;
     vvvfDrive(v, info.wheel, p.kmh, p.notch, braking, engine.drive, slipShare);
     braking = engine.drive.braking;

@@ -122,28 +122,27 @@ export const DEFAULT_COURSE: CourseId = 'oboro-downhill';
 
 /**
  * Medal times of the trains (joke entries) per course: gold = the legend AI's time with that train
- * (tools/sim-run.ts, 2026-11-03), silver +7 %, bronze +16 %. Runs where the AI could not stop in time and
- * respawned (N700 on 朧峠; E231 on 天狼) were replaced by their clean earlier runs or an estimate.
- * With the road grip per course (`surface`) the 霧降湖 and 天狼 medals of cars and trains were scaled by its mean
- * effect on the legend AI's laps (×1.014 and ×0.995). The Keikyu N1000 came later (same date, already with the
- * road grip): 147.93 / 119.33 / 118.73 s, no respawns.
+ * (tools/sim-run.ts, with the course's road grip), silver +7 %, bronze +16 %. Re-run on 2026-11-03 after the trains'
+ * tractive effort got its jerk-limited build-up (`TRACTION_RISE`): the clean laps moved by −2…+3 %, the AI's own
+ * spread. Runs where the AI could not stop in time and respawned (E231 and N700 on 朧峠; E231, Ginza 1000 and N700
+ * on 天狼) keep their earlier medals (clean runs or an estimate).
  */
 export const TRAIN_MEDALS: Record<CourseId, Record<TrainId, { gold: number; silver: number; bronze: number }>> = {
   'oboro-downhill': {
     e231: { gold: 151_500, silver: 162_000, bronze: 175_500 },
-    keikyu1000: { gold: 148_000, silver: 158_500, bronze: 171_500 },
-    ginza1000: { gold: 147_500, silver: 158_000, bronze: 171_000 },
+    keikyu1000: { gold: 145_500, silver: 155_500, bronze: 169_000 },
+    ginza1000: { gold: 151_500, silver: 162_000, bronze: 175_500 },
     n700: { gold: 148_000, silver: 158_500, bronze: 171_500 },
   },
   'kirifuri-lakeside': {
-    e231: { gold: 128_500, silver: 137_500, bronze: 148_500 },
-    keikyu1000: { gold: 119_500, silver: 128_000, bronze: 138_500 },
-    ginza1000: { gold: 130_500, silver: 139_500, bronze: 151_000 },
-    n700: { gold: 116_000, silver: 124_000, bronze: 135_000 },
+    e231: { gold: 126_500, silver: 135_500, bronze: 146_500 },
+    keikyu1000: { gold: 121_000, silver: 129_500, bronze: 140_500 },
+    ginza1000: { gold: 131_500, silver: 140_500, bronze: 152_500 },
+    n700: { gold: 119_500, silver: 128_000, bronze: 138_500 },
   },
   'tenrou-skyline': {
     e231: { gold: 127_000, silver: 136_000, bronze: 147_500 },
-    keikyu1000: { gold: 119_000, silver: 127_500, bronze: 138_000 },
+    keikyu1000: { gold: 118_500, silver: 127_000, bronze: 137_500 },
     ginza1000: { gold: 126_500, silver: 135_500, bronze: 146_500 },
     n700: { gold: 124_500, silver: 133_500, bronze: 144_500 },
   },
