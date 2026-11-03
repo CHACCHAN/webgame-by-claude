@@ -145,8 +145,6 @@ async function enterRoom(room: RoomState) {
   const me = room.players.find((p) => p.id === st().player?.id);
   if (me) st().set({ carId: me.car_id });
   useSettings.getState().set({ courseId: room.track_id as CourseId });
-  // on the room's channel while loading: the others see who is still loading, and a full room keeps this player
-  connectRealtime(room.code);
   if (game && game.course.id !== room.track_id) {
     app.set({ loading: { progress: 0, label: '' } });
     app.go('loading');
@@ -159,6 +157,8 @@ async function enterRoom(room: RoomState) {
   useApp.getState().set({ mode: 'online' });
   useApp.getState().go('onlineRoom');
   hookGame();
+  // after loading: building a course blocks the page long enough for the socket to give up on its first try
+  connectRealtime(room.code);
   startPolling();
   applyRoom(room);
   if (st().room?.code === room.code) applyRoom(await api.rooms.setReady(onlinePlayer(), room.code));

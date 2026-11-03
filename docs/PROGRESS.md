@@ -20,8 +20,9 @@ Newest first. "Verified" means actually executed in this environment; anything e
   course; the guest only connected to the room after loading, so it saw the start late or after the green light.
 - `room_players.ready` (migration): set by the client after loading the course (`PATCH /rooms/{code}/me`,
   re-sent by the room poll if that failed), reset on a rejoin; `start` refuses with 409 while anyone is not ready
-  (after dropping members no longer on the presence channel). Clients join the room's channel before loading.
-  Room screen: "ロード中…" next to such players, the start button says it is waiting.
+  (after dropping members no longer on the presence channel). Room screen: "ロード中…" next to such players, the
+  start button says it is waiting. (Joining the room's socket before loading was tried: building the course blocks
+  the page so long that the socket gave up and fell back to wss, failing on plain http — so it still joins after.)
 - Rooms keep the host's `time_of_day` (migration, validated, default night): everyone races in the same conditions.
 
 ### Race setup order, settings, car list
