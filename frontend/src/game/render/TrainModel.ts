@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { CarSpec } from '../vehicle/carSpecs';
-import type { Livery, TrainInfo } from '../vehicle/trains';
+import type { LampPair, Livery, TrainInfo } from '../vehicle/trains';
 import { createCarMaterials, type CarRig } from './CarModel';
 
 /**
@@ -40,6 +40,8 @@ export interface TrainRig {
   /** place the cars behind the anchor (the leading bogie, at road level) along its driven path */
   update(anchor: THREE.Object3D): void;
   setLivery(color: string): void;
+  /** interior lights behind the side windows (0 = off, 1 = night) */
+  setInterior(level: number): void;
 }
 
 /** Path driven by the leading bogie: points every half metre, newest last, about 70 m kept. */
@@ -291,6 +293,64 @@ function materials(t: TrainInfo, liv: Livery) {
   };
 }
 
+/** brightness of the lit side windows at night */
+const WINDOW_GLOW = 1.5;
+
+/**
+ * Night interior light of a model car: texels that are dark, face sideways and lie in the window band glow
+ * (the models bake their windows into textures or plain dark colours, so there is no glass part to light).
+ * `toCar`: the mesh's transform into the car's frame (meshopt quantization leaves a scale on every mesh).
+ */
+function lightWindows(mat: THREE.Material, uniforms: { uWinGlow: { value: number }; uWinBand: { value: THREE.Vector3 } }, toCar: THREE.Matrix4) {
+  const own = { uToCar: { value: toCar }, uToCarN: { value: new THREE.Matrix3().getNormalMatrix(toCar) } };
+  mat.onBeforeCompile = (shader) => {
+    Object.assign(shader.uniforms, uniforms, own);
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nuniform mat4 uToCar;\nuniform mat3 uToCarN;\nvarying vec3 vCarPos;\nvarying vec3 vCarNrm;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvCarPos = (uToCar * vec4(position, 1.0)).xyz;\nvCarNrm = uToCarN * normal;');
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', '#include <common>\nuniform float uWinGlow;\nuniform vec3 uWinBand;\nvarying vec3 vCarPos;\nvarying vec3 vCarNrm;')
+      .replace(
+        '#include <emissivemap_fragment>',
+        /* glsl */ `#include <emissivemap_fragment>
+        float winLum = dot(diffuseColor.rgb, vec3(0.2126, 0.7152, 0.0722));
+        float win = (1.0 - smoothstep(uWinBand.z * 0.3, uWinBand.z, winLum)) * smoothstep(0.6, 0.85, abs(normalize(vCarNrm).x))
+          * smoothstep(uWinBand.x - 0.02, uWinBand.x + 0.04, vCarPos.y) * (1.0 - smoothstep(uWinBand.y - 0.04, uWinBand.y + 0.02, vCarPos.y));
+        totalEmissiveRadiance += uWinGlow * win * vec3(1.0, 0.93, 0.8);`,
+      );
+  };
+  mat.customProgramCacheKey = () => 'train-windows';
+}
+
+/**
+ * Lenses for a pair of lamps on a model's cab end (`end` 1 = front, -1 = rear): each sits on the surface a ray from
+ * ahead of the cab hits, a hair off it and facing out. Returns the lens centres (car frame).
+ */
+export function fitLamps(car: THREE.Object3D, pair: LampPair, end: number, carLength: number, mat: THREE.Material) {
+  car.updateMatrixWorld(true);
+  const meshes: THREE.Object3D[] = [];
+  car.traverse((o) => {
+    if ((o as THREE.Mesh).isMesh) meshes.push(o);
+  });
+  const geo = pair.round ? new THREE.CircleGeometry(0.5, 20).scale(pair.w, pair.h, 1) : new THREE.PlaneGeometry(pair.w, pair.h);
+  const ray = new THREE.Raycaster();
+  const out: THREE.Vector3[] = [];
+  for (const s of [1, -1]) {
+    ray.set(new THREE.Vector3(s * pair.x, pair.y, end * (carLength / 2 + 3)), new THREE.Vector3(0, 0, -end));
+    const hit = ray.intersectObjects(meshes, false)[0];
+    if (!hit) continue;
+    const n = hit.face ? hit.face.normal.clone().transformDirection(hit.object.matrixWorld) : new THREE.Vector3(0, 0, end);
+    // the models are double-sided: face the lens towards the side the ray came from
+    if (n.z * end < 0) n.negate();
+    const lens = new THREE.Mesh(geo, mat);
+    lens.position.copy(hit.point).addScaledVector(n, 0.015);
+    lens.lookAt(_c.copy(lens.position).add(n));
+    car.add(lens);
+    out.push(lens.position.clone());
+  }
+  return out;
+}
+
 export function buildTrain(spec: CarSpec, opts: { bodyColor?: string } = {}): CarRig & { train: TrainRig } {
   const t = spec.train!;
   const pick = (c?: string) => t.liveries.find((l) => l.band === c) ?? (c ? { ...t.liveries[0], band: c, band2: c } : t.liveries[0]);
@@ -316,6 +376,8 @@ export function buildTrain(spec: CarSpec, opts: { bodyColor?: string } = {}): Ca
   root.add(consist);
   const cars: THREE.Group[] = [];
   const model = models.get(spec.id);
+  // window band (y from, to) and the luminance up to which a texel there is window
+  const windows = { uWinGlow: { value: 0 }, uWinBand: { value: new THREE.Vector3(...(t.lamps?.windows ?? [0, 0]), t.lamps?.windowLum ?? 0.1) } };
   for (let k = 0; k < TRAIN.cars; k++) {
     const car = new THREE.Group();
     car.matrixAutoUpdate = false;
@@ -323,10 +385,12 @@ export function buildTrain(spec: CarSpec, opts: { bodyColor?: string } = {}): Ca
       // the model's car (shared geometry, own copies of the materials so ghosts can recolour them)
       const piece = model[k].clone(true);
       piece.position.set(0, 0, 0);
+      piece.updateMatrixWorld(true);
       piece.traverse((o) => {
         const m = o as THREE.Mesh;
         if (!m.isMesh) return;
         m.material = (m.material as THREE.Material).clone();
+        if (t.lamps) lightWindows(m.material as THREE.Material, windows, m.matrixWorld.clone());
         m.castShadow = true;
         m.receiveShadow = true;
       });
@@ -380,6 +444,9 @@ export function buildTrain(spec: CarSpec, opts: { bodyColor?: string } = {}): Ca
       m.band2.color.set(liv.band2 ?? liv.band);
       if (t.body === 'painted') m.body.color.set(liv.body ?? '#f2f1ea');
     },
+    setInterior(level) {
+      windows.uWinGlow.value = level * WINDOW_GLOW;
+    },
   };
 
   // headlights on the leading car (its own frame: the nose at +carLength/2), so in a bend they turn with the body;
@@ -390,6 +457,12 @@ export function buildTrain(spec: CarSpec, opts: { bodyColor?: string } = {}): Ca
     headlights: [new THREE.Vector3(0.95, 1.42, nose), new THREE.Vector3(-0.95, 1.42, nose)],
     taillights: [] as THREE.Vector3[],
   };
+  // a model's own lamps are only painted on: glowing lenses over them (head lamps lead, tail lamps trail)
+  if (model && t.lamps) {
+    const head = fitLamps(cars[0], t.lamps.head, 1, t.carLength, carMats.headlight);
+    if (head.length) anchors.headlights = head;
+    anchors.taillights = fitLamps(cars[TRAIN.cars - 1], t.lamps.tail, -1, t.carLength, carMats.taillight);
+  }
   return { root, body, wheels, materials: carMats, headlightTargets: [], anchors, train, lampParent: cars[0] };
 }
 

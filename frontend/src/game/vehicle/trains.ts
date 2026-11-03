@@ -22,6 +22,15 @@ export interface Livery {
 /** Face of the procedural stand-in body (used when the model is missing). */
 export type FrontStyle = 'e235' | 'e231' | 'tobu50000' | 'tobu60000' | 'tobu8000' | 'tobu10000' | 'tobu30000' | 'jnr103';
 
+/** A pair of lamps on a cab face (mirrored across the centre line): centre and size in metres; round = ellipse. */
+export interface LampPair {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  round?: boolean;
+}
+
 export interface TrainInfo {
   series: string;
   operator: string;
@@ -55,6 +64,12 @@ export interface TrainInfo {
   bogies: number;
   front: FrontStyle;
   liveries: Livery[];
+  /**
+   * Lights of the model (car-local, measured on head-on renders): head lamps on the leading cab, tail lamps on the
+   * trailing cab (put on the surface by a ray from ahead), and the height band of the side windows lit at night
+   * with the brightness (linear luminance) up to which a texel there counts as window (default 0.1).
+   */
+  lamps?: { head: LampPair; tail: LampPair; windows: [number, number]; windowLum?: number };
 }
 
 /**
@@ -69,6 +84,8 @@ export const TRAIN_INFO: Record<TrainId, TrainInfo & { name: string; tagline: st
     accel: 2.5, vmax: 120, brake: [4.2, 4.5], mass: 79.8, motor: 'MT73 95kW×4', control: 'IGBT-VVVFインバータ（3レベル・三菱電機）', sound: 'igbt3',
     gearRatio: 7.07, wheel: 0.86, body: 'stainless', width: 2.95, carLength: 20, bogies: 13.8, front: 'e231',
     liveries: [{ name: '中央・総武線（黄1号）', band: '#ffd400' }],
+    // head and tail lamps share one unit under the windscreen
+    lamps: { head: { x: 0.85, y: 1.19, w: 0.24, h: 0.14 }, tail: { x: 0.85, y: 1.19, w: 0.24, h: 0.14 }, windows: [1.78, 2.77] },
     model: { title: 'JR東日本E231系電車', author: 'own.guest', url: 'https://sketchfab.com/3d-models/98d47a9e4aca454d9c02eb2c690fdaee', license: 'CC BY 4.0' },
   },
   jr117: {
@@ -79,6 +96,7 @@ export const TRAIN_INFO: Record<TrainId, TrainInfo & { name: string; tagline: st
     accel: 2.0, vmax: 115, brake: [3.5, 5.0], mass: 115.5, motor: 'MT54D 120kW×4（直流直巻）', control: '抵抗制御（直並列・弱め界磁）', sound: 'resistor',
     gearRatio: 4.82, wheel: 0.86, body: 'painted', width: 2.9, carLength: 20, bogies: 13.8, front: 'jnr103',
     liveries: [{ name: 'サンライナー（白＋赤帯）', body: '#f2efe8', band: '#f2efe8', band2: '#d8261c' }],
+    lamps: { head: { x: 0.56, y: 1.99, w: 0.22, h: 0.22, round: true }, tail: { x: 1.0, y: 1.3, w: 0.18, h: 0.18, round: true }, windows: [1.94, 2.85], windowLum: 0.4 },
     model: { title: '117系 サンライナー | 117 series『Sun Liner』', author: 'own.guest', url: 'https://sketchfab.com/3d-models/6434932c06974d10927c2fe36c2c7f8e', license: 'CC BY 4.0' },
   },
   keisei3300: {
@@ -87,6 +105,7 @@ export const TRAIN_INFO: Record<TrainId, TrainInfo & { name: string; tagline: st
     accel: 3.5, vmax: 110, brake: [4.0, 4.5], mass: 99, massEstimated: true, motor: '100kW×4（全電動車）', control: '抵抗制御', sound: 'resistor',
     gearRatio: 6.06, wheel: 0.86, body: 'painted', width: 2.8, carLength: 18, bogies: 12.6, front: 'jnr103',
     liveries: [{ name: '赤電（ファイヤーオレンジ＋モーンアイボリー）', body: '#e05a1a', band: '#e05a1a', band2: '#efe3c4' }],
+    lamps: { head: { x: 0.8, y: 1.84, w: 0.22, h: 0.22 }, tail: { x: 1.1, y: 1.84, w: 0.22, h: 0.22 }, windows: [2.09, 3.08] },
     model: { title: '京成3300形(赤電) 先頭車1・中間車1・先頭車2', author: 'V3B4', url: 'https://sketchfab.com/V3B4', license: 'CC BY-NC 4.0' },
   },
   ginza1000: {
@@ -95,6 +114,8 @@ export const TRAIN_INFO: Record<TrainId, TrainInfo & { name: string; tagline: st
     accel: 3.3, vmax: 80, brake: [4.0, 4.5], mass: 82.3, massEstimated: true, motor: 'MM-S2B 120kW（永久磁石同期電動機）', control: 'IGBT-VVVFインバータ（東芝）', sound: 'igbt',
     gearRatio: 7.79, wheel: 0.78, body: 'painted', width: 2.55, carLength: 16, bogies: 10.3, front: 'tobu10000',
     liveries: [{ name: 'レモンイエロー', body: '#f2b705', band: '#f2b705', band2: '#c8102e' }],
+    // the head lamps sit high on the roof dome
+    lamps: { head: { x: 0.16, y: 3.28, w: 0.26, h: 0.26, round: true }, tail: { x: 1.05, y: 1.19, w: 0.15, h: 0.15, round: true }, windows: [1.8, 2.82], windowLum: 0.32 },
     model: { title: 'Japan Train Tokyo Metro Ginza Line (low poly)', author: 'ditovirnantio', url: 'https://sketchfab.com/3d-models/dc622d519f8d4b7ab1fd478815d129f8', license: 'CC BY 4.0' },
   },
   n700: {
@@ -105,6 +126,8 @@ export const TRAIN_INFO: Record<TrainId, TrainInfo & { name: string; tagline: st
     accel: 2.6, vmax: 330, brake: [2.7, 3.64], mass: 134, massEstimated: true, motor: '305kW×4（かご形三相誘導電動機）', control: 'PWMコンバータ＋IGBT-VVVFインバータ', sound: 'igbt',
     gearRatio: 2.79, wheel: 0.86, body: 'painted', width: 3.36, carLength: 25, bogies: 17.5, front: 'e231',
     liveries: [{ name: '白＋青帯', body: '#f4f5f6', band: '#1f3d8f' }],
+    // lamps low on the sides of the nose
+    lamps: { head: { x: 0.85, y: 1.05, w: 0.36, h: 0.12, round: true }, tail: { x: 0.85, y: 1.05, w: 0.36, h: 0.12, round: true }, windows: [1.72, 2.26] },
     model: { title: 'N700-3000 Series Shinkansen', author: 'Layo', url: 'https://sketchfab.com/3d-models/f70820be44e0467d8b1614f2aa3045bd', license: 'CC BY 4.0' },
   },
 };
@@ -169,6 +192,8 @@ export function trainSpec(id: TrainId): CarSpec {
     driftiness: 0.05,
     stats: { power: Math.min(10, Math.max(1, power)), grip: 4, drift: 0, weight: 1 },
     colors: { body: t.liveries[0].band, accent: '#2a2d33' },
+    // a train's tail lamps are its only red light at night: brighter than a car's position lamps
+    tailLampGain: 1.6,
     model: t.model,
     train: t,
   };

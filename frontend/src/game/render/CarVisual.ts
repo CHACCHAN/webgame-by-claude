@@ -69,9 +69,10 @@ export class CarVisual {
     else if (spec.popUpLamps && this.rig.fromModel && !opts.ghost) this.buildPods(spec.popUpLamps);
 
     if (opts.headlights && !opts.ghost) {
-      const front = this.rig.anchors.headlights[0]?.z ?? 2;
+      // a train's lamps can sit back on a long nose: its light starts at the tip, clear of the body's shadow
+      const front = spec.train ? spec.train.carLength / 2 + 0.2 : (this.rig.anchors.headlights[0]?.z ?? 2);
       const spot = new THREE.SpotLight('#fff1dc', 260, 140, 0.48, 0.55, 1.4);
-      spot.position.set(0, 0.75, front + 0.1);
+      spot.position.set(0, spec.train ? 1.1 : 0.75, front + 0.1);
       spot.target.position.set(0, -0.4, front + 30);
       spot.castShadow = opts.shadows;
       spot.shadow.mapSize.set(1024, 1024);
@@ -113,8 +114,10 @@ export class CarVisual {
       if (this.pods.length) spot.position.y = sources[0].y;
       for (const hl of sources) {
         const cone = new THREE.Mesh(new THREE.ConeGeometry(3.2, 22, 24, 1, true), beamMat);
-        cone.rotation.x = -Math.PI / 2 - 0.05;
-        cone.position.set(hl.x, hl.y, hl.z + 11);
+        // apex at the lamp, dipping towards the road 22 m ahead (more from high lamps, e.g. a train's roof lamps)
+        const dip = clamp((hl.y - 0.3) / 22, 0.03, 0.15);
+        cone.rotation.x = -Math.PI / 2 + dip;
+        cone.position.set(hl.x, hl.y - 11 * Math.sin(dip), hl.z + 11 * Math.cos(dip));
         lamps.add(cone);
         this.beams.push(cone);
       }
@@ -128,6 +131,7 @@ export class CarVisual {
   setHeadlights(on: number, instant = false) {
     this.lightLevel = on;
     this.tailBase = on >= LIGHTS_ON ? 3.4 : 0.9;
+    this.rig.train?.setInterior(on >= LIGHTS_ON ? 1 : 0);
     if (this.pods.length) {
       this.podTarget = on >= LIGHTS_ON ? 1 : 0;
       if (instant) this.podOpen = this.podTarget;

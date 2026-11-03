@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import * as THREE from 'three';
 import { CAR_SPECS } from '../vehicle/carSpecs';
 import { TRAIN_ORDER } from '../vehicle/trains';
-import { buildTrain, TRAIN } from '../render/TrainModel';
+import { buildTrain, fitLamps, TRAIN } from '../render/TrainModel';
 
 /** Car centres (world) of a built train after its anchor drove along `path`. */
 function drive(path: (t: number) => { p: THREE.Vector3; heading: number }, steps: number) {
@@ -74,6 +74,28 @@ describe('trains', () => {
       worst = Math.max(worst, fwd.angleTo(beam));
     }
     expect(worst).toBeLessThan(0.01);
+  });
+
+  it("a model's lamps sit on its cab faces, facing out (a sloped nose too)", () => {
+    const mat = new THREE.MeshBasicMaterial();
+    // a box car 20 m long, and a car whose nose slopes back 45° below 2 m
+    const flat = new THREE.Group();
+    flat.add(new THREE.Mesh(new THREE.BoxGeometry(2.8, 3.6, 20).translate(0, 1.8, 0), mat));
+    const head = fitLamps(flat, { x: 0.8, y: 1.2, w: 0.2, h: 0.2 }, 1, 20, mat);
+    expect(head).toHaveLength(2);
+    for (const p of head) expect(p.z).toBeCloseTo(10.015, 3);
+    expect(head.map((p) => p.x).sort()).toEqual([-0.8, 0.8]);
+    const tail = fitLamps(flat, { x: 1.1, y: 1.2, w: 0.2, h: 0.2 }, -1, 20, mat);
+    for (const p of tail) expect(p.z).toBeCloseTo(-10.015, 3);
+    const nose = new THREE.Group();
+    const wedge = new THREE.BoxGeometry(2.8, 4, 4).rotateX(Math.PI / 4).translate(0, 0, 10);
+    nose.add(new THREE.Mesh(wedge, mat));
+    fitLamps(nose, { x: 0.5, y: 0.5, w: 0.3, h: 0.1 }, 1, 20, mat);
+    const lens = nose.children[1];
+    const out = new THREE.Vector3(0, 0, 1).applyQuaternion(lens.quaternion);
+    // on the 45° face: facing forward and up alike
+    expect(out.z).toBeCloseTo(Math.SQRT1_2, 2);
+    expect(Math.abs(out.y)).toBeCloseTo(Math.SQRT1_2, 2);
   });
 
   it('backing up pulls the cars back along the same path', () => {
