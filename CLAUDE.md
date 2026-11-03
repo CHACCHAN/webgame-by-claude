@@ -93,10 +93,15 @@ pending. `docs/PLAN.md` holds the design.
   `frontAtMin` / `flip`), then with `vite preview` on :4173: `node tools/import-trains.cjs <srcRoot> [ids]`.
   The models' lamps are only painted on: `TrainInfo.lamps` (head/tail lamp positions measured on head-on renders,
   lenses put on the surface by a ray; the side-window band and its luminance limit for the night interior glow).
-  Sound (`audio/TrainSound.ts`): VVVF trains synthesise the inverter from `TrainInfo.vvvf` (`vehicle/vvvf.ts`
-  patterns → `public/audio/vvvf-worklet.js`); others follow a recording of a start by speed (`motorSound`: clip +
-  [s, km/h] points, `audio/TrainRecordings.ts`); all loop `runningSound` by speed. Check a change by rendering
-  the sound alone through an OfflineAudioContext (update() at 30 Hz via `suspend`), not by ear only. Medals: `TRAIN_MEDALS` in courses.ts (re-run tools/sim-run.ts
+  Sound (`audio/TrainSound.ts`): VVVF trains run a port of VVVF-Simulator (`audio/vvvf/`: AudioWorklet `vvvf-sim`
+  at ~192 kHz → the simulator's impulse response `public/audio/vvvf-filter.wav` → body EQ `VVVF_BODY`), driven by
+  `TrainInfo.vvvf` (`vehicle/vvvf.ts`: pattern name, gear teeth, poles, slip; `vvvfDrive`). Patterns are the
+  simulator's YAML (`tools/vvvf/*.yaml`; after editing run `npx tsx tools/vvvf-patterns.ts`, the test checks the
+  JSONs). `sim.ts` / `data.ts` / `math.ts` are a line-by-line port: keep them so (C# semantics: banker's rounding,
+  `List.Sort`); `vvvf.test.ts` compares with the C# build's output (`tools/vvvf-ref/README.md` to regenerate). Others
+  follow a recording of a start by speed (`motorSound`: clip + [s, km/h] points, `audio/TrainRecordings.ts`); all loop
+  `runningSound` by speed. Check a change by rendering, not by ear only: `tools/vvvf-train-wav.ts` (Node, inverter only,
+  levels per speed band) and `tools/vvvf-game-wav.ts` (Chrome + vite preview: the game's whole chain, offline). Medals: `TRAIN_MEDALS` in courses.ts (re-run tools/sim-run.ts
   with the train ids after physics or course changes). `CAR_ORDER` = cars only (AI, bots, GLBs), `VEHICLE_ORDER` =
   cars + trains (player-facing lists); the backend's `game.cars` lists both.
 - The cockroach (joke entry, `vehicle/roach.ts`, id `roach`, last in `VEHICLE_ORDER`): a car-like sim on one fixed

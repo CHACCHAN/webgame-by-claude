@@ -4,7 +4,7 @@
  * below is the share of the top speed (motor rpm / redline: one fixed ratio).
  */
 export class BugSound {
-  private ctx: AudioContext;
+  private ctx: BaseAudioContext;
   readonly out: GainNode;
   private ticks: AudioBufferSourceNode;
   private tickGain: GainNode;
@@ -15,7 +15,7 @@ export class BugSound {
   private airGain: GainNode;
   private airFilter: BiquadFilterNode;
 
-  constructor(ctx: AudioContext, noise: AudioBuffer, destination: AudioNode) {
+  constructor(ctx: BaseAudioContext, noise: AudioBuffer, destination: AudioNode) {
     this.ctx = ctx;
     this.out = ctx.createGain();
     this.out.gain.value = 0;

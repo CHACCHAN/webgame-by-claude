@@ -1,0 +1,6 @@
+# test: power 0->70 Hz at 10 Hz/s, coast, power again, coast, brake down at 10 Hz/s
+7 P 10
+1 N 0
+0.5 P 0
+0.5 N 0
+7.5 B 10

@@ -119,20 +119,20 @@ describe('trains', () => {
     }
   });
 
-  it('the VVVF patterns: E231 runs asynchronous with a rising carrier, then 3-pulse, then 1-pulse at full voltage', async () => {
-    const { E231_MITSUBISHI, vvvfAt } = await import('../vehicle/vvvf');
-    // 7.07 gear, 0.86 m wheels, 4-pole motors: ~1.45 Hz per km/h
-    expect(E231_MITSUBISHI.hzPerKmh).toBeCloseTo(1.454, 2);
-    const at = (f: number) => vvvfAt(E231_MITSUBISHI.power, f);
-    expect(at(1)).toMatchObject({ pulses: 0, carrier: 198 });
-    expect(at(8).carrier).toBeCloseTo(198 + (460 - 198) / 2, 0);
-    expect(at(24.5).carrier).toBeCloseTo(670, 0);
-    expect(at(45).pulses).toBe(3);
-    expect(at(60)).toMatchObject({ pulses: 1, carrier: 0 });
-    expect(at(10).amp).toBeLessThan(at(30).amp);
-    expect(at(60).amp).toBeGreaterThan(1);
-    // braking keeps the asynchronous carrier longer
-    expect(vvvfAt(E231_MITSUBISHI.brake, 45)).toMatchObject({ pulses: 0, carrier: 1000 });
+  it('the VVVF drive: speed → inverter Hz from gear, wheel and poles; slip under power and braking; coasting keeps the brake pattern', async () => {
+    const { E231_MITSUBISHI, hzPerKmh, vvvfDrive } = await import('../vehicle/vvvf');
+    // 99:14 gear, 0.86 m wheels, 4-pole motors: ~1.45 Hz per km/h
+    const k = hzPerKmh(E231_MITSUBISHI, 0.86);
+    expect(k).toBeCloseTo(1.454, 2);
+    const d = { hz: 0, rotorHz: 0, braking: false, powerOff: true };
+    expect(vvvfDrive(E231_MITSUBISHI, 0.86, 50, 1, false, d)).toMatchObject({ braking: false, powerOff: false });
+    expect(d.hz).toBeCloseTo(50 * k + 2, 6);
+    expect(vvvfDrive(E231_MITSUBISHI, 0.86, 50, -1, false, d)).toMatchObject({ braking: true, powerOff: false });
+    expect(d.hz).toBeCloseTo(50 * k - 2, 6);
+    expect(vvvfDrive(E231_MITSUBISHI, 0.86, 50, 0, true, d)).toMatchObject({ braking: true, powerOff: true });
+    expect(d.hz).toBeCloseTo(d.rotorHz, 6);
+    expect(vvvfDrive(E231_MITSUBISHI, 0.86, 2, -1, true, d)).toMatchObject({ braking: true, powerOff: true });
+    expect(vvvfDrive(E231_MITSUBISHI, 0.86, 0, 1, false, d).hz).toBeCloseTo(2, 6);
   });
 
   it('backing up pulls the cars back along the same path', () => {

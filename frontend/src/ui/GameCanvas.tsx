@@ -60,6 +60,31 @@ function GameBridge() {
         for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode(...buf.subarray(i, i + 0x8000));
         return { b64: btoa(bin), stats };
       };
+      // dev hook for tools/vvvf-game-wav.cjs: a vehicle's sound as the game drives it, rendered offline. `plan`: one
+      // [seconds, km/h, throttle, brake] per update (the game calls update once per frame); returns float32 as base64
+      w.__renderTrainSound = async (id: CarId, plan: [number, number, number, number][], rate = 48000) => {
+        const [{ AudioEngine }, { CAR_SPECS }] = await Promise.all([import('../game/audio/AudioEngine'), import('../game/vehicle/carSpecs')]);
+        const spec = CAR_SPECS[id];
+        const seconds = plan[plan.length - 1][0] + 0.5;
+        const ctx = new OfflineAudioContext(1, Math.ceil(seconds * rate), rate);
+        const audio = new AudioEngine(ctx);
+        const e = audio.engine('player', spec);
+        await audio.loaded();
+        const redline = spec.engine.redline, vmax = spec.train?.vmax ?? 300;
+        for (const [t, kmh, throttle, brake] of plan) {
+          void ctx.suspend(Math.round((t * rate) / 128) * (128 / rate)).then(() => {
+            e.update((kmh / vmax) * redline, throttle, 0, 1, redline, brake);
+            void ctx.resume();
+          }, () => undefined);
+        }
+        const t0 = performance.now();
+        const buf = await ctx.startRendering();
+        const ms = performance.now() - t0;
+        const bytes = new Uint8Array(buf.getChannelData(0).buffer);
+        let bin = '';
+        for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+        return { b64: btoa(bin), ms };
+      };
       w.__previewCar = async (url: string, rotation?: [number, number, number]) => {
         const { previewCarModel } = await import('../game/render/carImport');
         return previewCarModel(url, rotation);

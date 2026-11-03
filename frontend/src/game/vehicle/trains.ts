@@ -1,5 +1,5 @@
 import type { CarSpec } from './carSpecs';
-import { E231_MITSUBISHI, GINZA_TOSHIBA_STANDIN, N700_APPROX, type VvvfPattern } from './vvvf';
+import { E231_MITSUBISHI, GINZA_TOSHIBA_STANDIN, N700_ESTIMATE, type TrainVvvf } from './vvvf';
 
 /**
  * Joke entries: three-car trains driven on the pass. The performance is the real train's (starting acceleration,
@@ -86,8 +86,8 @@ export interface TrainInfo {
   /** running noise (wheels, rails, rumble) heard whenever the train moves: a loop (public/audio/<file>.mp3, its seamless
    * window `loop` in s) recorded at `speed` km/h, played faster or slower with the speed */
   runningSound?: { file: string; loop: [number, number]; speed: number; gain?: number; credit: SoundCredit };
-  /** VVVF inverter: synthesised from this control pattern (instead of a motor recording) */
-  vvvf?: VvvfPattern;
+  /** VVVF inverter: VVVF-Simulator's calculation on a control pattern (instead of a motor recording) */
+  vvvf?: TrainVvvf;
 }
 
 /**
@@ -104,7 +104,7 @@ export const TRAIN_INFO: Record<TrainId, TrainInfo & { name: string; tagline: st
     liveries: [{ name: '中央・総武線（黄1号）', band: '#ffd400' }],
     // head and tail lamps share one unit under the windscreen
     lamps: { head: { x: 0.85, y: 1.19, w: 0.24, h: 0.14 }, tail: { x: 0.85, y: 1.19, w: 0.24, h: 0.14 }, windows: [1.78, 2.77] },
-    // the inverter synthesised from its control pattern (vehicle/vvvf.ts)
+    // the in-train sound calculated from the inverter's control pattern (vehicle/vvvf.ts, audio/vvvf)
     vvvf: E231_MITSUBISHI,
     runningSound: {
       file: 'run_emu', loop: [0.3, 63.3], speed: 110,
@@ -158,7 +158,7 @@ export const TRAIN_INFO: Record<TrainId, TrainInfo & { name: string; tagline: st
     liveries: [{ name: 'レモンイエロー', body: '#f2b705', band: '#f2b705', band2: '#c8102e' }],
     // the head lamps sit high on the roof dome
     lamps: { head: { x: 0.16, y: 3.28, w: 0.26, h: 0.26, round: true }, tail: { x: 1.05, y: 1.19, w: 0.15, h: 0.15, round: true }, windows: [1.8, 2.82], windowLum: 0.32 },
-    // the inverter synthesised from its control pattern (vehicle/vvvf.ts): a Toshiba stand-in (no PMSM pattern exists)
+    // the in-train sound calculated from a control pattern (vehicle/vvvf.ts): a Toshiba stand-in (no PMSM pattern exists)
     vvvf: GINZA_TOSHIBA_STANDIN,
     runningSound: {
       file: 'run_emu', loop: [0.3, 63.3], speed: 110,
@@ -176,8 +176,8 @@ export const TRAIN_INFO: Record<TrainId, TrainInfo & { name: string; tagline: st
     liveries: [{ name: '白＋青帯', body: '#f4f5f6', band: '#1f3d8f' }],
     // lamps low on the sides of the nose
     lamps: { head: { x: 0.85, y: 1.05, w: 0.36, h: 0.12, round: true }, tail: { x: 0.85, y: 1.05, w: 0.36, h: 0.12, round: true }, windows: [1.72, 2.26] },
-    // the inverter synthesised from its control pattern (vehicle/vvvf.ts): an approximation (none published)
-    vvvf: N700_APPROX,
+    // the in-train sound calculated from a control pattern (vehicle/vvvf.ts): our estimate (none published)
+    vvvf: N700_ESTIMATE,
     runningSound: {
       file: 'run_n700', loop: [0.3, 61.3], speed: 203,
       credit: { title: '700系 のぞみ 車内走行音', author: 'spaceaero2', license: 'CC BY 3.0', url: 'https://commons.wikimedia.org/wiki/File:JR_central_700series_nozomi_387_717-53_shinosaka.ogg' },

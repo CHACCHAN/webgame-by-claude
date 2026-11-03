@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>VvvfSimulator</RootNamespace>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <Optimize>true</Optimize>
+    <NoWarn>CS8602;CS8604;CS8618;CS8625;CS0168;CS0219;CS8600;CS8603;CS8629</NoWarn>
+  </PropertyGroup>
+  <PropertyGroup><S Condition="'$(S)' == ''">../src/VVVF-Simulator/VvvfSimulator/</S></PropertyGroup>
+  <ItemGroup>
+    <Compile Include="$(S)Data/Util.cs;$(S)Data/Vvvf/Struct.cs;$(S)Data/Vvvf/Analyze.cs;$(S)Data/Vvvf/Manager.cs;$(S)Data/Vvvf/Util.cs;$(S)Data/TrainAudio/Struct.cs" />
+    <Compile Include="$(S)Vvvf/MyMath.cs;$(S)Vvvf/Model/Config.cs;$(S)Vvvf/Model/Motor.cs;$(S)Vvvf/Model/Struct.cs" />
+    <Compile Include="$(S)Vvvf/Calculation/Common.cs;$(S)Vvvf/Calculation/L2.cs;$(S)Vvvf/Calculation/L3.cs" />
+    <Compile Include="$(S)Vvvf/Modulation/BaseWave.cs;$(S)Vvvf/Modulation/CustomPwm.cs;$(S)Vvvf/Modulation/DeltaSigma.cs;$(S)Vvvf/Modulation/SVM.cs" />
+    <EmbeddedResource Include="$(S)Vvvf/SwitchAngle/*.bin" LogicalName="VvvfSimulator.Vvvf.SwitchAngle.%(Filename)%(Extension)" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="NAudio.Core" Version="2.2.1" />
+    <PackageReference Include="YamlDotNet" Version="16.3.0" />
+  </ItemGroup>
+</Project>

@@ -1,18 +1,27 @@
 import type { MotorKind } from '../vehicle/trains';
-import { vvvfAt, type VvvfPattern } from '../vehicle/vvvf';
+import { vvvfDrive, type TrainVvvf } from '../vehicle/vvvf';
 import { RecordingFollower, RunningLoop } from './TrainRecordings';
+import { SIM_RATE, type VvvfDrive } from './vvvf/engine';
+
+/**
+ * The VVVF in-train sound after the simulator's impulse response, whose body resonance (150–350 Hz, ~25 dB above
+ * 100 Hz and 500 Hz) makes the synchronous few-pulse modes (their 6f torque ripple sits there) ~20 dB louder than the
+ * rest: a peaking cut there (dB, 0 = as the simulator), and the level (the loudest then peaks near 0.4).
+ */
+export const VVVF_BODY = { db: -15, hz: 230, q: 0.8 };
+const VVVF_GAIN = 1.4;
 
 /**
  * Traction sound of a train (joke entries). Always, while it moves: running noise (a recorded loop once loaded,
- * `setRunning`; else synthesised rumble). Under power or braking the equipment sings on top: a VVVF inverter
- * synthesised from its control pattern (`setVvvf`: the PWM voltage itself, public/audio/vvvf-worklet.js), or a
- * recording of the real train pulling away followed at the point matching the speed (`setRecording`,
- * audio/TrainRecordings.ts), or until one is ready a simple synthesis: carrier tones stepping through the pulse
- * modes, a chopper's steady tone, or the growl of DC motors on resistance control. `speed` below is the motor speed
- * as a share of the design top speed.
+ * `setRunning`; else synthesised rumble). Under power or braking the equipment sings on top: a VVVF train's in-train
+ * sound calculated by VVVF-Simulator's model from the inverter's control pattern (`setVvvf`: audio/vvvf, an
+ * AudioWorklet, then the simulator's impulse response), or a recording of the real train pulling away followed at
+ * the point matching the speed (`setRecording`, audio/TrainRecordings.ts), or until one is ready a simple synthesis:
+ * carrier tones stepping through the pulse modes, a chopper's steady tone, or the growl of DC motors on resistance
+ * control. `speed` below is the motor speed as a share of the design top speed.
  */
 export class TrainSound {
-  private ctx: AudioContext;
+  private ctx: BaseAudioContext;
   readonly out: GainNode;
   private gear: OscillatorNode;
   private gearGain: GainNode;
@@ -27,11 +36,12 @@ export class TrainSound {
   private rollFilter: BiquadFilterNode;
   private load = 0;
   private follower: RecordingFollower | null = null;
-  private vvvf: { node: AudioWorkletNode; gain: GainNode; pattern: VvvfPattern; sent: string } | null = null;
+  private vvvf: { node: AudioWorkletNode; v: TrainVvvf; wheel: number; drive: VvvfDrive } | null = null;
   private running: RunningLoop | null = null;
   private lastT = 0;
+  private disposed = false;
 
-  constructor(ctx: AudioContext, private kind: MotorKind, noise: AudioBuffer, destination: AudioNode, private vmax: number) {
+  constructor(ctx: BaseAudioContext, private kind: MotorKind, noise: AudioBuffer, destination: AudioNode, private vmax: number) {
     this.ctx = ctx;
     this.out = ctx.createGain();
     this.out.gain.value = 0;
@@ -94,50 +104,52 @@ export class TrainSound {
 
   /** A recording of the equipment pulling away and its [seconds, km/h] speed points (vehicle/trains.ts). */
   setRecording(buffer: AudioBuffer, knots: [number, number][], gain = 1) {
+    if (this.disposed) return;
     const out = this.ctx.createGain();
     out.gain.value = 0.9 * gain;
     out.connect(this.out);
     this.follower = new RecordingFollower(this.ctx, out, buffer, knots);
   }
 
-  /** The inverter synthesis (an AudioWorkletNode of 'vvvf') driven by a control pattern. */
-  setVvvf(node: AudioWorkletNode, pattern: VvvfPattern) {
-    // the motor's windings smooth the voltage: no fundamental rumble, softened edges
-    const hp = this.ctx.createBiquadFilter();
-    hp.type = 'highpass';
-    hp.frequency.value = 140;
-    const lp = this.ctx.createBiquadFilter();
-    lp.type = 'lowpass';
-    lp.frequency.value = 2600;
-    lp.Q.value = 0.6;
+  /**
+   * The VVVF in-train sound: an AudioWorkletNode of 'vvvf-sim' (audio/vvvf/vvvf.worklet.ts) through the simulator's
+   * impulse response (public/audio/vvvf-filter.wav, decoded at the context's rate).
+   */
+  setVvvf(node: AudioWorkletNode, ir: AudioBuffer, v: TrainVvvf, wheel: number) {
+    if (this.disposed) {
+      node.port.postMessage('stop');
+      return;
+    }
+    const conv = this.ctx.createConvolver();
+    conv.normalize = false;
+    conv.buffer = ir;
+    const body = this.ctx.createBiquadFilter();
+    body.type = 'peaking';
+    body.frequency.value = VVVF_BODY.hz;
+    body.Q.value = VVVF_BODY.q;
+    body.gain.value = VVVF_BODY.db;
     const gain = this.ctx.createGain();
-    gain.gain.value = 0;
-    node.connect(hp).connect(lp).connect(gain).connect(this.out);
-    node.port.postMessage({ level: pattern.level });
-    this.vvvf = { node, gain, pattern, sent: '' };
+    // the simulator convolves at 192 kHz: the same response at the context's rate sums proportionally fewer taps
+    gain.gain.value = ((VVVF_BODY.db === 0 ? 0.35 : VVVF_GAIN) * SIM_RATE) / this.ctx.sampleRate;
+    node.connect(conv).connect(body).connect(gain).connect(this.out);
+    this.vvvf = { node, v, wheel, drive: { hz: 0, rotorHz: 0, braking: false, powerOff: true } };
   }
 
-  private driveVvvf(kmh: number, dir: 1 | -1 | 0, level: number) {
-    const v = this.vvvf!;
+  /** speed and notch → the worklet's k-rate parameters (it smooths them itself) */
+  private driveVvvf(kmh: number, notch: 1 | -1 | 0) {
+    const s = this.vvvf!;
+    const d = vvvfDrive(s.v, s.wheel, kmh, notch, s.drive.braking, s.drive);
     const t = this.ctx.currentTime;
-    const p = v.pattern;
-    const f = Math.max(0, kmh * p.hzPerKmh + p.slip * (dir === -1 ? -1 : 1));
-    const m = vvvfAt(dir === -1 ? p.brake : p.power, f);
-    const key = `${m.pulses}|${m.random}`;
-    if (key !== v.sent) {
-      v.node.port.postMessage({ pulses: m.pulses, random: m.random });
-      v.sent = key;
-    }
-    const prm = v.node.parameters;
-    prm.get('freq')!.setTargetAtTime(f, t, 0.03);
-    prm.get('carrier')!.setTargetAtTime(m.carrier, t, 0.03);
-    prm.get('amp')!.setTargetAtTime(m.amp, t, 0.03);
-    // the gates shut when the power or the brake is off: silent coasting
-    v.gain.gain.setTargetAtTime(dir === 0 || (dir === -1 && kmh < 3) ? 0 : 0.35 * level, t, 0.04);
+    const prm = s.node.parameters;
+    prm.get('hz')!.setValueAtTime(d.hz, t);
+    prm.get('rotor')!.setValueAtTime(d.rotorHz, t);
+    prm.get('braking')!.setValueAtTime(d.braking ? 1 : 0, t);
+    prm.get('power')!.setValueAtTime(d.powerOff ? 0 : 1, t);
   }
 
   /** A loop of running noise (`loop`: its seamless window, s) recorded at `speed` km/h. */
   setRunning(buffer: AudioBuffer, loop: [number, number], speed: number, gain = 1) {
+    if (this.disposed) return;
     this.running = new RunningLoop(this.ctx, this.out, buffer, loop, speed, 0.5 * gain);
   }
 
@@ -158,7 +170,7 @@ export class TrainSound {
     const recorded = !!this.follower || !!this.vvvf;
     const dir = throttle > 0.05 ? 1 : brake > 0.05 ? -1 : 0;
     this.follower?.update(kmh, dir, lv * (throttle > 0.05 ? 1 : 0.7), dt);
-    if (this.vvvf) this.driveVvvf(kmh, dir, Math.max(0.35, this.load));
+    if (this.vvvf) this.driveVvvf(kmh, dir);
     this.running?.update(kmh);
     this.gear.frequency.setTargetAtTime(Math.max(20, mesh), t, 0.02);
     // (the recordings carry the real gear whine)
@@ -184,9 +196,13 @@ export class TrainSound {
   }
 
   dispose() {
+    this.disposed = true;
     this.follower?.stop();
     this.running?.stop();
-    this.vvvf?.node.disconnect();
+    if (this.vvvf) {
+      this.vvvf.node.port.postMessage('stop');
+      this.vvvf.node.disconnect();
+    }
     for (const o of [this.gear, this.motor, this.inv]) o.stop();
     this.roll.stop();
     this.out.disconnect();

@@ -175,12 +175,21 @@ Motor (under power / braking), resistor-control trains: a recording of a start f
 | 117 | [JR_west_117_shinkaisoku_moha117-15_akashi.ogg](https://commons.wikimedia.org/wiki/File:JR_west_117_shinkaisoku_moha117-15_akashi.ogg) (on board MoHa 117-15) | spaceaero2 | CC BY 3.0 | `motor_jr117`: 700–862 s |
 | 京成3300 (stand-in: Keikyu's first 1000 series) | [Keikyu_kyu1000kei_rokuon.ogg](https://commons.wikimedia.org/wiki/File:Keikyu_kyu1000kei_rokuon.ogg) | toshinori baba | Public domain | `motor_keisei3300`: 198–248 s |
 
-Motor, VVVF trains (E231, 銀座線1000, N700): synthesised from the inverter's control pattern (`vehicle/vvvf.ts`,
-`public/audio/vvvf-worklet.js`). Pattern figures retyped from VvvfGeeks / YAML-Files
-(https://github.com/VvvfGeeks/YAML-Files, fans' recreations of real trains; no licence file, the figures are used as
-facts about the trains with a credit and link, non-commercial): JRE_E231_MITSUBISHI for the E231, JRW_207-2000_TOSHIBA_IGBT
-as a stand-in for the Ginza line 1000 (no PMSM pattern published); the N700's is an estimate from public facts
-(3-level IGBT, ~1.5 kHz switching, ~25 s asynchronous after a start: Nagoya Univ. OCW lecture, Wikipedia).
+Motor, VVVF trains (E231, 銀座線1000, N700): the in-train sound calculated by a port of **VVVF Simulator**
+(VvvfGeeks, https://github.com/VvvfGeeks/VVVF-Simulator; terms: free for non-commercial use only, link to the
+project; the owner approved the port on 2026-11-03): the inverter's PWM, the induction motor's torque ripple and the
+simulator's in-train impulse response (`Generation/Audio/TrainSound/Filter.wav` → `frontend/public/audio/vvvf-filter.wav`,
+unchanged). Code: `frontend/src/game/audio/vvvf/` (sim.ts, data.ts, math.ts are the port; checked sample by sample
+against the simulator's own C# files, `frontend/tools/vvvf-ref/`). Control patterns in the simulator's YAML format,
+`frontend/tools/vvvf/` → JSON in `audio/vvvf/patterns/`:
+
+| Train | Pattern | Source |
+|---|---|---|
+| E231 | `JRE_E231_MITSUBISHI` | VvvfGeeks / YAML-Files (https://github.com/VvvfGeeks/YAML-Files, fans' recreations, "not exactly the same as the original"; no licence file, used with credit and link, non-commercial) |
+| 銀座線1000 | `JRW_207-2000_TOSHIBA_IGBT` (stand-in: no PMSM pattern published) | VvvfGeeks / YAML-Files |
+| N700 | `N700_ESTIMATE` (ours) | an estimate in the same format from public facts (3-level IGBT, ~1.5 kHz switching, ~25 s asynchronous after a start: Nagoya Univ. OCW lecture, Wikipedia) |
+
+Credits also in the settings screen.
 
 Running noise (always while moving; `TrainInfo.runningSound`, a seamless loop played faster or slower with speed):
 

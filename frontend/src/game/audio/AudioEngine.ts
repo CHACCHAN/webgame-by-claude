@@ -2,6 +2,15 @@ import { clamp } from '../util/math';
 import type { CarSpec } from '../vehicle/carSpecs';
 import { TrainSound } from './TrainSound';
 import { BugSound } from './BugSound';
+import type { TrainVvvf } from '../vehicle/vvvf';
+import type { VvvfData } from './vvvf/data';
+import { oversampleFor } from './vvvf/engine';
+import { trainVvvfAudio } from './vvvf/train';
+import type { VvvfProcessorOptions } from './vvvf/vvvf.worklet';
+import vvvfWorkletUrl from './vvvf/vvvf.worklet.ts?worker&url';
+
+/** the VVVF control patterns (JSON from tools/vvvf-patterns.ts), each loaded when a train needs it */
+const VVVF_PATTERNS = import.meta.glob<VvvfData>('./vvvf/patterns/*.json', { import: 'default' });
 
 interface LoopConfig {
   volume: number;
@@ -35,7 +44,7 @@ const MUSIC: Record<string, Partial<LoopConfig>> = {
 
 /** Synthesised engine/tyre/wind audio built with WebAudio nodes only. */
 export class EngineSound {
-  private ctx: AudioContext;
+  private ctx: BaseAudioContext;
   readonly out: GainNode;
   private oscs: OscillatorNode[] = [];
   private oscGains: GainNode[] = [];
@@ -49,7 +58,7 @@ export class EngineSound {
   private lastThrottle = 0;
   private lastBoost = 0;
 
-  constructor(ctx: AudioContext, private cylinders: number, turbo: boolean, noise: AudioBuffer, destination: AudioNode) {
+  constructor(ctx: BaseAudioContext, private cylinders: number, turbo: boolean, noise: AudioBuffer, destination: AudioNode) {
     this.ctx = ctx;
     this.out = ctx.createGain();
     this.out.gain.value = 0;
@@ -137,7 +146,8 @@ function makeDistortion(k: number) {
 }
 
 export class AudioEngine {
-  readonly ctx: AudioContext;
+  /** the page's context, or an OfflineAudioContext to render sounds (tools: the `__renderTrainSound` hook) */
+  readonly ctx: AudioContext | OfflineAudioContext;
   readonly master: GainNode;
   readonly sfx: GainNode;
   readonly music: GainNode;
@@ -147,9 +157,9 @@ export class AudioEngine {
   private engines = new Map<string, (EngineSound | TrainSound | BugSound) & { kind: string }>();
   private musicNodes: AudioNode[] = [];
 
-  constructor() {
+  constructor(offline?: OfflineAudioContext) {
     const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-    this.ctx = new Ctx();
+    this.ctx = offline ?? new Ctx();
     this.master = this.ctx.createGain();
     const comp = this.ctx.createDynamicsCompressor();
     comp.threshold.value = -14;
@@ -224,26 +234,45 @@ export class AudioEngine {
     return sound;
   }
 
-  /** A train's traction sound; its recordings (if any) join once decoded. */
+  /** A train's traction sound; its VVVF calculation or recordings (if any) join once loaded. */
   private trainSound(spec: CarSpec) {
     const t = spec.train!;
     const sound = new TrainSound(this.ctx, t.sound, this.noise, this.sfx, t.vmax);
-    const rec = t.motorSound, run = t.runningSound, pattern = t.vvvf;
-    if (pattern) {
-      void this.vvvfModule().then((ok) => ok && sound.setVvvf(new AudioWorkletNode(this.ctx, 'vvvf', { numberOfInputs: 0, outputChannelCount: [1] }), pattern));
-    } else if (rec) void this.loadClip(rec.file).then((buffer) => buffer && sound.setRecording(buffer, rec.knots, rec.gain));
-    if (run) void this.loadClip(run.file).then((buffer) => buffer && sound.setRunning(buffer, run.loop, run.speed, run.gain));
+    const rec = t.motorSound, run = t.runningSound, v = t.vvvf;
+    if (v) this.loading.push(this.vvvfNode(v).then((n) => n && sound.setVvvf(n.node, n.ir, v, t.wheel)));
+    else if (rec) this.loading.push(this.loadClip(rec.file).then((buffer) => buffer && sound.setRecording(buffer, rec.knots, rec.gain)));
+    if (run) this.loading.push(this.loadClip(run.file).then((buffer) => buffer && sound.setRunning(buffer, run.loop, run.speed, run.gain)));
     return sound;
   }
 
-  private vvvfReady: Promise<boolean> | null = null;
+  private loading: Promise<unknown>[] = [];
 
-  /** The inverter synthesis' worklet (public/audio/vvvf-worklet.js), loaded once; false where unsupported. */
-  private vvvfModule() {
-    this.vvvfReady ??= this.ctx.audioWorklet
-      ? this.ctx.audioWorklet.addModule('/audio/vvvf-worklet.js').then(() => true, () => false)
-      : Promise.resolve(false);
-    return this.vvvfReady;
+  /** Once the sounds' files asked for so far are in (offline renders wait for it). */
+  async loaded() {
+    while (this.loading.length) await Promise.all(this.loading.splice(0));
+  }
+
+  private vvvfReady: Promise<boolean> | null = null;
+  private vvvfIr: Promise<AudioBuffer | null> | null = null;
+
+  /**
+   * A train's VVVF calculation (AudioWorklet 'vvvf-sim', audio/vvvf/vvvf.worklet.ts) and the simulator's impulse
+   * response; null where AudioWorklet is missing or a file fails (the train keeps its simple synthesis). About
+   * 192 kHz of calculation (~10 % of a desktop core); phones calculate at half that.
+   */
+  private async vvvfNode(v: TrainVvvf) {
+    this.vvvfReady ??= this.ctx.audioWorklet ? this.ctx.audioWorklet.addModule(vvvfWorkletUrl).then(() => true, () => false) : Promise.resolve(false);
+    this.vvvfIr ??= fetch('/audio/vvvf-filter.wav')
+      .then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(new Error(String(r.status)))))
+      .then((b) => this.ctx.decodeAudioData(b))
+      .catch(() => null);
+    const load = VVVF_PATTERNS[`./vvvf/patterns/${v.pattern}.json`];
+    const [ok, ir, data] = await Promise.all([this.vvvfReady, this.vvvfIr, load ? load().catch(() => null) : null]);
+    if (!ok || !ir || !data) return null;
+    const phone = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
+    const processorOptions: VvvfProcessorOptions = { data, audio: trainVvvfAudio(v), oversample: oversampleFor(this.ctx.sampleRate, phone ? 2 : 4) };
+    const node = new AudioWorkletNode(this.ctx, 'vvvf-sim', { numberOfInputs: 0, outputChannelCount: [1], processorOptions });
+    return { node, ir };
   }
 
   private clips = new Map<string, Promise<AudioBuffer | null>>();

@@ -31,7 +31,7 @@ export class RecordingFollower {
   private rev: AudioBuffer | null = null;
 
   constructor(
-    private ctx: AudioContext,
+    private ctx: BaseAudioContext,
     private out: AudioNode,
     private buffer: AudioBuffer,
     /** [seconds into the recording, km/h], rising */
@@ -160,7 +160,7 @@ export class RunningLoop {
   private gain: GainNode;
 
   constructor(
-    private ctx: AudioContext,
+    private ctx: BaseAudioContext,
     out: AudioNode,
     buffer: AudioBuffer,
     loop: [number, number],

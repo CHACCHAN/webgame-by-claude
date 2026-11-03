@@ -1,0 +1,96 @@
+# N700 series Shinkansen: an ESTIMATE in VVVF-Simulator's format (no recreation of its inverter has been published).
+# What is known: 3-level IGBT inverters, switching about 1.5 kHz, asynchronous for some 25 s of a start at 2.6 km/h/s
+# (Nagoya Univ. OCW, Wikipedia). The structure (asynchronous → synchronous 3 pulses → 1 pulse, jerk, free-run
+# amplitudes) follows JRE_E231_MITSUBISHI of VvvfGeeks/YAML-Files. Fields left out take the simulator's defaults.
+Level: 3
+JerkSetting:
+  Braking:
+    On: { FrequencyChangeRate: 60, MaxControlFrequency: 72 }
+    Off: { FrequencyChangeRate: 100, MaxControlFrequency: 72 }
+  Accelerating:
+    On: { FrequencyChangeRate: 60, MaxControlFrequency: 62 }
+    Off: { FrequencyChangeRate: 100, MaxControlFrequency: 62 }
+MinimumFrequency:
+  Accelerating: 2
+  Braking: -1
+x-free-async: &freeAsync { EnableFreeRunOn: true, StuckFreeRunOn: false, EnableFreeRunOff: true, StuckFreeRunOff: false, EnableNormal: true }
+x-linear-free: &linearFree
+  PowerOn: { Mode: Linear, StartFrequency: 0, StartAmplitude: 0, EndFrequency: -1, EndAmplitude: -1 }
+  PowerOff: { Mode: Linear, StartFrequency: 0, StartAmplitude: 0, EndFrequency: -1, EndAmplitude: -1 }
+x-one-pulse-free: &onePulseFree
+  PowerOn: { Mode: InverseProportional, StartFrequency: 0, StartAmplitude: 0.001, EndFrequency: -1, EndAmplitude: -1, CurveChangeRate: 0.8, CutOffAmplitude: 0.01 }
+  PowerOff: { Mode: InverseProportional, StartFrequency: 0, StartAmplitude: 0.4, EndFrequency: -1, EndAmplitude: -1 }
+x-random: &random
+  Range: { Mode: Const, Constant: 100 }
+  Interval: { Mode: Const, Constant: 0.0002 }
+AcceleratePattern:
+- ControlFrequencyFrom: 52
+  EnableFreeRunOn: true
+  StuckFreeRunOn: true
+  EnableFreeRunOff: true
+  StuckFreeRunOff: true
+  EnableNormal: true
+  PulseMode: { PulseType: SYNC, PulseCount: 1 }
+  Amplitude:
+    Default: { Mode: InverseProportional, StartFrequency: 52, StartAmplitude: 0.5, EndFrequency: 62, EndAmplitude: 3.8 }
+    <<: *onePulseFree
+- ControlFrequencyFrom: 37
+  EnableFreeRunOn: true
+  StuckFreeRunOn: true
+  EnableFreeRunOff: true
+  StuckFreeRunOff: true
+  EnableNormal: true
+  PulseMode: { PulseType: SYNC, PulseCount: 3 }
+  Amplitude:
+    Default: { Mode: Linear, StartFrequency: 37, StartAmplitude: 0.72, EndFrequency: 52, EndAmplitude: 0.95 }
+    <<: *linearFree
+- ControlFrequencyFrom: 10
+  <<: *freeAsync
+  PulseMode: { PulseType: ASYNC, PulseData: { Dipolar: { Mode: Const, Constant: -1 } } }
+  Amplitude:
+    Default: { Mode: Linear, StartFrequency: 0, StartAmplitude: 0, EndFrequency: 52, EndAmplitude: 1 }
+    <<: *linearFree
+  AsyncModulationData:
+    RandomData: *random
+    CarrierWaveData: { Mode: Const, Constant: 1500 }
+- ControlFrequencyFrom: 0
+  <<: *freeAsync
+  PulseMode: { PulseType: ASYNC, PulseData: { Dipolar: { Mode: Const, Constant: -1 } } }
+  Amplitude:
+    Default: { Mode: Linear, StartFrequency: 0, StartAmplitude: 0, EndFrequency: 52, EndAmplitude: 1 }
+    <<: *linearFree
+  AsyncModulationData:
+    RandomData: *random
+    CarrierWaveData:
+      Mode: Moving
+      MovingValue: { Type: Proportional, Start: 0, StartValue: 1000, End: 10, EndValue: 1500 }
+BrakingPattern:
+- ControlFrequencyFrom: 55
+  EnableFreeRunOn: true
+  StuckFreeRunOn: true
+  EnableFreeRunOff: true
+  StuckFreeRunOff: true
+  EnableNormal: true
+  PulseMode: { PulseType: SYNC, PulseCount: 1 }
+  Amplitude:
+    Default: { Mode: InverseProportional, StartFrequency: 55, StartAmplitude: 0.5, EndFrequency: 72, EndAmplitude: 3.8 }
+    <<: *onePulseFree
+- ControlFrequencyFrom: 40
+  EnableFreeRunOn: true
+  StuckFreeRunOn: true
+  EnableFreeRunOff: true
+  StuckFreeRunOff: true
+  EnableNormal: true
+  PulseMode: { PulseType: SYNC, PulseCount: 3 }
+  Amplitude:
+    Default: { Mode: Linear, StartFrequency: 40, StartAmplitude: 0.75, EndFrequency: 55, EndAmplitude: 0.9 }
+    <<: *linearFree
+- ControlFrequencyFrom: 0
+  <<: *freeAsync
+  PulseMode: { PulseType: ASYNC, PulseData: { Dipolar: { Mode: Const, Constant: -1 } } }
+  Amplitude:
+    Default: { Mode: Linear, StartFrequency: 0, StartAmplitude: 0, EndFrequency: 60, EndAmplitude: 1 }
+    <<: *linearFree
+  AsyncModulationData:
+    RandomData: *random
+    CarrierWaveData: { Mode: Const, Constant: 1500 }

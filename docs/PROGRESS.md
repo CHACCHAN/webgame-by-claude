@@ -2,6 +2,40 @@
 
 Newest first. "Verified" means actually executed in this environment; anything else is marked as unverified.
 
+## Session 6 (2026-11-03) — VVVF Simulator ported for the trains' in-train sound (owner chose B: body resonance −15 dB; deployed)
+
+- Owner approved porting VvvfGeeks/VVVF-Simulator (non-commercial terms; credit + link in the settings screen and
+  ASSETS.md). `frontend/src/game/audio/vvvf/`: `data.ts` (the YAML structure with the C# defaults), `math.ts`
+  (MyMath, banker's rounding, .NET `List.Sort` on small lists), `sim.ts` (control state, carrier, pattern solver,
+  2-/3-level PWM incl. SVM / DPWM / HO / ΔΣ / special sync modes, induction motor RK4, in-train sound; CHM / SHE
+  tables left out), `engine.ts` (the game's driver: control every 128 output frames = 512 calculations at 192 kHz as the
+  simulator's real-time mode, rotor pinned to the wheels, windowed-sinc decimation, idle when gates off and currents
+  gone), `vvvf.worklet.ts` (AudioWorklet 'vvvf-sim', bundled with `?worker&url`), `train.ts` (simulator defaults, gear
+  whine off). Patterns: the simulator's YAML as is (`tools/vvvf/*.yaml` → `tools/vvvf-patterns.ts` → JSON; N700 = our
+  estimate in the same format). `TrainSound.setVvvf`: worklet → ConvolverNode with the simulator's Filter.wav
+  (`public/audio/vvvf-filter.wav`, gain 192 kHz / rate) → peaking EQ −15 dB at 230 Hz (`VVVF_BODY`) → gain.
+  `vehicle/vvvf.ts`: per-train pattern, gear teeth, poles, slip; `vvvfDrive` (notch N keeps the brake flag, electric
+  brake off below 3 km/h). Old `public/audio/vvvf-worklet.js` and the hand-typed bands removed.
+- Verified: the port against the simulator's own C# files built as a console app in the .NET SDK container
+  (`tools/vvvf-ref/`): identical in float32 (16.5 s at 96 kHz: E231 in-train sound with gear 14:99, 207-2000 line
+  voltage); 75 s at 192 kHz earlier: max difference 6e-11. `vvvf.test.ts` repeats the comparison (fixture), checks the
+  JSONs are current, engine behaviour (silent standing / coasting, sounds under power and braking, 2× vs 4×
+  oversampling within 3 dB pre-IR; after the IR within 0.1 dB in the loud parts), every train's pattern and teeth.
+  vitest 50/50, tsc, vite build.
+- Verified in Chrome (host GPU, vite preview with the API proxied to nowhere): the game's whole sound chain rendered
+  offline through `__renderTrainSound` (`?export=1`): E231 109 s in 33 s, Ginza 55 s in 12 s, N700 140 s in 30 s; the
+  spectrogram shows the asynchronous random carrier, 3-pulse and 1-pulse lines, the braking sweep under the running
+  noise. A live time attack with the E231 (autodrive): the worklet joins after 1.4 s, the master level follows the
+  speed, no errors. Settings screen shows the new credit. Cost: ~0.5 µs per calculation in V8 → ~9 % of a desktop core
+  at 192 kHz (phones 96 kHz).
+- Findings: the simulator's impulse response lifts 150–350 Hz by ~25 dB, so the synchronous 3-pulse region (6f torque
+  ripple there) is ~20 dB above the rest (A = as the simulator); the game uses a −15 dB cut there (B). The simulator's
+  calculated gear whine (not on by default there either) is 30–50 dB above the motor through the IR: left off.
+- Sent to the owner (SendUserFile): in-game sound of E231 / Ginza 1000 / N700 and E231 inverter-only A vs B.
+  The owner listened and chose B (「共鳴抑えてるやつのが良かった」), already the default (`VVVF_BODY.db = -15`); committed and deployed.
+- Also this session: proposed a base + per-kind extension design for vehicles (HANDOVER §0.2, ~35 kind branches
+  found); owner allowed Blender + MCP on the owner's PC to build our own models (§0.3).
+
 ## Session 5g (2026-11-03) — train sound rework (owner: choppy, silent when coasting, use analysed sources)
 
 - The 0.12 s grains of Session 5d made the motor sound choppy, and nothing played but a faint synthesis while
