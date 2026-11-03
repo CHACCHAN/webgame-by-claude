@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { enterFullscreenLandscape, isTouchDevice } from '../touch';
+import { isTouchDevice } from '../touch';
+import { enterFullscreen } from '../fullscreen';
 import { gameHolder } from '../GameCanvas';
 import { useApp } from '../../store/app';
 import { useMenuInput, hoverSelect } from '../useMenuInput';
@@ -46,7 +47,7 @@ export function TitleScreen() {
   const go = useApp((s) => s.go);
   const start = () => {
     // phones: fullscreen and landscape (where the browser allows it), from this tap
-    if (isTouchDevice()) enterFullscreenLandscape();
+    if (isTouchDevice()) enterFullscreen();
     const a = gameHolder.game?.initAudio();
     void a?.playMusic('bgm_menu');
     sfx.confirm();
@@ -417,6 +418,7 @@ export const CONTROL_ROWS: [string, string, string, string][] = [
   ['カメラ切替', 'C', '十字キー↑', '右上 CAM'],
   ['コースに復帰', 'R', 'Back', '右上 復帰'],
   ['ポーズ', 'Esc / P', 'Start', '右上 II'],
+  ['全画面表示の切り替え', 'F', '—', '左下 全画面'],
 ];
 
 export function ControlsScreen() {

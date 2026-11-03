@@ -125,3 +125,4 @@ pending. `docs/PLAN.md` holds the design.
   `ui/hud/TouchControls.tsx` feed `InputManager.touch`; menu screens get a ◀ 戻る button that sends Escape (every
   screen must keep mapping Esc to its back action); compact styles under `@media (max-height: 500px)`. Check with
   Playwright phone emulation (`viewport 844×390, hasTouch, isMobile`; `e2e/tests/mobile.spec.ts`).
+  Fullscreen (`ui/fullscreen.ts`): menu button, F key, pause item, settings row (phones: also the title tap).

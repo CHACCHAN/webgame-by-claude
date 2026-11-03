@@ -6,6 +6,7 @@ import { gameHolder } from '../GameCanvas';
 import { Hint } from './Menus';
 import { sfx } from '../sfx';
 import { PROP_CREDITS } from '../../game/render/props';
+import { fullscreenSupported, toggleFullscreen, useFullscreen } from '../fullscreen';
 import { TRAIN_INFO, TRAIN_ORDER } from '../../game/vehicle/trains';
 
 interface Row {
@@ -26,6 +27,7 @@ export function SettingsScreen() {
   const pct = (v: number) => `${Math.round(v * 100)}%`;
   const step = (v: number, dir: number, st = 0.1, lo = 0, hi = 1) => Math.round(Math.min(hi, Math.max(lo, v + dir * st)) * 100) / 100;
   const game = gameHolder.game;
+  const fullscreen = useFullscreen();
   const rows: Row[] = [
     { label: 'グラフィック品質', value: qLabel[s.quality], note: '影・木の密度・ポストエフェクト', change: (d) => { s.set({ quality: cycle(qualities, s.quality, d) }); setNeedsReload(true); } },
     { label: '解像度スケール', value: pct(s.resolutionScale), change: (d) => s.set({ resolutionScale: step(s.resolutionScale, d, 0.1, 0.5, 1) }) },
@@ -37,6 +39,7 @@ export function SettingsScreen() {
     { label: '効果音', value: pct(s.sfxVolume), change: (d) => s.set({ sfxVolume: step(s.sfxVolume, d) }) },
     { label: '音楽', value: pct(s.musicVolume), change: (d) => s.set({ musicVolume: step(s.musicVolume, d) }) },
     { label: 'FPS表示', value: s.showFps ? 'オン' : 'オフ', change: () => s.set({ showFps: !s.showFps }) },
+    { label: '全画面表示', value: !fullscreenSupported() ? '非対応' : fullscreen ? 'オン' : 'オフ', note: 'F キーでも切り替えられます', change: () => fullscreenSupported() && toggleFullscreen() },
   ];
   useMenuInput((a) => {
     if (a === 'up') { setSel((x) => (x + rows.length - 1) % rows.length); sfx.move(); }

@@ -12,16 +12,20 @@ import { ConditionsScreen, TransmissionScreen } from './ui/screens/RaceSetup';
 import { CarsScreen } from './ui/screens/Cars';
 import { TouchControls } from './ui/hud/TouchControls';
 import { useTouch } from './ui/touch';
+import { fullscreenSupported, toggleFullscreen, useFullscreen } from './ui/fullscreen';
 
 export function App() {
   const screen = useApp((s) => s.screen);
   const paused = useApp((s) => s.paused);
   const phase = useApp((s) => s.phase);
   const touch = useTouch();
+  const fullscreen = useFullscreen();
 
   // pause handling during races
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      // F: fullscreen on / off, anywhere (not while typing a name)
+      if (e.code === 'KeyF' && !e.repeat && (e.target as HTMLElement)?.tagName !== 'INPUT') toggleFullscreen();
       const app = useApp.getState();
       if (app.screen !== 'race' || app.paused) return;
       if (e.code === 'Escape' || e.code === 'KeyP') {
@@ -100,6 +104,11 @@ export function App() {
         {screen === 'race' && paused && <PauseMenu />}
         {touch && screen === 'race' && !paused && (phase === 'countdown' || phase === 'racing') && <TouchControls />}
       </div>
+      {fullscreenSupported() && !['boot', 'race'].includes(screen) && (
+        <button className={touchBack ? 'fs-toggle above-back' : 'fs-toggle'} onClick={toggleFullscreen} title="全画面表示の切り替え（F キー）">
+          {fullscreen ? '全画面終了' : '全画面'}
+        </button>
+      )}
       {touchBack && (
         <button
           className="touch-back"

@@ -2,6 +2,15 @@
 
 Newest first. "Verified" means actually executed in this environment; anything else is marked as unverified.
 
+## Session 5f (2026-11-03) — fullscreen toggle (owner's request: PC and phones alike)
+
+- `ui/fullscreen.ts`: on / off from a button on every menu screen (bottom left; on phones above ◀ 戻る), the F key
+  anywhere (not while typing a name), a pause menu item and a settings row; hidden / "非対応" where the browser has
+  no fullscreen (iPhone Safari). Phones still enter it with the title tap (with the landscape lock). nginx serves the
+  web app manifest as `application/manifest+json`.
+- Checked in the browser: button → fullscreen and label 全画面終了, F → off, settings row → on, pause item → on,
+  no button during a race; phone layout clear of the panels.
+
 ## Session 5e (2026-11-03) — phones (owner's request: スマホ対応)
 
 - Touch layout (`.touch` on the app when the primary pointer is coarse, `ui/touch.ts`; a laptop with a touch screen

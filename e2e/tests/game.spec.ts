@@ -22,6 +22,12 @@ test('menu navigation, settings persistence and controls screen', async ({ page 
   await prepare(page);
   await page.goto('/');
   await waitForTitle(page);
+  // fullscreen on and off: the button, then the F key
+  await page.locator('.fs-toggle').click();
+  await page.waitForFunction(() => !!document.fullscreenElement);
+  await expect(page.locator('.fs-toggle')).toHaveText('全画面終了');
+  await page.keyboard.press('KeyF');
+  await page.waitForFunction(() => !document.fullscreenElement);
   await page.keyboard.press('Enter');
   await expect(page.locator('.menu-list li.active')).toContainText('TIME ATTACK');
   await page.keyboard.press('ArrowDown');

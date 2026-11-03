@@ -8,6 +8,7 @@ import { startRaceFromState } from '../screens/Menus';
 import { sfx } from '../sfx';
 import { COURSES } from '../../game/track/courses';
 import { currentCourseId } from '../../store/settings';
+import { fullscreenSupported, toggleFullscreen, useFullscreen } from '../fullscreen';
 import { CONTROL_ROWS, Portrait } from '../screens/Menus';
 import type { HudState } from '../../game/Game';
 import { leaveRoom } from '../../store/online';
@@ -409,9 +410,12 @@ export function PauseMenu() {
     set({ paused: false });
   };
   const online = useApp.getState().mode === 'online';
+  const fullscreen = useFullscreen();
+  const fsItem = fullscreenSupported() ? [{ label: fullscreen ? '全画面表示を終了' : '全画面表示にする', action: toggleFullscreen }] : [];
   const items = online
     ? [
         { label: 'レースに戻る', action: resume },
+        ...fsItem,
         { label: 'リタイアしてルームを出る', action: () => { set({ paused: false }); void leaveRoom(); gameHolder.game?.startAttract(); go('online'); } },
       ]
     : [
@@ -419,6 +423,7 @@ export function PauseMenu() {
     { label: 'リスタート', action: () => { gameHolder.game?.setPaused(false); set({ paused: false }); void startRaceFromState(); } },
     { label: '車両選択へ', action: () => { gameHolder.game?.setPaused(false); set({ paused: false }); go('garage'); } },
     { label: 'メインメニューへ', action: () => { gameHolder.game?.setPaused(false); set({ paused: false }); gameHolder.game?.startAttract(); go('modes'); } },
+    ...fsItem,
       ];
   useMenuInput((a) => {
     if (a === 'up') { setSel((s) => (s + items.length - 1) % items.length); sfx.move(); }

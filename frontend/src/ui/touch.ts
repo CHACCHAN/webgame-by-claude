@@ -17,16 +17,3 @@ export function useTouch() {
   }, [touch]);
   return touch;
 }
-
-/** Phones: fullscreen and landscape where the browser allows it (Android; iOS ignores both). */
-export function enterFullscreenLandscape() {
-  const el = document.documentElement as HTMLElement & { webkitRequestFullscreen?: () => void };
-  const lock = () => (screen.orientation as ScreenOrientation & { lock?: (o: string) => Promise<void> })?.lock?.('landscape').catch(() => {});
-  try {
-    const p = el.requestFullscreen?.({ navigationUI: 'hide' }) ?? el.webkitRequestFullscreen?.();
-    if (p && 'then' in p) void p.then(lock).catch(() => {});
-    else lock();
-  } catch {
-    /* not allowed here */
-  }
-}
