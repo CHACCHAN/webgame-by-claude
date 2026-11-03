@@ -1,0 +1,125 @@
+# JR East E235-0 (Yamanote Line, mass production): Mitsubishi SC104, full-SiC (SiC-MOSFET + SiC-SBD), 2-level, 1C4M.
+# An ESTIMATE in VVVF-Simulator's format: no recreation of it has been published (VvvfGeeks/YAML-Files, 2026-11).
+# Sources:
+# - ja.wikipedia "JR東日本E235系電車" (主要機器): SiC 2-level voltage-source PWM inverter, 1C4M; at high speed it switches
+#   27 pulses instead of the former 1 pulse; mass-production cars all Mitsubishi SC104 full SiC; pure electric brake
+#   (回生ブレーキ併用電気指令式ブレーキ（純電気式）).
+# - VVVF名鑑 (vvvfdb.stars.ne.jp, 荏原急行; fans' analyses of coil recordings):
+#   Tokyu page (2020系, 9020系): Mitsubishi full-SiC cars run "非同期-27P"; the asynchronous carrier centre is 1200 Hz on
+#   the E235 and E235-based cars (1250 Hz on most other Mitsubishi full-SiC cars), with narrow random modulation (the
+#   2020's is "widened" against the E235's; the 9020's later software narrowed it "to the E235's width").
+#   Odakyu page (1000形 renewal, 5000形, 3000形 renewal): "キャリア1250Hzの非同期変調から3段階の27パルス"; the first 27-pulse
+#   step is over-modulated with 17 pulses left; a 4th, not over-modulated 27-pulse step exists only on some cars
+#   (not the E235), so the asynchronous region hands over straight to the first over-modulated step.
+# - A recording's description (YouTube, Yamanote E235 trial 2025-10): the carrier rises slightly at the end of the
+#   asynchronous region before the 27 pulses.
+# OUR ESTIMATES (nothing published): the switch frequencies; the rise 1200 → 1400 Hz over 42–52 Hz (so that 27 pulses
+# take over at 52 Hz ≈ 27 × 52 = 1404 Hz switching, without a jump); the random range ±60 Hz; the three steps'
+# modulation (sine against the 27-pulse triangle: 1.2 leaves 17 pulses per cycle, 1.5 leaves 13, 2.2 leaves 9) and where they change; braking switches ~1.2× higher than
+# powering (as the E233's Mitsubishi IGBT, JRE_E233_1000_MITSUBISHI); the jerk rates of that file.
+# Format and free-run amplitudes as our N700_ESTIMATE. Fields left out take the simulator's defaults.
+# Free run (re-powering or braking while moving): every mode is "stuck" at the speed, as on JRE_E233_1000_MITSUBISHI.
+Level: 2
+JerkSetting:
+  Braking:
+    On: { FrequencyChangeRate: 120, MaxControlFrequency: 62 }
+    Off: { FrequencyChangeRate: 60, MaxControlFrequency: 62 }
+  Accelerating:
+    On: { FrequencyChangeRate: 120, MaxControlFrequency: 52 }
+    Off: { FrequencyChangeRate: 60, MaxControlFrequency: 52 }
+MinimumFrequency:
+  Accelerating: -1
+  Braking: -1
+x-free-async: &freeAsync { EnableFreeRunOn: true, StuckFreeRunOn: true, EnableFreeRunOff: true, StuckFreeRunOff: true, EnableNormal: true }
+x-free-sync: &freeSync { EnableFreeRunOn: true, StuckFreeRunOn: true, EnableFreeRunOff: true, StuckFreeRunOff: true, EnableNormal: true }
+x-linear-free: &linearFree
+  PowerOn: { Mode: Linear, StartFrequency: 0, StartAmplitude: 0, EndFrequency: -1, EndAmplitude: -1 }
+  PowerOff: { Mode: Linear, StartFrequency: 0, StartAmplitude: 0, EndFrequency: -1, EndAmplitude: -1 }
+# narrow random modulation around the centre (est.)
+x-random: &random
+  Range: { Mode: Const, Constant: 60 }
+  Interval: { Mode: Const, Constant: 0.0002 }
+AcceleratePattern:
+# 27 pulses, 3rd step (most over-modulated) to the top speed: never 1 pulse
+- ControlFrequencyFrom: 85
+  <<: *freeSync
+  PulseMode: { PulseType: SYNC, PulseCount: 27 }
+  Amplitude:
+    Default: { Mode: Linear, StartFrequency: 85, StartAmplitude: 2.2, EndFrequency: 86, EndAmplitude: 2.2 }
+    <<: *linearFree
+# 27 pulses, 2nd step
+- ControlFrequencyFrom: 64
+  <<: *freeSync
+  PulseMode: { PulseType: SYNC, PulseCount: 27 }
+  Amplitude:
+    Default: { Mode: Linear, StartFrequency: 64, StartAmplitude: 1.5, EndFrequency: 65, EndAmplitude: 1.5 }
+    <<: *linearFree
+# 27 pulses, 1st step (over-modulated, ~17 pulses left)
+- ControlFrequencyFrom: 52
+  <<: *freeSync
+  PulseMode: { PulseType: SYNC, PulseCount: 27 }
+  Amplitude:
+    Default: { Mode: Linear, StartFrequency: 52, StartAmplitude: 1.2, EndFrequency: 53, EndAmplitude: 1.2 }
+    <<: *linearFree
+# asynchronous, the carrier rising slightly before the 27 pulses
+- ControlFrequencyFrom: 42
+  <<: *freeAsync
+  PulseMode: { PulseType: ASYNC }
+  Amplitude:
+    Default: { Mode: Linear, StartFrequency: 0, StartAmplitude: 0, EndFrequency: 52, EndAmplitude: 1.2 }
+    <<: *linearFree
+  AsyncModulationData:
+    RandomData: *random
+    CarrierWaveData:
+      Mode: Moving
+      MovingValue: { Type: Proportional, Start: 42, StartValue: 1200, End: 52, EndValue: 1400 }
+# asynchronous, 1200 Hz centre
+- ControlFrequencyFrom: 0
+  <<: *freeAsync
+  PulseMode: { PulseType: ASYNC }
+  Amplitude:
+    Default: { Mode: Linear, StartFrequency: 0, StartAmplitude: 0, EndFrequency: 52, EndAmplitude: 1.2 }
+    <<: *linearFree
+  AsyncModulationData:
+    RandomData: *random
+    CarrierWaveData: { Mode: Const, Constant: 1200 }
+BrakingPattern:
+- ControlFrequencyFrom: 100
+  <<: *freeSync
+  PulseMode: { PulseType: SYNC, PulseCount: 27 }
+  Amplitude:
+    Default: { Mode: Linear, StartFrequency: 100, StartAmplitude: 2.2, EndFrequency: 101, EndAmplitude: 2.2 }
+    <<: *linearFree
+- ControlFrequencyFrom: 76
+  <<: *freeSync
+  PulseMode: { PulseType: SYNC, PulseCount: 27 }
+  Amplitude:
+    Default: { Mode: Linear, StartFrequency: 76, StartAmplitude: 1.5, EndFrequency: 77, EndAmplitude: 1.5 }
+    <<: *linearFree
+- ControlFrequencyFrom: 62
+  <<: *freeSync
+  PulseMode: { PulseType: SYNC, PulseCount: 27 }
+  Amplitude:
+    Default: { Mode: Linear, StartFrequency: 62, StartAmplitude: 1.2, EndFrequency: 63, EndAmplitude: 1.2 }
+    <<: *linearFree
+- ControlFrequencyFrom: 52
+  <<: *freeAsync
+  PulseMode: { PulseType: ASYNC }
+  Amplitude:
+    Default: { Mode: Linear, StartFrequency: 0, StartAmplitude: 0, EndFrequency: 62, EndAmplitude: 1.2 }
+    <<: *linearFree
+  AsyncModulationData:
+    RandomData: *random
+    CarrierWaveData:
+      Mode: Moving
+      MovingValue: { Type: Proportional, Start: 52, StartValue: 1200, End: 62, EndValue: 1400 }
+# asynchronous down to the stop (pure electric brake)
+- ControlFrequencyFrom: 0
+  <<: *freeAsync
+  PulseMode: { PulseType: ASYNC }
+  Amplitude:
+    Default: { Mode: Linear, StartFrequency: 0, StartAmplitude: 0, EndFrequency: 62, EndAmplitude: 1.2 }
+    <<: *linearFree
+  AsyncModulationData:
+    RandomData: *random
+    CarrierWaveData: { Mode: Const, Constant: 1200 }

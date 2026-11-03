@@ -1,0 +1,145 @@
+# Tobu 30000: Hitachi VFI-HR1420B, 3-level IGBT (2000 V / 400 A), 1C4M, TM-95 190 kW 4-pole induction motors.
+# An ESTIMATE in VVVF-Simulator's format: no recreation of it has been published (VvvfGeeks/YAML-Files, 2026-11).
+# Sources:
+# - ja.wikipedia "東武30000系電車": 3-level IGBT VVVF by Hitachi (VFI-HR1420B), 1C4M; all-electric brake from the
+#   FY2001 cars, older cars later by software.
+# - VVVF名鑑 (vvvfdb.stars.ne.jp, 荏原急行; fans' analyses of coil recordings), Tobu page and Hitachi analysis page:
+#   pattern H3I-2 "非同期(ダイポーラ)-非同期(ユニポーラ)-1P", the 30000 (after the all-electric-brake software) with
+#   [a2] the dipolar modulation's strongest component at 2 × the carrier, [b1] no 3 pulses, [c2] the asynchronous
+#   carrier rising 900 → 1800 Hz (an octave) at a constant rate of frequency change; when braking, the carrier drops
+#   to 200 Hz just before the stop. The 1P of a 3-level inverter widens smoothly from the VVVF to the CVVF region.
+# - The structure (dipolar fading to unipolar, the carrier rising mid-way, 3-level 1 pulse "Alt1" with a widening pulse)
+#   follows JRW_223-2000_HITACHI_IGBT of VvvfGeeks/YAML-Files, the same H3I-2 family (500 → 1000 Hz there).
+# OUR ESTIMATES (nothing published): every switch frequency (dipolar 0–20 Hz fading to unipolar by 30 Hz, the rise
+# over 22–32 Hz as on the 223-2000, 1 pulse from 56 Hz ≈ 38 km/h, full voltage at 62 Hz; braking ~10 Hz higher), the
+# 200 Hz below 7 Hz (≈ 5 km/h) when braking, the amplitudes, and the jerk rates (the 223-2000's). The [a2] harmonic
+# emphasis cannot be chosen in the simulator: the dipolar modulation is its standard one.
+# Free run (re-powering or braking while moving): every mode is "stuck" at the speed (else a brake applied at speed
+# sweeps through the low-speed modes, 200 Hz included, while the voltage builds up).
+Level: 3
+JerkSetting:
+  Braking:
+    On: { FrequencyChangeRate: 85, MaxControlFrequency: 72 }
+    Off: { FrequencyChangeRate: 60, MaxControlFrequency: 72 }
+  Accelerating:
+    On: { FrequencyChangeRate: 60, MaxControlFrequency: 62 }
+    Off: { FrequencyChangeRate: 60, MaxControlFrequency: 62 }
+MinimumFrequency:
+  Accelerating: -1
+  Braking: -1
+x-free-async: &freeAsync { EnableFreeRunOn: true, StuckFreeRunOn: true, EnableFreeRunOff: true, StuckFreeRunOff: true, EnableNormal: true }
+x-free-sync: &freeSync { EnableFreeRunOn: true, StuckFreeRunOn: true, EnableFreeRunOff: true, StuckFreeRunOff: true, EnableNormal: true }
+x-linear-free: &linearFree
+  PowerOn: { Mode: Linear, StartFrequency: 0, StartAmplitude: 0, EndFrequency: -1, EndAmplitude: -1 }
+  PowerOff: { Mode: Linear, StartFrequency: 0, StartAmplitude: 0, EndFrequency: -1, EndAmplitude: -1 }
+# the asynchronous region's voltage: up to slight over-modulation where the 1 pulse takes over (est.)
+x-async-amp: &asyncAmp
+  Default: { Mode: Linear, StartFrequency: 0, StartAmplitude: 0.05, EndFrequency: 56, EndAmplitude: 1.15 }
+  PowerOn: { Mode: Linear, StartFrequency: 0, StartAmplitude: 0, EndFrequency: -1, EndAmplitude: -1 }
+  PowerOff: { Mode: Linear, StartFrequency: 0, StartAmplitude: 0, EndFrequency: -1, EndAmplitude: -1 }
+x-brake-amp: &brakeAmp
+  Default: { Mode: Linear, StartFrequency: 0, StartAmplitude: 0.05, EndFrequency: 66, EndAmplitude: 1.15 }
+  PowerOn: { Mode: Linear, StartFrequency: 0, StartAmplitude: 0, EndFrequency: -1, EndAmplitude: -1 }
+  PowerOff: { Mode: Linear, StartFrequency: 0, StartAmplitude: 0, EndFrequency: -1, EndAmplitude: -1 }
+AcceleratePattern:
+# 1 pulse (3-level: the pulse widens to full voltage at 62 Hz); no 3 pulses before it
+- ControlFrequencyFrom: 56
+  <<: *freeSync
+  PulseMode: { PulseType: SYNC, PulseCount: 1, Alternative: Alt1 }
+  Amplitude:
+    Default: { Mode: Linear, StartFrequency: 56, StartAmplitude: 0.55, EndFrequency: 62, EndAmplitude: 1 }
+    <<: *linearFree
+# unipolar, 1800 Hz
+- ControlFrequencyFrom: 32
+  <<: *freeAsync
+  PulseMode: { PulseType: ASYNC, PulseData: { Dipolar: { Mode: Const, Constant: -1 } } }
+  Amplitude: *asyncAmp
+  AsyncModulationData:
+    CarrierWaveData: { Mode: Const, Constant: 1800 }
+# unipolar, the carrier rising an octave at a constant rate of frequency change
+- ControlFrequencyFrom: 30
+  <<: *freeAsync
+  PulseMode: { PulseType: ASYNC, PulseData: { Dipolar: { Mode: Const, Constant: -1 } } }
+  Amplitude: *asyncAmp
+  AsyncModulationData:
+    CarrierWaveData:
+      Mode: Moving
+      MovingValue: { Type: Proportional, Start: 22, StartValue: 900, End: 32, EndValue: 1800 }
+# dipolar fading to unipolar while the carrier rises
+- ControlFrequencyFrom: 22
+  <<: *freeAsync
+  PulseMode:
+    PulseType: ASYNC
+    PulseData: { Dipolar: { Mode: Moving, MovingValue: { Type: Proportional, Start: 20, StartValue: 1, End: 30, EndValue: 0.5 } } }
+  Amplitude: *asyncAmp
+  AsyncModulationData:
+    CarrierWaveData:
+      Mode: Moving
+      MovingValue: { Type: Proportional, Start: 22, StartValue: 900, End: 32, EndValue: 1800 }
+- ControlFrequencyFrom: 20
+  <<: *freeAsync
+  PulseMode:
+    PulseType: ASYNC
+    PulseData: { Dipolar: { Mode: Moving, MovingValue: { Type: Proportional, Start: 20, StartValue: 1, End: 30, EndValue: 0.5 } } }
+  Amplitude: *asyncAmp
+  AsyncModulationData:
+    CarrierWaveData: { Mode: Const, Constant: 900 }
+# dipolar, 900 Hz from the start
+- ControlFrequencyFrom: 0
+  <<: *freeAsync
+  PulseMode: { PulseType: ASYNC, PulseData: { Dipolar: { Mode: Const, Constant: 1 } } }
+  Amplitude: *asyncAmp
+  AsyncModulationData:
+    CarrierWaveData: { Mode: Const, Constant: 900 }
+BrakingPattern:
+- ControlFrequencyFrom: 66
+  <<: *freeSync
+  PulseMode: { PulseType: SYNC, PulseCount: 1, Alternative: Alt1 }
+  Amplitude:
+    Default: { Mode: Linear, StartFrequency: 66, StartAmplitude: 0.55, EndFrequency: 72, EndAmplitude: 1 }
+    <<: *linearFree
+- ControlFrequencyFrom: 36
+  <<: *freeAsync
+  PulseMode: { PulseType: ASYNC, PulseData: { Dipolar: { Mode: Const, Constant: -1 } } }
+  Amplitude: *brakeAmp
+  AsyncModulationData:
+    CarrierWaveData: { Mode: Const, Constant: 1800 }
+- ControlFrequencyFrom: 34
+  <<: *freeAsync
+  PulseMode: { PulseType: ASYNC, PulseData: { Dipolar: { Mode: Const, Constant: -1 } } }
+  Amplitude: *brakeAmp
+  AsyncModulationData:
+    CarrierWaveData:
+      Mode: Moving
+      MovingValue: { Type: Proportional, Start: 26, StartValue: 900, End: 36, EndValue: 1800 }
+- ControlFrequencyFrom: 26
+  <<: *freeAsync
+  PulseMode:
+    PulseType: ASYNC
+    PulseData: { Dipolar: { Mode: Moving, MovingValue: { Type: Proportional, Start: 24, StartValue: 1, End: 34, EndValue: 0.5 } } }
+  Amplitude: *brakeAmp
+  AsyncModulationData:
+    CarrierWaveData:
+      Mode: Moving
+      MovingValue: { Type: Proportional, Start: 26, StartValue: 900, End: 36, EndValue: 1800 }
+- ControlFrequencyFrom: 24
+  <<: *freeAsync
+  PulseMode:
+    PulseType: ASYNC
+    PulseData: { Dipolar: { Mode: Moving, MovingValue: { Type: Proportional, Start: 24, StartValue: 1, End: 34, EndValue: 0.5 } } }
+  Amplitude: *brakeAmp
+  AsyncModulationData:
+    CarrierWaveData: { Mode: Const, Constant: 900 }
+- ControlFrequencyFrom: 7
+  <<: *freeAsync
+  PulseMode: { PulseType: ASYNC, PulseData: { Dipolar: { Mode: Const, Constant: 1 } } }
+  Amplitude: *brakeAmp
+  AsyncModulationData:
+    CarrierWaveData: { Mode: Const, Constant: 900 }
+# just before the stop (all-electric brake): the carrier drops to 200 Hz
+- ControlFrequencyFrom: 0
+  <<: *freeAsync
+  PulseMode: { PulseType: ASYNC, PulseData: { Dipolar: { Mode: Const, Constant: 1 } } }
+  Amplitude: *brakeAmp
+  AsyncModulationData:
+    CarrierWaveData: { Mode: Const, Constant: 200 }

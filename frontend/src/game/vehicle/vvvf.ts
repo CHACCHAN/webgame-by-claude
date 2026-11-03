@@ -68,6 +68,65 @@ export const KEIKYU_N1000_GTO: TrainVvvf = {
   source: '京急新1000形 1・2次車 シーメンスGTO（YAML-Files N1000_SIEMENS_GTO）',
 };
 
+/**
+ * JR East E231-0 on the Musashino Line (renewed 2017–2020 on the move from the Chuo-Sobu Line): the original Mitsubishi
+ * 3-level IGBT (SC60A, `E231_MITSUBISHI`) replaced by a new Mitsubishi 2-level IGBT, asynchronous carrier at a constant
+ * centre (fan recordings: tetsuyukan.com, vvvfdb.stars.ne.jp). No recreation of it has been published; the E233
+ * commuter type's Mitsubishi 2-level IGBT (SC85: constant ~750 Hz asynchronous → 3 → 1 pulse), the sound the renewal
+ * is said to resemble, stands in. Gear 99:14 (7.07), MT73 4-pole.
+ */
+export const E231_MUSASHINO_MITSUBISHI: TrainVvvf = {
+  pattern: 'JRE_E233_1000_MITSUBISHI',
+  gear: [14, 99],
+  polePairs: 2,
+  slip: 2,
+  source: 'E231系0番台 機器更新車（三菱2レベルIGBT）はE233系1000番台 三菱IGBTで代用（YAML-Files JRE_E233_1000_MITSUBISHI）',
+};
+
+/**
+ * JR East E235-0 (Yamanote Line, mass production): Mitsubishi full-SiC SC104, 2-level, 1C4M. Our estimate
+ * (tools/vvvf/E235_ESTIMATE.yaml, from ja.wikipedia and fans' analyses on VVVF名鑑): asynchronous at a constant ~1200 Hz
+ * centre with narrow random modulation, a slight rise at its end, then synchronous 27 pulses in three over-modulated
+ * steps to the top speed (never 1 pulse); the same backwards when braking, asynchronous to the stop. Stand-in kept as the
+ * alternative: the Meitetsu 100's Mitsubishi IGBT (YAML-Files MEITETSU_100_MITSUBISHI_IGBT, ~1000 Hz → 3 → 1 pulse).
+ * Gear 7.07 (99:14), MT79 4-pole.
+ */
+export const E235_MITSUBISHI_SIC: TrainVvvf = {
+  pattern: 'E235_ESTIMATE',
+  gear: [14, 99],
+  polePairs: 2,
+  slip: 2,
+  source: 'E235系0番台 三菱フルSiCは公開情報からの独自の推定（非同期1200Hz→同期27パルス）',
+};
+
+/**
+ * Tobu 30000: Hitachi 3-level IGBT VFI-HR1420B (1C4M). Our estimate (tools/vvvf/TOBU30000_ESTIMATE.yaml, pattern
+ * "H3I-2" after VVVF名鑑): asynchronous dipolar → unipolar, the carrier rising an octave 900 → 1800 Hz, then the 3-level
+ * 1 pulse (no 3 pulses); when braking, 200 Hz just before the stop. Stand-in kept as the alternative: the JR West
+ * 223-2000's Hitachi 3-level IGBT (YAML-Files JRW_223-2000_HITACHI_IGBT, same family, 500 → 1000 Hz). Gear 99:14,
+ * TM-95 4-pole.
+ */
+export const TOBU30000_HITACHI: TrainVvvf = {
+  pattern: 'TOBU30000_ESTIMATE',
+  gear: [14, 99],
+  polePairs: 2,
+  slip: 2,
+  source: '東武30000系 日立3レベルIGBTは公開情報からの独自の推定（非同期900→1800Hz→1パルス）',
+};
+
+/**
+ * JR East E5 (Hayabusa): 3-level IGBT PWM converter + 3-level IGBT inverter (CI18; Mitsubishi, Toshiba and Hitachi
+ * build it), 3300 V 1200 A elements, MT207 300 kW. No pattern has been published: our N700 estimate (3-level IGBT,
+ * ~1.5 kHz asynchronous → 3 → 1 pulse) with the E5's gear 82:31 (2.645); 4-pole motor assumed.
+ */
+export const E5_ESTIMATE: TrainVvvf = {
+  pattern: 'N700_ESTIMATE',
+  gear: [31, 82],
+  polePairs: 2,
+  slip: 1.5,
+  source: 'E5系は公開情報からの推定（N700系と同じ推定パターン・3レベルIGBT、歯車比82:31）',
+};
+
 /** inverter output Hz per km/h at no slip: wheel rev/s × gear ratio × pole pairs */
 export const hzPerKmh = (v: TrainVvvf, wheel: number) => ((v.gear[1] / v.gear[0]) * v.polePairs) / (Math.PI * wheel) / 3.6;
 
