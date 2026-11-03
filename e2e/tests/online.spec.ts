@@ -14,7 +14,8 @@ async function openPlayer(browser: Browser, name: string) {
   await page.locator('.menu-list li', { hasText: 'ONLINE BATTLE' }).click();
   await page.locator('.ol-name').fill(name);
   await page.keyboard.press('Enter');
-  await expect(page.locator('.ol-me')).toContainText(name);
+  // (three software-rendered browsers at once: the entry can take a while to show)
+  await expect(page.locator('.ol-me')).toContainText(name, { timeout: 90_000 });
   return { ctx, page, errors };
 }
 
