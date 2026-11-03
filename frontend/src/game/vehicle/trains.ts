@@ -92,7 +92,7 @@ export interface TrainInfo {
 
 /**
  * The trains with a 3D model (public/models/trains/<id>.glb: cut from a third-party model by tools/import-trains.cjs,
- * or our own built in Blender by tools/blender-trains.cjs, `model.own`). Figures from Japanese Wikipedia
+ * or our own built in Blender by tools/blender-models.cjs, `model.own`). Figures from Japanese Wikipedia
  * (2026-11-03): starting acceleration, design top speed, brake rates, motors, control, gear ratio, car length;
  * masses as marked.
  */
@@ -122,8 +122,9 @@ export const TRAIN_INFO: Record<TrainId, TrainInfo & { name: string; tagline: st
     // gear 83:14; wheel and bogie centres are our estimates (not published)
     gearRatio: 5.93, wheel: 0.86, body: 'painted', width: 2.83, carLength: 18, bogies: 12, front: 'tobu50000',
     liveries: [{ name: '京急レッド＋窓まわり白', body: '#d2192b', band: '#d2192b', band2: '#efeee8' }],
-    // our own model (tools/blender/keikyu1000.py): head lamps high in the windscreen, express / tail lamps low on the nose
-    lamps: { head: { x: 1.0, y: 3.2, w: 0.15, h: 0.15, round: true }, tail: { x: 0.95, y: 1.47, w: 0.34, h: 0.1 }, windows: [1.86, 2.9], windowLum: 0.06 },
+    // our own model (tools/blender/keikyu1000.py, parts/body_n1000.py): head lamps high in the windscreen (HEADLAMP),
+    // the tail lamp the inner half of each lamp unit low on the nose (express lamp outside), side windows WIN
+    lamps: { head: { x: 1.085, y: 3.16, w: 0.1, h: 0.1, round: true }, tail: { x: 0.844, y: 1.39, w: 0.17, h: 0.12 }, windows: [1.93, 2.81], windowLum: 0.06 },
     // the in-train sound calculated from the inverter's control pattern (vehicle/vvvf.ts, audio/vvvf): the scale is the
     // asynchronous carrier stepping through F G A B♭ C D E♭ F at the start
     vvvf: KEIKYU_N1000_GTO,
