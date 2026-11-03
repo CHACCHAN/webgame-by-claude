@@ -2,7 +2,7 @@
 
 Newest first. "Verified" means actually executed in this environment; anything else is marked as unverified.
 
-## Session 6b (2026-11-03) — Keikyu N1000 "doremifa" modelled in Blender; 117 and 京成3300 retired (owner's requests)
+## Session 6b (2026-11-03) — Keikyu N1000 "doremifa" modelled in Blender; 117 and 京成3300 retired (owner's requests; deployed)
 
 - Owner: "as a test of building models with Blender MCP, make the Keikyu 1000 doremifa", then "retire the 117 and the
   3300 and replace them with trains made in Blender". Second replacement slot: open, the owner is to choose.
@@ -32,7 +32,11 @@ Newest first. "Verified" means actually executed in this environment; anything e
   backend `game.cars`, medals). The `motorSound` mechanism stays. Backend test: 11 vehicles.
 - **Medals** `keikyu1000` (tools/sim-run.ts, legend AI, road grip on): 朧峠 147.93 s, 霧降湖 119.33 s, 天狼 118.73 s,
   no respawns → gold 148.0 / 119.5 / 119.0 s, silver +7 %, bronze +16 %.
-- Checks: `tsc -b` clean, vitest 50/50, `vite build`, backend 15/15 (container, `--build`).
+- Checks: `tsc -b` clean, vitest 50/50, `vite build`, backend 15/15 (container, `--build`). E2E on a separate test
+  stack (`-p touge-e2e`, other subnet, port 8090): 8 passed + 2 flaky (time attack, ghost battle: timeouts while
+  Blender Cycles renders used every core); both re-run on an idle machine with retries off: passed → 10/10.
+- Deployed (`docker compose up -d --build`): served bundle = local build (`index-DwVXFRCO.js`), keikyu1000.glb (same
+  SHA-1), the CHM tables and the worklet served, `jr117.glb` gone, `/api/content` lists 11 vehicles incl. keikyu1000.
 
 ## Session 6 (2026-11-03) — VVVF Simulator ported for the trains' in-train sound (owner chose B: body resonance −15 dB; deployed)
 
