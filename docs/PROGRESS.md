@@ -2,6 +2,50 @@
 
 Newest first. "Verified" means actually executed in this environment; anything else is marked as unverified.
 
+## Session 7 (2026-11-03 – 11-04) — every model our own (Blender); the owner's train lineup; a livery per line
+
+Owner: "E231 (Musashino), E235 (Yamanote), Keikyu 1000, Tobu 30000 and the Hayabusa: build them all and put them in
+the game; the cars too, and the scenery. The goal is that no credits have to be shown" (the VVVF-Simulator port and
+its YAML-Files patterns keep their credit: owner's choice). Then: "a train's colours and destination change with the
+line: E231 Musashino and Sobu local, E235 Yamanote and Sobu Rapid, Tobu 30000 Tojo or Isesaki; show the line's name,
+not a station". Models are built by Blender Python scripts (5.2 LTS, headless; subagents in parallel, at most four
+Blender processes) and checked against photos (photos only to measure; no logos or marks) before they go in.
+
+- **Pipeline** (`09f96e7`): `tools/blender-models.cjs <trains|cars|props|creatures> [ids] [--render]` replaces
+  blender-trains.cjs: Blender → GLB → glTF-Transform (dedup, train palettes lossless, join, weld, WebP, meshopt);
+  materials, primitives and triangles sorted, so an unchanged script gives the same bytes. Train line variants are
+  the same script with `--variant <name>` → `<id>-<variant>.glb` (`KINDS.trains.variants`).
+- **Keikyu N1000 v2** (`09f96e7`): rebuilt from part modules (body with painted livery and LED displays, TH-2100
+  bogies, PT7117 pantographs, underfloor, couplers, skirt); accepted by the owner from renders.
+- **Scenery props** (`d01cd10`): street light, wind turbine, curve mirror, vending machine, torii, stone lantern, bus
+  shelter, traffic cone from `tools/blender/props/` (built to the game's convention: PROPS lost its yaw / origin fixes
+  and the credits). Checked in the game at dawn and night on 朧峠 and 天狼 (lamp glass and vending fronts glow,
+  rotor turns about the hub). The Sketchfab props and import-props.cjs are gone.
+- **Lineup** (`c8795ff`): E231-0 after its move to the Musashino Line (renewed Mitsubishi 2-level IGBT), E235-0
+  (full SiC), Keikyu N1000, Tobu 30000 (Hitachi 3-level IGBT), E5 Hayabusa (26.5 m end cars: `TrainInfo.consist`,
+  `f87a388`). Ginza 1000 and N700 retired: their stored runs stay but leave every list (`cbb8e4d`, test). Specs from
+  ja.wikipedia (estimates marked). Medals from clean legend-AI laps (`TRAIN_MEDALS`). The AI no longer backs up when
+  a slow train gathers speed (`4363a27`; the cars' sim laps unchanged to the digit, bots stay valid).
+- **Sound**: patterns for the new trains (`7c303f1`: YAML-Files `JRE_E233_1000_MITSUBISHI` stands in for the renewed
+  E231; our estimates `E235_ESTIMATE`, `TOBU30000_ESTIMATE`; the E5 runs the N700 estimate with its gear 82:31). The
+  running noise is synthesised (`3a5b7f9`, `audio/running.ts`: octave-band roar fitted to two Commons recordings within
+  ~1 dB per band, joints per axle, wind, the motors' hum, flange squeal, brake hiss); the recordings and their credits
+  are gone.
+- **Own models** (`a5e2e82`, `1732e1e`): E235, Tobu 30000, E231 (body, roof, underfloor, bogies, couplers; LED
+  displays; car numbers) and the cockroach (57-bone rig, alternating-tripod scuttle). Lamps measured on head-on
+  renders (`TrainInfo.lamps`). The train import pipeline (import-trains.cjs, train-import.json, trainImport.ts,
+  `__importTrain`) is removed.
+- **Liveries per line** (`8d8957e`, `9a60669`): `Livery.variant / series / control / vvvf / swatch`. E231 武蔵野線 /
+  総武線各駅停車 (yellow, the original 3-level IGBT `JRE_E231_MITSUBISHI`), E235 山手線 / 横須賀・総武快速線 (E235-1000),
+  Tobu 30000 東上線 / 伊勢崎線 (1996–2011 three-colour LED era). The model `<id>-<variant>.glb` is loaded on demand;
+  the garage rebuilds the train when the line changes and names the line next to the swatches; the race's spec and
+  sound follow the line (`specForLivery`). Displays show the line's name (Keikyu: 京急本線).
+  Verified in Chrome on the RX 5700 XT (vite preview, API cut off): each swatch of E235, Tobu 30000 and E231 loads
+  its line's model and the label names the line; E231 head and tail lamps at dawn and night in a race.
+- **Cars** (in progress): six agents model the AE86, GDB, FD3S, JZA80, BNR34 and S15 from photos (`tools/blender/cars/`).
+  Own car models (`spec.model.own`) keep their trim, chrome, tyre, rim and caliper materials; only paint, accent,
+  glass and lamps are swapped for the runtime ones (`CarModel`, `9a60669`).
+
 ## Session 6c (2026-11-03) — the doremifa takes as long as on the real train (owner: "it reaches the F too fast")
 
 - Measured on Commons recordings (pitch track of the spectrogram, first note F → top G): `Keikyun1000.ogg` ~1.35 s,

@@ -51,11 +51,13 @@ pending. `docs/PLAN.md` holds the design.
 - The GPU picks its own clock (800–2100 MHz) and frame costs change ~2× with it: compare builds with paired runs.
 
 ## Gotchas
-- Scenery models (street lights, turbines, mirrors, vending machines, shrine, bus stop, cones): glTF folders →
-  `node tools/import-props.cjs <srcRoot> [ids]` (`tools/props-import.json`) → `public/models/props/*.glb`; size,
+- Own 3D models (no third-party assets): Blender Python scripts built by `BLENDER=<bin> node tools/blender-models.cjs
+  <trains|cars|props|creatures> [ids] [--render [dir]]` (Blender 5.2 headless → GLB → glTF-Transform: meshopt, WebP;
+  trains also palette textures). Scenery: `tools/blender/props/<id>.py` → `public/models/props/<id>.glb`; size,
   facing (+Z = front) and origin are set in `PROPS` (`render/props.ts`), placement in `TrackScenery.ts`. Each model
-  falls back to the procedural shape when it fails to load. `PropDef.drop` leaves out a box of a model's triangles
-  (the bus stop's utility pole). Credits: `PROPS[].credit` (settings screen) + ASSETS.md.
+  falls back to the procedural shape when it fails to load. The cockroach: `tools/blender/creatures/roach.py` (skinned,
+  scuttle cycle resampled at export). A train's line variants (`KINDS.trains.variants`) are the same script with
+  `--variant <name>` → `<id>-<name>.glb`.
 - Car models with pop-up lamps modelled raised: `popUps` in `car-import.json` (box around the pods, lens pattern,
   folding angle); modelled closed instead: `CarSpec.popUpLamps` (runtime pods). Exhaust guess wrong: `CarSpec.exhaust`.
 - Never leave a transmissive (refractive) material in the scene: three.js then renders every opaque object a second
@@ -88,15 +90,15 @@ pending. `docs/PLAN.md` holds the design.
 - Trains (joke entries, `vehicle/trains.ts`): the sim is only the leading front bogie; `TrainModel` draws three cars
   along its driven path every frame (`CarVisual.tick` → `rig.train.update`; call `CarVisual.refresh()` after moving
   a root by hand). Performance comes from the real figures via `trainSpec` (torque curve, redline, brake force);
-  check with the train tests in `vehicle.test.ts`. Models: unpack each glTF zip into a folder, describe the cuts in
-  `frontend/tools/train-import.json` (axis, scale to metres, three [from, to] ranges along the axis at the gangways,
-  `frontAtMin` / `flip`), then with `vite preview` on :4173: `node tools/import-trains.cjs <srcRoot> [ids]`.
-  Own models (`keikyu1000`; `TrainInfo.model.own`) are Blender Python scripts: `tools/blender/<id>.py` (assembly, CLI
-  `--out/--render/--views`) + part modules `tools/blender/parts/` + `train_kit.py` (frame, materials, export) +
-  `showcase.py` (trackside check renders) → `BLENDER=<bin> node tools/blender-models.cjs trains <id> [--render]`
-  (Blender 5.2 headless → GLB → palette, WebP, meshopt; deterministic). Same contract as imports: nodes car0..car2,
-  origin at the bogie midpoint on the ground, front +Z (Blender: game x, −z, y → Blender x, y, z). Cars of unequal
-  length (E5): `TrainInfo.consist` (`trainBogiePath`).
+  check with the train tests in `vehicle.test.ts`. Models (all own, `TrainInfo.model.own`) are Blender Python scripts:
+  `tools/blender/<id>.py` (assembly, CLI `--out/--render/--views/--variant`) + part modules `tools/blender/parts/` +
+  `<id>_textures.py` (LED displays, numbers) + `train_kit.py` (frame, materials, export) + `showcase.py` (trackside
+  check renders) → `BLENDER=<bin> node tools/blender-models.cjs trains <id> [--render]` (deterministic). Contract:
+  nodes car0..car2, origin at the bogie midpoint on the ground, front +Z (Blender: game x, −z, y → Blender x, y, z).
+  Cars of unequal length (E5): `TrainInfo.consist` (`trainBogiePath`). Displays show the line's name, never a station.
+  Line liveries (`TrainInfo.liveries`, the garage swatches): `variant` → model `<id>-<variant>.glb` (lazy-loaded,
+  the base model meanwhile), optional `series` / `control` / `vvvf` for that line's cars (`specForLivery`, the sound
+  keyed by the pattern); `swatch` when two lines share a band colour.
   The models' lamps are only painted on: `TrainInfo.lamps` (head/tail lamp positions measured on head-on renders,
   lenses put on the surface by a ray; the side-window band and its luminance limit for the night interior glow).
   Sound (`audio/TrainSound.ts`): VVVF trains run a port of VVVF-Simulator (`audio/vvvf/`: AudioWorklet `vvvf-sim`

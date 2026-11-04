@@ -1,9 +1,33 @@
-# 引き継ぎ書（2026-11-03 時点）
+# 引き継ぎ書（2026-11-04 時点）
 
 次のセッションはまずこのファイル、次に `CLAUDE.md`（構成・コマンド・注意点）、`docs/PROGRESS.md`（作業ログ。検証済み／未検証を区別して記録）を読むこと。
 素材の出典・ライセンスは `docs/ASSETS.md`、設計は `docs/PLAN.md`。
 
-## 0. 次のセッションでまずやること（2026-11-03 時点）
+## 0. 次のセッションでまずやること（2026-11-04 時点）
+
+### 0.0 すべて自作モデルに（Session 7、進行中）
+- オーナー: 「E231(武蔵野線) E235(山手線) 京急1000系 東武30000系 新幹線はやぶさ で全部作ってゲーム内に導入してください」
+  「車もすべて、ゲーム内の装飾等もお願いします。著作元を出さなくていいようにするのが目標になります」。
+  VVVF-Simulator の移植と YAML-Files のパターンだけはクレジットを残す（オーナー「2でいい」）。
+- 「電車って車両同じだけど使う路線で色と行先変わるよね…行先は駅名じゃなくて路線名にしてください」→ 路線ごとのカラー（下）。
+- 「電車の見た目を限界まで品質高く現物に近く」「ゲームで仮設置する前にまずは画像で私に見せてください」: 写真と並べたレンダーで
+  確認してから入れる。写真は寸法・形を測るためだけに使い、ロゴ・マスコット・社紋は入れない。
+- **済み**（ゲーム内で確認済み）
+  - 背景 8 種（街灯・風車・カーブミラー・自販機・鳥居・石灯籠・バス停・コーン）: `tools/blender/props/`。
+  - 電車: 京急新1000（v2）・E235・東武30000・E231（`tools/blender/<id>.py` ＋ `parts/` ＋ `<id>_textures.py`）。ゴキブリ（`creatures/roach.py`）。
+  - 路線ごとのカラー（`Livery.variant` → `<id>-<variant>.glb` を必要な時に読み込み、`series`・`control`・`vvvf` でその路線の車の性能表示と音）:
+    E231 武蔵野線／総武線各駅停車、E235 山手線／横須賀・総武快速線（1000番台）、東武30000 東上線／伊勢崎線（1996〜2011 の 3 色 LED）。
+    ガレージで色を選ぶと路線名が出てモデルが切り替わる。行先表示は路線名（京急は「京急本線」）。
+  - 取り込みの道具（`import-trains.cjs`・`train-import.json`・`trainImport.ts`・`import-props.cjs`）は削除。
+- **作業中**
+  - E5 はやぶさ（`tools/blender/e5.py`、未コミット）: 写真との比較で前頭部（キャノピー・頬のくぼみ・裾の張り出し）を修正中。
+    GLB が無い間はゲームでは手続き生成の仮の車体。できたら `blender-models.cjs trains e5` → `TrainInfo.lamps` の `// LAMPS:e5` を埋める。
+  - 車 6 台（`tools/blender/cars/<id>.py`、未コミット）: 写真と並べて形を詰めている。オーナーに画像を見せてから入れる。
+    入れる時: `blender-models.cjs cars <id>` → `CarSpec.model` を自作（`own: true`、作者 TOUGE NOCTURNE、ライセンス 自作）に。
+    RX-7 はモデルのリトラ（`popup_l` / `popup_r`）を使う。インプレッサは実寸のホイールベース 2.525m・トレッド約 1.48m に直し、
+    メダルを擬似走行で確かめ `npm run seed:bots`。全車が自作になったら `import-cars.cjs`・`car-import.json`・`carImport.ts`・`__importCar` を削除。
+  - 入るまでは車は Sketchfab のモデル（帰属表示あり）のまま。第三者のモデルを「自作」と表示した状態では反映しない。
+
 
 ### 0.1 電車の音: VVVF Simulator の移植（Session 6、オーナーが B を選び反映済み）
 - 経緯: オーナーが「電車の音にはファンが多い、雑だと好まれない」と、本物の VVVF シミュレーター（OSS）を使うよう求めた。
@@ -45,7 +69,7 @@
   タイヤ痕、メダル）を登録制に。③ リトラ・排気位置などの個別機能は部品として足す。④ 車種一覧をフロントから JSON で出してバックエンドが読む＋一致テスト。
 - 進め方: 電車の音が終わってから、①挙動を変えずに登録制へ移す ②音のインターフェース ③一覧の一本化、の順で、毎回テスト・E2E・スクショで確認。
 
-### 0.3 Blender で自前のモデルを作る（Session 6b で開始: 京急新1000形。オーナーの確認待ち）
+### 0.3 Blender で自前のモデルを作る（Session 6b で開始。Session 7 で全モデルに広げた: 0.0）
 - オーナー: 「3dモデルの権利などが気になるならblender 入れてmcp 連携で使ってもいいですよ」
   「最終的に外部素材に頼らずとも製作できるようなblender 導入してあなたがモデルを作りなおすところ見てみたい」
 - Session 6b の依頼: 「Blender MCPでの作り込みをやるテストとして京急1000系のドレミファ作ってくれない？」
@@ -56,7 +80,8 @@
   アドオンのクラウド連携（Meshy・Tripo・Sketchfab・Hyper3D・PolyHaven）は使わない。それまでは Blender の Python スクリプトで作る
   （MCP も中身は Blender 内での Python 実行なので、作れる物は同じ。違いは対話的に 1 手ずつ見ながら進められること）。
 - **作り方**: `frontend/tools/blender/train_kit.py`（部品の道具）＋ `tools/blender/<id>.py`（電車ごとの寸法と部品）→
-  `node tools/blender-trains.cjs <id>`（Blender → GLB → gltf-transform で圧縮 → `public/models/trains/<id>.glb`）。
+  `node tools/blender-models.cjs trains <id>`（Blender → GLB → gltf-transform で圧縮 → `public/models/trains/<id>.glb`。
+  車・背景・ゴキブリも同じ道具で `cars` / `props` / `creatures`）。
   `--render` で組み立ての段階ごとの絵（`/tmp/<id>-stage*.png`）。GLB をコミットするので、実行時・ビルド時に Blender は要らない。
   - 車体は断面を前後に伸ばした筒（屋根の肩の丸み）、端の面取り、運転台は前傾（rake）とふくらみ（bulge）。窓・ドア・帯・ライトは
     車体の表面に投影した板（デカール）。台車・床下機器・クーラー・パンタグラフ・スカート・連結器も部品で。
@@ -88,10 +113,10 @@
     終わったら `down -v`。
 - 遊べる内容:
   - コース 3 本: 朧峠、霧降湖、天狼スカイライン
-  - 車 6 台: すべて実車モデル（Sketchfab、CC BY）: ハチロク、RX-7、S15、インプレッサ、スープラ、R34
+  - 車 6 台: 実車モデル（Sketchfab、CC BY。自作に置き換え中、0.0）: ハチロク、RX-7、S15、インプレッサ、スープラ、R34
     - ハチロクとRX-7はリトラ（夜に開いて点灯、昼は閉じる）
-  - 背景: 街灯・風車（天狼）・カーブミラー・自販機・鳥居と石灯籠・バス停・コーンが実物の3Dモデル（Sketchfab、CC BY）
-  - ネタ枠: 電車 4 形式（E231・京急新1000（Blender で自作）・銀座線1000・N700）とゴキブリ
+  - 背景: 街灯・風車（天狼）・カーブミラー・自販機・鳥居と石灯籠・バス停・コーン（Blender で自作）
+  - ネタ枠: 電車 5 形式（E231・E235・京急新1000・東武30000・E5 はやぶさ。E5 以外は Blender で自作、路線ごとのカラーあり）とゴキブリ（自作）
   - モード: タイムアタック、AI ライバル戦、ゴーストバトル、オンライン対戦（最大 3 人）
   - Laravel 側: ランキング、ゴースト、対戦ルーム
 - オーナーは実 GPU（60fps）で遊んでおり、Cloudflare Tunnel で公開済み（オーナー自身が設定）。
@@ -122,6 +147,8 @@
   - 依頼するのは外部素材が必要なときと、自力で解決できないときだけ。
   - Sketchfab のモデルは私的利用（身内のみ）。CC BY / CC0 を選び、ゲームから抜き出したモデルは避ける。
   - 素材は ASSETS.md と `CarSpec.model` に帰属表示を必ず書く。
+  - 目標は帰属表示の要らないゲーム（2026-11-04、0.0）: モデルは Blender で自作する。例外は VVVF-Simulator の移植と YAML-Files の
+    パターン（クレジットを残す）。第三者のモデルを「自作」と表示しない。
 - **進め方**
   - オーナーとのやりとりは日本語。
   - 依頼に対しては、実際に動かして確認してから報告する。
@@ -177,7 +204,13 @@
 - **その他**
   - 朧峠のキービジュアルの車が実在車に似ている（公開前に差し替え推奨）。
 
-## 6. 最近の主な変更（新しい順。詳細は PROGRESS「Session 5b」「Session 5」「Session 4」）
+## 6. 最近の主な変更（新しい順。詳細は PROGRESS「Session 7」以下）
+
+### 自作モデルと電車の顔ぶれ（Session 7、2026-11-03〜04）
+- 電車: E231（武蔵野線に移った 0 番台）・E235・京急新1000・東武30000・E5 はやぶさ。銀座線1000 と N700 は廃止（記録は残し、一覧からは外す）。
+  性能は ja.wikipedia から、メダルは擬似走行の伝説 AI の周回から。音のパターン: E231 武蔵野線は YAML-Files `JRE_E233_1000_MITSUBISHI` で代用、
+  E235・東武30000 はこちらの推定、E5 は N700 の推定に E5 の歯車比。走行音は録音をやめて合成（`audio/running.ts`）。
+- 路線ごとのカラーと、自作モデル（背景・電車・ゴキブリ、車は作業中）は 0.0。
 
 ### 京急新1000形（ドレミファインバータ）と自作モデル（Session 6b、2026-11-03）
 - オーナーの依頼で、Blender で作った京急新1000形 1 次車を追加し、117・京成3300 を廃止（0.3）。
@@ -233,7 +266,7 @@
   オーナーが Sketchfab から落とした 3D モデル（ASSETS.md）。E235・東武・103 はモデルが無く、オーナーの判断でこの 5 形式に。
 - 性能は実車の値（起動加速度・設計最高速度・常用/非常減速度・歯車比、Wikipedia）。物理は先頭台車だけで、3 両はその軌跡を
   レールのようにたどる。視点は高めの追従と運転台。音は制御方式ごとの合成（VVVF の段の変化など）。
-- モデルの差し替え・追加: `frontend/tools/train-import.json` と `tools/import-trains.cjs`（CLAUDE.md）。
+- モデルの差し替え・追加: `frontend/tools/train-import.json` と `tools/import-trains.cjs`（Session 7 で自作モデルに置き換えて削除）。
 - 加速は実車の起動加速度どおり（E231 で 0→30km/h 約 12 秒、ゲーム内の実測でも同じ）。オーナーが「遅くない?」と確認のうえ、
   実車どおりのままと決定（2026-11-03）。上げる場合は `trains.ts` の `accel` ではなく別の倍率で（表示は実車値のまま）。
 - ライトは先頭車に付いている（物理の台車に付けていた時はカーブでライトだけ左右に振れた、修正済み）。
@@ -376,13 +409,14 @@ nohup npx vite preview --port 4173 --strictPort > /tmp/preview.log 2>&1 &   # �
 | AI（追突回避・ライン防御・停車） | `frontend/src/game/ai/AIDriver.ts` |
 | オンラインの相手車（代役の車体） | `frontend/src/game/net/RemoteRacers.ts`, `ProxyCar.ts` |
 | 排気・タイヤスモーク | `frontend/src/game/fx/Exhaust.ts`, `TireEffects.ts` |
-| 車の取り込み | `frontend/tools/import-cars.cjs`, `car-import.json`, `src/game/render/carImport.ts` |
+| 車の取り込み（自作の車が入ったら削除） | `frontend/tools/import-cars.cjs`, `car-import.json`, `src/game/render/carImport.ts` |
 | 実 GPU での性能計測 | `frontend/tools/perf-gpu.cjs` |
-| 背景の3Dモデル（読み込み・配置） | `frontend/src/game/render/props.ts`, `TrackScenery.ts`（`buildLandmarks` など）, `tools/import-props.cjs` |
+| 背景の3Dモデル（読み込み・配置） | `frontend/src/game/render/props.ts`, `TrackScenery.ts`（`buildLandmarks` など）, `tools/blender/props/` |
 | 電車の音（全体・VVVF・走行音の合成） | `frontend/src/game/audio/TrainSound.ts`, `audio/running.ts`（走行音: 転動音・継目・風・主電動機のうなり・きしみ・ブレーキ）, `audio/running.worklet.ts`, `audio/AudioEngine.ts`（`vvvfNode`, `runningNode`）, `tools/train-run-wav.ts` |
 | VVVF Simulator の移植（計算・ワークレット・C# 版との突き合わせ） | `frontend/src/game/audio/vvvf/`（sim, data, math, engine, train, vvvf.worklet）, `tools/vvvf-ref/`, `src/game/__tests__/vvvf.test.ts` |
 | VVVF の制御パターン（YAML → JSON）・電車ごとの設定（歯数・すべり） | `frontend/tools/vvvf/*.yaml`, `tools/vvvf-patterns.ts`, `src/game/vehicle/vvvf.ts`, `vehicle/trains.ts`（`vvvf`, `running`） |
-| 自作の電車モデル（Blender のスクリプト・書き出し） | `frontend/tools/blender/train_kit.py`, `tools/blender/<id>.py`, `tools/blender-trains.cjs` |
+| 自作のモデル（Blender のスクリプト・書き出し） | `frontend/tools/blender-models.cjs`, `tools/blender/train_kit.py`, `tools/blender/<id>.py`・`parts/`（電車）, `tools/blender/cars/`, `props/`, `creatures/` |
+| 電車の路線ごとのカラー | `frontend/src/game/vehicle/trains.ts`（`liveries`, `specForLivery`, `trainModelKey`）, `render/TrainModel.ts` |
 | VVVF の CHM（スイッチング角テーブル） | `frontend/src/game/audio/vvvf/customPwm.ts`, `public/audio/vvvf-tables/*.bin`, `tools/vvvf-tables.ts` |
 | 電車の音の試聴ファイル | `frontend/tools/vvvf-train-wav.ts`（Node）, `tools/vvvf-game-wav.ts`（Chrome でゲームの音そのもの） |
 | 音のクレジット | `frontend/src/ui/screens/Settings.tsx`, `docs/ASSETS.md`（Train sounds） |
