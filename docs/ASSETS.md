@@ -139,16 +139,17 @@ modules (`tools/blender/parts/<id>_*.py`: body, bogies, roof gear, underfloor, c
 numpy / PIL, Noto Sans CJK for the LED displays and car numbers, no photo pixels). `node tools/blender-models.cjs
 trains [ids]` builds and optimises `frontend/public/models/trains/<id>.glb` and each line variant
 (`--variant <name>` → `<id>-<name>.glb`: the same train painted and signed for another line). Dimensions and layout
-from public figures (Japanese Wikipedia) and photos, used for measuring only; no drawings, no logos or corporate
-marks; the displays show the line's name, not a station.
+from public figures (Japanese Wikipedia) and photos, used for measuring only; no drawings. Company marks and service
+logos (JR mark, KEIKYU logotype, the Hayabusa and H5 logos) are drawn by our scripts as shapes, never cut from photos
+(owner's choice, 2026-11-04; to be removed if a rights holder objects). The displays show the line's name, not a station.
 
 | Train | Lines (model files) |
 |---|---|
-| E231系0番台 (`e231`) | 武蔵野線 (`e231.glb`), 中央・総武緩行線 (`e231-sobu.glb`) |
-| E235系 (`e235`) | 山手線 (`e235.glb`), 横須賀・総武快速線 E235系1000番台 (`e235-sobu.glb`) |
+| E231系 (`e231`) | 武蔵野線 (`e231.glb`), 中央・総武緩行線 (`e231-sobu.glb`), 常磐線快速 (`e231-joban.glb`), 地下鉄東西線直通 800番台 (`e231-tozai.glb`), 上野東京ライン 近郊型1000番台 (`e231-kinkou.glb`) |
+| E235系 (`e235`) | 山手線 (`e235.glb`), 横須賀・総武快速線 E235系1000番台 (`e235-sobu.glb`), 総武線各駅停車 (`e235-chuosobu.glb`) |
 | 京急新1000形 (`keikyu1000`) | 京急本線 (`keikyu1000.glb`) |
 | 東武30000系 (`tobu30000`) | 東上線 (`tobu30000.glb`), 伊勢崎線 1996–2011 (`tobu30000-isesaki.glb`: 3-colour LED of that era) |
-| E5系 はやぶさ (`e5`) | 東北新幹線 (`e5.glb`: 26.5 m end cars, `TrainInfo.consist`) |
+| E5系 はやぶさ (`e5`) | 東北新幹線 (`e5.glb`: 26.5 m end cars, `TrainInfo.consist`), 北海道新幹線 H5系 (`e5-h5.glb`) |
 
 Train performance figures (vehicle/trains.ts) are from Japanese Wikipedia; masses marked as estimates in the game
 where no per-car figure is published.
@@ -173,7 +174,8 @@ tables (`Vvvf/SwitchAngle/*.bin`, solved by the simulator's authors; copied unch
 | Train | Pattern | Source |
 |---|---|---|
 | E231 武蔵野線 (renewed Mitsubishi 2-level IGBT) | `JRE_E233_1000_MITSUBISHI` | VvvfGeeks / YAML-Files (https://github.com/VvvfGeeks/YAML-Files, fans' recreations, "not exactly the same as the original"; no licence file, used with credit and link, non-commercial) |
-| E231 総武線各駅停車 (3-level IGBT) | `JRE_E231_MITSUBISHI` | VvvfGeeks / YAML-Files |
+| E231 総武線各駅停車, 常磐線, 東西線直通 (3-level IGBT) | `JRE_E231_MITSUBISHI` | VvvfGeeks / YAML-Files |
+| E231 上野東京ライン (近郊型, Hitachi 2-level IGBT) | `JRE_E231_HITACHI` | VvvfGeeks / YAML-Files |
 | 京急新1000 | `N1000_SIEMENS_GTO` (the "ドレミファインバータ": asynchronous carrier in steps 175…400 Hz, then CHM 15 … 3, sync) | VvvfGeeks / YAML-Files |
 | E235 | `E235_ESTIMATE` (ours) | an estimate in the simulator's format from public facts (full-SiC 2-level, asynchronous ~1200 Hz then 27 pulses; ja.wikipedia, VVVF名鑑) |
 | 東武30000 | `TOBU30000_ESTIMATE` (ours) | an estimate from public facts (Hitachi 3-level IGBT) |

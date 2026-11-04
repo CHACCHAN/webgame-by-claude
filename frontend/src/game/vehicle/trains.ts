@@ -1,6 +1,6 @@
 import type { CarSpec } from './carSpecs';
 import type { TrainRunning } from '../audio/running';
-import { E231_MITSUBISHI, E231_MUSASHINO_MITSUBISHI, E235_MITSUBISHI_SIC, E5_ESTIMATE, KEIKYU_N1000_GTO, TOBU30000_HITACHI, type TrainVvvf } from './vvvf';
+import { E231_KINKOU_HITACHI, E231_MITSUBISHI, E231_MUSASHINO_MITSUBISHI, E235_MITSUBISHI_SIC, E5_ESTIMATE, KEIKYU_N1000_GTO, TOBU30000_HITACHI, type TrainVvvf } from './vvvf';
 
 /**
  * Joke entries: three-car trains driven on the pass. The performance is the real train's (starting acceleration,
@@ -163,8 +163,8 @@ export const trainTailZ = (t: Pick<TrainInfo, 'carLength' | 'bogies' | 'consist'
  */
 export const TRAIN_INFO: Record<TrainId, TrainInfo & { name: string; tagline: string; description: string; model: { title: string; author: string; url: string; license: string; own?: boolean } }> = {
   e231: {
-    name: 'E231系', series: 'E231系0番台（武蔵野線）', operator: 'JR東日本', tagline: '武蔵野線・総武線・常磐線・東西線直通',
-    description: 'JR東日本の通勤形の標準になったE231系。武蔵野線の車は機器更新でVVVFが三菱の2レベルIGBTに。カラーで武蔵野線・総武線各駅停車・常磐線快速、車体の細い800番台（地下鉄東西線直通）を選べる。',
+    name: 'E231系', series: 'E231系0番台（武蔵野線）', operator: 'JR東日本', tagline: '武蔵野線・総武線・常磐線・東西線直通・上野東京ライン',
+    description: 'JR東日本の通勤形の標準になったE231系。武蔵野線の車は機器更新でVVVFが三菱の2レベルIGBTに。カラーで武蔵野線・総武線各駅停車・常磐線快速、車体の細い800番台（地下鉄東西線直通）、湘南色の近郊タイプ（上野東京ライン）を選べる。',
     accel: 2.5, vmax: 120, brake: [4.2, 4.5], mass: 79.8, motor: 'MT73 95kW×4', control: 'IGBT-VVVFインバータ（2レベル・三菱電機、機器更新車）', sound: 'igbt',
     gearRatio: 7.07, wheel: 0.86, body: 'stainless', width: 2.95, carLength: 20, bogies: 13.8, front: 'e231',
     // the lines it runs on: Wikipedia (E231, 武蔵野線) orange #f15a22 + brown #3c060f (the cab front: orange only); the
@@ -179,6 +179,12 @@ export const TRAIN_INFO: Record<TrainId, TrainInfo & { name: string; tagline: st
       {
         name: '地下鉄東西線直通', band: '#00b2e5', band2: '#1d2f8c', variant: 'tozai', series: 'E231系800番台（地下鉄東西線直通）', control: 'IGBT-VVVFインバータ（三菱電機）', vvvf: E231_MITSUBISHI,
         lamps: { head: { x: 0.8, y: 1.439, w: 0.205, h: 0.175 }, tail: { x: 1.085, y: 1.439, w: 0.205, h: 0.175 }, windows: [1.95, 2.86], windowLum: 0.06 },
+      },
+      // the suburban type (1000番台) in Shōnan colours on the Ueno-Tokyo Line: its own high cab, the head lamps (LED since
+      // 2025) up by the line display, the tail lamps in the units under the bands; Hitachi 2-level IGBT
+      {
+        name: '上野東京ライン', band: '#f68b1e', band2: '#009900', swatch: '#009900', variant: 'kinkou', series: 'E231系1000番台（近郊タイプ・上野東京ライン）', control: 'IGBT-VVVFインバータ（2レベル・日立製作所）', vvvf: E231_KINKOU_HITACHI,
+        lamps: { head: { x: 0.92, y: 3.325, w: 0.08, h: 0.08, round: true }, tail: { x: 0.92, y: 1.335, w: 0.2, h: 0.115 }, windows: [1.95, 2.9], windowLum: 0.06 },
       },
     ],
     lamps: { head: { x: 0.79, y: 1.367, w: 0.2, h: 0.16 }, tail: { x: 1.05, y: 1.367, w: 0.19, h: 0.15 }, windows: [1.93, 2.86], windowLum: 0.06 },

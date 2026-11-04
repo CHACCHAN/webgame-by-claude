@@ -714,7 +714,9 @@ def _cab_interior(V, X):
 
 
 # head-on figures of the face (x, y), measured on the photos (see the docstring)
-GLASS_AREA = (1.33, 1.916, 3.40, 0.22, 0.20)     # half width, y0, y1, bottom corner r, top corner r (silver frame round it)
+GLASS_AREA = (1.33, 1.916, 3.36, 0.22, 0.30)     # half width, y0, y1, bottom corner r, top corner r (silver frame round it;
+#   owner 2026-11-04: the black ran out into the top corners. The face turns into the roof from y ≈ 3.29, so the black
+#   ends just over the displays (top 3.35) with round corners (p19: r ≈ 0.3), the frame following the shoulders)
 SCREEN = (1.29, 2.22, 3.07, 0.10)               # the clear windscreen inside it (half width, y0, y1, r)
 FRONT_BAND = (1.557, 1.881)
 LAMP_PANEL = (1.38, 1.212, 1.521, 0.10)          # half width, y0, y1, r
@@ -767,8 +769,11 @@ def paint_face(body, plate_img=None, w=2048, h=1600):
     hw, y0, y1, rb, rt = GLASS_AREA
     sd_b = SRR(X, V, 0.0, (y0 + y1) / 2, 2 * hw, y1 - y0, rb)
     sd_t = SRR(X, V, 0.0, (y0 + y1) / 2, 2 * hw, y1 - y0, rt)
-    upper = K.smoothstep((y0 + y1) / 2 - 0.05, (y0 + y1) / 2 + 0.05, 0) if False else (V > (y0 + y1) / 2)
-    sd = np.where(upper, sd_t, sd_b)
+    sd = np.where(V > (y0 + y1) / 2, sd_t, sd_b)
+    # near the top a row of the face ends short of HW (its corners turn into the roof's shoulders): keep the frame
+    # as wide as at the sides there, measured from the row's own end (with x alone the black ran out to the corners)
+    edge = np.max(np.abs(X), axis=1, keepdims=True)
+    sd = np.maximum(sd, np.abs(X) - (edge - (HW - hw)))
     cv.paint(cv.cover(sd + 0.010, aa), (0.10, 0.10, 0.105), 0.4, 0.0)        # the rubber gasket
     cv.paint(cv.cover(sd + 0.022, aa), GLASS, 0.06, 0.0)
     # the clear windscreen with the cab behind it

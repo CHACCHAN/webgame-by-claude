@@ -62,6 +62,18 @@ export const E231_MUSASHINO_MITSUBISHI: TrainVvvf = {
 };
 
 /**
+ * JR East E231 suburban type (1000番台 and others: Tokaido, Utsunomiya, Takasaki Lines): Hitachi 2-level IGBT (SC59A),
+ * gear 7.07 (99:14) as on the commuter type, MT73 4-pole (ja.wikipedia JR東日本E231系電車, 近郊タイプ).
+ */
+export const E231_KINKOU_HITACHI: TrainVvvf = {
+  pattern: 'JRE_E231_HITACHI',
+  gear: [14, 99],
+  polePairs: 2,
+  slip: 2,
+  source: 'E231系 近郊タイプ 日立IGBT（YAML-Files JRE_E231_HITACHI）',
+};
+
+/**
  * JR East E235-0 (Yamanote Line, mass production): Mitsubishi full-SiC SC104, 2-level, 1C4M. Our estimate
  * (tools/vvvf/E235_ESTIMATE.yaml, from ja.wikipedia and fans' analyses on VVVF名鑑): asynchronous at a constant ~1200 Hz
  * centre with narrow random modulation, a slight rise at its end, then synchronous 27 pulses in three over-modulated

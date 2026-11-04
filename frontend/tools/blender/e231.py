@@ -3,7 +3,7 @@ JR East E231 series 0番台 as converted for the Musashino Line (set MU2, Keiyō
 クハE230 as the game shows them, built from numbers and our own painted textures (no outside model, no photo pixels).
 Run with Blender 5.x:
 
-  blender --background --factory-startup --python tools/blender/e231.py -- --out <file.glb> [--variant sobu|joban|tozai]
+  blender --background --factory-startup --python tools/blender/e231.py -- --out <file.glb> [--variant sobu|joban|tozai|kinkou]
       [--render <dir> [--views hero,head,...] [--samples N] [--size WxH] [--cams 'name:ex,ey,ez,tx,ty,tz,lens;...']]
       [--tex <dir>]
 
@@ -14,6 +14,8 @@ Variants (the line's name on the displays):
           FRP and skirt, outside-speaker blanks in the upper band, an electric coupler under the head (its only
           extra geometry)
   tozai   E231-800 (Tōzai Line through service, set K5): its own narrower body and asymmetric cab, parts/e231_800_*.py
+  kinkou  the suburban type 1000番台 in Shōnan colours (上野東京ライン / Ueno-Tokyo Line): its own body, high cab and
+          gear, built by parts/e231_kinkou_build.py (textures: e231_kinkou_textures.py)
 The first three share the meshes, nodes and material names; they differ in paint and sign textures (and joban's
 electric coupler).
 
@@ -39,6 +41,10 @@ sys.path.insert(0, os.path.join(HERE, 'parts'))
 import train_kit as K  # noqa: E402
 
 _A = sys.argv[sys.argv.index('--') + 1:] if '--' in sys.argv else []
+if '--variant' in _A and _A[_A.index('--variant') + 1] == 'kinkou':
+    # the suburban type (1000番台) has its own body, cab and gear: parts/e231_kinkou_build.py builds, exports, renders
+    importlib.import_module('e231_kinkou_build').run(_A)
+    sys.exit(0)
 # the E231-800 (Tōzai Line through service) has its own narrower body and cab: parts/e231_800_body.py
 BD = importlib.import_module('e231_800_body' if '--variant' in _A and _A[_A.index('--variant') + 1] == 'tozai'
                              else 'e231_body')

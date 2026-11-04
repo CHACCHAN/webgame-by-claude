@@ -9,7 +9,7 @@ the game; the cars too, and the scenery. The goal is that no credits have to be 
 its YAML-Files patterns keep their credit: owner's choice). Then: "a train's colours and destination change with the
 line: E231 Musashino and Sobu local, E235 Yamanote and Sobu Rapid, Tobu 30000 Tojo or Isesaki; show the line's name,
 not a station". Models are built by Blender Python scripts (5.2 LTS, headless; subagents in parallel, at most four
-Blender processes) and checked against photos (photos only to measure; no logos or marks) before they go in.
+Blender processes) and checked against photos (photos only to measure) before they go in.
 
 - **Pipeline** (`09f96e7`): `tools/blender-models.cjs <trains|cars|props|creatures> [ids] [--render]` replaces
   blender-trains.cjs: Blender → GLB → glTF-Transform (dedup, train palettes lossless, join, weld, WebP, meshopt);
@@ -42,9 +42,30 @@ Blender processes) and checked against photos (photos only to measure; no logos 
   sound follow the line (`specForLivery`). Displays show the line's name (Keikyu: 京急本線).
   Verified in Chrome on the RX 5700 XT (vite preview, API cut off): each swatch of E235, Tobu 30000 and E231 loads
   its line's model and the label names the line; E231 head and tail lamps at dawn and night in a race.
-- **Cars** (in progress): six agents model the AE86, GDB, FD3S, JZA80, BNR34 and S15 from photos (`tools/blender/cars/`).
-  Own car models (`spec.model.own`) keep their trim, chrome, tyre, rim and caliper materials; only paint, accent,
-  glass and lamps are swapped for the runtime ones (`CarModel`, `9a60669`).
+- **Owner's review (2026-11-04)**: "the top of the E235 / E231 faces is wrong: the colour normally frames the windows";
+  "the E231 also ran in Tozai-through and Joban colours, check the other trains"; logos: the owner chose to put them in
+  (they are trademarks, the site is public): drawn by us as shapes, removed if a rights holder objects; no mascots.
+  - E235 (`ef25c0d`): the line colour runs over the windscreen as a frame (0.08 m top band), JR marks on the cab-car
+    sides; `chuosobu`: the sets moved from the Yamanote Line in 2026, canary yellow (総武線各駅停車).
+  - Keikyu: the KEIKYU side logotype on the middle car. Tobu 30000: no body logos on the real cars (photos).
+  - E231: the silver FRP frame round the black face (the line colour a bar under it), JR marks. Owner then: "the black
+    here bothers me" (the top corners): the black ran out into the corners, because near the top the face turns into
+    the roof's shoulders and the face texture's rows end short of the body's width. The black now ends just over the
+    displays (y 3.36, round top corners r 0.30) and stays a frame's width inside each row's end. Liveries 常磐線 (快速,
+    emerald + yellow-green), 地下鉄東西線直通 (800番台: narrower body, the cab's emergency door on one side) and
+    上野東京ライン (近郊型 1000番台, 湘南色; Hitachi 2-level IGBT, YAML-Files `JRE_E231_HITACHI`). A line whose cab differs
+    gives its own lamps (`Livery.lamps`).
+  - E5 (`fda2605`): own model (nose and canopy fitted to head-on and 3/4 photos, PS208 with its noise shields, bogies,
+    the Hayabusa logo and JR marks) and the H5 (北海道新幹線: 彩香パープル band, H5 numbers and logo). Its four lamps
+    in a row: `LampPair.n / gap`.
+  - Verified in Chrome on the RX 5700 XT (vite preview, API cut off): each new swatch loads its line's model and the
+    label names the line; head and tail lamps at dawn and night.
+- **Cars: paused** (owner, 2026-11-04: "your cost is very high: finish everything but the cars; the cars use the
+  external models; I'll restart them next week or later"). The six cars stay on the Sketchfab models with credits.
+  Modelling by eye against photos did not converge (owner: "not the same as the real cars"), so a measured fit was
+  built for the restart: `tools/carfit/` (silhouette and material-ID renders from cameras solved on the photos,
+  GrabCut masks, IoU / boundary error / zone offsets; acceptance IoU ≥ 0.95, p95 ≤ 1.5 % of the car's width). The
+  work in progress is committed unused (`bb80d52`: `tools/blender/cars/`, `fitdata/`).
 
 ## Session 6c (2026-11-03) — the doremifa takes as long as on the real train (owner: "it reaches the F too fast")
 

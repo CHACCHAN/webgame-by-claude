@@ -25,7 +25,7 @@ const KINDS = {
   trains: {
     dir: 'tools/blender', out: 'public/models/trains', palette: true, joinNamed: true, textureSize: 2048, big: { led: 4096 },
     ids: ['e231', 'e235', 'keikyu1000', 'tobu30000', 'e5'],
-    variants: { e231: ['sobu', 'joban', 'tozai'], e235: ['sobu', 'chuosobu'], tobu30000: ['isesaki'], e5: ['h5'] },
+    variants: { e231: ['sobu', 'joban', 'tozai', 'kinkou'], e235: ['sobu', 'chuosobu'], tobu30000: ['isesaki'], e5: ['h5'] },
   },
   cars: { dir: 'tools/blender/cars', out: 'public/models/cars', palette: false, textureSize: 1024, big: {}, ids: ['hayate', 'raijin', 'shiden', 'supra', 'r34', 's15'] },
   props: {
