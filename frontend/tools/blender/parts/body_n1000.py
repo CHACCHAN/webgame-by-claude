@@ -957,8 +957,97 @@ def _side_x(y):
     return HW - SHOULDER + math.sqrt(SHOULDER * SHOULDER - dy * dy)
 
 
+# The "KEIKYU" logotype on the lower side (owner allows company logos, 2026-11-04): a thin metal frame round six
+# metal block letters on the red, near the car's right-hand end as seen from either side (point symmetry). Measured on
+# photo 04 (Keikyu-N1000-ALcar, The RW place, CC BY-SA 3.0; a Tpu with its pantographs): the box ends 0.35 m short of
+# the end window's outer edge, 0.39 x 0.13 m, its centre 0.33 m above the body's lower edge; the letters fill ~92 % of
+# the box's width and ~2/3 of its height. Seen clearly only on that car; photos of the cab cars' lower sides are too
+# oblique to tell, so the logo goes on the cars listed here.
+SIDE_LOGO = (7.585, 1.317, 0.39, 0.13, 0.006)   # |z| of the centre, y of the centre, width, height, frame width
+SIDE_LOGO_CARS = ('middle',)
+LOGO_CAP = 0.088                                 # letter height
+LOGO_STROKE = 0.17                               # stroke / letter height
+LOGO_GAP = 0.14                                  # letter gap / letter height
+
+
+def _logo_letters():
+    """KEIKYU as polygons in letter-height units (a along the line of text, b up; baseline at b = 0); and the width"""
+    t = LOGO_STROKE
+    s = t * 1.25                                  # horizontal width of a slanted stroke
+
+    def rect(a0, b0, a1, b1):
+        return [(a0, b0), (a1, b0), (a1, b1), (a0, b1)]
+
+    # the pieces of a letter only touch (overlapping coplanar faces render black)
+    def K(w=0.62, lo=0.32, hi=0.62):
+        # one outline: the stem, the leg from the stem at b = lo, the arm from the stem at b = hi; the leg's right edge
+        # meets the arm's lower edge at (pa, pb)
+        d1 = (w - s - t, 1 - hi)                  # along the arm
+        d2 = (w - s - t, -lo)                     # along the leg
+        k = -1 / (d1[1] - d2[1])
+        pa, pb = w + k * d1[0], 1 + k * d1[1]
+        return [[(0, 0), (t, 0), (t, lo), (w - s, 0), (w, 0), (pa, pb), (w, 1), (w - s, 1), (t, hi), (t, 1), (0, 1)]], w
+
+    def E(w=0.52):
+        return [rect(0, 0, t, 1), rect(t, 1 - t, w, 1), rect(t, 0.5 - t / 2, w * 0.92, 0.5 + t / 2), rect(t, 0, w, t)], w
+
+    def I():
+        return [rect(0, 0, t, 1)], t
+
+    def Y(w=0.66):
+        m, j = w / 2, 0.44                        # the arms meet the stem at b = j; their inner edges at b = j + 0.28
+        return [rect(m - t / 2, 0, m + t / 2, j),
+                [(m - t / 2, j), (m + t / 2, j), (w, 1), (w - s, 1), (m, j + 0.28), (s, 1), (0, 1)]], w
+
+    def U(w=0.60, n=10):
+        r0, r1, c = w / 2 - t, w / 2, 0.30
+        polys = [rect(0, c, t, 1), rect(w - t, c, w, 1)]
+        for k in range(n):                        # the bowl: a half ring below b = c
+            a0, a1 = math.pi + math.pi * k / n, math.pi + math.pi * (k + 1) / n
+            polys.append([(w / 2 + r1 * math.cos(a0), c + r1 * math.sin(a0) * (c / r1)),
+                          (w / 2 + r1 * math.cos(a1), c + r1 * math.sin(a1) * (c / r1)),
+                          (w / 2 + r0 * math.cos(a1), c + r0 * math.sin(a1) * ((c - t) / r0)),
+                          (w / 2 + r0 * math.cos(a0), c + r0 * math.sin(a0) * ((c - t) / r0))])
+        return polys, w
+
+    out, a = [], 0.0
+    for polys, w in (K(), E(), I(), K(), Y(), U()):
+        out += [[(a + pa, pb) for pa, pb in p] for p in polys]
+        a += w + LOGO_GAP
+    return out, a - LOGO_GAP
+
+
+def side_logo(part, kind, lift=0.0015):
+    """the KEIKYU logotype on both sides (flat metal shapes just off the side)"""
+    if kind not in SIDE_LOGO_CARS:
+        return
+    zc_abs, yc, w, h, fw = SIDE_LOGO
+    letters, width = _logo_letters()
+    for side in (-1, 1):
+        x = side * (HW + lift)
+        # the right-hand end as seen from outside: −z on the left side (+x), +z on the right side (−x); text runs
+        # from the viewer's left to right, i.e. towards −z on the left side and +z on the right side
+        zc = -side * zc_abs
+        run = -side
+
+        def at(a, b):                              # a, b in metres from the box centre (a to the viewer's right)
+            return (x, yc + b, zc + run * a)
+
+        def quad(pts):
+            part.face_uv([at(*p) for p in pts], 'kb_sill', [(0.0, 0.0)] * len(pts), smooth=False, out=(side, 0, 0))
+
+        # the frame
+        for a0, b0, a1, b1 in ((-w / 2, h / 2 - fw, w / 2, h / 2), (-w / 2, -h / 2, w / 2, -h / 2 + fw),
+                               (-w / 2, -h / 2 + fw, -w / 2 + fw, h / 2 - fw), (w / 2 - fw, -h / 2 + fw, w / 2, h / 2 - fw)):
+            quad([(a0, b0), (a1, b0), (a1, b1), (a0, b1)])
+        # the letters, centred in the box
+        for p in letters:
+            quad([((pa - width / 2) * LOGO_CAP, (pb - 0.5) * LOGO_CAP) for pa, pb in p])
+
+
 def side_fittings(part, boxes, kind):
-    """side destination displays, side lamps, and on a cab car the crew doors' grab rails and handles"""
+    """side destination displays, side lamps, the KEIKYU logotype, and on a cab car the crew doors' grab rails and handles"""
+    side_logo(part, kind)
     for side in (-1, 1):
         sz = 1 if side < 0 else -1          # point symmetry: the left side mirrors z
         zc, yc, w, h = SIDE_SIGN

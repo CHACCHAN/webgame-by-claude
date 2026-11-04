@@ -22,6 +22,9 @@ Fonts: Noto Sans CJK JP (index 0 of the .ttc; SIL OFL 1.1), as there. Images: u 
   num_<car>.png    car numbers as painted on the side below the windows (black Noto Sans CJK JP Medium on white,
                    2,000 px/m, the lettering 0.085 m tall as on the line-scan photo "クハE235-9"): クハE235-17,
                    モハE235-49 (the 9th car of set 17), クハE234-17. The model samples them into the side texture.
+  sobu_*.png       the E235-1000 (Yokosuka / Sobu Rapid line, set F-35): 横須賀・総武快速線, 1452F, F-35.
+  chuosobu/*.png   the E235-0 moved to the Chūō-Sōbu local (B31 / B33, 2026): 総武線各駅停車 / Chuo-Sobu Line (as the
+                   E231's Sōbu variant), 1031B, set 31, クハE235-31 / モハE235-91 / クハE234-31.
 """
 import os
 import sys
@@ -110,9 +113,34 @@ def sobu_side():
     return m
 
 
+# ---------------------------------------------------------------- E235-0 on the Chūō-Sōbu local (B31 / B33, 2026)
+CHUOSOBU_YELLOW = (255, 214, 0)     # 黄1号 as the LEDs show it (the E231 Sōbu variant's value)
+
+
+def chuosobu_front():
+    """総武線各駅停車 over "Chuo-Sobu Line" (the E231 Sōbu variant's text), the line colour as a bar under them"""
+    m = KT.Matrix(1.07, 0.16, 268, 40)
+    m.text_cjk('総武線各駅停車', 0.115, 0.006, 0.096, 0.090, 0.120, WHITE)
+    m.text_fit('Chuo-Sobu Line', 0.300, 0.104, 0.470, 0.034, WHITE, track=0.03)
+    m.fill(CHUOSOBU_YELLOW, 20, 37, 248, 40)
+    m.dots_from_layers()
+    return m
+
+
+def chuosobu_side():
+    m = KT.Matrix(0.54, 0.13, 216, 52)
+    m.text_cjk('総武線各駅停車', 0.025, 0.008, 0.062, 0.060, 0.0705, WHITE)
+    m.text_fit('Chuo-Sobu Line', 0.120, 0.078, 0.300, 0.026, WHITE, track=0.02)
+    m.fill(CHUOSOBU_YELLOW, 6, 46, 210, 50)
+    m.dots_from_layers()
+    return m
+
+
 NUMBERS = {'kuha235': 'クハE235-17', 'moha235': 'モハE235-49', 'kuha234': 'クハE234-17'}
 # set F-35 of the 11-car basic set: 11号車 クハE235-1035, 10号車 モハE235-1035 (pantograph), 1号車 クハE234-1035
 SOBU_NUMBERS = {'kuha235': 'クハE235-1035', 'moha235': 'モハE235-1035', 'kuha234': 'クハE234-1035'}
+# set B31 (ex トウ31): the same cars, renumbering not reported; モハE235-91 = the 9th car as on set 17 (49 = 3 × 17 − 2)
+CHUOSOBU_NUMBERS = {'kuha235': 'クハE235-31', 'moha235': 'モハE235-91', 'kuha234': 'クハE234-31'}
 
 
 def car_number(text, ppm=2000, h_m=0.085):
@@ -160,6 +188,14 @@ def main():
         save(car_number(text), f'num_{key}.png')
     for key, text in SOBU_NUMBERS.items():
         save(car_number(text), f'sobu_num_{key}.png')
+    # the Chūō-Sōbu local set in its own folder: chuosobu/<name>.png
+    os.makedirs(os.path.join(OUT, 'chuosobu'), exist_ok=True)
+    for name, m, ppm in (('led_front', chuosobu_front(), 1600), ('led_runno', led_runno('1031B'), 1600),
+                         ('led_setno', led_setno('31'), 1600), ('led_side', chuosobu_side(), 2000)):
+        save(m.render(True, ppm), f'chuosobu/{name}.png')
+        save(m.render(False, ppm), f'chuosobu/{name}_off.png')
+    for key, text in CHUOSOBU_NUMBERS.items():
+        save(car_number(text), f'chuosobu/num_{key}.png')
 
 
 if __name__ == '__main__':

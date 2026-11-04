@@ -167,8 +167,8 @@ export const TRAIN_INFO: Record<TrainId, TrainInfo & { name: string; tagline: st
     model: { title: 'E231系0番台', author: 'TOUGE NOCTURNE', url: '', license: '自作', own: true },
   },
   e235: {
-    name: 'E235系', series: 'E235系0番台（山手線）', operator: 'JR東日本', tagline: '山手線と横須賀・総武快速線',
-    description: '山手線の現役車両。SiC素子のVVVFで高速域も1パルスにせず27パルスで走る。カラーでウグイス色の山手線と、スカ色の横須賀・総武快速線（1000番台）を選べる。',
+    name: 'E235系', series: 'E235系0番台（山手線）', operator: 'JR東日本', tagline: '山手線・横須賀・総武快速線・総武線各駅停車',
+    description: '山手線の現役車両。SiC素子のVVVFで高速域も1パルスにせず27パルスで走る。カラーでウグイス色の山手線、スカ色の横須賀・総武快速線（1000番台）、2026年に移った黄色の総武線各駅停車を選べる。',
     // accel 3.0, design top 120, service brake 4.2; emergency 4.5 estimated (as E231 / E233)
     accel: 3.0, vmax: 120, brake: [4.2, 4.5],
     // クハE235 33.3 t + モハE235 31.7 t + クハE234 33.4 t
@@ -180,6 +180,8 @@ export const TRAIN_INFO: Record<TrainId, TrainInfo & { name: string; tagline: st
     liveries: [
       { name: '山手線', band: '#9acd32', band2: '#1a1a1a' },
       { name: '横須賀・総武快速線', band: '#0067c0', band2: '#e8dcb0', variant: 'sobu', series: 'E235系1000番台（横須賀・総武快速線）' },
+      // sets moved from the Yamanote Line in 2026, repainted canary yellow (no photo yet: the Yamanote layout recoloured)
+      { name: '総武線各駅停車', band: '#ffd400', band2: '#1a1a1a', variant: 'chuosobu', series: 'E235系0番台（中央・総武緩行線）' },
     ],
     // our own model (tools/blender/e235.py): head lamps high at the outer ends of the black panel, the tail lamps beside
     // the front LED display; side windows (glass far darker than the stainless around it)

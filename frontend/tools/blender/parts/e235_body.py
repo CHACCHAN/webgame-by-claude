@@ -72,6 +72,10 @@ GREEN = (0.50, 0.72, 0.26)       # 黄緑6号 as it reads on photos (door #78ad6
 # (bright blue) #2440c3; the cream a little deeper, as it reads on the photos (#ecdcb8 sunlit)
 BLUE = (0.141, 0.251, 0.765)
 CREAM = (0.95, 0.90, 0.77)
+# E235-0 moved to the Chūō-Sōbu local (B31 2026-06, B33 2026-09-30; `set_variant('chuosobu')`): the Yamanote pattern
+# with the uguisu changed to canary yellow (railf.jp, ja.wikipedia). 黄1号 as on our E231 Sōbu variant (#ffd400).
+# No photo of a yellow E235 on Commons yet (2026-11-04): the layout is the Yamanote one recoloured (estimated).
+YELLOW = (1.0, 0.831, 0.0)
 VARIANT = 'yamanote'
 LINE = GREEN            # the line colour: face frame, the cab's wrap onto the side (and the doors on the Yamanote cars)
 BLACK_PANEL = (0.025, 0.027, 0.03)
@@ -235,6 +239,45 @@ class Nose(BD.Nose):
                 y = a[1] + (b[1] - a[1]) * t
                 row.append((x, y, face_z(x, y)))
             self.rows.append(row)
+
+    def uv(self):
+        """texture coordinates (as the Keikyu module): u = arc length along each full row from the centre line,
+        v = height; returns u per column point and u per point of each row's middle part"""
+        n = len(self.ring)
+        u_col = [None] * n
+        u_row = [None] * self.half
+        for i in range(self.half):
+            pts = self.full_row(i)
+            u = self.row_u(pts)
+            k = self.steps + 1
+            u_col[i] = list(u[:k])
+            if i != n - 1 - i:
+                u_col[n - 1 - i] = list(reversed(u[len(u) - k:]))
+            mid = self.rows[i]
+            u_row[i] = [u[k - 1]] + list(u[k:len(u) - k]) + [u[len(u) - k]] if len(mid) > 1 else [0.0]
+        return u_col, u_row
+
+    def quads(self):
+        """the nose's faces: (points, [(u, v)], on a column) through the roundings, then across the face"""
+        u_col, u_row = self.uv()
+        n = len(self.ring)
+        for i in range(n - 1):
+            for k in range(self.steps):
+                pts = [self.cols[i][k], self.cols[i + 1][k], self.cols[i + 1][k + 1], self.cols[i][k + 1]]
+                uvs = [(u_col[i][k], pts[0][1]), (u_col[i + 1][k], pts[1][1]), (u_col[i + 1][k + 1], pts[2][1]),
+                       (u_col[i][k + 1], pts[3][1])]
+                yield pts, uvs, True
+        for i in range(self.half - 1):
+            ra, rb = self.rows[i], self.rows[i + 1]
+            ua, ub = u_row[i], u_row[i + 1]
+            for k in range(len(ra) - 1):
+                if len(rb) > 1:
+                    pts = [ra[k], ra[k + 1], rb[k + 1], rb[k]]
+                    uvs = [(ua[k], ra[k][1]), (ua[k + 1], ra[k + 1][1]), (ub[k + 1], rb[k + 1][1]), (ub[k], rb[k][1])]
+                else:
+                    pts = [ra[k], ra[k + 1], rb[0]]
+                    uvs = [(ua[k], ra[k][1]), (ua[k + 1], ra[k + 1][1]), (0.0, rb[0][1])]
+                yield pts, uvs, False
 
 
 def _quad_out(p, centre_z):
@@ -413,18 +456,7 @@ class Body:
                           (side * (HW_BOT - 0.12), ys[0], CAB_JOIN), (side * _tuck_x(ys[0]), ys[0], CAB_JOIN)],
                          'e_under', [(0, 0)] * 4, smooth=False, out=(0, -1, 0))
             del x0
-        # texture coordinates of the nose (as the Keikyu module): u along each row, v = height
-        u_col = [None] * n
-        u_row = [None] * nose.half
-        for i in range(nose.half):
-            pts = nose.full_row(i)
-            u = nose.row_u(pts)
-            k = nose.steps + 1
-            u_col[i] = list(u[:k])
-            if i != n - 1 - i:
-                u_col[n - 1 - i] = list(reversed(u[len(u) - k:]))
-            mid = nose.rows[i]
-            u_row[i] = [u[k - 1]] + list(u[k:len(u) - k]) + [u[len(u) - k]] if len(mid) > 1 else [0.0]
+        u_col, u_row = nose.uv()
         self.u_col, self.u_row = u_col, u_row
 
         def mat_for(pts):
@@ -432,25 +464,14 @@ class Body:
             return 'e_face' if cy < self.FACE_UV[3] - 0.02 else 'e_roof'
 
         out_c = Vector((0.0, 2.0, FACE - 2.5))
-        for i in range(n - 1):
-            for k in range(nose.steps):
-                pts = [nose.cols[i][k], nose.cols[i + 1][k], nose.cols[i + 1][k + 1], nose.cols[i][k + 1]]
-                uvs = [(u_col[i][k], pts[0][1]), (u_col[i + 1][k], pts[1][1]), (u_col[i + 1][k + 1], pts[2][1]), (u_col[i][k + 1], pts[3][1])]
-                m = mat_for(pts)
+        for pts, uvs, on_column in nose.quads():
+            m = mat_for(pts)
+            fuv = [self.face_uv(u, v) for u, v in uvs] if m == 'e_face' else [(0, 0)] * len(pts)
+            if on_column:
                 c = Vector([sum(p[j] for p in pts) / 4 for j in range(3)])
-                part.face_uv(pts, m, [self.face_uv(u, v) for u, v in uvs] if m == 'e_face' else [(0, 0)] * 4, out=c - out_c)
-        for i in range(nose.half - 1):
-            ra, rb = nose.rows[i], nose.rows[i + 1]
-            ua, ub = u_row[i], u_row[i + 1]
-            for k in range(len(ra) - 1):
-                if len(rb) > 1:
-                    pts = [ra[k], ra[k + 1], rb[k + 1], rb[k]]
-                    uvs = [(ua[k], ra[k][1]), (ua[k + 1], ra[k + 1][1]), (ub[k + 1], rb[k + 1][1]), (ub[k], rb[k][1])]
-                else:
-                    pts = [ra[k], ra[k + 1], rb[0]]
-                    uvs = [(ua[k], ra[k][1]), (ua[k + 1], ra[k + 1][1]), (0.0, rb[0][1])]
-                m = mat_for(pts)
-                part.face_uv(pts, m, [self.face_uv(u, v) for u, v in uvs] if m == 'e_face' else [(0, 0)] * len(pts), out=(0, 0.3, 1))
+                part.face_uv(pts, m, fuv, out=c - out_c)
+            else:
+                part.face_uv(pts, m, fuv, out=(0, 0.3, 1))
         # underside of the nose: a fan under the lowest row
         bottom = nose.full_row(0)
         yb = bottom[0][1]
@@ -527,6 +548,7 @@ WIN_R = 0.12
 CAB_WINDOW = (8.565, 9.375, 2.36, 2.95)   # z0, z1, y0, y1 (two panes)
 CREW_DOOR = (7.737, 8.374, 1.18, 2.96)
 CREW_WINDOW = (7.96, 8.30, 2.10, 2.95)
+SOBU_TOP_END = 8.22                        # E235-1000: the top band ends over the crew door (d689b5)
 WAIST = 1.83                    # the panel joint along the side at the windows' foot
 SIDE_SIGN = (0.0, 3.085, 0.54, 0.13)      # side destination display: z, y, width, height (centre of the car)
 SIDE_LAMP = (-0.70, 3.13)                 # small indicator lamp on the frieze
@@ -614,6 +636,43 @@ def _sample_text(path):
     return 1.0 - a
 
 
+JR_MARK = (3.055, 0.22, 0.08)     # the JR mark above the cab's side window: foot y, height, set back from the window's front edge
+JR_GREY = (0.34, 0.35, 0.37)      # dark grey on the stainless (photos 1d3bc9 / e63727 / d689b5)
+
+
+def _seg(px, py, ax, ay, bx, by):
+    """distance from (px, py) to the segment a–b"""
+    dx, dy = bx - ax, by - ay
+    t = np.clip(((px - ax) * dx + (py - ay) * dy) / (dx * dx + dy * dy), 0.0, 1.0)
+    return np.hypot(px - ax - t * dx, py - ay - t * dy)
+
+
+def jr_mark_sd(x, y):
+    """signed distance of our drawing of the JR mark (letter height 1, J from x = 0, the R ending at x ≈ 1.62):
+    bold strokes 0.2 thick with rounded inner bends, proportions measured on the cab car photos (about 1.65 : 1)"""
+    t = 0.20
+    h = t / 2
+    # J: the stem on its right, a round hook at the foot ending in a short upturn on the left
+    d = _seg(x, y, 0.62, 0.36, 0.62, 1.0 - h) - h
+    d = np.maximum(d, y - 1.0)
+    cx, cy, rm = 0.36, 0.36, 0.26          # the hook's centre line radius
+    ring = np.abs(np.hypot(x - cx, y - cy) - rm) - h
+    d = np.minimum(d, np.where(y < cy, ring, 1e3))
+    d = np.minimum(d, np.maximum(np.abs(x - (cx - rm)) - h, np.maximum(y - 0.44, cy - y)))
+    d = np.minimum(d, np.maximum(np.abs(x - 0.62) - h, np.maximum(y - 1.0, cy - y)))
+    # R: the stem, the bowl (two bars into a half ring), the leg running out to the right at the foot
+    d = np.minimum(d, np.maximum(np.abs(x - 0.92) - h, np.abs(y - 0.5) - 0.5))
+    bx, by, br = 1.22, 0.71, 0.19
+    bowl = np.abs(np.hypot(x - bx, y - by) - br) - h
+    d = np.minimum(d, np.where(x > bx, bowl, 1e3))
+    for yb in (by + br, by - br):
+        d = np.minimum(d, np.maximum(np.abs(y - yb) - h, np.maximum(0.92 - x, x - bx)))
+    leg = _seg(x, y, 1.20, by - br, 1.54, 0.08) - h
+    leg = np.maximum(leg, -y)
+    d = np.minimum(d, leg)
+    return np.maximum(d, np.maximum(-y, y - 1.0))
+
+
 def paint_side(kind, side, number_path=None, w=4096, h=560):
     """one side of a car (u = z, v = y); side +1 = left (+x): drawn in z and flipped to read from outside later"""
     cv = Canvas(Body.SIDE_UV, w, h)
@@ -684,11 +743,25 @@ def paint_side(kind, side, number_path=None, w=4096, h=560):
         gap = np.zeros_like(U)
         for zd in doors:
             gap = np.maximum(gap, cv.cover(np.abs(U - zd) - (DOOR_W + 0.09) / 2))
-        lim = cv.cover(U - GREEN_Z) if cab else 1.0
+        # on a cab car both stop short of the cab (photo d689b5): the waist band 0.17 before the crew door, the top
+        # band over the crew door's window, which leaves the JR mark over the cab's side window on bare stainless
+        lim_waist = cv.cover(U - (CREW_DOOR[0] - 0.17)) if cab else 1.0
+        lim_top = cv.cover(U - SOBU_TOP_END) if cab else 1.0
         for y0, y1, col in ((1.72, 1.85, CREAM), (1.54, 1.72, BLUE)):
-            cv.paint(cv.cover(np.abs(V - (y0 + y1) / 2) - (y1 - y0) / 2) * (1 - gap) * lim, col, 0.32, 0.0)
+            cv.paint(cv.cover(np.abs(V - (y0 + y1) / 2) - (y1 - y0) / 2) * (1 - gap) * lim_waist, col, 0.32, 0.0)
         for y0, y1, col in ((3.05, 3.20, CREAM), (3.20, 3.42, BLUE)):
-            cv.paint(cv.cover(np.abs(V - (y0 + y1) / 2) - (y1 - y0) / 2) * lim, col, 0.32, 0.0)
+            cv.paint(cv.cover(np.abs(V - (y0 + y1) / 2) - (y1 - y0) / 2) * lim_top, col, 0.32, 0.0)
+    if cab:
+        # the JR mark over the cab's side window, its front edge JR_MARK[2] behind the window's front edge; it reads
+        # from outside, so on the left side (+x, seen with +z to the left) it is drawn mirrored before the flip
+        y0, hh, back = JR_MARK
+        zf = CAB_WINDOW[1] + 0.015 - back
+        wid = 1.62 * hh
+        gx = (U - (zf - wid)) / hh if side < 0 else (zf - U) / hh
+        gy = (V - y0) / hh
+        near = (gx > -0.2) & (gx < 1.9) & (gy > -0.2) & (gy < 1.2)
+        sd = np.where(near, jr_mark_sd(np.where(near, gx, 0.0), np.where(near, gy, 0.0)) * hh, 1.0)
+        cv.paint(cv.cover(sd), JR_GREY, 0.45, 0.0)
     # car number below the big window at the car's centre (z ≈ 0; on the left side it reads from +z to −z)
     if number_path:
         cov = _sample_text(number_path)
@@ -733,7 +806,7 @@ def paint_bay(w=1024, h=1440):
         for y0, y1, col in ((3.05, 3.20, CREAM), (3.20, 3.42, BLUE)):
             cv.paint(cv.cover(np.abs(V - (y0 + y1) / 2) - (y1 - y0) / 2), col, 0.32, 0.0)
     else:
-        _dots(cv, U, V, t_frieze, pitch=0.012)
+        _dots(cv, U, V, t_frieze, pitch=0.012, colour=LINE)
     cv.paint(cv.cover(np.abs(V - (FRIEZE[0] - 0.01)) - 0.0015), (0.48, 0.49, 0.50), 0.45, 1.0)
     # door leaves: green, the dots thinning towards the pockets (outer edges)
     hw = DOOR_W / 2
@@ -746,7 +819,7 @@ def paint_bay(w=1024, h=1440):
         inside = cv.cover(np.maximum(np.abs(U) - hw, np.maximum(SILL - V, V - DOOR_TOP)))
         cv.paint(inside, (0.74, 0.75, 0.755), 0.28, 1.0)
     else:
-        _dots(cv, U, V, t_leaf, pitch=0.010)
+        _dots(cv, U, V, t_leaf, pitch=0.010, colour=LINE)
     in_leaf = cv.cover(np.maximum(np.abs(U) - hw, np.maximum(SILL - V, V - DOOR_TOP)))
     cv.rough = cv.rough * (1 - in_leaf) + 0.32 * in_leaf
     # the opening's rounded top corners (the trim shows there)
@@ -784,11 +857,47 @@ def _cab_interior(V):
     return (desk * (1 - a) + wall * a) * (1 - b) + top * b
 
 
+def _face_x(nose, cv):
+    """x of the nose at each texel of the face texture, rasterised from its faces (mask, x)"""
+    u0, u1, v0, v1 = Body.FACE_UV
+    su, sv = cv.w / (u1 - u0), cv.h / (v1 - v0)
+    X = np.zeros((cv.h, cv.w), np.float32)
+    hit = np.zeros((cv.h, cv.w), bool)
+    for pts, uvs, _ in nose.quads():
+        P = np.array([((u - u0) * su - 0.5, (v - v0) * sv - 0.5, p[0]) for (u, v), p in zip(uvs, pts)])
+        for tri in ((0, 1, 2), (0, 2, 3)) if len(P) == 4 else ((0, 1, 2),):
+            (ax, ay, xa), (bx, by, xb), (cx_, cy_, xc) = P[list(tri)]
+            det = (bx - ax) * (cy_ - ay) - (cx_ - ax) * (by - ay)
+            if abs(det) < 1e-9:
+                continue
+            i0, i1 = max(int(math.floor(min(ax, bx, cx_))), 0), min(int(math.ceil(max(ax, bx, cx_))) + 1, cv.w)
+            j0, j1 = max(int(math.floor(min(ay, by, cy_))), 0), min(int(math.ceil(max(ay, by, cy_))) + 1, cv.h)
+            if i0 >= i1 or j0 >= j1:
+                continue
+            gi, gj = np.meshgrid(np.arange(i0, i1), np.arange(j0, j1))
+            l1 = ((gi - ax) * (cy_ - ay) - (cx_ - ax) * (gj - ay)) / det
+            l2 = ((bx - ax) * (gj - ay) - (gi - ax) * (by - ay)) / det
+            l0 = 1 - l1 - l2
+            e = -0.02
+            m = (l0 >= e) & (l1 >= e) & (l2 >= e)
+            X[j0:j1, i0:i1] = np.where(m, l0 * xa + l1 * xb + l2 * xc, X[j0:j1, i0:i1])
+            hit[j0:j1, i0:i1] |= m
+    return hit, X
+
+
+def _roof_y(x):
+    """the roof arc's height over |x| (the head-on outline above the shoulders)"""
+    rr, _ = _roof_geometry()
+    return ROOF - rr + np.sqrt(np.maximum(rr * rr - np.asarray(x) ** 2, 0.0))
+
+
 HEADLAMP = (0.914, 3.37, 0.135, 0.12)     # |x|, y, width, height of the lamp unit
 TAILLAMP = (0.620, 3.35, 0.10, 0.16)
 LED_FRONT = (0.015, 3.33, 1.07, 0.16)     # centre x, y, width, height
 LED_RUNNO = (-0.94, 3.04, 0.42, 0.12)
 LED_SETNO = (-1.18, 2.22, 0.11, 0.06)
+TOP_BAND = 0.08         # the line colour's band across the top of the face, head-on (61f8ab 0.088, 524875 0.07)
+TOP_R = 0.34            # the black area's upper inner corners, head-on (61f8ab 0.34, 524875 ≈ 0.40)
 
 
 def paint_face(body, w=2048, h=1456):
@@ -813,12 +922,18 @@ def paint_face(body, w=2048, h=1456):
         xa = np.interp(U[j], rows_u[i], rows_x[i])
         xb = np.interp(U[j], rows_u[i + 1], rows_x[i + 1])
         X[j] = xa + (xb - xa) * t
+    # the rows' interpolation is only right where the rows run: through the top rounding the columns run up and back
+    # (u along a column is not x), so take x from the nose's own faces wherever they cover the texture
+    X = np.where(*_face_x(nose, cv), X)
     dxdu = np.abs(np.gradient(X, axis=1)) / cv.px
     aa = np.maximum(cv.px * dxdu, 1e-4)
     cv.fill(LINE, 0.30, 0.0)
-    # the black panel: display band, windscreen, wiper band, then the dots into the green
-    top, bot = 3.528, GROOVE_Y + 0.09
-    sd_panel = _sd_rr(X, V, 0.0, (top + bot) / 2, 2 * PANEL_X, top - bot, 0.26)
+    # the black panel: display band, windscreen, wiper band, then the dots into the green. The line colour frames it
+    # on all four sides: across the top a band TOP_BAND below the outline (parallel to the roof arc, measured in the
+    # head-on view, v = y), its inner corners rounded TOP_R (photos 524875 / 61f8ab head-on)
+    top, bot = ROOF - TOP_BAND, GROOVE_Y + 0.09
+    Vf = V - (_roof_y(X) - ROOF)            # the roof arc straightened out
+    sd_panel = _sd_rr(X, Vf, 0.0, (top + bot) / 2, 2 * PANEL_X, top - bot, TOP_R)
     sd_bottom = _sd_rr(X, V, 0.0, (top + bot) / 2, 2 * PANEL_X, top - bot, GROOVE_R)
     sd_panel = np.where(V < 2.4, sd_bottom, sd_panel)
     inside = cv.cover(sd_panel, aa)
@@ -840,8 +955,8 @@ def paint_face(body, w=2048, h=1456):
         cv.paint(band * _halftone(X, V, t_face, 0.031, aa), LINE, 0.30, 0.0)
     # glass divider bar between the display band and the windscreen
     sd = np.maximum(np.abs(X) - 1.37, np.abs(V - 3.165) - 0.045)
-    cv.paint(cv.cover(sd, aa), (0.07, 0.072, 0.075), 0.3, 0.3)
-    cv.paint(cv.cover(np.maximum(np.abs(X) - 1.37, np.abs(V - 3.209) - 0.003), aa), (0.30, 0.31, 0.32), 0.2, 0.5)
+    cv.paint(cv.cover(sd, aa) * inside, (0.07, 0.072, 0.075), 0.3, 0.3)
+    cv.paint(cv.cover(np.maximum(np.abs(X) - 1.37, np.abs(V - 3.209) - 0.003), aa) * inside, (0.30, 0.31, 0.32), 0.2, 0.5)
     # windscreen: the cab behind the glass
     sd = _sd_rr(X, V, 0.0, (2.15 + 3.12) / 2, 2.70, 3.12 - 2.15, 0.05)
     a = cv.cover(sd, aa)
@@ -868,17 +983,18 @@ def paint_face(body, w=2048, h=1456):
 
 SIGNS = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'textures', 'e235')
 NUMBERS = {'car0': 'num_kuha235.png', 'car1': 'num_moha235.png', 'car2': 'num_kuha234.png'}
-PREFIX = ''             # 'sobu_' for the E235-1000's signs (e235_textures.py writes both sets)
+PREFIX = ''             # 'sobu_' / 'chuosobu/' for the other lines' signs (e235_textures.py writes all three)
 
 
 def set_variant(name):
-    """'yamanote' (0番台, the default) or 'sobu' (1000番台): colours and signs only, the geometry stays the same"""
+    """'yamanote' (0番台, the default), 'sobu' (1000番台) or 'chuosobu' (0番台 on the Chūō-Sōbu local, the Yamanote
+    pattern in yellow): colours and signs only, the geometry stays the same"""
     global VARIANT, LINE, PREFIX
-    if name not in ('yamanote', 'sobu'):
+    if name not in ('yamanote', 'sobu', 'chuosobu'):
         raise ValueError(f'unknown variant {name}')
     VARIANT = name
-    LINE = BLUE if name == 'sobu' else GREEN
-    PREFIX = 'sobu_' if name == 'sobu' else ''
+    LINE = {'yamanote': GREEN, 'sobu': BLUE, 'chuosobu': YELLOW}[name]
+    PREFIX = {'yamanote': '', 'sobu': 'sobu_', 'chuosobu': 'chuosobu/'}[name]
 
 
 def _load(name):

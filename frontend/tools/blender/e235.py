@@ -1,14 +1,18 @@
 """
 JR East E235 series 0 (Yamanote Line, 2015–), three cars as the game shows them: クハE235 (cab, leading) + モハE235
 (the motor car with the single-arm pantograph, 9号車 of the 11-car set) + クハE234 (cab, trailing, turned round), built
-from numbers and our own painted textures (no outside model, no photo pixels, no logos). Run with Blender 5.x:
+from numbers and our own painted textures (no outside model, no photo pixels; the JR mark drawn by us). Run with
+Blender 5.x:
 
-  blender --background --factory-startup --python tools/blender/e235.py -- --out <file.glb> [--variant sobu]
+  blender --background --factory-startup --python tools/blender/e235.py -- --out <file.glb> [--variant sobu|chuosobu]
       [--render <dir> [--views hero,head,...] [--samples N] [--size WxH]] [--tex <dir>]
 
 --variant sobu builds the E235-1000 of the Yokosuka / Sobu Rapid line (横須賀・総武快速線) instead: the same meshes
 and nodes, only the paint and the signs differ (cream and blue bands along the sides, stainless doors, the blue face
 with its cream-to-blue halftone, displays 横須賀・総武快速線, set F-35: クハE235-1035 + モハE235-1035 + クハE234-1035).
+--variant chuosobu builds the 0番台 moved to the Chūō-Sōbu local in 2026 (B31, B33): the Yamanote paint with the
+uguisu changed to canary yellow, displays 総武線各駅停車 / Chuo-Sobu Line, set B31 (signs in textures/e235/chuosobu/).
+No photo of it on Commons yet: the layout is the Yamanote one recoloured (estimated); one-man fittings not added.
 
 The parts live in tools/blender/parts/ (each module's docstring lists its figures and where they come from):
   e235_body        body shell, cab face, doors, windows, painted side / door / face textures, LED displays, fittings
@@ -82,8 +86,10 @@ VIEW_SET = {
     'match_head': ((0.0, 2.2, 34.0), (0.0, 2.0, 9.8), 135),
     'match34': ((-4.5, 3.2, 32.0), (-0.4, 1.7, 5.0), 95),
     'match_sobu': ((2.6, 3.0, 40.0), (0.25, 2.0, 9.5), 150),     # like the E235-1000 photo "Series-E235-1000 F35"
+    'match_side34': ((-9.0, 2.6, 25.0), (0.0, 2.0, 3.0), 45),   # cab and side from the front right (photo d689b5)
+    'jr': ((-5.5, 2.9, 11.0), (-1.47, 3.0, 8.4), 45),           # the JR mark over the cab's side window (e63727)
 }
-LIT = {'hero', 'head', 'front34', 'low', 'skirt', 'match_head', 'match34', 'match_sobu', 'bogie'}
+LIT = {'hero', 'head', 'front34', 'low', 'skirt', 'match_head', 'match34', 'match_sobu', 'match_side34', 'jr', 'bogie'}
 TAIL = {'rear34'}
 
 
