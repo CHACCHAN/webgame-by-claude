@@ -1,0 +1,42 @@
+{
+ "photo": "/tmp/claude-1000/-home-dev-Desktop-service-internal-webgame-by-claude/43be7242-fdd3-4dc4-ac3b-587fd8b5aa08/scratchpad/agents/car-shiden/ref/r11.jpg",
+ "render": "/tmp/claude-1000/-home-dev-Desktop-service-internal-webgame-by-claude/43be7242-fdd3-4dc4-ac3b-587fd8b5aa08/scratchpad/agents/car-shiden/fit/r11_sil.png",
+ "iou": 0.8798,
+ "render_to_photo_mean_pct": 1.45,
+ "render_to_photo_p95_pct": 3.76,
+ "photo_to_render_mean_pct": 1.68,
+ "photo_to_render_p95_pct": 4.16,
+ "max_pct": 7.06,
+ "band_px": 76,
+ "car_bbox_px": [
+  1267,
+  684
+ ],
+ "zones": {
+  "top-left": {
+   "mean_signed_pct": -0.28,
+   "p90_abs_pct": 2.46
+  },
+  "bottom-left": {
+   "mean_signed_pct": 1.21,
+   "p90_abs_pct": 2.65
+  },
+  "top-middle": {
+   "mean_signed_pct": -0.71,
+   "p90_abs_pct": 1.58
+  },
+  "bottom-middle": {
+   "mean_signed_pct": -2.52,
+   "p90_abs_pct": 3.71
+  },
+  "top-right": {
+   "mean_signed_pct": 0.1,
+   "p90_abs_pct": 1.69
+  },
+  "bottom-right": {
+   "mean_signed_pct": 0.99,
+   "p90_abs_pct": 5.78
+  }
+ },
+ "note": "pct = % of the car bbox width in the image; signed + = model outline outside the photo outline"
+}

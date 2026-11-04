@@ -1,0 +1,42 @@
+{
+ "photo": "/tmp/claude-1000/-home-dev-Desktop-service-internal-webgame-by-claude/43be7242-fdd3-4dc4-ac3b-587fd8b5aa08/scratchpad/agents/car-supra/ref/r06.jpg",
+ "render": "/tmp/claude-1000/-home-dev-Desktop-service-internal-webgame-by-claude/43be7242-fdd3-4dc4-ac3b-587fd8b5aa08/scratchpad/agents/car-supra/fit/r06_sil.png",
+ "iou": 0.7857,
+ "render_to_photo_mean_pct": 3.12,
+ "render_to_photo_p95_pct": 5.97,
+ "photo_to_render_mean_pct": 3.46,
+ "photo_to_render_p95_pct": 6.05,
+ "max_pct": 8.28,
+ "band_px": 59,
+ "car_bbox_px": [
+  980,
+  569
+ ],
+ "zones": {
+  "top-left": {
+   "mean_signed_pct": 0.78,
+   "p90_abs_pct": 4.59
+  },
+  "bottom-left": {
+   "mean_signed_pct": -3.49,
+   "p90_abs_pct": 6.02
+  },
+  "top-middle": {
+   "mean_signed_pct": 0.85,
+   "p90_abs_pct": 4.28
+  },
+  "bottom-middle": {
+   "mean_signed_pct": -4.25,
+   "p90_abs_pct": 5.51
+  },
+  "top-right": {
+   "mean_signed_pct": -4.18,
+   "p90_abs_pct": 6.07
+  },
+  "bottom-right": {
+   "mean_signed_pct": -0.88,
+   "p90_abs_pct": 2.45
+  }
+ },
+ "note": "pct = % of the car bbox width in the image; signed + = model outline outside the photo outline"
+}

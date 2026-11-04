@@ -1,0 +1,10 @@
+{
+ "p06": {
+  "photo": "ref/06_TOYOTA_SPRINTER_TRUENO_1600GT-APEX_E-AE86_REAR_IMAGE.jpg",
+  "fold": true,
+  "args": [
+   "--mask",
+   "fit/masks/p06.png"
+  ]
+ }
+}
