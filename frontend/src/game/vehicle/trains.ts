@@ -161,7 +161,7 @@ export const TRAIN_INFO: Record<TrainId, TrainInfo & { name: string; tagline: st
       { name: '武蔵野線', band: '#f15a22', band2: '#3c060f' },
       { name: '総武線各駅停車', band: '#ffd400', variant: 'sobu', series: 'E231系0番台（中央・総武緩行線）', control: 'IGBT-VVVFインバータ（3レベル・三菱電機）', vvvf: E231_MITSUBISHI },
     ],
-    // LAMPS:e231
+    lamps: { head: { x: 0.79, y: 1.367, w: 0.2, h: 0.16 }, tail: { x: 1.05, y: 1.367, w: 0.19, h: 0.15 }, windows: [1.93, 2.86], windowLum: 0.06 },
     // the in-train sound calculated from the inverter's control pattern (vehicle/vvvf.ts, audio/vvvf)
     vvvf: E231_MUSASHINO_MITSUBISHI,
     model: { title: 'E231系0番台', author: 'TOUGE NOCTURNE', url: '', license: '自作', own: true },

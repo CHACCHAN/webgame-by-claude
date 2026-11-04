@@ -52,14 +52,6 @@ function GameBridge() {
         for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode(...buf.subarray(i, i + 0x8000));
         return { b64: btoa(bin), stats };
       };
-      w.__importTrain = async (urls: string[], cfg: import('../game/render/trainImport').TrainImportConfig) => {
-        const { importTrainModel } = await import('../game/render/trainImport');
-        const { glb, stats } = await importTrainModel(urls, cfg);
-        const buf = new Uint8Array(glb);
-        let bin = '';
-        for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode(...buf.subarray(i, i + 0x8000));
-        return { b64: btoa(bin), stats };
-      };
       // dev hook for tools/vvvf-game-wav.cjs: a vehicle's sound as the game drives it, rendered offline. `plan`: one
       // [seconds, km/h, throttle, brake] per update (the game calls update once per frame); returns float32 as base64
       w.__renderTrainSound = async (id: CarId, plan: [number, number, number, number][], rate = 48000) => {
