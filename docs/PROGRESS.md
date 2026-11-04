@@ -60,6 +60,9 @@ Blender processes) and checked against photos (photos only to measure) before th
     in a row: `LampPair.n / gap`.
   - Verified in Chrome on the RX 5700 XT (vite preview, API cut off): each new swatch loads its line's model and the
     label names the line; head and tail lamps at dawn and night.
+- **Deployed** (2026-11-04, `378220c`): the served bundle matches the local build, the new train models are served
+  byte-identical, `/api/content` lists e231 and e5. Tests: vitest 53/53, backend 16/16 (container, `--build`); E2E not
+  run for this deploy.
 - **Cars: paused** (owner, 2026-11-04: "your cost is very high: finish everything but the cars; the cars use the
   external models; I'll restart them next week or later"). The six cars stay on the Sketchfab models with credits.
   Modelling by eye against photos did not converge (owner: "not the same as the real cars"), so a measured fit was
