@@ -358,17 +358,24 @@ export function fitLamps(car: THREE.Object3D, pair: LampPair, end: number, reach
   const ray = new THREE.Raycaster();
   const out: THREE.Vector3[] = [];
   for (const s of [1, -1]) {
-    ray.set(new THREE.Vector3(s * pair.x, pair.y, end * (reach + 3)), new THREE.Vector3(0, 0, -end));
-    const hit = ray.intersectObjects(meshes, false)[0];
-    if (!hit) continue;
-    const n = hit.face ? hit.face.normal.clone().transformDirection(hit.object.matrixWorld) : new THREE.Vector3(0, 0, end);
-    // the models are double-sided: face the lens towards the side the ray came from
-    if (n.z * end < 0) n.negate();
-    const lens = new THREE.Mesh(geo, mat);
-    lens.position.copy(hit.point).addScaledVector(n, 0.015);
-    lens.lookAt(_c.copy(lens.position).add(n));
-    car.add(lens);
-    out.push(lens.position.clone());
+    // a side's lenses; its light (the beam's source) comes from their middle
+    const side = new THREE.Vector3();
+    let count = 0;
+    for (let i = 0; i < (pair.n ?? 1); i++) {
+      ray.set(new THREE.Vector3(s * (pair.x + i * (pair.gap ?? 0)), pair.y, end * (reach + 3)), new THREE.Vector3(0, 0, -end));
+      const hit = ray.intersectObjects(meshes, false)[0];
+      if (!hit) continue;
+      const n = hit.face ? hit.face.normal.clone().transformDirection(hit.object.matrixWorld) : new THREE.Vector3(0, 0, end);
+      // the models are double-sided: face the lens towards the side the ray came from
+      if (n.z * end < 0) n.negate();
+      const lens = new THREE.Mesh(geo, mat);
+      lens.position.copy(hit.point).addScaledVector(n, 0.015);
+      lens.lookAt(_c.copy(lens.position).add(n));
+      car.add(lens);
+      side.add(lens.position);
+      count++;
+    }
+    if (count) out.push(side.divideScalar(count));
   }
   return out;
 }

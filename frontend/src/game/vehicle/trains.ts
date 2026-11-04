@@ -52,6 +52,9 @@ export interface LampPair {
   w: number;
   h: number;
   round?: boolean;
+  /** lamps per side (default 1): the next ones `gap` m further out (the E5's row of four) */
+  n?: number;
+  gap?: number;
 }
 
 export interface TrainInfo {
@@ -229,8 +232,8 @@ export const TRAIN_INFO: Record<TrainId, TrainInfo & { name: string; tagline: st
     model: { title: '東武30000系', author: 'TOUGE NOCTURNE', url: '', license: '自作', own: true },
   },
   e5: {
-    name: '新幹線E5系', series: 'E5系（はやぶさ）', operator: 'JR東日本', tagline: '最高速度320km/hの「はやぶさ」',
-    description: '東北新幹線の主力。15mの長いノーズで営業最高速度320km/h。常盤グリーンと飛雲ホワイトの車体にはやてピンクの帯。下り坂の峠ではブレーキの効きが心配。',
+    name: '新幹線E5系', series: 'E5系（はやぶさ）', operator: 'JR東日本', tagline: '最高速度320km/h・東北／北海道新幹線',
+    description: '東北新幹線の主力。15mの長いノーズで営業最高速度320km/h。常盤グリーンと飛雲ホワイトの車体にはやてピンクの帯（北海道新幹線のH5系は彩香パープル）。下り坂の峠ではブレーキの効きが心配。',
     // max 320 (balancing speed 360 on +3 ‰); accel 1.71. The rated 9,600 kW over 453.5 t at 1.71 km/h/s puts the end
     // of constant torque near 140–150 km/h (estimated)
     traction: [140, 320], drag: 0.03, damping: 0.0004,
@@ -244,8 +247,14 @@ export const TRAIN_INFO: Record<TrainId, TrainInfo & { name: string; tagline: st
     // the end cars' nose: 26.5 m cars with the leading bogie 5.25 m behind the nose tip (the coupler ends as the middle car's)
     consist: [{ length: 26.5, bogies: 17.5, front: 5.25 }, { length: 25, bogies: 17.5, front: 3.75 }, { length: 26.5, bogies: 17.5, front: 3.75 }],
     // upper 常盤グリーン #489a83, lower 飛雲ホワイト #d6dad9, band はやてピンク #df3687
-    liveries: [{ name: '常盤グリーン＋飛雲ホワイト（はやてピンク帯）', body: '#d6dad9', band: '#489a83', band2: '#df3687' }],
-    // LAMPS:e5
+    // the H5 (JR Hokkaido): the same car with a 彩香パープル band; its swatch is the band, the paint being the same
+    liveries: [
+      { name: '東北新幹線', body: '#d6dad9', band: '#489a83', band2: '#df3687' },
+      { name: '北海道新幹線', body: '#d6dad9', band: '#489a83', band2: '#7a5aa6', swatch: '#7a5aa6', variant: 'h5', series: 'H5系（北海道新幹線・JR北海道）' },
+    ],
+    // four round units in a row along the canopy's top edge (inner x ±0.08, outer ±0.24; Ø0.104 lenses), each head
+    // and tail lamp in one; side windows 2.17–2.62 (measured on the Blender model, tools/blender/e5.py)
+    lamps: { head: { x: 0.08, y: 2.84, w: 0.104, h: 0.104, round: true, n: 2, gap: 0.16 }, tail: { x: 0.08, y: 2.84, w: 0.06, h: 0.06, round: true, n: 2, gap: 0.16 }, windows: [2.17, 2.62], windowLum: 0.06 },
     // our estimate of the inverter (none published; vehicle/vvvf.ts)
     vvvf: E5_ESTIMATE,
     // welded rail on slab track, 2.5 m bogies, pressure-tight body; the long nose and covered pantograph cut the wind
