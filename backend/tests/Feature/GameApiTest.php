@@ -115,6 +115,20 @@ class GameApiTest extends TestCase
         $this->assertSame([], $this->getJson('/api/tracks/tenrou-skyline/leaderboard')->json('entries'));
     }
 
+    public function test_runs_in_retired_vehicles_are_left_out(): void
+    {
+        $a = $this->register('Alpha');
+        $b = $this->register('Bravo');
+        $this->withToken($a)->postJson('/api/runs', $this->runPayload(120_000, ['car_id' => 'roach']))->assertCreated();
+        $this->withToken($b)->postJson('/api/runs', $this->runPayload(130_000))->assertCreated();
+
+        // the cockroach leaves the game: its runs stay stored but no list shows them
+        config(['game.cars' => array_diff_key(config('game.cars'), ['roach' => 0])]);
+        $this->assertSame(['Bravo'], array_column($this->getJson('/api/tracks/oboro-downhill/leaderboard')->json('entries'), 'player_name'));
+        $this->assertSame([], $this->withToken($a)->getJson('/api/players/me')->assertOk()->json('bests'));
+        $this->assertDatabaseHas('runs', ['car_id' => 'roach']);
+    }
+
     public function test_rank_reflects_other_players(): void
     {
         $a = $this->register('Alpha');

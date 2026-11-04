@@ -31,6 +31,7 @@ class PlayerController extends Controller
 
         $bests = Run::query()
             ->where('player_id', $player->id)
+            ->whereIn('car_id', array_keys(config('game.cars')))
             ->selectRaw('track_id, car_id, MIN(time_ms) AS best_ms, COUNT(*) AS runs')
             ->groupBy('track_id', 'car_id')
             ->get();
