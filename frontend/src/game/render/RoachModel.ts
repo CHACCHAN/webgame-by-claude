@@ -56,6 +56,8 @@ export function buildRoach(spec: CarSpec, opts: { bodyColor?: string } = {}): Ca
   let mixer: THREE.AnimationMixer | null = null;
   let duration = 1;
   let eyes = new THREE.Vector3(0, 0.55, 1.6);
+  /** where the beams start: the eyes' centres (body space), left first */
+  let lamps: THREE.Vector3[] | null = null;
   if (model) {
     const scene = cloneSkinned(model.scene);
     scene.traverse((o) => {
@@ -75,7 +77,9 @@ export function buildRoach(spec: CarSpec, opts: { bodyColor?: string } = {}): Ca
       duration = model.clip.duration || 1;
       mixer.setTime(0);
     }
-    // scale to size, centred across and along, feet on the ground (posed bounds: the skinning applied)
+    // scale to size, centred along, feet on the ground (posed bounds: the skinning applied). Across, the model's own
+    // plane of symmetry (x = 0) stays on the centreline: the posed bounds are lopsided (the long antennae and the
+    // tripod gait), and centring on them put the whole cockroach 0.35 m off its body and its eyes off the lamps
     scene.updateMatrixWorld(true);
     const box = new THREE.Box3().setFromObject(scene, true);
     const size = box.getSize(new THREE.Vector3());
@@ -83,28 +87,39 @@ export function buildRoach(spec: CarSpec, opts: { bodyColor?: string } = {}): Ca
     const holder = new THREE.Group();
     holder.scale.setScalar(s);
     const c = box.getCenter(new THREE.Vector3());
-    scene.position.set(-c.x, -box.min.y, -c.z);
+    scene.position.set(0, -box.min.y, -c.z);
     holder.add(scene);
     body.add(holder);
-    // the eyes: at the foremost head bone (`head_eyes`, between the compound eyes)
     body.updateMatrixWorld(true);
-    let head: THREE.Object3D | null = null;
-    const at = new THREE.Vector3();
-    scene.traverse((o) => {
-      if (!(o as THREE.Bone).isBone || !o.name.startsWith('head')) return;
-      if (!head || o.getWorldPosition(at).z > head.getWorldPosition(new THREE.Vector3()).z) head = o;
-    });
-    if (head) eyes = (head as THREE.Object3D).getWorldPosition(new THREE.Vector3());
+    // the compound eyes themselves are the headlights (glossy dark by day, glowing at night)
+    lamps = lightEyes(scene, carMats.headlight);
+    if (!lamps) {
+      // no eye patch found: lamps at the foremost head bone (`head_eyes`, between the compound eyes)
+      let head: THREE.Object3D | null = null;
+      const at = new THREE.Vector3();
+      scene.traverse((o) => {
+        if (!(o as THREE.Bone).isBone || !o.name.startsWith('head')) return;
+        if (!head || o.getWorldPosition(at).z > head.getWorldPosition(new THREE.Vector3()).z) head = o;
+      });
+      if (head) eyes = (head as THREE.Object3D).getWorldPosition(new THREE.Vector3());
+    }
   } else {
     buildStandIn(body, tinted);
   }
-  // eyes glow as headlights at night (the beams start there): on the compound eyes, ±0.2 m
-  const eyeX = model ? 0.2 : 0.26;
-  const eyeGeo = new THREE.SphereGeometry(0.09, 12, 8);
-  for (const x of [eyeX, -eyeX]) {
-    const eye = new THREE.Mesh(eyeGeo, carMats.headlight);
-    eye.position.set(x, eyes.y, eyes.z);
-    body.add(eye);
+  if (lamps) {
+    carMats.headlight.color.set('#1c1510');
+    carMats.headlight.roughness = 0.15;
+    carMats.headlight.metalness = 0.3;
+  } else {
+    // glowing spheres on the stand-in's head (or round the model's head bone)
+    const eyeX = model ? 0.2 : 0.26;
+    const eyeGeo = new THREE.SphereGeometry(0.09, 12, 8);
+    for (const x of [eyeX, -eyeX]) {
+      const eye = new THREE.Mesh(eyeGeo, carMats.headlight);
+      eye.position.set(x, eyes.y, eyes.z);
+      body.add(eye);
+    }
+    lamps = [new THREE.Vector3(eyeX, eyes.y, eyes.z), new THREE.Vector3(-eyeX, eyes.y, eyes.z)];
   }
   const base = tinted.map((m) => ({ color: m.color.clone(), map: m.map, metalness: m.metalness, roughness: m.roughness }));
   const setLivery = (color: string) => {
@@ -148,8 +163,53 @@ export function buildRoach(spec: CarSpec, opts: { bodyColor?: string } = {}): Ca
     setLivery,
   };
 
-  const anchors = { exhaust: new THREE.Vector3(), headlights: [new THREE.Vector3(eyeX, eyes.y, eyes.z + 0.1), new THREE.Vector3(-eyeX, eyes.y, eyes.z + 0.1)], taillights: [] as THREE.Vector3[] };
+  const anchors = { exhaust: new THREE.Vector3(), headlights: lamps.map((l) => l.clone().setZ(l.z + 0.1)), taillights: [] as THREE.Vector3[] };
   return { root, body, wheels, materials: carMats, headlightTargets: [], anchors, fromModel: !!model, creature };
+}
+
+/** the compound eyes' patch of the roach_body atlas in glTF UVs (roach_tex.py LAYOUT['eye'] = u 0.75–1, v 0–0.15, v flipped) */
+const EYE_UV = { u: 0.75, v: 0.85 };
+
+/**
+ * Give the compound eyes' triangles (found by their atlas patch) the lamp material and return the eyes' centres
+ * (body space, posed at the clip's start; left eye first), or null when the model has no such patch.
+ */
+function lightEyes(scene: THREE.Object3D, lamp: THREE.MeshStandardMaterial): THREE.Vector3[] | null {
+  const sums = [new THREE.Vector3(), new THREE.Vector3()];
+  const counts = [0, 0];
+  const v = new THREE.Vector3();
+  scene.traverse((o) => {
+    const m = o as THREE.SkinnedMesh;
+    if (!m.isSkinnedMesh || Array.isArray(m.material) || m.material.name !== 'roach_body') return;
+    const g = m.geometry, uv = g.getAttribute('uv'), index = g.index;
+    if (!uv || !index) return;
+    // a triangle's UV centroid lies inside its own patch (vertices on a patch edge are shared with the neighbour's)
+    const rest: number[] = [], eye: number[] = [];
+    for (let t = 0; t < index.count; t += 3) {
+      const a = index.getX(t), b = index.getX(t + 1), c = index.getX(t + 2);
+      const u = (uv.getX(a) + uv.getX(b) + uv.getX(c)) / 3, w = (uv.getY(a) + uv.getY(b) + uv.getY(c)) / 3;
+      (u > EYE_UV.u && w > EYE_UV.v ? eye : rest).push(a, b, c);
+    }
+    if (!eye.length) return;
+    for (const i of new Set(eye)) {
+      m.getVertexPosition(i, v).applyMatrix4(m.matrixWorld);
+      const side = v.x > 0 ? 0 : 1;
+      sums[side].add(v);
+      counts[side]++;
+    }
+    // an own index (the loaded geometry is shared by every clone): the eyes last, as a second material group
+    const geo = new THREE.BufferGeometry();
+    for (const [name, attr] of Object.entries(g.attributes)) geo.setAttribute(name, attr);
+    geo.setIndex([...rest, ...eye]);
+    geo.addGroup(0, rest.length, 0);
+    geo.addGroup(rest.length, eye.length, 1);
+    geo.boundingBox = g.boundingBox;
+    geo.boundingSphere = g.boundingSphere;
+    m.geometry = geo;
+    m.material = [m.material, lamp];
+  });
+  if (!counts[0] || !counts[1]) return null;
+  return sums.map((s, i) => s.divideScalar(counts[i]));
 }
 
 /** Procedural cockroach (no model): shell, head and six legs; tinted like the model. */
