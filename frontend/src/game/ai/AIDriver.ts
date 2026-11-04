@@ -39,6 +39,8 @@ export class AIDriver {
   private random: () => number;
   private wobblePhase: number;
   private stuckTime = 0;
+  /** speed when it last counted as moving (the stuck check sees whether it speeds up since) */
+  private stuckFrom = 0;
   /** extra lateral offset used to go around another car */
   private avoid = 0;
   /** progress (m), lateral offset and forward speed of a car to race against (rubber band, avoidance, no rear-ending) */
@@ -128,9 +130,17 @@ export class AIDriver {
     }
     out.handbrake = false;
 
-    // unstick: back up if pinned against a wall
-    if (Math.abs(speed) < 1 && out.throttle > 0.5) this.stuckTime += dt;
-    else this.stuckTime = Math.max(0, this.stuckTime - dt);
+    // unstick: back up if pinned against a wall (a train slow off the mark, 1.7 km/h/s after its jerk-limited build-up,
+    // is not stuck while it gathers speed)
+    const stalled = Math.abs(speed) < 1 && out.throttle > 0.5;
+    if (stalled && speed - this.stuckFrom > 0.15) {
+      this.stuckTime = 0;
+      this.stuckFrom = speed;
+    } else if (stalled) this.stuckTime += dt;
+    else {
+      this.stuckTime = Math.max(0, this.stuckTime - dt);
+      this.stuckFrom = speed;
+    }
     if (this.stuckTime > 1.5) {
       out.throttle = 0;
       out.brake = 1;
