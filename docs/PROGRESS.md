@@ -63,6 +63,10 @@ Blender processes) and checked against photos (photos only to measure) before th
 - **Deployed** (2026-11-04, `378220c`): the served bundle matches the local build, the new train models are served
   byte-identical, `/api/content` lists e231 and e5. Tests: vitest 53/53, backend 16/16 (container, `--build`); E2E not
   run for this deploy.
+- **Cockroach lamps fixed** (owner: the lamps sat off the head; `4d978d8`, deployed 2026-11-04, bundle
+  `index-CS_Gjguf.js`): the model was centred across on its lopsided posed bounds (antennae, gait), 0.35 m off its body
+  and off the lamp spheres. It now keeps its own plane of symmetry, and the compound eyes (their atlas patch) take the
+  lamp material, the beams starting at their centres. Checked head-on in the garage at night; vitest 53/53.
 - **Cars: paused** (owner, 2026-11-04: "your cost is very high: finish everything but the cars; the cars use the
   external models; I'll restart them next week or later"). The six cars stay on the Sketchfab models with credits.
   Modelling by eye against photos did not converge (owner: "not the same as the real cars"), so a measured fit was
