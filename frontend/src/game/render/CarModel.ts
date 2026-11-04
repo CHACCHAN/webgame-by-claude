@@ -127,6 +127,7 @@ export function createCarMaterials(spec: CarSpec, bodyColor = spec.colors.body):
 }
 
 const WHEEL_NAMES = ['wheel_fl', 'wheel_fr', 'wheel_rl', 'wheel_rr'];
+const LIVE_MATERIALS = new Set(['paint', 'accent', 'glass', 'headlight', 'taillight']);
 
 /**
  * A single visible refractive (transmission) material makes three.js draw every opaque object a second
@@ -155,11 +156,14 @@ export function rigFromTemplate(template: THREE.Object3D, spec: CarSpec, opts: {
   const fresh = createCarMaterials(spec, opts.bodyColor);
   const byName = fresh as unknown as Record<string, THREE.Material>;
   const cloned = new Map<THREE.Material, THREE.Material>();
+  // our own models (tools/blender/cars) are painted as the real car: only the materials the game changes at run time
+  // (paint colour, the accent, glass, the lamps' glow) are swapped; trim, chrome, tyres, rims and calipers stay theirs
+  const live = (name: string) => (spec.model?.own ? LIVE_MATERIALS.has(name) : true);
   root.traverse((o) => {
     const m = o as THREE.Mesh;
     if (!m.isMesh) return;
     const swap = (mat: THREE.Material) => {
-      if (byName[mat.name]) {
+      if (byName[mat.name] && live(mat.name)) {
         // keep the GLB textures but take over the shared, tweakable material
         const target = byName[mat.name] as THREE.MeshStandardMaterial;
         const src = mat as THREE.MeshStandardMaterial;

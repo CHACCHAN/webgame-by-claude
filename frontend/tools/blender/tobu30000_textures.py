@@ -5,13 +5,15 @@ Host python3 + PIL only (no numpy). Deterministic: no random numbers, same bytes
     python3 frontend/tools/blender/tobu30000_textures.py [outdir]
 Default output: frontend/tools/blender/textures/tobu30000/
 
-The service shown: 急行 池袋 (Express for Ikebukuro, Tojo Line), on the full-colour LED displays the 10-car Tojo sets
+Two variants (tobu30000.py --variant): the Tojo Line today, 急行 東上線 / TOJO LINE (the display shows the line name),
+and the Isesaki Line era (1996-2011), 急行 伊勢崎線 on 3-colour LEDs (files *_isesaki.png, the same pixel sizes so the atlas
+and the UVs stay identical). Tojo displays, on the full-colour LED displays the 10-car Tojo sets
 carry today (photos 2024-2026: "Tobu-Series30000 31612.jpg", "Tobu railway 31613 at Ikebukuro Station 20240629",
 "Tobu Series30000-32401 Outside-LED.jpg"). Layouts are read off those photos; their pixels are not used.
 
   led_type.png / _off   0.600 x 0.170 m (1400 px/m; the side display 2000 px/m: the atlas stays within 4096 px)  front type display behind the left windscreen: red field, 急行 + EXPRESS
-  led_dest.png / _off   0.770 x 0.200 m  front destination display over the gangway door: 池袋 + IKEBUKURO, white on black
-  led_side.png / _off   0.980 x 0.160 m  side display: red type block 急行 / EXPRESS, then 池袋 / IKEBUKURO
+  led_dest.png / _off   0.770 x 0.200 m  front destination display over the gangway door: 東上線 + TOJO LINE, white on black
+  led_side.png / _off   0.980 x 0.160 m  side display: red type block 急行 / EXPRESS, then 東上線 / TOJO LINE
   numbers.json          car numbers as outlines (metres, cap height 0.130 m; the sides scale them to 0.093 m), traced
                         from a 4000 px/m raster of the digits (pixel-edge loops, Douglas-Peucker 1.6 px)
 LED matrices: Matrix from keikyu1000_textures (dark panel, unlit dots visible, lit dots with a glow).
@@ -34,6 +36,8 @@ FONT_NUM = '/usr/share/fonts/opentype/noto/NotoSansCJK-Medium.ttc'
 
 WHITE = (240, 244, 255)
 RED = (232, 26, 30)          # 急行 field (Tojo Line full-colour LED; 31612 photo)
+RED3 = (255, 38, 24)         # 3-colour LED (Isesaki Line era): red
+ORANGE3 = (255, 128, 16)     #   and orange
 NUMBERS = ('31612', '32612', '34412')
 CONDENSE = 0.90         # the train's digits are a little narrower than Noto's
 
@@ -50,11 +54,11 @@ def led_type():
 
 
 def led_dest():
-    # 0.77 x 0.20 m: 220 x 57 dots; 池袋 widely spaced (photo: char centres ±0.13 m), IKEBUKURO under it
+    # 0.77 x 0.20 m: 220 x 57 dots; the line name widely spaced, its romanisation under it
     m = KT.Matrix(0.77, 0.20, 220, 57)
-    cw, ch, pitch = 0.118, 0.112, 0.26
-    m.text_cjk('池袋', (0.77 - pitch - cw) / 2, 0.016, cw, ch, pitch, WHITE)
-    m.text_fit('IKEBUKURO', 0.27, 0.146, 0.23, 0.030, WHITE)
+    cw, ch, pitch = 0.118, 0.112, 0.20
+    m.text_cjk('東上線', (0.77 - 2 * pitch - cw) / 2, 0.016, cw, ch, pitch, WHITE)
+    m.text_fit('TOJO LINE', 0.27, 0.146, 0.23, 0.030, WHITE)
     m.dots_from_layers()
     return m
 
@@ -66,8 +70,47 @@ def led_side():
     m.fill(RED, 0, 2, fw, 62)
     m.text_cjk('急行', 0.050, 0.014, 0.090, 0.098, 0.115, WHITE)
     m.text_fit('EXPRESS', 0.040, 0.123, 0.23, 0.026, WHITE)
-    m.text_cjk('池袋', 0.455, 0.012, 0.104, 0.100, 0.27, WHITE)
-    m.text_fit('IKEBUKURO', 0.47, 0.123, 0.26, 0.027, WHITE)
+    m.text_cjk('東上線', 0.423, 0.012, 0.104, 0.100, 0.18, WHITE)
+    m.text_fit('TOJO LINE', 0.535, 0.123, 0.24, 0.027, WHITE)
+    m.dots_from_layers()
+    return m
+
+
+# ---- Isesaki Line era (1996-2011, Hanzomon line through service): 3-colour LED, coarse dots, Japanese only.
+# ja.wikipedia: the type display showed 急行 in red characters, from March 2006 in a red frame ("赤枠に急行");
+# destinations in orange. Layouts after the 2007 / 2012 photos ("Tobu-30000.jpg", LERK, CC BY 2.5; "Tobu 30000
+# Series.jpg", T. Hanami, CC0), whose displays are too small to read: dot counts and text sizes are estimates.
+
+def _frame(m, colour, i0, j0, i1, j1):
+    m.fill(colour, i0, j0, i1, j0 + 1)
+    m.fill(colour, i0, j1 - 1, i1, j1)
+    m.fill(colour, i0, j0, i0 + 1, j1)
+    m.fill(colour, i1 - 1, j0, i1, j1)
+
+
+def led_type_isesaki():
+    m = KT.Matrix(0.60, 0.17, 96, 28)          # ~6 mm pitch
+    _frame(m, RED3, 6, 1, 90, 27)
+    cw, ch, pitch = 0.125, 0.125, 0.19
+    m.text_cjk('急行', (0.60 - pitch - cw) / 2, 0.023, cw, ch, pitch, RED3)
+    m.dots_from_layers()
+    return m
+
+
+def led_dest_isesaki():
+    m = KT.Matrix(0.77, 0.20, 128, 32)         # 6 mm pitch
+    cw, ch, pitch = 0.150, 0.150, 0.175
+    m.text_cjk('伊勢崎線', (0.77 - 3 * pitch - cw) / 2, 0.025, cw, ch, pitch, ORANGE3)
+    m.dots_from_layers()
+    return m
+
+
+def led_side_isesaki():
+    m = KT.Matrix(0.98, 0.16, 192, 32)         # 5 mm pitch
+    fw = round(0.30 / 0.98 * 192)
+    _frame(m, RED3, 2, 1, fw, 31)
+    m.text_cjk('急行', 0.045, 0.025, 0.105, 0.110, 0.12, RED3)
+    m.text_cjk('伊勢崎線', 0.36, 0.022, 0.120, 0.116, 0.150, ORANGE3)
     m.dots_from_layers()
     return m
 
@@ -177,7 +220,9 @@ def main():
         img.save(os.path.join(OUT, name), optimize=True)
         print(f'{name:22s} {img.width}x{img.height} {img.mode}')
 
-    for name, fn, ppm in (('led_type', led_type, 1400), ('led_dest', led_dest, 1400), ('led_side', led_side, 2000)):
+    for name, fn, ppm in (('led_type', led_type, 1400), ('led_dest', led_dest, 1400), ('led_side', led_side, 2000),
+                          ('led_type_isesaki', led_type_isesaki, 1400), ('led_dest_isesaki', led_dest_isesaki, 1400),
+                          ('led_side_isesaki', led_side_isesaki, 2000)):
         m = fn()
         save(m.render(True, ppm), name + '.png')
         save(m.render(False, ppm), name + '_off.png')

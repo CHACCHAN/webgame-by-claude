@@ -151,8 +151,8 @@ export const trainTailZ = (t: Pick<TrainInfo, 'carLength' | 'bogies' | 'consist'
  */
 export const TRAIN_INFO: Record<TrainId, TrainInfo & { name: string; tagline: string; description: string; model: { title: string; author: string; url: string; license: string; own?: boolean } }> = {
   e231: {
-    name: 'E231系', series: 'E231系0番台（武蔵野線）', operator: 'JR東日本', tagline: '武蔵野線のオレンジ帯',
-    description: '中央・総武線から武蔵野線へ移ったE231系。転用時の機器更新でVVVFは三菱の2レベルIGBTに。オレンジと茶の帯で峠を下る。',
+    name: 'E231系', series: 'E231系0番台（武蔵野線）', operator: 'JR東日本', tagline: '武蔵野線と総武線各駅停車',
+    description: '中央・総武緩行線で走り、一部が武蔵野線へ移ったE231系。武蔵野線の車は機器更新でVVVFが三菱の2レベルIGBTに。カラーで武蔵野線と総武線各駅停車を選べる。',
     accel: 2.5, vmax: 120, brake: [4.2, 4.5], mass: 79.8, motor: 'MT73 95kW×4', control: 'IGBT-VVVFインバータ（2レベル・三菱電機、機器更新車）', sound: 'igbt',
     gearRatio: 7.07, wheel: 0.86, body: 'stainless', width: 2.95, carLength: 20, bogies: 13.8, front: 'e231',
     // the lines it runs on: Wikipedia (E231, 武蔵野線) orange #f15a22 + brown #3c060f (the cab front: orange only); the
@@ -164,11 +164,11 @@ export const TRAIN_INFO: Record<TrainId, TrainInfo & { name: string; tagline: st
     // LAMPS:e231
     // the in-train sound calculated from the inverter's control pattern (vehicle/vvvf.ts, audio/vvvf)
     vvvf: E231_MUSASHINO_MITSUBISHI,
-    model: { title: 'E231系0番台 武蔵野線', author: 'TOUGE NOCTURNE', url: '', license: '自作', own: true },
+    model: { title: 'E231系0番台', author: 'TOUGE NOCTURNE', url: '', license: '自作', own: true },
   },
   e235: {
-    name: 'E235系', series: 'E235系0番台（山手線）', operator: 'JR東日本', tagline: '山手線の新しい顔',
-    description: '山手線の現役車両。SiC素子のVVVFインバータを日本の高速鉄道線で初めて量産採用し、高速域でも1パルスにせず27パルスで走る。ウグイス色のグラデーションで峠を下る。',
+    name: 'E235系', series: 'E235系0番台（山手線）', operator: 'JR東日本', tagline: '山手線と横須賀・総武快速線',
+    description: '山手線の現役車両。SiC素子のVVVFで高速域も1パルスにせず27パルスで走る。カラーでウグイス色の山手線と、スカ色の横須賀・総武快速線（1000番台）を選べる。',
     // accel 3.0, design top 120, service brake 4.2; emergency 4.5 estimated (as E231 / E233)
     accel: 3.0, vmax: 120, brake: [4.2, 4.5],
     // クハE235 33.3 t + モハE235 31.7 t + クハE234 33.4 t
@@ -185,7 +185,7 @@ export const TRAIN_INFO: Record<TrainId, TrainInfo & { name: string; tagline: st
     // the front LED display; side windows (glass far darker than the stainless around it)
     lamps: { head: { x: 0.914, y: 3.37, w: 0.135, h: 0.12 }, tail: { x: 0.62, y: 3.35, w: 0.1, h: 0.16 }, windows: [1.915, 2.865], windowLum: 0.06 },
     vvvf: E235_MITSUBISHI_SIC,
-    model: { title: 'E235系0番台 山手線', author: 'TOUGE NOCTURNE', url: '', license: '自作', own: true },
+    model: { title: 'E235系', author: 'TOUGE NOCTURNE', url: '', license: '自作', own: true },
   },
   keikyu1000: {
     name: '京急新1000形', series: '新1000形 1次車（2002年）', operator: '京浜急行電鉄', tagline: '発車で音階を奏でる「ドレミファインバータ」',
@@ -206,7 +206,7 @@ export const TRAIN_INFO: Record<TrainId, TrainInfo & { name: string; tagline: st
   },
   tobu30000: {
     name: '東武30000系', series: '30000系', operator: '東武鉄道', tagline: '半蔵門線直通のために生まれた',
-    description: '半蔵門線・田園都市線への直通用に1996年に登場したステンレス車。日立の3レベルIGBTインバータにロイヤルマルーンの帯。今は東上線を走る。起動加速度3.3km/h/sで峠を下る。',
+    description: '半蔵門線への直通用に1996年に登場したステンレス車で、日立の3レベルIGBTインバータ。伊勢崎線から直通運転をこなし、今は東上線を走る。カラーでどちらも選べる。',
     // accel 3.3 (2.5 coupled with the 10000s), design top 120, service 3.5, emergency 4.5
     accel: 3.3, vmax: 120, brake: [3.5, 4.5],
     // only 29.0–37.5 t per car published: クハ31600 ~30.0 + モハ32600 (pantographs, VVVF, compressor) ~37.5 + クハ36600 ~30.0

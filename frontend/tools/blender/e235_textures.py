@@ -70,20 +70,49 @@ def led_setno(text='17'):
 
 
 def led_side():
-    # 0.54 x 0.13 m (measured on the line-scan photo), pitch 2.5 mm: 216 x 52 dots
-    W, H = 0.54, 0.13
-    m = KT.Matrix(W, H, 216, 52)
-    m.fill(LINE_GREEN, 2, 3, 70, 49)                 # the line field: 0.17 m
-    m.text_cjk('山手線', 0.016, 0.034, 0.044, 0.056, 0.047, WHITE)
-    m.text_cjk('渋谷', 0.192, 0.016, 0.054, 0.058, 0.058, WHITE)
-    m.text_cjk('・', 0.308, 0.040, 0.014, 0.014, 0.024, WHITE)
-    m.text_cjk('新宿方面', 0.330, 0.016, 0.050, 0.058, 0.051, WHITE)
-    m.text_fit('for Shibuya & Shinjuku', 0.196, 0.090, 0.330, 0.022, WHITE, track=0.0)
+    # 0.54 x 0.13 m (measured on the line-scan photo), pitch 2.5 mm: 216 x 52 dots. The line name only (the owner's
+    # choice): 山手線 large, "Yamanote Line" beside it, the line colour bar under both as on the front display
+    m = KT.Matrix(0.54, 0.13, 216, 52)
+    m.text_cjk('山手線', 0.022, 0.016, 0.076, 0.082, 0.080, WHITE)
+    m.text_fit('Yamanote Line', 0.272, 0.044, 0.246, 0.046, WHITE, track=0.02)
+    m.fill(LINE_GREEN, 6, 43, 210, 48)
+    m.dots_from_layers()
+    return m
+
+
+# ---------------------------------------------------------------- E235-1000 (Yokosuka / Sobu Rapid line)
+SOBU_BLUE = (52, 92, 230)       # 青20号 (#2440c3) as LEDs show it, a little lighter
+SOBU_CREAM = (255, 236, 196)    # クリーム1号 (#fff4d5)
+
+
+def sobu_front():
+    """横須賀・総武快速線 over "Yokosuka-Sobu Rapid Line", the two line colours as a bar under them"""
+    m = KT.Matrix(1.07, 0.16, 268, 40)
+    m.text_cjk('横須賀', 0.085, 0.006, 0.092, 0.088, 0.100, WHITE)
+    m.text_cjk('・', 0.392, 0.039, 0.022, 0.022, 0.03, WHITE)       # the glyph is scaled to its box: drawn small
+    m.text_cjk('総武快速線', 0.425, 0.006, 0.092, 0.088, 0.100, WHITE)
+    m.text_fit('Yokosuka-Sobu Rapid Line', 0.150, 0.102, 0.770, 0.034, WHITE, track=0.03)
+    m.fill(SOBU_CREAM, 20, 37, 134, 40)
+    m.fill(SOBU_BLUE, 134, 37, 248, 40)
+    m.dots_from_layers()
+    return m
+
+
+def sobu_side():
+    m = KT.Matrix(0.54, 0.13, 216, 52)
+    m.text_cjk('横須賀', 0.012, 0.008, 0.054, 0.058, 0.0575, WHITE)
+    m.text_cjk('・', 0.189, 0.030, 0.013, 0.013, 0.02, WHITE)
+    m.text_cjk('総武快速線', 0.212, 0.008, 0.054, 0.058, 0.0575, WHITE)
+    m.text_fit('Yokosuka-Sobu Rapid Line', 0.040, 0.078, 0.460, 0.026, WHITE, track=0.02)
+    m.fill(SOBU_CREAM, 6, 46, 108, 50)
+    m.fill(SOBU_BLUE, 108, 46, 210, 50)
     m.dots_from_layers()
     return m
 
 
 NUMBERS = {'kuha235': 'クハE235-17', 'moha235': 'モハE235-49', 'kuha234': 'クハE234-17'}
+# set F-35 of the 11-car basic set: 11号車 クハE235-1035, 10号車 モハE235-1035 (pantograph), 1号車 クハE234-1035
+SOBU_NUMBERS = {'kuha235': 'クハE235-1035', 'moha235': 'モハE235-1035', 'kuha234': 'クハE234-1035'}
 
 
 def car_number(text, ppm=2000, h_m=0.085):
@@ -122,11 +151,15 @@ def main():
         print(f'{name:22s} {img.width}x{img.height} {img.mode}')
 
     for name, m, ppm in (('led_front', led_front(), 1600), ('led_runno', led_runno(), 1600),
-                         ('led_setno', led_setno(), 1600), ('led_side', led_side(), 2000)):
+                         ('led_setno', led_setno(), 1600), ('led_side', led_side(), 2000),
+                         ('sobu_led_front', sobu_front(), 1600), ('sobu_led_runno', led_runno('1452F'), 1600),
+                         ('sobu_led_setno', led_setno('F-35'), 1600), ('sobu_led_side', sobu_side(), 2000)):
         save(m.render(True, ppm), name + '.png')
         save(m.render(False, ppm), name + '_off.png')
     for key, text in NUMBERS.items():
         save(car_number(text), f'num_{key}.png')
+    for key, text in SOBU_NUMBERS.items():
+        save(car_number(text), f'sobu_num_{key}.png')
 
 
 if __name__ == '__main__':

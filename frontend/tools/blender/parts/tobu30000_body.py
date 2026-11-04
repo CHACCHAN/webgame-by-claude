@@ -666,8 +666,9 @@ def _emissive(m, name, img):
     return mat
 
 
-def add_materials(m, tex_dir):
-    """plain materials plus the painted textures (written to tex_dir); returns the atlas boxes"""
+def add_materials(m, tex_dir, variant='tojo'):
+    """plain materials plus the painted textures (written to tex_dir); returns the atlas boxes. variant 'tojo' or
+    'isesaki' picks the LED display images (same sizes, so the atlas boxes and UVs are the same)"""
     os.makedirs(tex_dir, exist_ok=True)
     m.add('tb_steel', '#cccccf', metallic=1.0, roughness=0.32)
     m.add('tb_jamb', '#c4c4c7', metallic=1.0, roughness=0.28)
@@ -697,7 +698,8 @@ def add_materials(m, tex_dir):
     img, mr = cv.image('tb_face', os.path.join(tex_dir, 'face.png'))
     m.mats['tb_face'] = BD.textured_material('tb_face', img, mr)
     boxes = {}
-    pieces = [(k, _load(k + '.png')) for k in ('led_type', 'led_dest', 'led_side')]
+    suffix = '' if variant == 'tojo' else '_' + variant
+    pieces = [(k, _load(k + suffix + '.png')) for k in ('led_type', 'led_dest', 'led_side')]
     if all(img is not None for _, img in pieces):
         img, b = BD._atlas('tb_led', pieces, os.path.join(tex_dir, 'led.png'))
         _emissive(m, 'tb_led', img)

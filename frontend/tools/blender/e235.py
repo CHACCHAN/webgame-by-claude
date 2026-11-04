@@ -3,8 +3,12 @@ JR East E235 series 0 (Yamanote Line, 2015–), three cars as the game shows the
 (the motor car with the single-arm pantograph, 9号車 of the 11-car set) + クハE234 (cab, trailing, turned round), built
 from numbers and our own painted textures (no outside model, no photo pixels, no logos). Run with Blender 5.x:
 
-  blender --background --factory-startup --python tools/blender/e235.py -- --out <file.glb>
+  blender --background --factory-startup --python tools/blender/e235.py -- --out <file.glb> [--variant sobu]
       [--render <dir> [--views hero,head,...] [--samples N] [--size WxH]] [--tex <dir>]
+
+--variant sobu builds the E235-1000 of the Yokosuka / Sobu Rapid line (横須賀・総武快速線) instead: the same meshes
+and nodes, only the paint and the signs differ (cream and blue bands along the sides, stainless doors, the blue face
+with its cream-to-blue halftone, displays 横須賀・総武快速線, set F-35: クハE235-1035 + モハE235-1035 + クハE234-1035).
 
 The parts live in tools/blender/parts/ (each module's docstring lists its figures and where they come from):
   e235_body        body shell, cab face, doors, windows, painted side / door / face textures, LED displays, fittings
@@ -51,6 +55,7 @@ VIEWS = opt('--views', opt('--view', 'hero'))
 SAMPLES = int(opt('--samples', '64'))
 SIZE = tuple(int(v) for v in opt('--size', '1600x900').split('x'))
 TEX = opt('--tex')
+VARIANT = opt('--variant', 'yamanote')
 
 BOGIE_Z = 6.9
 COUPLER_FACE = 10.0
@@ -72,11 +77,13 @@ VIEW_SET = {
     'rear34': ((-6.0, 2.6, -66.0), (0.0, 1.9, -44.0), 50),
     'skirt': ((1.4, 0.9, 13.8), (0.0, 0.7, 9.8), 50),
     'panto': ((5.5, 6.2, -16.0), (0.0, 4.0, -27.0), 50),
+    'sign': ((5.0, 2.8, 2.0), (1.47, 3.0, 0.0), 45),          # the side destination display of car0 (left side)
     # for the sheets with the reference photos: head-on (S5A-0043) and a 3/4 view from ahead and to the right
     'match_head': ((0.0, 2.2, 34.0), (0.0, 2.0, 9.8), 135),
     'match34': ((-4.5, 3.2, 32.0), (-0.4, 1.7, 5.0), 95),
+    'match_sobu': ((2.6, 3.0, 40.0), (0.25, 2.0, 9.5), 150),     # like the E235-1000 photo "Series-E235-1000 F35"
 }
-LIT = {'hero', 'head', 'front34', 'low', 'skirt', 'match_head', 'match34', 'bogie'}
+LIT = {'hero', 'head', 'front34', 'low', 'skirt', 'match_head', 'match34', 'match_sobu', 'bogie'}
 TAIL = {'rear34'}
 
 
@@ -183,6 +190,7 @@ def lamps(view):
 
 def main():
     K.clear_scene()
+    EB.set_variant(VARIANT)
     tex_dir = TEX or tempfile.mkdtemp(prefix='e235-tex-')
     m, boxes = materials(tex_dir)
     RN.set_roof_profile([(x, y) for x, y, _nx, _ny in EB.half_profile()])

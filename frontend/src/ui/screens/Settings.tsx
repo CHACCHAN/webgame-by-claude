@@ -75,7 +75,7 @@ export function SettingsScreen() {
         <div className="gpu-note">※ 目標は 1080p / 60fps です。カクつく場合は品質か解像度スケールを下げてください。</div>
         <div className="credits">
           VVVF電車の音: VVVF Simulator（VvvfGeeks, https://github.com/VvvfGeeks/VVVF-Simulator）の計算（PWM・誘導電動機・車内音のインパルス応答）と同梱のスイッチング角テーブル（CHM）を移植して使用（非商用に限り無償の利用規約による）。制御パターン:{' '}
-          {[...new Set(TRAIN_ORDER.flatMap((id) => (TRAIN_INFO[id].vvvf ? [TRAIN_INFO[id].vvvf!.source] : [])))].join('・')}
+          {[...new Set(TRAIN_ORDER.flatMap((id) => [TRAIN_INFO[id].vvvf, ...TRAIN_INFO[id].liveries.map((l) => l.vvvf)].flatMap((v) => (v ? [v.source] : []))))].join('・')}
           （YAML-Files: VvvfGeeks, https://github.com/VvvfGeeks/YAML-Files、実車の再現で実物と同一ではありません）
         </div>
       </div>

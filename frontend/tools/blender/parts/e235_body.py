@@ -68,6 +68,12 @@ END_R = 0.06            # rounding of a gangway end
 # colours (sRGB 0..1)
 STAINLESS = (0.70, 0.71, 0.715)
 GREEN = (0.50, 0.72, 0.26)       # 黄緑6号 as it reads on photos (door #78ad63 sunlit, face #7fab69…#91b974)
+# E235-1000 (Yokosuka / Sobu Rapid line, `set_variant('sobu')`): ja.wikipedia gives クリーム1号 #fff4d5 and 青20号
+# (bright blue) #2440c3; the cream a little deeper, as it reads on the photos (#ecdcb8 sunlit)
+BLUE = (0.141, 0.251, 0.765)
+CREAM = (0.95, 0.90, 0.77)
+VARIANT = 'yamanote'
+LINE = GREEN            # the line colour: face frame, the cab's wrap onto the side (and the doors on the Yamanote cars)
 BLACK_PANEL = (0.025, 0.027, 0.03)
 GLASS = (0.04, 0.05, 0.055)
 SIDE_GLASS = (0.10, 0.115, 0.12)
@@ -670,7 +676,19 @@ def paint_side(kind, side, number_path=None, w=4096, h=560):
         for yy in (1.27, 1.30, 1.33):
             cv.paint(cv.cover(np.maximum(np.abs(U - cz) - 0.10, np.abs(V - yy) - 0.006)), (0.25, 0.25, 0.26), 0.5, 1.0)
         # the line colour wraps round the cab corner onto the side
-        cv.paint(cv.cover(GREEN_Z - U), GREEN, 0.32, 0.0)
+        cv.paint(cv.cover(GREEN_Z - U), LINE, 0.32, 0.0)
+    if VARIANT == 'sobu':
+        # スカ色 bands (photos 67abb8 / 5cfd07, scaled on the door height): along the waist under the windows cream
+        # 1.72…1.85 over blue 1.54…1.72, left out at the passenger doors; along the top cream 3.05…3.20 under blue
+        # 3.20…3.42, right through (above the doors it continues on the bay texture)
+        gap = np.zeros_like(U)
+        for zd in doors:
+            gap = np.maximum(gap, cv.cover(np.abs(U - zd) - (DOOR_W + 0.09) / 2))
+        lim = cv.cover(U - GREEN_Z) if cab else 1.0
+        for y0, y1, col in ((1.72, 1.85, CREAM), (1.54, 1.72, BLUE)):
+            cv.paint(cv.cover(np.abs(V - (y0 + y1) / 2) - (y1 - y0) / 2) * (1 - gap) * lim, col, 0.32, 0.0)
+        for y0, y1, col in ((3.05, 3.20, CREAM), (3.20, 3.42, BLUE)):
+            cv.paint(cv.cover(np.abs(V - (y0 + y1) / 2) - (y1 - y0) / 2) * lim, col, 0.32, 0.0)
     # car number below the big window at the car's centre (z ≈ 0; on the left side it reads from +z to −z)
     if number_path:
         cov = _sample_text(number_path)
@@ -711,7 +729,11 @@ def paint_bay(w=1024, h=1440):
     def t_frieze(u, v):
         inside = (v > FRIEZE[0]) & (v < FRIEZE[1])
         return np.where(inside, np.clip((fw - np.abs(u)) / 0.12, 0, 1) ** 1.2, 0.0)
-    _dots(cv, U, V, t_frieze, pitch=0.012)
+    if VARIANT == 'sobu':
+        for y0, y1, col in ((3.05, 3.20, CREAM), (3.20, 3.42, BLUE)):
+            cv.paint(cv.cover(np.abs(V - (y0 + y1) / 2) - (y1 - y0) / 2), col, 0.32, 0.0)
+    else:
+        _dots(cv, U, V, t_frieze, pitch=0.012)
     cv.paint(cv.cover(np.abs(V - (FRIEZE[0] - 0.01)) - 0.0015), (0.48, 0.49, 0.50), 0.45, 1.0)
     # door leaves: green, the dots thinning towards the pockets (outer edges)
     hw = DOOR_W / 2
@@ -719,7 +741,12 @@ def paint_bay(w=1024, h=1440):
     def t_leaf(u, v):
         inside = (v > SILL) & (v < DOOR_TOP) & (np.abs(u) < hw)
         return np.where(inside, np.clip((hw - np.abs(u)) / 0.07, 0, 1) ** 0.8, 0.0)
-    _dots(cv, U, V, t_leaf, pitch=0.010)
+    if VARIANT == 'sobu':
+        # plain stainless leaves (no colour on the 1000's doors: ja.wikipedia), a shade brighter than the side
+        inside = cv.cover(np.maximum(np.abs(U) - hw, np.maximum(SILL - V, V - DOOR_TOP)))
+        cv.paint(inside, (0.74, 0.75, 0.755), 0.28, 1.0)
+    else:
+        _dots(cv, U, V, t_leaf, pitch=0.010)
     in_leaf = cv.cover(np.maximum(np.abs(U) - hw, np.maximum(SILL - V, V - DOOR_TOP)))
     cv.rough = cv.rough * (1 - in_leaf) + 0.32 * in_leaf
     # the opening's rounded top corners (the trim shows there)
@@ -788,7 +815,7 @@ def paint_face(body, w=2048, h=1456):
         X[j] = xa + (xb - xa) * t
     dxdu = np.abs(np.gradient(X, axis=1)) / cv.px
     aa = np.maximum(cv.px * dxdu, 1e-4)
-    cv.fill(GREEN, 0.30, 0.0)
+    cv.fill(LINE, 0.30, 0.0)
     # the black panel: display band, windscreen, wiper band, then the dots into the green
     top, bot = 3.528, GROOVE_Y + 0.09
     sd_panel = _sd_rr(X, V, 0.0, (top + bot) / 2, 2 * PANEL_X, top - bot, 0.26)
@@ -801,8 +828,16 @@ def paint_face(body, w=2048, h=1456):
         return np.where(v > 1.97, 0.0, np.clip((1.97 - v) / (1.97 - 1.44), 0, 1))
     # dots: a two-phase checkerboard halftone over a black field between 1.44 and 1.97 (cells 0.031, photo 612879)
     band = inside * (V > 1.40) * (V <= 1.97)
-    cv.paint(band, BLACK_PANEL, 0.25, 0.0)
-    cv.paint(band * _halftone(X, V, t_face, 0.031, aa), GREEN, 0.30, 0.0)
+    if VARIANT == 'sobu':
+        # E235-1000 (photos 61f8ab / d689b5 / 5cfd07): under the wiper band a cream band to 1.86, then the same
+        # halftone from cream into the blue down to the panel's foot
+        def t_sobu(u, v):
+            return np.where(v > 1.86, 0.0, np.clip((1.86 - v) / (1.86 - 1.40), 0, 1))
+        cv.paint(band, CREAM, 0.30, 0.0)
+        cv.paint(band * _halftone(X, V, t_sobu, 0.031, aa), LINE, 0.30, 0.0)
+    else:
+        cv.paint(band, BLACK_PANEL, 0.25, 0.0)
+        cv.paint(band * _halftone(X, V, t_face, 0.031, aa), LINE, 0.30, 0.0)
     # glass divider bar between the display band and the windscreen
     sd = np.maximum(np.abs(X) - 1.37, np.abs(V - 3.165) - 0.045)
     cv.paint(cv.cover(sd, aa), (0.07, 0.072, 0.075), 0.3, 0.3)
@@ -833,6 +868,17 @@ def paint_face(body, w=2048, h=1456):
 
 SIGNS = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'textures', 'e235')
 NUMBERS = {'car0': 'num_kuha235.png', 'car1': 'num_moha235.png', 'car2': 'num_kuha234.png'}
+PREFIX = ''             # 'sobu_' for the E235-1000's signs (e235_textures.py writes both sets)
+
+
+def set_variant(name):
+    """'yamanote' (0番台, the default) or 'sobu' (1000番台): colours and signs only, the geometry stays the same"""
+    global VARIANT, LINE, PREFIX
+    if name not in ('yamanote', 'sobu'):
+        raise ValueError(f'unknown variant {name}')
+    VARIANT = name
+    LINE = BLUE if name == 'sobu' else GREEN
+    PREFIX = 'sobu_' if name == 'sobu' else ''
 
 
 def _load(name):
@@ -857,7 +903,7 @@ def add_materials(m, tex_dir, cars=(('car0', 'cab'), ('car1', 'middle'), ('car2'
     m.add('e_speaker', '#c9cbcc', metallic=0.4, roughness=0.4)
     m.add('e_sidelamp', '#d0b080', roughness=0.25)
     for name, kind in cars:
-        num = os.path.join(SIGNS, NUMBERS[name])
+        num = os.path.join(SIGNS, PREFIX + NUMBERS[name])
         num = num if os.path.exists(num) else None
         left = paint_side(kind, 1, num)
         right = paint_side(kind, -1, num)
@@ -871,7 +917,7 @@ def add_materials(m, tex_dir, cars=(('car0', 'cab'), ('car1', 'middle'), ('car2'
     m.mats['e_face'] = BD.textured_material('e_face', img, mr)
     # LED displays: one emissive atlas
     keys = ('led_front', 'led_runno', 'led_setno', 'led_side')
-    pieces = [(k, _load(k + '.png')) for k in keys]
+    pieces = [(k, _load(PREFIX + k + '.png')) for k in keys]
     boxes = {}
     if all(img is not None for _, img in pieces):
         img, b = BD._atlas('e_led', pieces, os.path.join(tex_dir, 'led.png'))

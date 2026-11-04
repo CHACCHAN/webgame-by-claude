@@ -10,7 +10,13 @@ displays, no electric coupler), three cars as the game shows them, built from nu
 Run with Blender 5.x:
 
   blender --background --factory-startup --python tools/blender/tobu30000.py -- --out <file.glb>
-      [--render <dir> [--views hero,head,...] [--samples N] [--size WxH]] [--tex <dir>]
+      [--variant isesaki] [--render <dir> [--views hero,head,...] [--samples N] [--size WxH]] [--tex <dir>]
+
+Variants (materials / textures only; meshes, nodes and UVs identical):
+  tojo (default)  the Tojo Line today: full-colour LED, 急行 (red field) + 東上線 / TOJO LINE
+  isesaki         the Isesaki Line era with the Hanzomon line through service (1996-2011): 3-colour LED, 急行 in a red
+                  frame + 伊勢崎線 in orange. The two-tier electric coupler the sets carried then is left out (it would
+                  need geometry the Tojo version does not have).
 
 The parts live in tools/blender/parts/ (each module's docstring lists its figures and where they come from):
   tobu30000_body        body shell, cab front, doors, windows, painted side / face textures, LED displays, numbers
@@ -50,6 +56,8 @@ VIEWS = opt('--views', opt('--view', 'hero'))
 SAMPLES = int(opt('--samples', '64'))
 SIZE = tuple(int(v) for v in opt('--size', '1600x900').split('x'))
 TEX = opt('--tex')
+VARIANT = opt('--variant', 'tojo')     # 'tojo' (today) or 'isesaki' (1996-2011): displays only, same geometry
+assert VARIANT in ('tojo', 'isesaki'), VARIANT
 
 CAR_LENGTH = 20.0       # over the couplers
 BOGIE_Z = 6.90          # bogie centres ±6.9 m (13.8 m: estimate, see tobu30000_bogie)
@@ -61,7 +69,7 @@ CARS = (('car0', 'cab', 0.0, False, '31612'), ('car1', 'middle', -CAR_LENGTH, Fa
 
 def materials(tex_dir):
     m = K.Materials()
-    boxes = BD.add_materials(m, tex_dir)
+    boxes = BD.add_materials(m, tex_dir, VARIANT)
     for mod in (RF, UF, BG, CP):
         mod.add_materials(m)
     return m, boxes
