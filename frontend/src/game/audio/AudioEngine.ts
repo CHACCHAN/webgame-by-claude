@@ -226,14 +226,16 @@ export class AudioEngine {
   /** The running sound of a vehicle: a synthesised engine, a train's traction equipment or a creature's legs. */
   engine(id: string, spec: CarSpec): EngineSound | TrainSound | BugSound {
     const e = this.engines.get(id);
-    if (e && e.kind === spec.id) return e;
+    // (a train on another line may run another inverter: a sound of its own)
+    const kind = spec.train?.vvvf ? `${spec.id}|${spec.train.vvvf.pattern}` : spec.id;
+    if (e && e.kind === kind) return e;
     if (e) this.removeEngine(id);
     const sound = spec.train
       ? this.trainSound(spec)
       : spec.creature
         ? new BugSound(this.ctx, this.noise, this.sfx)
         : new EngineSound(this.ctx, spec.engine.cylinders, spec.engine.turbo, this.noise, this.sfx);
-    this.engines.set(id, Object.assign(sound, { kind: spec.id }));
+    this.engines.set(id, Object.assign(sound, { kind }));
     return sound;
   }
 

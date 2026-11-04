@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { CarSpec } from '../vehicle/carSpecs';
-import { trainBogiePath, trainCars, trainNoseZ, trainTailZ, type LampPair, type Livery, type TrainInfo } from '../vehicle/trains';
+import { liverySwatch, trainBogiePath, trainCars, trainModelKey, trainNoseZ, trainTailZ, TRAIN_INFO, type LampPair, type Livery, type TrainId, type TrainInfo } from '../vehicle/trains';
 import { createCarMaterials, type CarRig } from './CarModel';
 
 /**
@@ -14,27 +14,49 @@ export const TRAIN = { cars: 3, pitch: 20, bogies: 13.8, body: 19.5, floor: 1.15
 /** front of the leading car ahead of the simulated bogie (m) */
 export const trainNose = (t: TrainInfo) => trainCars(t)[0].front;
 
-/** Cars cut from third-party models (public/models/trains/<id>.glb: nodes car0..car2), by train id. */
+/**
+ * The trains' 3D models (public/models/trains/<key>.glb: nodes car0..car2), by model key: the train id, or
+ * `<id>-<variant>` for a line's livery (`Livery.variant`: the same model painted and signed for that line).
+ */
 const models = new Map<string, THREE.Object3D[]>();
+const loading = new Map<string, Promise<void>>();
+let loader: Promise<import('three/examples/jsm/loaders/GLTFLoader.js').GLTFLoader> | null = null;
 
-export async function loadTrainModels(ids: string[]) {
-  const { GLTFLoader } = await import('three/examples/jsm/loaders/GLTFLoader.js');
-  const { MeshoptDecoder } = await import('three/examples/jsm/libs/meshopt_decoder.module.js');
-  const loader = new GLTFLoader();
-  loader.setMeshoptDecoder(MeshoptDecoder);
-  await Promise.all(
-    ids.map(async (id) => {
-      if (models.has(id)) return;
+/** Load one model (once; a missing or broken file leaves the procedural cars, or the base model for a variant). */
+export function loadTrainModel(key: string): Promise<void> {
+  let p = loading.get(key);
+  if (!p) {
+    loader ??= (async () => {
+      const { GLTFLoader } = await import('three/examples/jsm/loaders/GLTFLoader.js');
+      const { MeshoptDecoder } = await import('three/examples/jsm/libs/meshopt_decoder.module.js');
+      return new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
+    })();
+    p = (async () => {
       try {
-        const gltf = await loader.loadAsync(`/models/trains/${id}.glb`);
+        const gltf = await (await loader!).loadAsync(`/models/trains/${key}.glb`);
         const cars = [0, 1, 2].map((k) => gltf.scene.getObjectByName(`car${k}`));
-        if (cars.every(Boolean)) models.set(id, cars as THREE.Object3D[]);
+        if (cars.every(Boolean)) models.set(key, cars as THREE.Object3D[]);
       } catch (err) {
-        console.warn(`train model ${id} not loaded, using the procedural cars`, err);
+        console.warn(`train model ${key} not loaded`, err);
       }
-    }),
-  );
+    })();
+    loading.set(key, p);
+  }
+  return p;
 }
+
+/** The trains' base models (at start-up). */
+export async function loadTrainModels(ids: TrainId[]) {
+  await Promise.all(ids.map((id) => loadTrainModel(id)));
+}
+
+/** The line variants' models (in the background after start-up, or when a livery is picked). */
+export async function loadTrainVariants(ids: TrainId[]) {
+  await Promise.all(ids.flatMap((id) => TRAIN_INFO[id].liveries.filter((l) => l.variant).map((l) => loadTrainModel(trainModelKey(id, l)))));
+}
+
+/** Whether the model drawn for a livery is there (else the base model stands in until it is). */
+export const trainModelReady = (id: string, l?: Livery) => models.has(trainModelKey(id, l));
 
 export interface TrainRig {
   /** place the cars behind the anchor (the leading bogie, at road level) along its driven path */
@@ -353,7 +375,7 @@ export function fitLamps(car: THREE.Object3D, pair: LampPair, end: number, reach
 
 export function buildTrain(spec: CarSpec, opts: { bodyColor?: string } = {}): CarRig & { train: TrainRig } {
   const t = spec.train!;
-  const pick = (c?: string) => t.liveries.find((l) => l.band === c) ?? (c ? { ...t.liveries[0], band: c, band2: c } : t.liveries[0]);
+  const pick = (c?: string) => t.liveries.find((l) => liverySwatch(l) === c) ?? (c ? { ...t.liveries[0], band: c, band2: c } : t.liveries[0]);
   let liv = pick(opts.bodyColor);
   const carMats = createCarMaterials(spec, liv.band);
   const m = materials(t, liv);
@@ -375,7 +397,8 @@ export function buildTrain(spec: CarSpec, opts: { bodyColor?: string } = {}): Ca
   consist.matrixAutoUpdate = false;
   root.add(consist);
   const cars: THREE.Group[] = [];
-  const model = models.get(spec.id);
+  // the line's model, or the base one until that is loaded
+  const model = models.get(trainModelKey(spec.id, liv)) ?? models.get(spec.id);
   // window band (y from, to) and the luminance up to which a texel there is window
   const windows = { uWinGlow: { value: 0 }, uWinBand: { value: new THREE.Vector3(...(t.lamps?.windows ?? [0, 0]), t.lamps?.windowLum ?? 0.1) } };
   for (let k = 0; k < TRAIN.cars; k++) {
@@ -438,7 +461,7 @@ export function buildTrain(spec: CarSpec, opts: { bodyColor?: string } = {}): Ca
       });
     },
     setLivery(color) {
-      // a model keeps its own paint
+      // a model keeps its own paint (another line's model: the garage builds the train again)
       if (model) return;
       liv = pick(color);
       m.band.color.set(liv.band);

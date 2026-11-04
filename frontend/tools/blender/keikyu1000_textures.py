@@ -9,8 +9,8 @@ Physical mapping (all images: u to the right, v down, pixel density given per im
 
   led_runno.png / led_runno_off.png   0.350 x 0.205 m   1600 px/m   560 x 328    3-colour LED, orange "13H"
   led_type.png  / led_type_off.png    0.290 x 0.205 m   1600 px/m   464 x 328    full-colour LED, 快特 white on green
-  led_dest.png  / led_dest_off.png    0.670 x 0.210 m   1600 px/m  1072 x 336    white LED "三崎口"
-  led_side.png  / led_side_off.png    0.300 x 0.135 m   1600 px/m   480 x 216    side unit "快特 | 三崎口"
+  led_dest.png  / led_dest_off.png    0.670 x 0.210 m   1600 px/m  1072 x 336    white LED "京急本線" (the line, not a station)
+  led_side.png  / led_side_off.png    0.300 x 0.135 m   1600 px/m   480 x 216    side unit "快特 | 京急本線"
   cab_band_001.png, cab_band_008.png  2.900 x 0.400 m   1500 px/m  4350 x 600    RGBA cream band, u: x -1.45..+1.45 m,
                                       v: y 2.06 (top) .. 1.66 (bottom) m   (x = car's left = viewer's right)
   lamp_unit_L.png / lamp_unit_R.png   0.450 x 0.170 m   ~1138 px/m 512 x 194    waist lamp unit (base colour)
@@ -36,6 +36,9 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 OUT = sys.argv[1] if len(sys.argv) > 1 else os.path.join(HERE, 'textures', 'keikyu1000')
 
 FONT_CJK = '/usr/share/fonts/opentype/noto/NotoSansCJK-Medium.ttc'  # index 0 = Noto Sans CJK JP
+
+# the displays show the line, not a station (the owner's choice for every train)
+LINE, LINE_EN = '京急本線', 'Keikyu Main Line'
 
 CREAM = (239, 233, 216)
 SLIT = (12, 12, 14)
@@ -219,7 +222,7 @@ def led_type(name='快特', field=GREEN, fg=WHITE):
     return m
 
 
-def led_dest(name='三崎口'):
+def led_dest(name=LINE):
     # 0.67 x 0.21 m: 100 x 32 dots (pitch ~6.7 mm); chars 0.135 wide x 0.108 high at pitch 0.22 (measured on photo 08)
     m = Matrix(0.67, 0.21, 100, 32)
     cw, ch = 0.145, 0.15
@@ -231,13 +234,17 @@ def led_dest(name='三崎口'):
     return m
 
 
-def led_side(type_name='快特', dest='三崎口'):
-    # 0.30 x 0.135 m: 60 x 27 dots (pitch 5 mm).  Green type field on the left third, white destination on black.
+def led_side(type_name='快特', dest=LINE):
+    # 0.30 x 0.135 m: 60 x 27 dots (pitch 5 mm).  Green type field on the left third, white destination on black
+    # (four characters set narrower than three).
     m = Matrix(0.30, 0.135, 60, 27)
     fw = 20  # dots of the type field
     m.fill(GREEN, 0, 0, fw, 27)
     m.text_cjk(type_name, 0.0035, 0.0165, 0.044, 0.1, 0.048, WHITE)
-    m.text_cjk(dest, 0.108, 0.0175, 0.058, 0.1, 0.0635, WHITE)
+    if len(dest) <= 3:
+        m.text_cjk(dest, 0.108, 0.0175, 0.058, 0.1, 0.0635, WHITE)
+    else:
+        m.text_cjk(dest, 0.108, 0.0175, 0.044, 0.1, 0.046, WHITE)
     m.dots_from_layers()
     return m
 
@@ -245,7 +252,7 @@ def led_side(type_name='快特', dest='三崎口'):
 def led_side_wide():
     """Side destination unit, 0.88 x 0.14 m, 352 x 56 dots (2.5 mm), full-colour LED, layout read off the close-up
     KHK1001HND.jpg (aspect 6.4:1): green type block with 快特 + "Limited Exp." at the left, a dark gap, then a white
-    destination field with dark text, 三崎口 + "Misakiguchi" (the photo's 羽田空港 + "Haneda Airport")."""
+    destination field with dark text: the line, 京急本線 + "Keikyu Main Line" (the photo's 羽田空港 + "Haneda Airport")."""
     m = Matrix(0.88, 0.14, 352, 56)
     DARK = (0, 0, 0)
     m.fill(GREEN, round(0.022 / 0.88 * 352), round(0.0196 / 0.14 * 56), round(0.250 / 0.88 * 352),
@@ -254,8 +261,8 @@ def led_side_wide():
            round(0.130 / 0.14 * 56))
     m.text_cjk('快特', 0.0413, 0.0347, 0.0715, 0.0706, 0.121, WHITE)
     m.text_fit('Limited Exp.', 0.0468, 0.109, 0.173, 0.0205, WHITE)
-    m.text_cjk('三崎口', 0.4055, 0.0325, 0.074, 0.068, 0.150, DARK)
-    m.text_fit('Misakiguchi', 0.4925, 0.1035, 0.20, 0.0215, DARK)
+    m.text_cjk(LINE, 0.3825, 0.0325, 0.074, 0.068, 0.110, DARK)
+    m.text_fit(LINE_EN, 0.425, 0.1035, 0.32, 0.0215, DARK)
     m.dots_from_layers()
     return m
 
@@ -693,7 +700,7 @@ def main():
     m = led_type('快特')
     save(m.render(True), 'led_type.png')
     save(m.render(False), 'led_type_off.png')
-    m = led_dest('三崎口')
+    m = led_dest()
     save(m.render(True), 'led_dest.png')
     save(m.render(False), 'led_dest_off.png')
     m = led_side()

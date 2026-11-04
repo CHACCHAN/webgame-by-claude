@@ -112,6 +112,8 @@ kbd {
 .colors { display: flex; flex-wrap: wrap; gap: 10px; padding: 6px; margin: -6px 0 16px; }
 .swatch { width: 30px; height: 30px; border-radius: 50%; border: 2px solid rgba(255, 255, 255, 0.25); transition: transform 0.15s; }
 .swatch.on { border-color: #fff; transform: scale(1.18); box-shadow: 0 0 0 3px rgba(255, 138, 42, 0.6); }
+/* a train's line / the cockroach's species for the swatch picked */
+.livery-name { align-self: center; margin-left: 4px; font-size: 13px; letter-spacing: 0.04em; color: rgba(255, 255, 255, 0.85); }
 .arrow { position: absolute; top: 50%; transform: translateY(-50%); width: 56px; height: 56px; border-radius: 50%; border: 1px solid var(--line);
   background: rgba(10, 14, 22, 0.55); font-size: 34px; line-height: 1; display: grid; place-items: center; }
 .arrow.left { left: 3vw; }

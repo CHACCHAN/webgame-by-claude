@@ -14,7 +14,7 @@ import { api, loadCarBests, loadLocalBest } from '../../api/client';
 import { MEDAL_LABEL, medalFor, nextTarget } from '../../game/race/medals';
 import { formatTime } from '../format';
 import { sfx } from '../sfx';
-import { CarSheet, COLORS, useGarageOrbit } from './Cars';
+import { CarSheet, COLORS, liveryName, useGarageOrbit } from './Cars';
 
 export function BootScreen() {
   const loading = useApp((s) => s.loading);
@@ -194,12 +194,13 @@ export function GarageScreen() {
         <div className="crumb">SELECT YOUR CAR ― 車両選択</div>
       </div>
       <div className="garage-card">
-        <CarSheet spec={spec} index={i} />
+        <CarSheet spec={spec} index={i} color={color} />
         <CarRecord id={id} />
         <div className="colors">
           {palette.map((c) => (
-            <button key={c} className={c === color ? 'swatch on' : 'swatch'} style={{ background: c }} onClick={() => set({ carColor: c })} aria-label={`color ${c}`} />
+            <button key={c} className={c === color ? 'swatch on' : 'swatch'} style={{ background: c }} onClick={() => set({ carColor: c })} aria-label={liveryName(id, c) ?? `color ${c}`} title={liveryName(id, c) ?? undefined} />
           ))}
+          {liveryName(id, color) && <span className="livery-name">{liveryName(id, color)}</span>}
         </div>
         <button className="cta" onClick={confirm}>
           この車に決定 <span>▶</span>

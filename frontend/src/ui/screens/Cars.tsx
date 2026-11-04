@@ -4,14 +4,14 @@ import { useMenuInput } from '../useMenuInput';
 import { gameHolder } from '../GameCanvas';
 import { CAR_SPECS, VEHICLE_ORDER, type CarId, type CarSpec } from '../../game/vehicle/carSpecs';
 import { Hint } from './Menus';
-import { TRAIN_INFO, TRAIN_ORDER, type TrainId } from '../../game/vehicle/trains';
+import { liverySwatch, specForLivery, TRAIN_INFO, TRAIN_ORDER, trainLivery, type TrainId } from '../../game/vehicle/trains';
 import { ROACH_INFO } from '../../game/vehicle/roach';
 import { sfx } from '../sfx';
 
 /** Body colours offered for each car (first = default). */
 export const COLORS: Record<CarId, string[]> = {
-  // trains: one swatch per paint scheme (the band colour identifies it)
-  ...(Object.fromEntries(TRAIN_ORDER.map((id) => [id, TRAIN_INFO[id].liveries.map((l) => l.band)])) as Record<TrainId, string[]>),
+  // trains: one swatch per line it runs on (its paint and displays)
+  ...(Object.fromEntries(TRAIN_ORDER.map((id) => [id, TRAIN_INFO[id].liveries.map(liverySwatch)])) as Record<TrainId, string[]>),
   hayate: ['#e8e6e1', '#b3121c', '#1b1d22', '#2f6db5', '#e0b400'],
   raijin: ['#d9dbde', '#1d4fa8', '#0c0c0e', '#8f1218', '#5e6b3a'],
   shiden: ['#f5c400', '#c8102e', '#f2f2f0', '#121214', '#3a7d44'],
@@ -21,6 +21,14 @@ export const COLORS: Record<CarId, string[]> = {
   // the cockroach: one swatch per species colouring
   roach: ROACH_INFO.liveries.map((l) => l.swatch),
 };
+
+/** Name of a train's line or of the cockroach's species for a swatch (null for a car's plain paint). */
+export function liveryName(id: CarId, color: string): string | null {
+  const spec = CAR_SPECS[id];
+  if (spec.train) return trainLivery(spec.train, color).name;
+  if (spec.creature) return spec.creature.liveries.find((l) => l.swatch === color)?.name ?? null;
+  return null;
+}
 
 /** Peak power from the torque curve (linear between the points, up to the redline). */
 export function peakPower(spec: CarSpec) {
@@ -112,7 +120,9 @@ function CreatureFigures({ spec, full }: { spec: CarSpec; full: boolean }) {
 }
 
 /** Name, character and figures of a car: `full` adds the whole specification table (car list). */
-export function CarSheet({ spec, index, full = false }: { spec: CarSpec; index: number; full?: boolean }) {
+export function CarSheet({ spec: base, index, full = false, color }: { spec: CarSpec; index: number; full?: boolean; color?: string }) {
+  // a train's figures as fitted for the line picked
+  const spec = specForLivery(base, color);
   const power = peakPower(spec);
   const [trqRpm, trq] = peakTorque(spec);
   return (
@@ -236,11 +246,12 @@ export function CarsScreen() {
         <div className="crumb">CAR LIST ― 車両一覧</div>
       </div>
       <div className="garage-card">
-        <CarSheet spec={CAR_SPECS[id]} index={i} full />
+        <CarSheet spec={CAR_SPECS[id]} index={i} full color={color} />
         <div className="colors">
           {palette.map((col, k) => (
-            <button key={col} className={col === color ? 'swatch on' : 'swatch'} style={{ background: col }} onClick={() => setC(k)} aria-label={`color ${col}`} />
+            <button key={col} className={col === color ? 'swatch on' : 'swatch'} style={{ background: col }} onClick={() => setC(k)} aria-label={liveryName(id, col) ?? `color ${col}`} title={liveryName(id, col) ?? undefined} />
           ))}
+          {liveryName(id, color) && <span className="livery-name">{liveryName(id, color)}</span>}
         </div>
         <button className="cta small ghost" onClick={back}>メニューに戻る</button>
       </div>

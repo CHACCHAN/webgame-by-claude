@@ -27,9 +27,9 @@ import { AudioEngine } from './audio/AudioEngine';
 import { GhostPlayer, GhostRecorder, type GhostData } from './race/Ghost';
 import { clamp, damp, lerp, smoothstep } from './util/math';
 import type { TrackProjection } from './track/Track';
-import { loadTrainModels, trainNose } from './render/TrainModel';
+import { loadTrainModel, loadTrainModels, loadTrainVariants, trainModelReady, trainNose } from './render/TrainModel';
 import { loadRoachModel } from './render/RoachModel';
-import { TRAIN_ORDER } from './vehicle/trains';
+import { specForLivery, trainLivery, trainModelKey, TRAIN_ORDER } from './vehicle/trains';
 
 export type GamePhase = 'loading' | 'attract' | 'garage' | 'countdown' | 'racing' | 'finished' | 'replay';
 export type RaceMode = 'time_attack' | 'rival' | 'ghost' | 'online';
@@ -182,6 +182,8 @@ export class Game {
   private bestSplits: number[] | null = null;
   private cinematic = { shot: 0, t: 0, anchor: new THREE.Vector3(), pos: new THREE.Vector3() };
   private garageCar: CarVisual | null = null;
+  /** the colour last picked in the garage (a train's other line is shown once its model is loaded) */
+  private garageWant: string | undefined;
   private garageAngle = 0;
   /** world yaw of the camera offset that looks from the hillside out over the valley */
   private garageViewYaw = 0;
@@ -248,6 +250,8 @@ export class Game {
     await initRapier();
     await this.yieldFrame(0.08, '車両モデルを読み込み中');
     await Promise.all([loadCarTemplates(CAR_ORDER), loadTrainModels(TRAIN_ORDER), loadRoachModel(), loadSurfaceTextures(), loadProps()]);
+    // the trains' other lines (liveries with their own model) follow in the background
+    void loadTrainVariants(TRAIN_ORDER);
     this.root.add(this.smoke.points, this.skids.mesh, this.rain.mesh, this.exhaust.group);
     this.exhaust.density = this.quality.treeDensity < 0.6 ? 0.6 : 1;
     this.remotes = new RemoteRacers(this.root, (id) => this.rideHeightOf(id), false);
@@ -386,7 +390,8 @@ export class Game {
   }
 
   private createRacer(carId: CarId, s: number, lateral: number, opts: { ai?: AILevel; headlights: boolean; color?: string }): Racer {
-    const spec = CAR_SPECS[carId];
+    // a train as fitted for its line (the livery picked: its inverter sound)
+    const spec = specForLivery(CAR_SPECS[carId], opts.color);
     const p = this.track.pointAt(s, lateral);
     const sim = new VehicleSim(this.physics, spec, p, this.track.headingAt(s));
     sim.assist = this.assist;
@@ -477,6 +482,7 @@ export class Game {
 
   showGarage(carId: CarId, color?: string) {
     this.clearRace();
+    this.garageWant = color;
     const spec = CAR_SPECS[carId];
     const tmp = new VehicleSim(this.physics, spec, new THREE.Vector3(0, -500, 0), 0);
     const ride = tmp.rideHeight;
@@ -593,8 +599,7 @@ export class Game {
     if (this.audio) {
       void this.audio.playMusic(this.raceMusic(cfg.mode), { fallback: this.course.music });
       this.audio.preload('jingle_finish', 'jingle_lose', 'jingle_rival_win', 'jingle_medal', 'jingle_record');
-      const spec = CAR_SPECS[cfg.carId];
-      this.audio.engine('player', spec);
+      this.audio.engine('player', this.player.sim.spec);
       if (this.rival) this.audio.engine('rival', this.rival.sim.spec);
     }
     this.setPhase('countdown');
@@ -1303,7 +1308,21 @@ export class Game {
   }
 
   setGarageColor(color: string) {
-    this.garageCar?.setColor(color);
+    const car = this.garageCar;
+    if (!car) return;
+    this.garageWant = color;
+    const t = car.spec.train;
+    const id = car.spec.id;
+    // another line of a train: its own model (loaded if need be), so the train is built again
+    if (t && trainModelKey(id, trainLivery(t, color)) !== trainModelKey(id, trainLivery(t, car.color))) {
+      const l = trainLivery(t, color);
+      // (unless another colour or vehicle was picked meanwhile)
+      const show = () => this.garageWant === color && this.garageCar?.spec.id === id && this.showGarage(id, color);
+      if (trainModelReady(id, l)) show();
+      else void loadTrainModel(trainModelKey(id, l)).then(show);
+      return;
+    }
+    car.setColor(color);
   }
 
   /** Move the pooled point lights to the lamps nearest the camera. */

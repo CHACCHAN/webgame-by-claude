@@ -32,6 +32,8 @@ export class CarVisual {
   readonly rig: CarRig;
   readonly root: THREE.Group;
   readonly spec: CarSpec;
+  /** the body colour (a train's or the cockroach's livery swatch) */
+  color: string | undefined;
   readonly headlights: THREE.SpotLight[] = [];
   private beams: THREE.Mesh[] = [];
   private bodyPitch = 0;
@@ -52,6 +54,7 @@ export class CarVisual {
 
   constructor(spec: CarSpec, opts: { headlights: boolean; shadows: boolean; ghost?: boolean; bodyColor?: string; rideHeight: number }) {
     this.spec = spec;
+    this.color = opts.bodyColor;
     this.rideHeight = opts.rideHeight;
     this.rig = buildCar(spec, { bodyColor: opts.bodyColor });
     this.root = new THREE.Group();
@@ -222,6 +225,7 @@ export class CarVisual {
 
   /** Recolour: the paint, a train's livery or a creature's colouring. */
   setColor(color: string) {
+    this.color = color;
     if (this.rig.train) this.rig.train.setLivery(color);
     else if (this.rig.creature) this.rig.creature.setLivery(color);
     else this.rig.materials.paint.color.set(color);

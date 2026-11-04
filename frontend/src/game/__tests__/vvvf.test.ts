@@ -128,11 +128,14 @@ describe("the game's VVVF engine (audio/vvvf/engine.ts)", () => {
 
   it('every VVVF train has its pattern, gear teeth matching its ratio, and slip only for induction motors', () => {
     for (const id of TRAIN_ORDER) {
-      const t = TRAIN_INFO[id], v = t.vvvf;
-      if (!v) continue;
-      expect(pattern(v.pattern).AcceleratePattern.length).toBeGreaterThan(0);
-      expect(v.gear[1] / v.gear[0]).toBeCloseTo(t.gearRatio, 2);
-      expect(v.slip > 0).toBe(!t.motor.includes('永久磁石'));
+      const t = TRAIN_INFO[id];
+      // the train's inverter and those of its lines (a livery's own equipment)
+      for (const v of [t.vvvf, ...t.liveries.map((l) => l.vvvf)]) {
+        if (!v) continue;
+        expect(pattern(v.pattern).AcceleratePattern.length).toBeGreaterThan(0);
+        expect(v.gear[1] / v.gear[0]).toBeCloseTo(t.gearRatio, 2);
+        expect(v.slip > 0).toBe(!t.motor.includes('永久磁石'));
+      }
     }
   });
 });

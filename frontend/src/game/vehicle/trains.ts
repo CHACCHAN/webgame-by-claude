@@ -1,6 +1,6 @@
 import type { CarSpec } from './carSpecs';
 import type { TrainRunning } from '../audio/running';
-import { E231_MUSASHINO_MITSUBISHI, E235_MITSUBISHI_SIC, E5_ESTIMATE, KEIKYU_N1000_GTO, TOBU30000_HITACHI, type TrainVvvf } from './vvvf';
+import { E231_MITSUBISHI, E231_MUSASHINO_MITSUBISHI, E235_MITSUBISHI_SIC, E5_ESTIMATE, KEIKYU_N1000_GTO, TOBU30000_HITACHI, type TrainVvvf } from './vvvf';
 
 /**
  * Joke entries: three-car trains driven on the pass. The performance is the real train's (starting acceleration,
@@ -12,14 +12,35 @@ export type TrainId = 'e231' | 'e235' | 'keikyu1000' | 'tobu30000' | 'e5';
 /** Sound of the traction equipment (audio/TrainSound.ts). */
 export type MotorKind = 'sic' | 'igbt3' | 'igbt' | 'gto' | 'chopper' | 'resistor';
 
-/** One paint scheme: the swatch colour is `band` (the body colour of painted cars). */
+/**
+ * One paint scheme, usually a line the train runs on: its colours, the model variant painted and signed for that line,
+ * and what differs on that line's cars. The swatch in the car select is `swatch` or else `band`; it identifies the
+ * livery everywhere (chosen colour, races, ghosts).
+ */
 export interface Livery {
   name: string;
   /** painted steel body; stainless / aluminium bodies stay bare */
   body?: string;
   band: string;
   band2?: string;
+  /** swatch when two liveries share a band colour (same paint, another line) */
+  swatch?: string;
+  /** model variant for this line (public/models/trains/<id>-<variant>.glb: its paint and displays); default the base model */
+  variant?: string;
+  /** series and control equipment as fitted for this line (default: the train's) */
+  series?: string;
+  control?: string;
+  /** the inverter on this line's cars (default: the train's) */
+  vvvf?: TrainVvvf;
 }
+
+export const liverySwatch = (l: Livery) => l.swatch ?? l.band;
+
+/** The livery a chosen colour stands for (the first one for any other colour). */
+export const trainLivery = (t: Pick<TrainInfo, 'liveries'>, color?: string) => t.liveries.find((l) => liverySwatch(l) === color) ?? t.liveries[0];
+
+/** File of the model drawn for a livery: public/models/trains/<key>.glb. */
+export const trainModelKey = (id: string, l?: Livery) => (l?.variant ? `${id}-${l.variant}` : id);
 
 /** Face of the procedural stand-in body (used when the model is missing). */
 export type FrontStyle = 'e235' | 'e231' | 'tobu50000' | 'tobu60000' | 'tobu8000' | 'tobu10000' | 'tobu30000' | 'jnr103';
@@ -134,8 +155,12 @@ export const TRAIN_INFO: Record<TrainId, TrainInfo & { name: string; tagline: st
     description: '中央・総武線から武蔵野線へ移ったE231系。転用時の機器更新でVVVFは三菱の2レベルIGBTに。オレンジと茶の帯で峠を下る。',
     accel: 2.5, vmax: 120, brake: [4.2, 4.5], mass: 79.8, motor: 'MT73 95kW×4', control: 'IGBT-VVVFインバータ（2レベル・三菱電機、機器更新車）', sound: 'igbt',
     gearRatio: 7.07, wheel: 0.86, body: 'stainless', width: 2.95, carLength: 20, bogies: 13.8, front: 'e231',
-    // Wikipedia (E231, 武蔵野線): orange #f15a22 + brown #3c060f (the cab front: orange only)
-    liveries: [{ name: '武蔵野線（オレンジ＋茶）', band: '#f15a22', band2: '#3c060f' }],
+    // the lines it runs on: Wikipedia (E231, 武蔵野線) orange #f15a22 + brown #3c060f (the cab front: orange only); the
+    // Chuo-Sobu local's 黄1号, with the cars' original equipment (renewed only on the move to the Musashino Line)
+    liveries: [
+      { name: '武蔵野線', band: '#f15a22', band2: '#3c060f' },
+      { name: '総武線各駅停車', band: '#ffd400', variant: 'sobu', series: 'E231系0番台（中央・総武緩行線）', control: 'IGBT-VVVFインバータ（3レベル・三菱電機）', vvvf: E231_MITSUBISHI },
+    ],
     // LAMPS:e231
     // the in-train sound calculated from the inverter's control pattern (vehicle/vvvf.ts, audio/vvvf)
     vvvf: E231_MUSASHINO_MITSUBISHI,
@@ -150,8 +175,12 @@ export const TRAIN_INFO: Record<TrainId, TrainInfo & { name: string; tagline: st
     mass: 98.4, motor: 'MT79 140kW×4（かご形三相誘導電動機）', control: 'フルSiC-VVVFインバータ（2レベル・三菱電機 SC104・1C4M）', sound: 'sic',
     // gear 7.07 (99:14); wheel and bogie centres estimated (JR East 20 m standard)
     gearRatio: 7.07, wheel: 0.86, body: 'stainless', width: 2.95, carLength: 20, bogies: 13.8, front: 'e235',
-    // the line colour (ウグイス色 #9acd32), black cab front
-    liveries: [{ name: '山手線（ウグイス色）', band: '#9acd32', band2: '#1a1a1a' }],
+    // the lines: 山手線 (ウグイス色 #9acd32, black cab front) and the 1000番台 of the 横須賀・総武快速線 (スカ色: blue
+    // #0067c0, the line colour, and cream)
+    liveries: [
+      { name: '山手線', band: '#9acd32', band2: '#1a1a1a' },
+      { name: '横須賀・総武快速線', band: '#0067c0', band2: '#e8dcb0', variant: 'sobu', series: 'E235系1000番台（横須賀・総武快速線）' },
+    ],
     // our own model (tools/blender/e235.py): head lamps high at the outer ends of the black panel, the tail lamps beside
     // the front LED display; side windows (glass far darker than the stainless around it)
     lamps: { head: { x: 0.914, y: 3.37, w: 0.135, h: 0.12 }, tail: { x: 0.62, y: 3.35, w: 0.1, h: 0.16 }, windows: [1.915, 2.865], windowLum: 0.06 },
@@ -184,8 +213,13 @@ export const TRAIN_INFO: Record<TrainId, TrainInfo & { name: string; tagline: st
     mass: 97.5, massEstimated: true, motor: 'TM-95 190kW×4（かご形三相誘導電動機）', control: 'IGBT-VVVFインバータ（3レベル・日立製作所 VFI-HR1420B・1C4M）', sound: 'igbt3',
     // gear 99:14; wheel and bogie centres estimated; 車体基準幅 2,770
     gearRatio: 7.07, wheel: 0.86, body: 'stainless', width: 2.77, carLength: 20, bogies: 13.8, front: 'tobu30000',
-    // ロイヤルマルーン: the film sampled in sunlight on photos (#c0184a…#b31946; the model's colour)
-    liveries: [{ name: 'ロイヤルマルーン帯', band: '#b91848' }],
+    // ロイヤルマルーン: the film sampled in sunlight on photos (#c0184a…#b31946; the model's colour). The same paint on
+    // both lines it has run on: 東上線 (since 2011) and 伊勢崎線 (1996–2011, through to the Hanzomon Line); the
+    // swatches differ by a hair so they stay apart
+    liveries: [
+      { name: '東上線', band: '#b91848' },
+      { name: '伊勢崎線', band: '#b91848', swatch: '#b9184a', variant: 'isesaki' },
+    ],
     // our own model (tools/blender/tobu30000.py): one chrome-framed unit per side in the red band, the LED head lamp
     // inside, the tail lamp outside; side windows
     lamps: { head: { x: 0.825, y: 1.435, w: 0.196, h: 0.116 }, tail: { x: 1.065, y: 1.435, w: 0.2, h: 0.14 }, windows: [1.98, 2.91], windowLum: 0.06 },
@@ -239,6 +273,27 @@ function tractionCurve(t: TrainInfo) {
   const top = (t.vmax / 3.6) * 1.05;
   const speeds = [0, vb, (vb + vp) / 2, vp, (vp + top) / 2, top];
   return speeds.map((v) => [Math.round(toRpm(v)), Math.round((force(v) * r) / (t.gearRatio * 0.86))] as [number, number]);
+}
+
+const liveried = new Map<string, CarSpec>();
+
+/**
+ * The vehicle as fitted for a livery (a train's line: its series, control equipment and inverter sound); the same
+ * object for the same livery, any other spec as it is.
+ */
+export function specForLivery(spec: CarSpec, color?: string): CarSpec {
+  const t = spec.train;
+  if (!t) return spec;
+  const l = trainLivery(t, color);
+  if (!l.series && !l.control && !l.vvvf) return spec;
+  const key = `${spec.id}|${liverySwatch(l)}`;
+  let s = liveried.get(key);
+  if (!s) {
+    const train = { ...t, series: l.series ?? t.series, control: l.control ?? t.control, vvvf: l.vvvf ?? t.vvvf };
+    s = { ...spec, engineName: train.control, train };
+    liveried.set(key, s);
+  }
+  return s;
 }
 
 export function trainSpec(id: TrainId): CarSpec {

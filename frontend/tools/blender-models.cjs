@@ -4,6 +4,8 @@
 //   node tools/blender-models.cjs props [ids]    tools/blender/props/<id>.py  → public/models/props/<id>.glb
 //   node tools/blender-models.cjs creatures      tools/blender/creatures/roach.py → public/models/roach/roach.glb
 //   … --render [dir]   also renders each model's check views with its script (default dir: /tmp/<id>-render)
+// A train's line variants (`variants`: the same model painted and signed for another line, `Livery.variant` in
+// vehicle/trains.ts) are built by the same script with `--variant <name>` → <id>-<name>.glb.
 // BLENDER=<path> picks the Blender binary (default: `blender` on PATH; tested with 5.2 LTS). Without ids, all of a kind
 // (KINDS[kind].ids).
 //
@@ -20,7 +22,11 @@ const { execFileSync } = require('child_process');
 // joinNamed: merge sibling meshes even when named (a train's car parts), else named nodes stay apart (a turbine's
 // rotor, a car's exhaust found by its mesh name)
 const KINDS = {
-  trains: { dir: 'tools/blender', out: 'public/models/trains', palette: true, joinNamed: true, textureSize: 2048, big: { led: 4096 }, ids: ['e231', 'e235', 'keikyu1000', 'tobu30000', 'e5'] },
+  trains: {
+    dir: 'tools/blender', out: 'public/models/trains', palette: true, joinNamed: true, textureSize: 2048, big: { led: 4096 },
+    ids: ['e231', 'e235', 'keikyu1000', 'tobu30000', 'e5'],
+    variants: { e231: ['sobu'], e235: ['sobu'], tobu30000: ['isesaki'] },
+  },
   cars: { dir: 'tools/blender/cars', out: 'public/models/cars', palette: false, textureSize: 1024, big: {}, ids: ['hayate', 'raijin', 'shiden', 'supra', 'r34', 's15'] },
   props: {
     dir: 'tools/blender/props', out: 'public/models/props', palette: false, textureSize: 1024, big: {}, outDir: true,
@@ -113,14 +119,18 @@ async function optimise(raw, out) {
   for (const id of ids) {
     const script = path.join(kind.dir, `${id}.py`);
     if (!fs.existsSync(script)) throw new Error(`no ${script}`);
-    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), `${id}-`));
-    const raw = kind.outDir ? path.join(tmp, `${id}.glb`) : path.join(tmp, `${id}.raw.glb`);
-    const log = build(script, ['--out', kind.outDir ? tmp : raw]).toString();
-    for (const line of log.split('\n')) if (/^(TRIS|MATERIALS|PROP)/.test(line)) console.log(`  ${line}`);
-    const out = path.join(kind.out, `${id}.glb`);
-    await optimise(raw, out);
-    fs.rmSync(tmp, { recursive: true, force: true });
-    console.log(out, fs.statSync(out).size, 'bytes');
+    // the model, then its line variants
+    for (const variant of [null, ...(kind.variants?.[id] ?? [])]) {
+      const name = variant ? `${id}-${variant}` : id;
+      const tmp = fs.mkdtempSync(path.join(os.tmpdir(), `${name}-`));
+      const raw = kind.outDir ? path.join(tmp, `${id}.glb`) : path.join(tmp, `${name}.raw.glb`);
+      const log = build(script, [...(variant ? ['--variant', variant] : []), '--out', kind.outDir ? tmp : raw]).toString();
+      for (const line of log.split('\n')) if (/^(TRIS|MATERIALS|PROP)/.test(line)) console.log(`  ${line}`);
+      const out = path.join(kind.out, `${name}.glb`);
+      await optimise(raw, out);
+      fs.rmSync(tmp, { recursive: true, force: true });
+      console.log(out, fs.statSync(out).size, 'bytes');
+    }
     if (renderDir !== null) {
       const dir = path.resolve(renderDir || path.join(os.tmpdir(), `${id}-render`), renderDir ? id : '');
       fs.mkdirSync(dir, { recursive: true });
