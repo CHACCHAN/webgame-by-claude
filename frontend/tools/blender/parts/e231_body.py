@@ -22,12 +22,14 @@ Measured on photos (Commons, ../e231/ref/list.json; heights scaled from the 1,85
   (1.70–1.90 m), two panes (drop + fixed); the top band runs over the doors, the waist stripes stop at the doors.
 - "E231 Musashino-Line.jpg", "...Kuha E230-22 ... Fuchū-Hommachi" and the night head-on "京葉線の東京駅 ... E231系0番台.jpg"
   for the cab face (head-on X from the face width 2.95 m, heights between the coupler 0.88 and the roof 3.655):
-  black glass area |x| ≤ 1.30, y 1.92–3.53; orange band 1.47–1.87 across the face; lamp panel |x| ≤ 1.33, 1.19–1.45
-  with a unit at each end (head lamp inside |x| ≈ 0.83, tail lamp outside ≈ 1.12, units |x| 0.64–1.29); run-number
-  display centred at x ≈ −0.80, destination at x ≈ +0.10, both behind the glass at y ≈ 3.35; skirt (the strengthened
-  V-shaped type fitted from 2008): top 0.74 at the sides, a notch down to 0.62 round the coupler, bottom 0.17.
-Estimates: the section's taper (−0.06 at the bottom, from 1.80 down), the eave 3.28, shoulder r 0.30 (roof arc r 9.5 m
-through 3.655), the face's rake and plan bulge, the cab corner radii, the crew door 8.40–9.00, end windows.
+  black glass area |x| ≤ 1.33, y 1.916–3.40 inside a silver FRP frame (sides ≈ 0.12–0.17, top ≈ 0.11–0.14 projected,
+  top inner corners r ≈ 0.20: also "JRE Series-E231 B11.jpg", MaedaAkihiko, CC BY-SA 4.0); band 1.557–1.881 across the
+  face; lamp panel |x| ≤ 1.38, 1.212–1.521 with a unit at each end (head lens |x| 0.79, tail lens 1.05, both y 1.367);
+  run-number display centred at x −0.87, line-name display at x 0, both behind the glass at y 3.25 (inside the black
+  area, under its top frame); skirt (the strengthened V-shaped type): top 0.69 at the sides, a notch down to 0.51
+  round the coupler, bottom 0.16, V tip z 9.94.
+Estimates: the section's taper (−0.06 at the bottom, from 1.80 down), the eave 3.24, shoulder r 0.36 (roof arc
+r ≈ 12.2 m through 3.655), the face's rake and plan bulge, the cab corner radii, the crew door 8.40–9.00, end windows.
 
 Frame: the game's car frame of train_kit (x left, y up, z forward, metres). A cab car has its cab at +z.
 """
@@ -92,6 +94,8 @@ BLACK = (0.030, 0.030, 0.033)
 ROOF_GREY = '#9a9a96'
 
 YELLOW = (1.0, 0.831, 0.0)           # 黄1号 #ffd400 (Chūō-Sōbu local)
+EMERALD = (0.10, 0.64, 0.61)         # 青緑1号 (Jōban rapid), between the coordinator's #339999 and the photos' sunlit cyan
+UGUISU = (0.40, 0.78, 0.26)          # the yellow-green line under it (sampled from j00 / j03, toned down)
 
 _TEXTURES = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'textures', 'e231')
 SIGNS = _TEXTURES
@@ -104,18 +108,31 @@ SIGNS = _TEXTURES
 #   a deeper one under the gutter, the crew door all yellow, the face band as on the Musashino cars (Commons
 #   "Kuha E230-11 Mitaka Rolling Stock Center 20211101.jpg", Rsa, CC BY-SA 3.0: waist 1.44–1.80, top 3.02–gutter,
 #   window bottom 1.93 and door sill 1.15 as the scale).
+# Jōban rapid / Narita line (as running, Matsudo sets; joban/ref/list.json): the cab face's FRP white (`frp`), on it
+#   an emerald band over a thin yellow-green line under the windscreen (`front_bands`; j03 head-on, the black area's
+#   bottom 1.916 and the lamp panel's top 1.521 as the scale: emerald 1.64–1.835, line 1.568–1.64) and a white JR
+#   mark on the emerald at x 1.04 (j00 / j03, `jr_front`); sides: emerald 1.52–1.80 over the line 1.46–1.52 (j00 /
+#   j04 / j06: about 4 : 1, the emerald's top 0.13 under the windows), emerald under the gutter (3.03–3.235, j06) cut
+#   by the blanked-off outside-speaker plates (`top_gaps`: z of their centres, one in each outer window bay, j06;
+#   ja.wikipedia: メクラ蓋で塞いでおり、ラインが途切れている), the crew door wrapped in emerald (j06); the skirt
+#   white (`skirt`), the electric coupler under the head (`electric_coupler`), JR marks white on the sides.
 LIVERIES = {
     'musashino': dict(top=(3.05, 3.225, ORANGE),
                       waist=((1.53, 1.79, ORANGE, 0.42), (1.505, 1.53, WHITE, 0.42), (1.43, 1.505, MAROON, 0.40)),
                       front=ORANGE, crew_door=False, signs=''),
     'sobu': dict(top=(3.02, 3.235, YELLOW), waist=((1.44, 1.80, YELLOW, 0.42),),
                  front=YELLOW, crew_door=True, signs='sobu'),
+    'joban': dict(top=(3.03, 3.235, EMERALD), waist=((1.52, 1.80, EMERALD, 0.42), (1.46, 1.52, UGUISU, 0.42)),
+                  front=EMERALD, front_bands=((1.64, 1.835, EMERALD), (1.568, 1.64, UGUISU)),
+                  frp=((0.93, 0.93, 0.91), 0.32, 0.0), jr_front=(1.04, 1.7375, 0.11, (0.95, 0.95, 0.95)),
+                  jr_side=(0.92, 0.92, 0.92), top_gaps={'cab': (-4.94, 4.715), 'middle': (-4.94, 4.94)},
+                  skirt=('#e4e4e0', 0.0, 0.40), electric_coupler=True, crew_door=True, signs='joban'),
 }
 LIVERY = LIVERIES['musashino']
 
 
 def set_variant(name):
-    """switch paint and signs ('musashino' or 'sobu') before add_materials"""
+    """switch paint and signs ('musashino', 'sobu' or 'joban') before add_materials"""
     global LIVERY, SIGNS
     LIVERY = LIVERIES[name]
     SIGNS = os.path.join(_TEXTURES, LIVERY['signs']) if LIVERY['signs'] else _TEXTURES
@@ -559,6 +576,10 @@ def paint_side(kind, number_img=None, w=4096, h=512):
     ty0, ty1, tcol = LIVERY['top']
     sd = np.maximum(np.maximum(ty0 - V, V - ty1), np.maximum(z_end0 - U, U - z_end1))
     cv.paint(cv.cover(sd), tcol, 0.42, 0.0)
+    for zg in LIVERY.get('top_gaps', {}).get(kind, ()):   # blanked-off speaker openings: a stainless plate in a seam
+        sd = SRR(U, V, zg, (ty0 + ty1) / 2, 0.13, ty1 - ty0 + 0.01, 0.01)
+        cv.paint(cv.cover(sd), STEEL, 0.36, 1.0)
+        cv.paint(cv.cover(np.abs(sd + 0.006) - 0.002) * 0.6, (0.33, 0.33, 0.34), 0.5, 0.0)
     # waist stripes: orange, white, maroon; they stop at the door openings (with a little steel margin)
     stripe_z1 = (CAB_JOIN + 0.2) if cab else z_end1
     off = in_doors(0.035).astype(np.float32)
@@ -693,7 +714,7 @@ def _cab_interior(V, X):
 
 
 # head-on figures of the face (x, y), measured on the photos (see the docstring)
-GLASS_AREA = (1.36, 1.916, 3.497, 0.22, 0.30)     # half width, y0, y1, bottom corner r, top corner r
+GLASS_AREA = (1.33, 1.916, 3.40, 0.22, 0.20)     # half width, y0, y1, bottom corner r, top corner r (silver frame round it)
 SCREEN = (1.29, 2.22, 3.07, 0.10)               # the clear windscreen inside it (half width, y0, y1, r)
 FRONT_BAND = (1.557, 1.881)
 LAMP_PANEL = (1.38, 1.212, 1.521, 0.10)          # half width, y0, y1, r
@@ -701,7 +722,7 @@ LAMP_UNIT = (0.63, 1.24, 1.245, 1.49)       # |x| from, to; y0, y1
 HEAD = (0.790, 1.367, 0.200, 0.160)            # |x|, y, w, h (lens)
 TAIL = (1.050, 1.367, 0.190, 0.150)
 LEDS = (('led_runno', -0.87, 0.42, 0.17), ('led_dest', 0.0, 0.78, 0.20))
-LED_Y = 3.29
+LED_Y = 3.25
 SET_PLATE = (-0.93, 2.97, 0.26, 0.12)           # behind the glass: centre x, y, w, h
 
 
@@ -728,10 +749,20 @@ def paint_face(body, plate_img=None, w=2048, h=1600):
         X[j] = xa + (xb - xa) * t
     dxdu = np.abs(np.gradient(X, axis=1)) / cv.px
     aa = np.maximum(cv.px * dxdu, 1e-4)
-    cv.fill(FRP, 0.30, 0.55)
-    # orange band across the face and round the corners
-    sd = np.maximum(FRONT_BAND[0] - V, V - FRONT_BAND[1])
-    cv.paint(cv.cover(sd), LIVERY['front'], 0.38, 0.0)
+    cv.fill(*LIVERY.get('frp', (FRP, 0.30, 0.55)))
+    # the band(s) across the face and round the corners
+    for by0, by1, bcol in LIVERY.get('front_bands', ((FRONT_BAND[0], FRONT_BAND[1], LIVERY['front']),)):
+        sd = np.maximum(by0 - V, V - by1)
+        cv.paint(cv.cover(sd), bcol, 0.38, 0.0)
+    # the JR mark on the band (JR_FRONT)
+    jr = BD._pixels(bpy.data.images.load(os.path.join(_TEXTURES, 'jr_mark.png')))
+    jx, jh, jcol = JR_FRONT
+    jy = (FRONT_BAND[0] + FRONT_BAND[1]) / 2
+    if 'jr_front' in LIVERY:
+        jx, jy, jh, jcol = LIVERY['jr_front']
+    jw = jh * jr.shape[1] / jr.shape[0]
+    samp, inside = BD._sample(jr, X, V, jx - jw / 2, jx + jw / 2, jy - jh / 2, jy + jh / 2)
+    cv.paint(samp[..., 3] * inside, jcol, 0.35, 0.0)
     # black glass area: square-ish with rounded corners (larger at the top)
     hw, y0, y1, rb, rt = GLASS_AREA
     sd_b = SRR(X, V, 0.0, (y0 + y1) / 2, 2 * hw, y1 - y0, rb)
@@ -807,27 +838,34 @@ def add_materials(m, tex_dir, kinds=('cab', 'middle')):
     m.add(P + 'bellows', '#2c2c2e', roughness=0.8)
     m.add(P + 'chrome', '#d6d8db', metallic=1.0, roughness=0.18)
     m.add(P + 'black', '#111113', roughness=0.4)
-    m.add(P + 'skirt', '#c9cac7', metallic=0.45, roughness=0.42)
+    sk_col, sk_met, sk_rough = LIVERY.get('skirt', ('#c9cac7', 0.45, 0.42))
+    m.add(P + 'skirt', sk_col, metallic=sk_met, roughness=sk_rough)
     m.add(P + 'lamp', '#e2e2dc', metallic=0.3, roughness=0.12)        # head lamp lens (showcase lights it)
     m.add(P + 'tail', '#3a0a0e', roughness=0.12)
     m.add(P + 'sidelamp', '#b8212a', roughness=0.2)
     # the sides of both kinds in one image, one material, and a strip above them with each car's number on a copy of
-    # the side round it (SIDE_ATLAS, NUMBER_UV): the numbers are decals, so they read the right way on both sides and
+    # the side round it, and one with the JR mark (SIDE_ATLAS, DECAL_UV): decals, so they read the right way on both sides and
     # car2 carries its own
     sides = {kind: paint_side(kind) for kind in ('middle', 'cab')}
-    blocks = [(car, _number_block(sides[kind], _load(f'numbers_{car}.png')))
-              for car, kind in (('car0', 'cab'), ('car1', 'middle'), ('car2', 'cab'))]
+    jr = BD._pixels(bpy.data.images.load(os.path.join(_TEXTURES, 'jr_mark.png')))
+    blocks = []
+    for car, kind in (('car0', 'cab'), ('car1', 'middle'), ('car2', 'cab')):
+        blocks.append((car, _number_block(sides[kind], _load(f'numbers_{car}.png'))))
+        blocks.append((car, _jr_block(sides[kind], jr)))
     W, hs = sides['cab'].w, sides['cab'].h
     sh = max(64, max(blk[0].shape[0] for _, blk in blocks))
     H = 2 * hs + sh
     strip = [np.zeros((sh, W, 3), np.float32), np.full((sh, W), 0.34, np.float32), np.ones((sh, W), np.float32)]
-    NUMBER_UV.clear()
-    for i, (car, (rgb, rough, metal, extent)) in enumerate(blocks):
-        c0, r = i * (W // 3) + 8, rgb.shape
+    DECAL_UV.clear()
+    c0 = 8
+    for car, (rgb, rough, metal, extent) in blocks:
+        r = rgb.shape
         strip[0][:r[0], c0:c0 + r[1]] = rgb
         strip[1][:r[0], c0:c0 + r[1]] = rough
         strip[2][:r[0], c0:c0 + r[1]] = metal
-        NUMBER_UV[car] = ((c0 / W, (c0 + r[1]) / W, 2 * hs / H, (2 * hs + r[0]) / H), extent)
+        DECAL_UV.setdefault(car, []).append(((c0 / W, (c0 + r[1]) / W, 2 * hs / H, (2 * hs + r[0]) / H), extent))
+        c0 += r[1] + 16
+    assert c0 <= W, 'decal strip overflow'
     SIDE_ATLAS.update({'car1': (0.0, hs / H), 'car0': (hs / H, hs / H), 'car2': (hs / H, hs / H)})
     cv = sides['cab']
     cv.rgb = np.concatenate([sides['middle'].rgb, cv.rgb, strip[0]], axis=0)
@@ -861,17 +899,18 @@ def add_materials(m, tex_dir, kinds=('cab', 'middle')):
 
 
 SIDE_ATLAS = {}     # car: v offset, v scale of its side texture in side.png (set by add_materials)
-NUMBER_UV = {}      # car: ((u0, u1, v0, v1) of its number block in side.png, (z0, z1, y0, y1) it covers on the car)
+DECAL_UV = {}       # car: [((u0, u1, v0, v1) of a decal block in side.png, (z0, z1, y0, y1) it covers on the car)]
 NUMBER_AT = (-1.25, 1.30)   # car numbers: left end z and bottom y on the side (car frame), cap height 0.075
+# The JR mark on the sides: on the waist band, centred in the bay between doors 3 and 4 counted from the cab (both
+# sides: "Series-E231-0-MU4F.jpg" right side, "Kuha E230-11 Mitaka ..." left side), 0.14 m high (≈ 0.55 of the
+# Musashino orange, 0.4 of the Sōbu yellow), stainless grey; the middle car is given the same bay (not seen).
+JR_SIDE = (-4.94, 0.14, (0.50, 0.51, 0.52))      # centre z, height, colour
+# On the cab face: white, on the band at the right seen from ahead (+x), p04 / q42: centre x 1.12, height 0.115.
+JR_FRONT = (1.12, 0.115, (0.90, 0.90, 0.90))
 
 
-def _number_block(cv, img):
-    """the side texels round the car number with the number painted on: (rgb, rough, metal, (z0, z1, y0, y1))"""
-    arr = BD._pixels(img) if not isinstance(img, np.ndarray) else img
-    nh, nw = arr.shape[:2]
-    hgt = 0.075 * nh / max(1, nh - 8)
-    wid = hgt * nw / nh
-    z0, y0 = NUMBER_AT
+def _decal_block(cv, arr, z0, y0, wid, hgt, colour, rough_, metal_):
+    """the side texels round a decal with the decal painted on: (rgb, rough, metal, (z0, z1, y0, y1))"""
     pad = 0.02
     us, vs = cv.U[0], cv.V[:, 0]
     cols = np.where((us >= z0 - pad) & (us <= z0 + wid + pad))[0]
@@ -880,25 +919,45 @@ def _number_block(cv, img):
     rgb, rough, metal = cv.rgb[sl].copy(), cv.rough[sl].copy(), cv.metal[sl].copy()
     samp, inside = BD._sample(arr, cv.U[sl], cv.V[sl], z0, z0 + wid, y0, y0 + hgt)
     a = samp[..., 3] * inside
-    rgb = rgb * (1 - a[..., None]) + np.array((0.06, 0.06, 0.065), np.float32) * a[..., None]
-    rough = rough * (1 - a) + 0.5 * a
-    metal = metal * (1 - a)
+    rgb = rgb * (1 - a[..., None]) + np.array(colour, np.float32) * a[..., None]
+    rough = rough * (1 - a) + rough_ * a
+    metal = metal * (1 - a) + metal_ * a
     du, dv = us[1] - us[0], vs[1] - vs[0]
     extent = (us[cols[0]] - du / 2, us[cols[-1]] + du / 2, vs[rows[0]] - dv / 2, vs[rows[-1]] + dv / 2)
     return rgb, rough, metal, extent
 
 
+def _number_block(cv, img):
+    arr = BD._pixels(img) if not isinstance(img, np.ndarray) else img
+    nh, nw = arr.shape[:2]
+    hgt = 0.075 * nh / max(1, nh - 8)
+    wid = hgt * nw / nh
+    return _decal_block(cv, arr, NUMBER_AT[0], NUMBER_AT[1], wid, hgt, (0.06, 0.06, 0.065), 0.5, 0.0)
+
+
+def _jr_block(cv, img):
+    arr = BD._pixels(img) if not isinstance(img, np.ndarray) else img
+    nh, nw = arr.shape[:2]
+    zc, hgt, colour = JR_SIDE
+    colour = LIVERY.get('jr_side', colour)
+    wid = hgt * nw / nh
+    y0 = LIVERY['waist'][0][0] + (LIVERY['waist'][0][1] - LIVERY['waist'][0][0] - hgt) / 2
+    metal = 0.0 if 'jr_side' in LIVERY else 1.0      # a white film mark (Jōban) or stainless grey
+    return _decal_block(cv, arr, zc - wid / 2, y0, wid, hgt, colour, 0.30, metal)
+
+
 def number_decals(part, car, kind):
-    """the car number on both sides: a quad 3 mm off the side, its texels from the number strip of side.png (after
-    atlas_uvs); on the left side (+x) the texture runs the other way, so the number still reads left to right"""
-    (u0, u1, v0, v1), (z0, z1, y0, y1) = NUMBER_UV[car]
+    """the car number and the JR mark on both sides: quads 3 mm off the side, their texels from the decal strip of
+    side.png (after atlas_uvs); on the left side (+x) the texture runs the other way, so they still read left to
+    right"""
     mat = P + ('side_cab' if kind == 'cab' else 'side_middle')
-    for s in (-1, 1):
-        xa, xb = s * (side_x(y0) + 0.003), s * (side_x(y1) + 0.003)
-        pts = [(xa, y0, z0), (xa, y0, z1), (xb, y1, z1), (xb, y1, z0)]
-        ua, ub = (u0, u1) if s < 0 else (u1, u0)
-        uvs = [(ua, v0), (ub, v0), (ub, v1), (ua, v1)]
-        part.face_uv(pts, mat, uvs, smooth=False, out=(s, 0.0, 0.0))
+    for (u0, u1, v0, v1), (z0, z1, y0, y1) in DECAL_UV[car]:
+        for s in (-1, 1):
+            xa, xb = s * (side_x(y0) + 0.003), s * (side_x(y1) + 0.003)
+            pts = [(xa, y0, z0), (xa, y0, z1), (xb, y1, z1), (xb, y1, z0)]
+            ua, ub = (u0, u1) if s < 0 else (u1, u0)
+            uvs = [(ua, v0), (ub, v0), (ub, v1), (ua, v1)]
+            part.face_uv(pts, mat, uvs, smooth=False, out=(s, 0.0, 0.0))
 
 
 def build(part, kind):

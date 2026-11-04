@@ -32,6 +32,8 @@ export interface Livery {
   control?: string;
   /** the inverter on this line's cars (default: the train's) */
   vvvf?: TrainVvvf;
+  /** lights of this line's model when its cab differs (another sub-series; default: the train's `lamps`) */
+  lamps?: TrainLamps;
 }
 
 export const liverySwatch = (l: Livery) => l.swatch ?? l.band;
@@ -55,6 +57,13 @@ export interface LampPair {
   /** lamps per side (default 1): the next ones `gap` m further out (the E5's row of four) */
   n?: number;
   gap?: number;
+}
+
+export interface TrainLamps {
+  head: LampPair;
+  tail: LampPair;
+  windows: [number, number];
+  windowLum?: number;
 }
 
 export interface TrainInfo {
@@ -97,7 +106,7 @@ export interface TrainInfo {
    * trailing cab (put on the surface by a ray from ahead), and the height band of the side windows lit at night
    * with the brightness (linear luminance) up to which a texel there counts as window (default 0.1).
    */
-  lamps?: { head: LampPair; tail: LampPair; windows: [number, number]; windowLum?: number };
+  lamps?: TrainLamps;
   /**
    * Running noise (wheels, rail joints, wind, rumble; synthesised by audio/running.ts): the track and body. Optional,
    * the defaults suit a commuter train on jointed track.
@@ -154,8 +163,8 @@ export const trainTailZ = (t: Pick<TrainInfo, 'carLength' | 'bogies' | 'consist'
  */
 export const TRAIN_INFO: Record<TrainId, TrainInfo & { name: string; tagline: string; description: string; model: { title: string; author: string; url: string; license: string; own?: boolean } }> = {
   e231: {
-    name: 'E231系', series: 'E231系0番台（武蔵野線）', operator: 'JR東日本', tagline: '武蔵野線と総武線各駅停車',
-    description: '中央・総武緩行線で走り、一部が武蔵野線へ移ったE231系。武蔵野線の車は機器更新でVVVFが三菱の2レベルIGBTに。カラーで武蔵野線と総武線各駅停車を選べる。',
+    name: 'E231系', series: 'E231系0番台（武蔵野線）', operator: 'JR東日本', tagline: '武蔵野線・総武線・常磐線・東西線直通',
+    description: 'JR東日本の通勤形の標準になったE231系。武蔵野線の車は機器更新でVVVFが三菱の2レベルIGBTに。カラーで武蔵野線・総武線各駅停車・常磐線快速、車体の細い800番台（地下鉄東西線直通）を選べる。',
     accel: 2.5, vmax: 120, brake: [4.2, 4.5], mass: 79.8, motor: 'MT73 95kW×4', control: 'IGBT-VVVFインバータ（2レベル・三菱電機、機器更新車）', sound: 'igbt',
     gearRatio: 7.07, wheel: 0.86, body: 'stainless', width: 2.95, carLength: 20, bogies: 13.8, front: 'e231',
     // the lines it runs on: Wikipedia (E231, 武蔵野線) orange #f15a22 + brown #3c060f (the cab front: orange only); the
@@ -163,6 +172,14 @@ export const TRAIN_INFO: Record<TrainId, TrainInfo & { name: string; tagline: st
     liveries: [
       { name: '武蔵野線', band: '#f15a22', band2: '#3c060f' },
       { name: '総武線各駅停車', band: '#ffd400', variant: 'sobu', series: 'E231系0番台（中央・総武緩行線）', control: 'IGBT-VVVFインバータ（3レベル・三菱電機）', vvvf: E231_MITSUBISHI },
+      // Joban rapid / Narita Line (Matsudo sets): emerald over a yellow-green line, the cab face white FRP
+      { name: '常磐線', band: '#339999', band2: '#99cc00', variant: 'joban', series: 'E231系0番台（常磐線快速）', control: 'IGBT-VVVFインバータ（3レベル・三菱電機）', vvvf: E231_MITSUBISHI },
+      // E231-800 (Chuo-Sobu local through to the Tozai Line): its own 2.8 m body and asymmetric cab (the emergency door
+      // on one side), sky blue under a dark blue line; lamps measured on its own model
+      {
+        name: '地下鉄東西線直通', band: '#00b2e5', band2: '#1d2f8c', variant: 'tozai', series: 'E231系800番台（地下鉄東西線直通）', control: 'IGBT-VVVFインバータ（三菱電機）', vvvf: E231_MITSUBISHI,
+        lamps: { head: { x: 0.8, y: 1.439, w: 0.205, h: 0.175 }, tail: { x: 1.085, y: 1.439, w: 0.205, h: 0.175 }, windows: [1.95, 2.86], windowLum: 0.06 },
+      },
     ],
     lamps: { head: { x: 0.79, y: 1.367, w: 0.2, h: 0.16 }, tail: { x: 1.05, y: 1.367, w: 0.19, h: 0.15 }, windows: [1.93, 2.86], windowLum: 0.06 },
     // the in-train sound calculated from the inverter's control pattern (vehicle/vvvf.ts, audio/vvvf)

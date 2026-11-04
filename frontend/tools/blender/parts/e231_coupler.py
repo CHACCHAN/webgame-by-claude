@@ -4,7 +4,7 @@ between the cars of a set. A part module for the Blender model (train_kit.Part, 
 `ec_`). The counterpart of the Keikyu module coupler_n1000 (its mesh helpers are imported).
 
   add_materials(m)
-  front_coupler(part, z_face=10.0, y_axis=0.88, pocket=True, corner_boxes=True)
+  front_coupler(part, z_face=10.0, y_axis=0.88, pocket=True, corner_boxes=True, electric=False)
       tight-lock head, shank, draft gear, carrier bar, release lever, the two louvred horn boxes, the skirt stays, the
       air hoses with their cocks, the dark back plate behind the skirt's notch, the coupler pocket's walls (`pocket`)
       and the two hinged boxes at the cab face's bottom corners (`corner_boxes`)
@@ -15,7 +15,11 @@ Each returns the number of triangles it added. Run directly with Blender it rend
 cab bottom and skirt (the main builder's envelope):
   blender -t 4 --background --factory-startup --python parts/e231_coupler.py -- <outdir> [--views a,b,...] [--clay]
 
-No electric coupler: the Musashino Line sets show none under the head (photos p02, p03, p04, p10, p17).
+No electric coupler on the Musashino Line sets (photos p02, p03, p04, p10, p17). The Jōban rapid sets carry one
+(`electric=True`, ja.wikipedia: 電気連結器 on the cab cars for splitting and joining): a grey box hung under the head,
+its front lid just behind the contact face (Commons "E231系0番台マト101編成(LED化後).jpg", 1065F, CC0, and "JRE
+Series-E231 104.jpg", MaedaAkihiko, CC BY-SA 4.0): x ±0.20, y 0.49…0.645, lid 0.03 behind the face, 0.42 deep, a
+cable bundle out of its back (sizes est. against the head's 0.48 width).
 
 Figures and where they come from. Photo p04 (Commons "E231-0 Series Musashino Line of JR East", Hyper Maniac Man,
 CC BY-SA 4.0; a long-lens view almost head-on) is the main source: ≈ 318 px/m at the front (the cab bottom panel,
@@ -359,7 +363,26 @@ def _corner_boxes(part):
             _bolt(part, s * dx, 1.06, 9.875, r=0.006, h=0.004, mat=SV)
 
 
-def front_coupler(part, z_face=10.0, y_axis=0.88, pocket=True, corner_boxes=True):
+def _electric(part, zf, Y0):
+    """the electric coupler under the head: box, front lid with its seam and latches, guide pins, cable bundle"""
+    y0, y1 = Y0 - 0.39, Y0 - 0.235
+    zl = zf - 0.03
+    _box(part, GR, -0.20, 0.20, y0, y1, zl - 0.42, zl - 0.03, ch=0.01)                   # the body
+    _box(part, GR, -0.195, 0.195, y0 + 0.006, y1 - 0.006, zl - 0.03, zl, ch=0.008)      # the lid
+    _box(part, DK, -0.19, 0.19, y0 + 0.004, y1 - 0.004, zl - 0.036, zl - 0.026)         # the lid's seam
+    for s in (-1, 1):
+        _box(part, SV, s * 0.15 - 0.02, s * 0.15 + 0.02, (y0 + y1) / 2 - 0.015, (y0 + y1) / 2 + 0.015,
+             zl, zl + 0.012, ch=0.003)                                                   # latches
+        pc = _Piece(angle=40)
+        pc.cyl(SV, (s * 0.215, y1 - 0.03, zl - 0.06), (s * 0.215, y1 - 0.03, zl + 0.02), 0.012, n=8)  # guide pins
+        _emit(part, pc)
+    _box(part, DK, -0.10, 0.10, y0 - 0.012, y0, zl - 0.36, zl - 0.06)                   # the drain / rail below
+    pc = _Piece(angle=40)
+    pc.cyl(RB, (0.0, (y0 + y1) / 2, zl - 0.42), (0.0, 0.70, 9.42), 0.035, n=8)          # cable bundle
+    _emit(part, pc)
+
+
+def front_coupler(part, z_face=10.0, y_axis=0.88, pocket=True, corner_boxes=True, electric=False):
     """
     Everything under the cab between the body bottom and the skirt: the tight-lock head (contact face at z_face, the
     horn reaching z_face + 0.10), shank, draft gear, carrier bar and release lever, the louvred boxes, the skirt
@@ -380,6 +403,8 @@ def front_coupler(part, z_face=10.0, y_axis=0.88, pocket=True, corner_boxes=True
         _pocket(part)
     if corner_boxes:
         _corner_boxes(part)
+    if electric:
+        _electric(part, z_face, Y0)
     return _tris(part) - t0
 
 

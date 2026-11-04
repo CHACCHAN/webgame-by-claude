@@ -3,12 +3,19 @@ JR East E231 series 0番台 as converted for the Musashino Line (set MU2, Keiyō
 クハE230 as the game shows them, built from numbers and our own painted textures (no outside model, no photo pixels).
 Run with Blender 5.x:
 
-  blender --background --factory-startup --python tools/blender/e231.py -- --out <file.glb> [--variant sobu]
-      [--render <dir> [--views hero,head,...] [--samples N] [--size WxH]] [--tex <dir>]
+  blender --background --factory-startup --python tools/blender/e231.py -- --out <file.glb> [--variant sobu|joban|tozai]
+      [--render <dir> [--views hero,head,...] [--samples N] [--size WxH] [--cams 'name:ex,ey,ez,tx,ty,tz,lens;...']]
+      [--tex <dir>]
 
---variant sobu builds the same train in the Chūō-Sōbu local livery (yellow 黄1号 band, displays 総武線各駅停車 /
-Chuo-Sobu Line, set B11); without it the Musashino Line version (MU2, 武蔵野線 / Musashino Line). Only paint and sign
-textures differ: the meshes, nodes and material names are the same for both.
+Variants (the line's name on the displays):
+  (none)  Musashino Line, set MU2 (武蔵野線 / Musashino Line), orange / white / maroon
+  sobu    Chūō-Sōbu local, set B11 (総武線各駅停車 / Chuo-Sobu Line), yellow 黄1号
+  joban   Jōban rapid / Narita line, set 111 (常磐線 / Joban Line): emerald 青緑1号 over a yellow-green line, white cab
+          FRP and skirt, outside-speaker blanks in the upper band, an electric coupler under the head (its only
+          extra geometry)
+  tozai   E231-800 (Tōzai Line through service, set K5): its own narrower body and asymmetric cab, parts/e231_800_*.py
+The first three share the meshes, nodes and material names; they differ in paint and sign textures (and joban's
+electric coupler).
 
 The parts live in tools/blender/parts/ (each module's docstring lists its figures and where they come from):
   e231_body        body shell, cab face, doors, windows, painted side / face textures, LED displays, skirt
@@ -30,7 +37,11 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 sys.path.insert(0, os.path.join(HERE, 'parts'))
 import train_kit as K  # noqa: E402
-import e231_body as BD  # noqa: E402
+
+_A = sys.argv[sys.argv.index('--') + 1:] if '--' in sys.argv else []
+# the E231-800 (Tōzai Line through service) has its own narrower body and cab: parts/e231_800_body.py
+BD = importlib.import_module('e231_800_body' if '--variant' in _A and _A[_A.index('--variant') + 1] == 'tozai'
+                             else 'e231_body')
 
 
 _ARGV = sys.argv[sys.argv.index('--') + 1:] if '--' in sys.argv else []
@@ -95,6 +106,9 @@ VIEWS_E231 = {
     'num0': ((5.0, 1.45, -1.25), (0.0, 1.35, -1.25), 60),
     'num0r': ((-5.0, 1.45, -1.0), (0.0, 1.35, -1.0), 60),
     'num1': ((5.0, 1.45, -21.0), (0.0, 1.35, -21.0), 60),
+    'm42': ((-4.6, 3.4, 33.0), (-0.6, 2.0, 5.0), 105),
+    'jrR': ((-7.0, 1.75, -4.0), (0.0, 1.65, -4.94), 45),
+    'jrL': ((7.0, 1.75, -4.0), (0.0, 1.65, -4.94), 45),
     'm10': ((-9.0, 4.4, 46.0), (-0.6, 2.1, 0.0), 120),
 }
 
@@ -196,7 +210,9 @@ def build_car(m, boxes, name, kind, z_offset, flip):
     n = tris(gear)
     if CP is not None:
         if cab:
-            CP.front_coupler(gear, COUPLER_FACE)
+            lv = getattr(BD, 'LIVERY', {})      # joban: electric coupler; tozai (E231-800): no corner boxes
+            CP.front_coupler(gear, COUPLER_FACE, corner_boxes=lv.get('corner_boxes', True),
+                             electric=lv.get('electric_coupler', False))
         if name != 'car2':      # one bar coupler per gap, carried by the car ahead
             CP.intercar_coupler(gear, -L / 2)
     count['couplers'] = tris(gear) - n
@@ -223,7 +239,12 @@ def main():
         import showcase as S
         S.scene(z0=-62.0, z1=12.0)
         S.VIEWS.update(VIEWS_E231)
-        LIT = {'hero', 'head', 'front34', 'low', 'skirt', 'm04', 'm10', 'm14'}
+        # extra cameras for checks: --cams 'name:ex,ey,ez,tx,ty,tz,lens;name2:...' (game frame)
+        for spec in filter(None, (opt('--cams') or '').split(';')):
+            name, nums = spec.split(':')
+            v = [float(t) for t in nums.split(',')]
+            S.VIEWS[name] = (tuple(v[0:3]), tuple(v[3:6]), v[6])
+        LIT = {'hero', 'head', 'front34', 'low', 'skirt', 'm04', 'm10', 'm14', 'm42'}
         views = VIEWS.split(',')
         if RENDER.endswith('.png'):
             S.headlamps(views[0] in LIT, material=BD.P + 'lamp')

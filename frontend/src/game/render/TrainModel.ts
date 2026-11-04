@@ -406,8 +406,10 @@ export function buildTrain(spec: CarSpec, opts: { bodyColor?: string } = {}): Ca
   const cars: THREE.Group[] = [];
   // the line's model, or the base one until that is loaded
   const model = models.get(trainModelKey(spec.id, liv)) ?? models.get(spec.id);
+  // the lights of the model drawn: the line's own when its cab differs, unless the base model stands in for it
+  const lamps = (models.has(trainModelKey(spec.id, liv)) && liv.lamps) || t.lamps;
   // window band (y from, to) and the luminance up to which a texel there is window
-  const windows = { uWinGlow: { value: 0 }, uWinBand: { value: new THREE.Vector3(...(t.lamps?.windows ?? [0, 0]), t.lamps?.windowLum ?? 0.1) } };
+  const windows = { uWinGlow: { value: 0 }, uWinBand: { value: new THREE.Vector3(...(lamps?.windows ?? [0, 0]), lamps?.windowLum ?? 0.1) } };
   for (let k = 0; k < TRAIN.cars; k++) {
     const car = new THREE.Group();
     car.matrixAutoUpdate = false;
@@ -420,7 +422,7 @@ export function buildTrain(spec: CarSpec, opts: { bodyColor?: string } = {}): Ca
         const m = o as THREE.Mesh;
         if (!m.isMesh) return;
         m.material = (m.material as THREE.Material).clone();
-        if (t.lamps) lightWindows(m.material as THREE.Material, windows, m.matrixWorld.clone());
+        if (lamps) lightWindows(m.material as THREE.Material, windows, m.matrixWorld.clone());
         m.castShadow = true;
         m.receiveShadow = true;
       });
@@ -489,10 +491,10 @@ export function buildTrain(spec: CarSpec, opts: { bodyColor?: string } = {}): Ca
     taillights: [] as THREE.Vector3[],
   };
   // a model's own lamps are only painted on: glowing lenses over them (head lamps lead, tail lamps trail)
-  if (model && t.lamps) {
-    const head = fitLamps(cars[0], t.lamps.head, 1, trainNoseZ(t), carMats.headlight);
+  if (model && lamps) {
+    const head = fitLamps(cars[0], lamps.head, 1, trainNoseZ(t), carMats.headlight);
     if (head.length) anchors.headlights = head;
-    anchors.taillights = fitLamps(cars[TRAIN.cars - 1], t.lamps.tail, -1, trainTailZ(t), carMats.taillight);
+    anchors.taillights = fitLamps(cars[TRAIN.cars - 1], lamps.tail, -1, trainTailZ(t), carMats.taillight);
   }
   return { root, body, wheels, materials: carMats, headlightTargets: [], anchors, train, lampParent: cars[0] };
 }
