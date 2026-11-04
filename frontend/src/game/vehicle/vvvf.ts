@@ -22,38 +22,16 @@ export interface TrainVvvf {
   source: string;
 }
 
-/** JR East E231 (commuter type): Mitsubishi 3-level IGBT. Gear 99:14. */
+/**
+ * JR East E231 (commuter type) as built: Mitsubishi 3-level IGBT, gear 99:14. No train in the game runs it since the
+ * E231 became the renewed Musashino Line car (`E231_MUSASHINO_MITSUBISHI`); the tests check the port against it.
+ */
 export const E231_MITSUBISHI: TrainVvvf = {
   pattern: 'JRE_E231_MITSUBISHI',
   gear: [14, 99],
   polePairs: 2,
   slip: 2,
   source: 'E231系 三菱IGBT（YAML-Files JRE_E231_MITSUBISHI）',
-};
-
-/**
- * Tokyo Metro 1000 (Toshiba IGBT, permanent-magnet motors): no pattern has been published; stand-in: the Toshiba
- * 3-level IGBT of the JR West 207-2000. Gear 109:14.
- */
-export const GINZA_TOSHIBA_STANDIN: TrainVvvf = {
-  pattern: 'JRW_207-2000_TOSHIBA_IGBT',
-  gear: [14, 109],
-  polePairs: 2,
-  slip: 0,
-  source: '銀座線1000系は東芝IGBTのJR西日本207系2000番台で代用（YAML-Files JRW_207-2000_TOSHIBA_IGBT）',
-};
-
-/**
- * N700: no pattern has been published; our estimate in the simulator's format (tools/vvvf/N700_ESTIMATE.yaml) from
- * what is: 3-level IGBT, switching about 1.5 kHz, asynchronous for some 25 s of a start at 2.6 km/h/s. Gear 2.79
- * (teeth 81:29 for the ratio).
- */
-export const N700_ESTIMATE: TrainVvvf = {
-  pattern: 'N700_ESTIMATE',
-  gear: [29, 81],
-  polePairs: 2,
-  slip: 1.5,
-  source: 'N700系は公開情報からの独自の推定（3レベルIGBT・約1.5kHz）',
 };
 
 /**

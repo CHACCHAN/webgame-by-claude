@@ -120,8 +120,8 @@ describe('trains', () => {
     const t120 = clickTimes(p, 120, 3);
     expect(t120[1] - t120[0]).toBeCloseTo(2.1 / (120 / 3.6), 9);
     expect(t120[12] - t120[0]).toBeCloseTo(RAIL_LENGTH / (120 / 3.6), 9);
-    // welded rail (the N700): a joint every 400 m, 2.5 m bogies
-    const n = runningParams(TRAIN_INFO.n700);
+    // welded rail (the E5): a joint every 400 m, 2.5 m bogies
+    const n = runningParams(TRAIN_INFO.e5);
     expect([n.axle, n.jointSpacing, n.sealed]).toEqual([2.5, 400, true]);
     // 2 s at 300 km/h (167 m) from 20 m before a joint: the 12 axles once
     expect(clickTimes(n, 300, 2, 380).length).toBe(12);

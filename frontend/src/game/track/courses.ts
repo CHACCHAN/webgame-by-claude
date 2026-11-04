@@ -124,27 +124,30 @@ export const DEFAULT_COURSE: CourseId = 'oboro-downhill';
  * Medal times of the trains (joke entries) per course: gold = the legend AI's time with that train
  * (tools/sim-run.ts, with the course's road grip), silver +7 %, bronze +16 %. Re-run on 2026-11-03 after the trains'
  * tractive effort got its jerk-limited build-up (`TRACTION_RISE`): the clean laps moved by −2…+3 %, the AI's own
- * spread. Runs where the AI could not stop in time and respawned (E231 and N700 on 朧峠; E231, Ginza 1000 and N700
- * on 天狼) keep their earlier medals (clean runs or an estimate).
+ * spread. The E231 keeps its earlier medals (its runs respawned then). E235, Tobu 30000 and E5 from 2026-11-04 runs,
+ * all clean.
  */
 export const TRAIN_MEDALS: Record<CourseId, Record<TrainId, { gold: number; silver: number; bronze: number }>> = {
   'oboro-downhill': {
     e231: { gold: 151_500, silver: 162_000, bronze: 175_500 },
+    e235: { gold: 148_500, silver: 159_000, bronze: 172_500 },
     keikyu1000: { gold: 145_500, silver: 155_500, bronze: 169_000 },
-    ginza1000: { gold: 151_500, silver: 162_000, bronze: 175_500 },
-    n700: { gold: 148_000, silver: 158_500, bronze: 171_500 },
+    tobu30000: { gold: 152_500, silver: 163_000, bronze: 177_000 },
+    e5: { gold: 158_500, silver: 169_500, bronze: 184_000 },
   },
   'kirifuri-lakeside': {
     e231: { gold: 126_500, silver: 135_500, bronze: 146_500 },
+    e235: { gold: 122_500, silver: 131_000, bronze: 142_000 },
     keikyu1000: { gold: 121_000, silver: 129_500, bronze: 140_500 },
-    ginza1000: { gold: 131_500, silver: 140_500, bronze: 152_500 },
-    n700: { gold: 119_500, silver: 128_000, bronze: 138_500 },
+    tobu30000: { gold: 123_500, silver: 132_000, bronze: 143_500 },
+    e5: { gold: 129_000, silver: 138_000, bronze: 149_500 },
   },
   'tenrou-skyline': {
     e231: { gold: 127_000, silver: 136_000, bronze: 147_500 },
+    e235: { gold: 122_500, silver: 131_000, bronze: 142_000 },
     keikyu1000: { gold: 118_500, silver: 127_000, bronze: 137_500 },
-    ginza1000: { gold: 126_500, silver: 135_500, bronze: 146_500 },
-    n700: { gold: 124_500, silver: 133_500, bronze: 144_500 },
+    tobu30000: { gold: 117_500, silver: 125_500, bronze: 136_500 },
+    e5: { gold: 128_500, silver: 137_500, bronze: 149_000 },
   },
 };
 

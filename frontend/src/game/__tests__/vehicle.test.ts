@@ -161,7 +161,7 @@ describe('VehicleSim', () => {
     expect(roach.t100).toBeLessThan(2);
     expect(roach.vmax).toBeGreaterThan(380);
     expect(roach.stop).toBeLessThan(25);
-    for (const car of [...CAR_ORDER, 'n700'] as CarId[]) {
+    for (const car of [...CAR_ORDER, 'e5'] as CarId[]) {
       const p = perf(car);
       expect(roach.t100).toBeLessThan(p.t100);
       expect(roach.vmax).toBeGreaterThan(p.vmax);
