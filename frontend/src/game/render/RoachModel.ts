@@ -5,9 +5,10 @@ import type { CreatureInfo } from '../vehicle/roach';
 import { createCarMaterials, type CarRig } from './CarModel';
 
 /**
- * The giant cockroach (joke entry): a third-party model with a skinned scuttle cycle (public/models/roach/roach.glb,
- * credits in docs/ASSETS.md), or a procedural stand-in when it is missing. The legs run with the distance covered
- * (capped so they do not strobe at speed). Head +Z, feet on y = 0.
+ * The giant cockroach (joke entry): our own model with a skinned scuttle cycle (public/models/roach/roach.glb, built
+ * by tools/blender-models.cjs from tools/blender/creatures/roach.py: alternating tripods, 1.6 m of ground per cycle),
+ * or a procedural stand-in when it is missing. The legs run with the distance covered (capped so they do not strobe
+ * at speed). Head +Z, feet on y = 0.
  */
 let model: { scene: THREE.Object3D; clip: THREE.AnimationClip | null } | null = null;
 
@@ -25,8 +26,8 @@ export async function loadRoachModel() {
   }
 }
 
-/** overall length the model is scaled to, antennae and legs included (m); the body itself is ~3.4 m */
-const LENGTH = 5.6;
+/** overall length the model is scaled to, antennae and hind legs included (m): the body (head to wing tips) is 3.4 m */
+const LENGTH = 6.76;
 /** most leg cycles per second (beyond it the gait would strobe at 60 fps) */
 const MAX_CYCLES = 9;
 
@@ -85,7 +86,7 @@ export function buildRoach(spec: CarSpec, opts: { bodyColor?: string } = {}): Ca
     scene.position.set(-c.x, -box.min.y, -c.z);
     holder.add(scene);
     body.add(holder);
-    // the eyes: at the foremost head bone
+    // the eyes: at the foremost head bone (`head_eyes`, between the compound eyes)
     body.updateMatrixWorld(true);
     let head: THREE.Object3D | null = null;
     const at = new THREE.Vector3();
@@ -97,9 +98,10 @@ export function buildRoach(spec: CarSpec, opts: { bodyColor?: string } = {}): Ca
   } else {
     buildStandIn(body, tinted);
   }
-  // eyes glow as headlights at night (the beams start there)
+  // eyes glow as headlights at night (the beams start there): on the compound eyes, ±0.2 m
+  const eyeX = model ? 0.2 : 0.26;
   const eyeGeo = new THREE.SphereGeometry(0.09, 12, 8);
-  for (const x of [0.26, -0.26]) {
+  for (const x of [eyeX, -eyeX]) {
     const eye = new THREE.Mesh(eyeGeo, carMats.headlight);
     eye.position.set(x, eyes.y, eyes.z);
     body.add(eye);
@@ -146,7 +148,7 @@ export function buildRoach(spec: CarSpec, opts: { bodyColor?: string } = {}): Ca
     setLivery,
   };
 
-  const anchors = { exhaust: new THREE.Vector3(), headlights: [new THREE.Vector3(0.26, eyes.y, eyes.z + 0.1), new THREE.Vector3(-0.26, eyes.y, eyes.z + 0.1)], taillights: [] as THREE.Vector3[] };
+  const anchors = { exhaust: new THREE.Vector3(), headlights: [new THREE.Vector3(eyeX, eyes.y, eyes.z + 0.1), new THREE.Vector3(-eyeX, eyes.y, eyes.z + 0.1)], taillights: [] as THREE.Vector3[] };
   return { root, body, wheels, materials: carMats, headlightTargets: [], anchors, fromModel: !!model, creature };
 }
 

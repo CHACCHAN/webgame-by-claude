@@ -10,29 +10,5 @@
         { "file": 0, "from": -41.2, "to": -24.87 }
       ]
     }
-  },
-  "ginza1000": {
-    "dir": "ginza",
-    "textureSize": 1024,
-    "config": {
-      "files": ["scene.gltf"], "axis": "x", "scale": [0.0098, 0.0098, 0.0086],
-      "cars": [
-        { "file": 0, "from": 7239.2, "to": 8871 },
-        { "file": 0, "from": 5574.5, "to": 7239.2 },
-        { "file": 0, "from": -934, "to": 710 }
-      ]
-    }
-  },
-  "n700": {
-    "dir": "n700",
-    "simplify": 0.35,
-    "config": {
-      "files": ["scene.gltf"], "axis": "x", "scale": [2.814, 2.814, 2.814],
-      "cars": [
-        { "file": 0, "from": 124.92, "to": 134 },
-        { "file": 0, "from": 116.04, "to": 124.92 },
-        { "file": 0, "from": -8.4, "to": 0.55 }
-      ]
-    }
   }
 }

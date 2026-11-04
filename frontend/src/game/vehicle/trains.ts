@@ -152,7 +152,9 @@ export const TRAIN_INFO: Record<TrainId, TrainInfo & { name: string; tagline: st
     gearRatio: 7.07, wheel: 0.86, body: 'stainless', width: 2.95, carLength: 20, bogies: 13.8, front: 'e235',
     // the line colour (ウグイス色 #9acd32), black cab front
     liveries: [{ name: '山手線（ウグイス色）', band: '#9acd32', band2: '#1a1a1a' }],
-    // LAMPS:e235
+    // our own model (tools/blender/e235.py): head lamps high at the outer ends of the black panel, the tail lamps beside
+    // the front LED display; side windows (glass far darker than the stainless around it)
+    lamps: { head: { x: 0.914, y: 3.37, w: 0.135, h: 0.12 }, tail: { x: 0.62, y: 3.35, w: 0.1, h: 0.16 }, windows: [1.915, 2.865], windowLum: 0.06 },
     vvvf: E235_MITSUBISHI_SIC,
     model: { title: 'E235系0番台 山手線', author: 'TOUGE NOCTURNE', url: '', license: '自作', own: true },
   },
@@ -182,9 +184,11 @@ export const TRAIN_INFO: Record<TrainId, TrainInfo & { name: string; tagline: st
     mass: 97.5, massEstimated: true, motor: 'TM-95 190kW×4（かご形三相誘導電動機）', control: 'IGBT-VVVFインバータ（3レベル・日立製作所 VFI-HR1420B・1C4M）', sound: 'igbt3',
     // gear 99:14; wheel and bogie centres estimated; 車体基準幅 2,770
     gearRatio: 7.07, wheel: 0.86, body: 'stainless', width: 2.77, carLength: 20, bogies: 13.8, front: 'tobu30000',
-    // ロイヤルマルーン (the hex is our estimate)
-    liveries: [{ name: 'ロイヤルマルーン帯', band: '#7d1935' }],
-    // LAMPS:tobu30000
+    // ロイヤルマルーン: the film sampled in sunlight on photos (#c0184a…#b31946; the model's colour)
+    liveries: [{ name: 'ロイヤルマルーン帯', band: '#b91848' }],
+    // our own model (tools/blender/tobu30000.py): one chrome-framed unit per side in the red band, the LED head lamp
+    // inside, the tail lamp outside; side windows
+    lamps: { head: { x: 0.825, y: 1.435, w: 0.196, h: 0.116 }, tail: { x: 1.065, y: 1.435, w: 0.2, h: 0.14 }, windows: [1.98, 2.91], windowLum: 0.06 },
     vvvf: TOBU30000_HITACHI,
     model: { title: '東武30000系', author: 'TOUGE NOCTURNE', url: '', license: '自作', own: true },
   },

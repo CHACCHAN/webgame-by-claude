@@ -8,7 +8,7 @@ import type { CarSpec } from './carSpecs';
 export interface CreatureInfo {
   /**
    * colour variants: the swatch shown in the car select, then either per-channel gains on the model's texture
-   * (linear; the texture is a deep red-brown, so only gains can turn it another hue) or a plain colour in its
+   * (linear; the texture is red-brown with a tan pronotum, so only gains can turn it another hue) or a plain colour in its
    * place (the bump map stays), optionally metallic
    */
   liveries: { name: string; swatch: string; gain?: [number, number, number]; plain?: string; metal?: boolean }[];
@@ -21,7 +21,7 @@ export interface CreatureInfo {
 export const ROACH_INFO: CreatureInfo = {
   liveries: [
     { name: 'ワモンゴキブリ', swatch: '#7a3417' },
-    { name: 'クロゴキブリ', swatch: '#2b1d16', gain: [0.25, 0.7, 1.2] },
+    { name: 'クロゴキブリ', swatch: '#2b1d16', gain: [0.2, 0.2, 0.22] },
     { name: 'チャバネゴキブリ', swatch: '#b98a4e', plain: '#a8723a' },
     { name: '黄金のゴキブリ', swatch: '#e2b632', plain: '#e8b54a', metal: true },
   ],
@@ -72,6 +72,7 @@ export const ROACH_SPEC: CarSpec = {
   driftiness: 0.6,
   stats: { power: 10, grip: 10, drift: 7, weight: 10 },
   colors: { body: ROACH_INFO.liveries[0].swatch, accent: '#1a0f0a' },
-  model: { title: 'Cockroach', author: 'CK (xcellf)', url: 'https://sketchfab.com/3d-models/cockroach-cead55b8aa8643d48d67240bad028592', license: 'CC BY 4.0' },
+  // our own model: tools/blender/creatures/roach.py (an American cockroach, Periplaneta americana)
+  model: { title: 'ワモンゴキブリ', author: 'TOUGE NOCTURNE', url: '', license: '自作', own: true },
   creature: ROACH_INFO,
 };

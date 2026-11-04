@@ -2,13 +2,15 @@
 //   node tools/blender-models.cjs trains [ids]   tools/blender/<id>.py        → public/models/trains/<id>.glb
 //   node tools/blender-models.cjs cars [ids]     tools/blender/cars/<id>.py   → public/models/cars/<id>.glb
 //   node tools/blender-models.cjs props [ids]    tools/blender/props/<id>.py  → public/models/props/<id>.glb
+//   node tools/blender-models.cjs creatures      tools/blender/creatures/roach.py → public/models/roach/roach.glb
 //   … --render [dir]   also renders each model's check views with its script (default dir: /tmp/<id>-render)
 // BLENDER=<path> picks the Blender binary (default: `blender` on PATH; tested with 5.2 LTS). Without ids, all of a kind
 // (KINDS[kind].ids).
 //
 // Optimisation (glTF-Transform): meshopt geometry, one mesh per material per node, WebP textures. Trains also merge
 // their solid-colour materials into palette textures (the game keeps a train's materials as they are); cars and props
-// keep every material, since the game swaps some of them by name (paint, glass, lamps, …).
+// keep every material, since the game swaps some of them by name (paint, glass, lamps, …). A creature's skinned
+// animation is resampled (keys on straight runs dropped).
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
@@ -24,6 +26,7 @@ const KINDS = {
     dir: 'tools/blender/props', out: 'public/models/props', palette: false, textureSize: 1024, big: {}, outDir: true,
     ids: ['street_light', 'wind_turbine', 'curve_mirror', 'vending_machine', 'torii', 'stone_lantern', 'bus_stop', 'traffic_cone'],
   },
+  creatures: { dir: 'tools/blender/creatures', out: 'public/models/roach', palette: false, textureSize: 1024, big: {}, resample: true, ids: ['roach'] },
 };
 
 const args = process.argv.slice(2);
@@ -89,6 +92,7 @@ async function optimise(raw, out) {
   const doc = await io.read(raw);
   sortByMaterial(doc);
   const steps = [F.dedup()];
+  if (kind.resample) steps.push(F.resample());
   if (kind.palette) steps.push(F.palette({ min: 5 }));
   steps.push(F.join({ keepNamed: !kind.joinNamed }), F.weld(), F.prune(), F.sparse());
   // the palettes lossless (lossy WebP smears neighbouring colour blocks into each other), the rest as good-quality WebP
