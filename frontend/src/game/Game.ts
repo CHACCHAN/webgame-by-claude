@@ -290,6 +290,7 @@ export class Game {
     this.physics = new PhysicsWorld(this.track);
     this.scenery = buildScenery(this.track, this.terrain, { treeDensity: this.quality.treeDensity, shadows: this.quality.shadows, photoTextures: this.quality.photoTextures, treeLod: this.quality.treeLod });
     this.root.add(this.scenery.group);
+    this.rain.setCovers(this.scenery.covers);
     this.lampSlots.fill(-1);
     await this.yieldFrame(0.75, '夜景を灯しています');
     this.env = buildEnvironment(this.terrain);

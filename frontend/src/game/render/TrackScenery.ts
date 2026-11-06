@@ -34,6 +34,11 @@ export interface SceneryResult {
   nightEmissive: THREE.MeshStandardMaterial[];
   /** materials carrying the baked lamp lightmap (scaled with lamp state) */
   lightmapMats: THREE.MeshStandardMaterial[];
+  /**
+   * roofs over the road (the rock sheds), for the rain to stop under: quads of 9 floats each, corners a b c d in
+   * order (x, z pairs) and the roof slab's top height
+   */
+  covers: Float32Array;
   update(time: number, cameraPos: THREE.Vector3): void;
 }
 
@@ -187,7 +192,8 @@ export function buildScenery(track: Track, terrain: TerrainData, quality: Scener
 
   // ----------------------------------------------------------- structures
   const lamps: Lamp[] = [];
-  buildRockshed(track, sides, group, concreteMat, lamps, nightEmissive);
+  const covers: number[] = [];
+  buildRockshed(track, sides, group, concreteMat, lamps, nightEmissive, covers);
   buildBridge(track, terrain, group, concreteMat, steel, lamps);
 
   // ------------------------------------------------------------- lamps
@@ -219,6 +225,7 @@ export function buildScenery(track: Track, terrain: TerrainData, quality: Scener
     roadMaterial,
     nightEmissive,
     lightmapMats,
+    covers: new Float32Array(covers),
     update(time, cameraPos) {
       updateTreeLods(trees, cameraPos);
       turbines.update(time);
@@ -445,6 +452,7 @@ function buildRockshed(
   concrete: THREE.MeshStandardMaterial,
   lamps: Lamp[],
   nightEmissive: THREE.MeshStandardMaterial[],
+  covers: number[],
 ) {
   const roofH = 5.6;
   for (const [a0, b0] of track.zoneRanges('rockshed')) {
@@ -461,6 +469,18 @@ function buildRockshed(
     );
     // back wall on the mountain side
     geos.push(sweep(track, a, b, mountain, [[0.9, -0.3], [0.7, roofH]]));
+    // the roof's footprint (the slab's two edges, as swept above) for the rain: quads every 6 m
+    const edgeL = new THREE.Vector3(), edgeR = new THREE.Vector3();
+    let prev: number[] | null = null;
+    for (let i = a; ; i = Math.min(b, i + 6)) {
+      const hw = track.width[i] / 2 + SHOULDER;
+      track.pointAt(i, mountain * (hw + 1.2), edgeL);
+      track.pointAt(i, mountain * (hw - (track.width[mid] + SHOULDER * 2 + 0.6)), edgeR);
+      const row = [edgeL.x, edgeL.z, edgeR.x, edgeR.z, Math.max(edgeL.y, edgeR.y) + roofH + 0.9];
+      if (prev) covers.push(prev[0], prev[1], prev[2], prev[3], row[2], row[3], row[0], row[1], Math.max(prev[4], row[4]));
+      prev = row;
+      if (i === b) break;
+    }
     const shed = new THREE.Mesh(mergeGeometries(geos), concrete);
     shed.castShadow = true;
     shed.receiveShadow = true;

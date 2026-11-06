@@ -75,6 +75,14 @@ export function loadPlayer(): StoredPlayer | null {
   }
 }
 
+function forgetPlayer() {
+  try {
+    localStorage.removeItem(TOKEN_KEY);
+  } catch {
+    /* storage unavailable */
+  }
+}
+
 function savePlayer(p: StoredPlayer) {
   try {
     localStorage.setItem(TOKEN_KEY, JSON.stringify(p));
@@ -116,23 +124,29 @@ export interface RealtimeInfo {
 export const api = {
   health: () => request<{ status: string; database: string; version: string }>('/health'),
 
-  async ensurePlayer(name: string): Promise<StoredPlayer> {
+  /**
+   * The stored player, checked with the server every time (a stale token, e.g. after the server's players were reset,
+   * used to fail every later submission with 401): renamed if the name changed, created anew if the token is unknown.
+   */
+  async ensurePlayer(name: string, retry = true): Promise<StoredPlayer> {
     const existing = loadPlayer();
     if (existing) {
-      if (existing.name !== name) {
-        try {
+      try {
+        if (existing.name !== name) {
           await request('/players/me', { method: 'PATCH', body: JSON.stringify({ name }) }, existing.token);
           existing.name = name;
           savePlayer(existing);
-        } catch (e) {
-          if (e instanceof ApiError && e.status === 401) {
-            localStorage.removeItem(TOKEN_KEY);
-            return api.ensurePlayer(name);
-          }
-          throw e;
+        } else {
+          await request('/players/me', {}, existing.token);
         }
+        return existing;
+      } catch (e) {
+        if (e instanceof ApiError && e.status === 401 && retry) {
+          forgetPlayer();
+          return api.ensurePlayer(name, false);
+        }
+        throw e;
       }
-      return existing;
     }
     const created = await request<{ id: number; name: string; token: string }>('/players', {
       method: 'POST',
