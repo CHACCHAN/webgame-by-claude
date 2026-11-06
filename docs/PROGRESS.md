@@ -67,6 +67,13 @@ Blender processes) and checked against photos (photos only to measure) before th
   `index-CS_Gjguf.js`): the model was centred across on its lopsided posed bounds (antennae, gait), 0.35 m off its body
   and off the lamp spheres. It now keeps its own plane of symmetry, and the compound eyes (their atlas patch) take the
   lamp material, the beams starting at their centres. Checked head-on in the garage at night; vitest 53/53.
+- **Owner's bug reports, 2026-11-06** (`2743cf9`, deployed, bundle `index-Aa5HYB9G.js`):
+  - Rain fell inside the rock shed: the sheds export their roof footprint (`SceneryResult.covers`), and the rain
+    shader drops streaks under the slab of the nearest 16 quads. Checked in Chrome on 朧峠 in the rain.
+  - "Saving to the database sometimes failed": the nginx log showed a `POST /api/runs` 401. `ensurePlayer` checked
+    the stored token only on a name change, so a token the server no longer knew (e.g. after the 2026-11-04 reset of
+    the players) failed every submission. It now checks the token every time and registers again on 401
+    (`src/api/__tests__/client.test.ts`). No 422 or 5xx on run submissions in the log since 2026-11-04.
 - **Cars: paused** (owner, 2026-11-04: "your cost is very high: finish everything but the cars; the cars use the
   external models; I'll restart them next week or later"). The six cars stay on the Sketchfab models with credits.
   Modelling by eye against photos did not converge (owner: "not the same as the real cars"), so a measured fit was
