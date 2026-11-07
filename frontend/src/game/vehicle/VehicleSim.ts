@@ -546,7 +546,8 @@ export class VehicleSim {
     const v2 = planarSpeed * planarSpeed;
     _imp.copy(lin).normalize().multiplyScalar(-spec.dragCoef * v2 * dt);
     if (planarSpeed > 0.5) body.applyImpulse(_imp, true);
-    if (grounded > 0) body.applyImpulse(_imp.copy(this.up).multiplyScalar(-spec.downforce * v2 * dt), true);
+    const dfV = spec.downforceTopSpeed ?? Infinity;
+    if (grounded > 0) body.applyImpulse(_imp.copy(this.up).multiplyScalar(-spec.downforce * Math.min(v2, dfV * dfV) * dt), true);
 
     // ---------------- assists
     if (grounded >= 2 && this.assist > 0 && planarSpeed > 6) {

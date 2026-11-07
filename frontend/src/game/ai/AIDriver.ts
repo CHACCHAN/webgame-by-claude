@@ -63,7 +63,8 @@ export class AIDriver {
     vehicle.gripDriver = true;
     vehicle.assist = 2;
     const grip = Math.min(vehicle.spec.gripFront, vehicle.spec.gripRear) * vehicle.gripScale * 9.81;
-    this.speeds = this.line.speedProfile(grip * this.profile.gripUse, grip * this.profile.brakeUse, 50, 62);
+    // the speed limit is the course's (62 m/s ≈ 223 km/h on the mountain passes; the autobahn lets everything run flat out)
+    this.speeds = this.line.speedProfile(grip * this.profile.gripUse, grip * this.profile.brakeUse, 50, this.track.design.aiTopSpeed ?? 62);
   }
 
   update(vehicle: VehicleSim, dt: number, out: VehicleInput): VehicleInput {

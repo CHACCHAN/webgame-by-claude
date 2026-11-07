@@ -48,6 +48,7 @@ interface RoadSample {
 /** Steepness of the hillside the road is cut into, per zone. */
 const SLOPE: Partial<Record<string, number>> = {
   vista: 1.0, hairpins: 0.62, start: 0.38, forest: 0.58, rockshed: 0.95, bridge: 0.3, finish: 0.4, crest: 0.08, lakeside: 0.5,
+  motorway: 0.5, overpass: 0.5, village: 0.4, interchange: 0.3,
 };
 
 function roadSamples(track: Track, lf: Landform, spacing: number): RoadSample[] {
@@ -60,7 +61,7 @@ function roadSamples(track: Track, lf: Landform, spacing: number): RoadSample[] 
     let gx = (baseHeight(x + e, z) - baseHeight(x - e, z)) / (2 * e);
     let gz = (baseHeight(x, z + e) - baseHeight(x, z - e)) / (2 * e);
     const len = Math.hypot(gx, gz) || 1;
-    const steep = SLOPE[track.zone[i] ?? ''] ?? 0.55;
+    const steep = (SLOPE[track.zone[i] ?? ''] ?? 0.55) * (lf.hillside ?? 1);
     gx = (gx / len) * steep;
     gz = (gz / len) * steep;
     const ridge = track.zone[i] === 'crest' ? 1 : track.zone[i] === 'start' && lf.treeLine < 1000 ? 0.7 : 0;
@@ -83,16 +84,21 @@ function roadSamples(track: Track, lf: Landform, spacing: number): RoadSample[] 
  * with embankments. The bridge zone is never filled, leaving a gorge.
  */
 export function buildTerrain(track: Track, lf: Landform, opts: { nearCell?: number; farCell?: number } = {}): TerrainData {
-  const nearCell = opts.nearCell ?? 4;
-  const farCell = opts.farCell ?? 24;
+  const nearCell = opts.nearCell ?? lf.grid?.near ?? 4;
+  const farCell = opts.farCell ?? lf.grid?.far ?? 24;
+  // flat graded ground beyond the drivable edges (a motorway's median, opposite carriageway and verges)
+  const formation = track.design.formation ?? { left: 0, right: 0 };
   const coarse = roadSamples(track, lf, 8);
   const baseHeight = (x: number, z: number) => lf.base(x, z);
 
   // gorge under the bridge: a valley line through the bridge midpoint
   const bridgeRanges = track.zoneRanges('bridge');
   const gorges = bridgeRanges.map(([a, b]) => {
-    const m = track.getPos(Math.round((a + b) / 2));
-    return { x: m.x, z: m.z, y: m.y };
+    const mid = Math.round((a + b) / 2);
+    const m = track.getPos(mid);
+    const f = track.getFwd(mid);
+    const fl = Math.hypot(f.x, f.z) || 1;
+    return { x: m.x, z: m.z, y: m.y, fx: f.x / fl, fz: f.z / fl, half: ((b - a) / 2) * DS };
   });
 
   // spatial hash of coarse samples
@@ -109,6 +115,15 @@ export function buildTerrain(track: Track, lf: Landform, opts: { nearCell?: numb
 
   const gorgeDepth = (x: number, z: number, roadY: number) => {
     let d = 0;
+    if (lf.viaducts) {
+      // a viaduct spans a valley of the landform: as wide as the bridge, the ground follows that valley down
+      for (const g of gorges) {
+        const across = Math.abs((x - g.x) * g.fx + (z - g.z) * g.fz);
+        const depth = Math.max(0, g.y - 6 - baseHeight(x, z));
+        d = Math.max(d, depth * smoothstep(g.half + 40, g.half - 40, across));
+      }
+      return d;
+    }
     for (const g of gorges) {
       // valley axis runs roughly north-south, meandering a little
       const ax = g.x + (z - g.z) * 0.18 + Math.sin((z - g.z) / 140) * 30;
@@ -121,7 +136,7 @@ export function buildTerrain(track: Track, lf: Landform, opts: { nearCell?: numb
     return d;
   };
 
-  function fieldHeight(x: number, z: number, out: { dist: number; roadY: number; idx: number }) {
+  function fieldHeight(x: number, z: number, out: { dist: number; roadY: number; idx: number; lat: number }) {
     const base = baseHeight(x, z);
     const cx = Math.floor(x / CELL), cz = Math.floor(z / CELL);
     let wSum = 0, hSum = 0;
@@ -153,6 +168,7 @@ export function buildTerrain(track: Track, lf: Landform, opts: { nearCell?: numb
     out.dist = Infinity;
     out.roadY = 0;
     out.idx = -1;
+    out.lat = 0;
     if (!bestS) return base + detailHeight(lf, x, z);
 
     // refine distance against the dense centerline around the nearest coarse sample
@@ -169,6 +185,8 @@ export function buildTerrain(track: Track, lf: Landform, opts: { nearCell?: numb
     out.dist = dist;
     out.roadY = track.pos[bestI * 3 + 1];
     out.idx = bestI;
+    // signed: + = right of the centreline
+    out.lat = (x - track.pos[bestI * 3]) * track.right[bestI * 3] + (z - track.pos[bestI * 3 + 2]) * track.right[bestI * 3 + 2];
 
     // Interpolated road surface field, fading into the natural landform.
     const roadField = wSum > 0 ? hSum / wSum : base;
@@ -180,11 +198,11 @@ export function buildTerrain(track: Track, lf: Landform, opts: { nearCell?: numb
     return h;
   }
 
-  function finalHeight(x: number, z: number, info: { dist: number; roadY: number; idx: number }) {
+  function finalHeight(x: number, z: number, info: { dist: number; roadY: number; idx: number; lat: number }) {
     const h = fieldHeight(x, z, info);
     if (info.idx < 0) return h;
     const halfW = track.width[info.idx] / 2;
-    const edge = halfW + 1.2;
+    const edge = halfW + 1.2 + (info.lat < 0 ? formation.left : formation.right);
     // banked corners drop the inner edge below the centreline: keep the bed under the lowest edge
     const bed = info.roadY - 0.45 - Math.abs(track.bank[info.idx]) * edge;
     const isBridge = track.zone[info.idx] === 'bridge';
@@ -219,7 +237,7 @@ export function buildTerrain(track: Track, lf: Landform, opts: { nearCell?: numb
   const nearH = new Float32Array(nnx * nnz);
   const nearD = new Float32Array(nnx * nnz);
   const nearI = new Int32Array(nnx * nnz);
-  const info = { dist: 0, roadY: 0, idx: -1 };
+  const info = { dist: 0, roadY: 0, idx: -1, lat: 0 };
   for (let j = 0; j < nnz; j++) {
     const z = nz0 + j * nearCell;
     for (let i = 0; i < nnx; i++) {
@@ -250,9 +268,12 @@ export function buildTerrain(track: Track, lf: Landform, opts: { nearCell?: numb
 
   // ---- far grid (pure landform; dips below the near grid so the near mesh wins)
   const cxm = (minX + maxX) / 2, czm = (minZ + maxZ) / 2;
-  const fx0 = Math.floor((cxm - 5600) / farCell) * farCell, fz0 = Math.floor((czm - 5200) / farCell) * farCell;
-  const fnx = Math.ceil(11200 / farCell) + 1;
-  const fnz = Math.ceil(10400 / farCell) + 1;
+  // an 11.2 × 10.4 km square around the course, or as far beyond the course as the landform asks
+  const reach = lf.grid?.reach ?? 0;
+  const fw = Math.max(11200, maxX - minX + 2 * reach), fd = Math.max(10400, maxZ - minZ + 2 * reach);
+  const fx0 = Math.floor((cxm - fw / 2) / farCell) * farCell, fz0 = Math.floor((czm - fd / 2) / farCell) * farCell;
+  const fnx = Math.ceil(fw / farCell) + 1;
+  const fnz = Math.ceil(fd / farCell) + 1;
   const farH = new Float32Array(fnx * fnz);
   const nearX1 = nx0 + (nnx - 1) * nearCell, nearZ1 = nz0 + (nnz - 1) * nearCell;
   // lowest near-grid height within one far cell of (x, z): the coarse mesh must stay under every road

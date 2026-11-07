@@ -66,6 +66,8 @@ export const ROACH_SPEC: CarSpec = {
   brakeForce: 15000,
   dragCoef: 0.25,
   downforce: 2.0,
+  // no more than at 250 km/h: at 400 km/h (the autobahn) the springs sank under 3.5× its weight and the belly hit the road
+  downforceTopSpeed: 70,
   // the cars' body damping would cap it far below its top speed
   damping: 0.004,
   rolling: 0.01,

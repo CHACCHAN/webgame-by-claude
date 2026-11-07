@@ -47,6 +47,8 @@ export interface CarSpec {
   brakeForce: number;
   dragCoef: number;
   downforce: number;
+  /** speed (m/s) beyond which the downforce stops growing (default: no limit) */
+  downforceTopSpeed?: number;
   /** linear damping of the body (default 0.02: ~0.4 m/s² at 70 km/h, part of the cars' tuning) */
   damping?: number;
   /** rolling resistance as a share of the wheel load (default 0.015, tyres; steel wheels far less) */

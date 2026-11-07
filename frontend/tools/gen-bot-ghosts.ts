@@ -32,6 +32,11 @@ const extras: Record<CourseId, Bot[]> = {
     { name: '稜線ハンター', car: 'shiden', profile: { ...AI_PROFILES.ace, gripUse: 0.8 }, seed: 12 },
     { name: 'hairpin_k', car: 'hayate', profile: { ...AI_PROFILES.ace, gripUse: 0.75 }, seed: 13 },
   ],
+  autobahn: [
+    { name: 'NIGHT_OWL', car: 'supra', profile: { ...AI_PROFILES.ace, gripUse: 0.8 }, seed: 14 },
+    { name: 'ミッドナイト白石', car: 'shiden', profile: { ...AI_PROFILES.ace, gripUse: 0.76 }, seed: 15 },
+    { name: 'LINKE_SPUR', car: 'raijin', profile: { ...AI_PROFILES.legend, gripUse: 0.9 }, seed: 16 },
+  ],
 };
 
 const out: unknown[] = [];

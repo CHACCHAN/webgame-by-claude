@@ -18,12 +18,16 @@ import {
 import { surfaceImage as photoImage, surfaceTexture as photoTexture, type SurfaceName } from './surfaceTextures';
 import { findCorners } from '../track/corners';
 import { placeProp, prop, type PropModel } from './props';
+import type { CourseStyle } from '../track/courses';
+import { buildAutobahnScenery } from './autobahnScenery';
 
 export interface Lamp {
   position: THREE.Vector3;
   color: THREE.Color;
   /** track distance, for lightmaps and pooling */
   s: number;
+  /** where the post's arm points (default: the road's centreline at `s`) */
+  aim?: THREE.Vector3;
 }
 
 export interface SceneryResult {
@@ -42,18 +46,21 @@ export interface SceneryResult {
   update(time: number, cameraPos: THREE.Vector3): void;
 }
 
-const SODIUM = new THREE.Color('#ffa850');
-const LED = new THREE.Color('#e4ecff');
+export const SODIUM = new THREE.Color('#ffa850');
+export const LED = new THREE.Color('#e4ecff');
 
 export interface SceneryQuality {
   treeDensity: number;
   shadows: boolean;
   photoTextures: boolean;
   treeLod: number;
+  /** 'autobahn': the motorway's own scenery (render/autobahnScenery.ts) instead of the mountain road's */
+  style?: CourseStyle;
 }
 
 /** Builds every static mesh along and around the course. */
 export function buildScenery(track: Track, terrain: TerrainData, quality: SceneryQuality): SceneryResult {
+  if (quality.style === 'autobahn') return buildAutobahnScenery(track, terrain, quality);
   const group = new THREE.Group();
   group.name = 'scenery';
   const sides = classifySides(track, terrain);
@@ -234,7 +241,7 @@ export function buildScenery(track: Track, terrain: TerrainData, quality: Scener
 }
 
 /** Soft pool of light under a lamp head at height h: roughly cos³ falloff. */
-function lampPool(dx: number, dy: number, dz: number) {
+export function lampPool(dx: number, dy: number, dz: number) {
   const d2 = dx * dx + dy * dy + dz * dz;
   const h = Math.max(dy, 0.5);
   const cos = h / Math.sqrt(d2);
@@ -277,7 +284,7 @@ function bakeRoadLightmap(track: Track, lamps: Lamp[], geo: THREE.BufferGeometry
   return tex;
 }
 
-function bakeTerrainLightmap(g: HeightGrid, lamps: Lamp[]) {
+export function bakeTerrainLightmap(g: HeightGrid, lamps: Lamp[]) {
   const { nx, nz, cell, x0, z0, heights } = g;
   const data = new Uint8Array(nx * nz * 4);
   const R = 40;
@@ -306,7 +313,7 @@ function bakeTerrainLightmap(g: HeightGrid, lamps: Lamp[]) {
 }
 
 // --------------------------------------------------------------------------
-function gridGeometry(g: HeightGrid, terrain: TerrainData, near: boolean) {
+export function gridGeometry(g: HeightGrid, terrain: TerrainData, near: boolean) {
   const { nx, nz, cell, x0, z0, heights } = g;
   const geo = new THREE.PlaneGeometry((nx - 1) * cell, (nz - 1) * cell, nx - 1, nz - 1);
   geo.rotateX(-Math.PI / 2);
@@ -595,7 +602,7 @@ export function lampArmYaw(dir: { x: number; z: number }) {
   return Math.atan2(dir.z, -dir.x);
 }
 
-function buildLampMeshes(track: Track, lamps: Lamp[], group: THREE.Group, nightEmissive: THREE.MeshStandardMaterial[]) {
+export function buildLampMeshes(track: Track, lamps: Lamp[], group: THREE.Group, nightEmissive: THREE.MeshStandardMaterial[]) {
   const poleMat = new THREE.MeshStandardMaterial({ color: '#7d8287', metalness: 0.7, roughness: 0.4 });
   const sodiumMat = new THREE.MeshStandardMaterial({ color: '#ffd9a0', emissive: SODIUM, emissiveIntensity: 6, roughness: 0.3 });
   const ledMat = new THREE.MeshStandardMaterial({ color: '#ffffff', emissive: LED, emissiveIntensity: 6, roughness: 0.3 });
@@ -619,7 +626,7 @@ function buildLampMeshes(track: Track, lamps: Lamp[], group: THREE.Group, nightE
       continue;
     }
     // arm points towards the road centre
-    const center = track.getPos(i);
+    const center = lamp.aim ?? track.getPos(i);
     const dir = new THREE.Vector3().subVectors(center, lamp.position).setY(0).normalize();
     q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), lampArmYaw(dir));
     const m = new THREE.Matrix4().compose(lamp.position, q, s1);
@@ -845,7 +852,23 @@ function cityWeight(lf: Landform, x: number, z: number) {
   return w;
 }
 
-function buildTrees(terrain: TerrainData, density: number, lodDistance: number) {
+/**
+ * `opts` (the autobahn's): `clearance` from the centreline instead of the mountain road's 10.5 m, `keep` rejects a
+ * spot, `extra` places more trees through `add` after the scattered ones.
+ */
+export function buildTrees(
+  terrain: TerrainData,
+  density: number,
+  lodDistance: number,
+  opts: {
+    clearance?: number;
+    keep?: (x: number, z: number) => boolean;
+    extra?: (add: (x: number, z: number, scale: number) => void) => void;
+    /** chunk size (m) of the trees in the near grid (default 320 m: one draw call per chunk) and outside it */
+    chunk?: number;
+    farChunk?: number;
+  } = {},
+) {
   const group = new THREE.Group();
   group.name = 'trees';
   const geo = treeGeometry();
@@ -863,7 +886,8 @@ function buildTrees(terrain: TerrainData, density: number, lodDistance: number) 
   const chunks = new Map<string, THREE.Matrix4[]>();
   const colors = new Map<string, THREE.Color[]>();
   const lf = terrain.landform;
-  const add = (x: number, z: number, scale: number) => {
+  const add = (x: number, z: number, scale: number, chunk = opts.chunk ?? CHUNK) => {
+    if (opts.keep && !opts.keep(x, z)) return;
     const y = terrain.heightAt(x, z);
     if (lf.waterLevel !== null && y < lf.waterLevel + 3) return;
     // thinning out towards the tree line, none above it
@@ -873,7 +897,7 @@ function buildTrees(terrain: TerrainData, density: number, lodDistance: number) 
     const dx = terrain.heightAt(x + 3, z) - terrain.heightAt(x - 3, z);
     const dz = terrain.heightAt(x, z + 3) - terrain.heightAt(x, z - 3);
     if (Math.hypot(dx, dz) / 6 > 1.25) return;
-    const key = `${Math.floor(x / CHUNK)},${Math.floor(z / CHUNK)}`;
+    const key = chunk === CHUNK ? `${Math.floor(x / CHUNK)},${Math.floor(z / CHUNK)}` : `f${Math.floor(x / chunk)},${Math.floor(z / chunk)}`;
     let list = chunks.get(key);
     if (!list) {
       chunks.set(key, (list = []));
@@ -893,7 +917,7 @@ function buildTrees(terrain: TerrainData, density: number, lodDistance: number) 
     const x = g.x0 + r() * (x1 - g.x0), z = g.z0 + r() * (z1 - g.z0);
     const d = terrain.roadDistAt(x, z);
     const hw = 7;
-    if (d < hw + 3.5) continue;
+    if (d < (opts.clearance ?? hw + 3.5)) continue;
     // clearings via noise; denser near the road for that tunnel-of-trees feeling
     const n = noise2(x / 140, z / 140);
     if (n < -0.25 && d > 40) continue;
@@ -905,8 +929,9 @@ function buildTrees(terrain: TerrainData, density: number, lodDistance: number) 
     const x = g.x0 - 2200 + r() * (x1 - g.x0 + 4400), z = g.z0 - 2200 + r() * (z1 - g.z0 + 4400);
     if (x > g.x0 && x < x1 && z > g.z0 && z < z1) continue;
     if (noise2(x / 300, z / 300) < -0.2) continue;
-    add(x, z, (12 + r() * 10) / 14);
+    add(x, z, (12 + r() * 10) / 14, opts.farChunk ?? CHUNK);
   }
+  opts.extra?.(add);
   // two levels of detail per chunk; Scenery.update() picks one by camera distance
   const farGeo = farTreeGeometry();
   const lods: { near: THREE.InstancedMesh; far: THREE.InstancedMesh; center: THREE.Vector3 }[] = [];
@@ -1078,12 +1103,14 @@ function lumpGeometry(seed: number, amount: number, kind: 'rock' | 'bush') {
 }
 
 /** Bushes and rocks scattered along the road for a less sterile roadside. */
-function buildClutter(
+export function buildClutter(
   track: Track,
   terrain: TerrainData,
   density: number,
   surfaceTexture: (n: SurfaceName, srgb: boolean) => THREE.Texture | null,
   keepOut: { x: number; z: number; r: number }[],
+  /** the autobahn's: where along / beside the road (+ = right) clutter may go, and no rocks */
+  opts: { accept?: (s: number, lateral: number) => boolean; rocks?: boolean } = {},
 ) {
   const group = new THREE.Group();
   group.name = 'clutter';
@@ -1113,6 +1140,7 @@ function buildClutter(
     const off = track.width[i] / 2 + SHOULDER + 1.4 + r() ** 2 * 22;
     // keep the summit start area (garage, grid) tidy
     if (s < track.startS + 45 && off < 16) continue;
+    if (opts.accept && !opts.accept(s, side * off)) continue;
     track.pointAt(s, side * off, p);
     if (keepOut.some((k) => (p.x - k.x) ** 2 + (p.z - k.z) ** 2 < k.r * k.r)) continue;
     const y = terrain.heightAt(p.x, p.z);
@@ -1121,7 +1149,9 @@ function buildClutter(
     const steep = Math.hypot(gx, gz);
     if (Math.abs(y - p.y) > 14) continue;
     q.setFromAxisAngle(UP, r() * 6.28);
-    if (steep > 0.9 || r() < 0.18) {
+    const rock = steep > 0.9 || r() < 0.18;
+    if (rock && opts.rocks === false) continue;
+    if (rock) {
       // boulders lie in the slope (tilted to the ground normal) and are half buried, so on steep
       // cuttings they read as rock outcrops rather than flat discs sticking out of the hill
       const sc = 0.3 + r() * 0.9;
@@ -1154,7 +1184,7 @@ function buildClutter(
 }
 
 /** Wind turbines on the skyline ridge (rotors animate in Scenery.update). */
-function buildTurbines(terrain: TerrainData) {
+export function buildTurbines(terrain: TerrainData) {
   const group = new THREE.Group();
   group.name = 'turbines';
   const model = prop('windTurbine');

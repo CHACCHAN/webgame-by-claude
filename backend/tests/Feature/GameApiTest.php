@@ -36,7 +36,8 @@ class GameApiTest extends TestCase
         $this->getJson('/api/health')->assertOk()->assertJson(['status' => 'ok', 'database' => 'ok']);
         $this->getJson('/api/content')->assertOk()
             ->assertJsonPath('tracks.0.id', 'oboro-downhill')
-            ->assertJsonCount(3, 'tracks')
+            ->assertJsonCount(4, 'tracks')
+            ->assertJsonPath('tracks.3.id', 'autobahn')
             // 6 cars, the 5 trains and the cockroach (joke entries)
             ->assertJsonCount(12, 'cars');
     }
@@ -158,5 +159,19 @@ class GameApiTest extends TestCase
             ->assertUnprocessable();
         // unauthenticated
         $this->withoutToken()->postJson('/api/runs', $this->runPayload(120_000))->assertUnauthorized();
+    }
+
+    public function test_autobahn_takes_runs_down_to_its_own_floor(): void
+    {
+        $token = $this->register();
+        $autobahn = ['track_id' => 'autobahn', 'car_id' => 'roach'];
+
+        // the cockroach flat out (~71 s): faster than any mountain pass's floor allows elsewhere, fine here
+        $this->withToken($token)->postJson('/api/runs', $this->runPayload(71_000, $autobahn))->assertCreated();
+        // an average beyond ~485 km/h is not
+        $this->withToken($token)->postJson('/api/runs', $this->runPayload(57_000, $autobahn))->assertUnprocessable();
+        // a commuter train at 120 km/h takes over four minutes
+        $this->withToken($token)->postJson('/api/runs', $this->runPayload(259_000, ['track_id' => 'autobahn', 'car_id' => 'e231']))->assertCreated();
+        $this->assertSame([71_000], array_column($this->getJson('/api/tracks/autobahn/leaderboard?car_id=roach')->json('entries'), 'time_ms'));
     }
 }

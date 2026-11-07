@@ -59,7 +59,7 @@ export function TitleScreen() {
   return (
     <div className="screen title" onClick={start}>
       <div className="title-logo">
-        <div className="title-small">{COURSES[currentCourseId()].nameEn} ・ 3 COURSES</div>
+        <div className="title-small">{COURSES[currentCourseId()].nameEn} ・ {COURSE_ORDER.length} COURSES</div>
         <h1>
           <span className="kanji">峠</span>
           <span className="en">TOUGE<br />NOCTURNE</span>

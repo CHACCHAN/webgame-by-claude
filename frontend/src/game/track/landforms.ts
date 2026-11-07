@@ -39,6 +39,16 @@ export interface Landform {
   moonDir: [number, number, number];
   /** height of the dawn sea of clouds */
   cloudLevel: number;
+  /**
+   * Terrain resolution: cell sizes (m) of the near grid (default 4) and the far grid (default 24), and how far the
+   * far grid reaches beyond the course (m; default an 11.2 × 10.4 km rectangle around it). Gentle land can take
+   * coarser cells: a long course would otherwise multiply the near grid.
+   */
+  grid?: { near?: number; far?: number; reach?: number };
+  /** scale of the hillsides the road is cut into (default 1; < 1 for rolling land) */
+  hillside?: number;
+  /** bridges are viaducts over valleys of the landform (the ground follows the valley down, as wide as the bridge) */
+  viaducts?: boolean;
   features: {
     ferrisWheel?: [number, number];
     /** coastal highway with moving traffic along z = coast(x) - 40 */
@@ -177,5 +187,89 @@ export const RIDGE: Landform = {
       }
       return out;
     })(),
+  },
+};
+
+// ------------------------------------------------- AUTOBAHN: plateau and river valley
+// Height of the land along the motorway (west → east): the forested plateau, its edge, and the valley floor of
+// the river beyond the finish; the far bank climbs again. (Matches the road of courseDesign AUTOBAHN.)
+const AB_TREND: [number, number][] = [
+  [-12000, 470], [-4300, 441], [-3000, 426], [-2000, 406], [-1000, 386], [0, 358], [1000, 332], [2000, 299],
+  [3000, 264], [3500, 254], [4300, 252], [5150, 250], [5900, 258], [6800, 292], [8500, 330], [14000, 360],
+];
+const abTrend = (x: number) => {
+  if (x <= AB_TREND[0][0]) return AB_TREND[0][1];
+  for (let k = 1; k < AB_TREND.length; k++) {
+    const [x1, h1] = AB_TREND[k];
+    if (x <= x1) {
+      const [x0, h0] = AB_TREND[k - 1];
+      // smooth between the knots so the land has no creases
+      return lerp(h0, h1, smoothstep(0, 1, (x - x0) / (x1 - x0)) * 0.5 + ((x - x0) / (x1 - x0)) * 0.5);
+    }
+  }
+  return AB_TREND[AB_TREND.length - 1][1];
+};
+/** the river: flows north–south past the end of the course */
+const abRiverX = (z: number) => 5150 + 160 * Math.sin(z / 800 + 0.6) + 60 * Math.sin(z / 310);
+/** the side valley under the viaduct (s ≈ 4530–5050): its axis crosses the road at the bridge, flowing SSE */
+const AB_VALLEY = { x: 335, z: -717, dx: 0.309, dz: 0.951, floor: 312 };
+
+export const PLATEAU: Landform = {
+  base(x, z) {
+    let h = abTrend(x);
+    const dr = Math.abs(x - abRiverX(z));
+    const valleyFloor = smoothstep(1300, 500, dr);
+    // wooded hills, higher to the north of the motorway, none on the river's meadows
+    const hills = 1 - valleyFloor;
+    h += 34 * smoothstep(-1100, -2600, z) * hills;
+    h += fbm(x / 1100 + 7.3, z / 1100 - 2.1, 4) * 52 * hills;
+    h += fbm(x / 360 - 1.7, z / 360 + 5.9, 3) * 14 * hills;
+    // the river's meadows and its channel
+    h = lerp(h, abTrend(abRiverX(z)) + 1.5 + dr * 0.006, valleyFloor);
+    h = lerp(239, h, smoothstep(80, 125, dr));
+    // the side valley the viaduct spans: a flat floor, gentle wooded slopes
+    const vx = x - AB_VALLEY.x, vz = z - AB_VALLEY.z;
+    const along = vx * AB_VALLEY.dx + vz * AB_VALLEY.dz;
+    const across = Math.abs(vx * AB_VALLEY.dz - vz * AB_VALLEY.dx + 35 * Math.sin(along / 260));
+    const vFloor = AB_VALLEY.floor - along * 0.012;
+    const valley = vFloor + Math.max(0, across - 50) * 0.21;
+    h = lerp(h, Math.min(h, valley), smoothstep(-3200, -2000, along));
+    // distant ranges on the horizon
+    const far = Math.hypot((x - 200) / 1.6, z + 500);
+    h += ridged(x / 1500 + 2.2, z / 1500 - 6.1, 4) * 260 * smoothstep(5200, 8500, far);
+    return h;
+  },
+  // forest everywhere but on the river's meadows
+  relief: (x, z) => 0.6 * smoothstep(420, 900, Math.abs(x - abRiverX(z))),
+  waterLevel: 246,
+  water: { x: 5150, z: -500, w: 900, d: 11000 },
+  treeLine: 2000,
+  cities: [
+    // the town across the river, the brightest lights on the horizon
+    { x: 6350, z: -350, rx: 900, rz: 1600, angle: 0.15, density: 0.5, downtown: 0.4 },
+    // a village on this bank, below the end of the course
+    { x: 4450, z: 250, rx: 380, rz: 300, angle: 0.3, density: 0.1, downtown: 0.1 },
+    // the village behind the noise walls (zone 'village', right of the road)
+    { x: 2300, z: -330, rx: 420, rz: 220, angle: 0.05, density: 0.08, downtown: 0 },
+    // the village the interchange's exit leads to
+    { x: -1250, z: -150, rx: 330, rz: 260, angle: 0.35, density: 0.07, downtown: 0.05 },
+    // a hamlet on the plateau
+    { x: -2950, z: -1750, rx: 280, rz: 200, angle: -0.3, density: 0.04, downtown: 0 },
+  ],
+  cityGlowDir: [0.85, 0, 0.25],
+  cityGlow: 0.45,
+  moonDir: [0.72, 0.45, 0.53],
+  // dawn: mist lies in the river valley
+  cloudLevel: 258,
+  grid: { near: 8, far: 32, reach: 4500 },
+  hillside: 0.35,
+  viaducts: true,
+  features: {
+    towers: [[-2200, -2700], [7200, -1900]],
+    // a wind farm on the plateau north of the motorway, a few more to the south
+    turbines: [
+      [-4100, -1650], [-3700, -1900], [-3300, -1600], [-2500, -2050], [-2050, -1800], [-1600, -2150], [-1150, -1900],
+      [-3500, 500], [-3050, 700], [-2600, 450],
+    ],
   },
 };

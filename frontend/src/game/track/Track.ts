@@ -90,8 +90,8 @@ export class Track {
     zones.push(zones[zones.length - 1]);
 
     // Smoothing keeps the integral (total heading change) intact.
-    const k = movingAverage(Float64Array.from(kRaw), 24);
-    const g = movingAverage(Float64Array.from(gRaw), 60);
+    const k = movingAverage(Float64Array.from(kRaw), design.smoothing?.curvature ?? 24);
+    const g = movingAverage(Float64Array.from(gRaw), design.smoothing?.grade ?? 60);
     const widthBase = movingAverage(Float64Array.from(wRaw), 40);
 
     this.count = n;
@@ -155,8 +155,8 @@ export class Track {
     }
 
     // 4. Timing lines and sector splits evenly by distance.
-    this.startS = 40;
-    this.finishS = this.length - 120;
+    this.startS = design.startS ?? 40;
+    this.finishS = this.length - (design.runoff ?? 120);
     this.sectorSplits = [];
     const timed = this.finishS - this.startS;
     for (let i = 1; i <= design.sectors; i++) this.sectorSplits.push(this.startS + (timed * i) / design.sectors);

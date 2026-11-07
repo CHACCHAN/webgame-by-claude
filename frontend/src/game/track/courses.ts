@@ -1,10 +1,13 @@
 import type { AILevel } from '../ai/AIDriver';
 import type { CarId, RoadCarId } from '../vehicle/carSpecs';
-import { KIRIFURI_LAKESIDE, OBORO_DOWNHILL, TENROU_SKYLINE, type CourseDesign } from './courseDesign';
-import { BAY, CALDERA, RIDGE, type Landform } from './landforms';
+import { AUTOBAHN, KIRIFURI_LAKESIDE, OBORO_DOWNHILL, TENROU_SKYLINE, type CourseDesign } from './courseDesign';
+import { BAY, CALDERA, PLATEAU, RIDGE, type Landform } from './landforms';
 import type { TrainId } from '../vehicle/trains';
 
-export type CourseId = 'oboro-downhill' | 'kirifuri-lakeside' | 'tenrou-skyline';
+export type CourseId = 'oboro-downhill' | 'kirifuri-lakeside' | 'tenrou-skyline' | 'autobahn';
+
+/** a Japanese mountain pass, or a German motorway (no Japanese roadside dressing, motorway structures instead) */
+export type CourseStyle = 'touge' | 'autobahn';
 
 export interface RivalInfo {
   name: string;
@@ -22,6 +25,7 @@ export interface CourseInfo {
   id: CourseId;
   name: string;
   nameEn: string;
+  style: CourseStyle;
   tagline: string;
   description: string;
   design: CourseDesign;
@@ -42,6 +46,7 @@ export const COURSES: Record<CourseId, CourseInfo> = {
     id: 'oboro-downhill',
     name: '朧峠',
     nameEn: 'OBORO PASS',
+    style: 'touge',
     tagline: '港町の夜景を見下ろすヘアピン地獄',
     description: '断崖の展望コーナーから 4 連続ヘアピン、ロックシェッド、渓谷の橋へ。眼下に港町の灯りが広がる、夜の峠の王道コース。',
     design: OBORO_DOWNHILL,
@@ -67,6 +72,7 @@ export const COURSES: Record<CourseId, CourseInfo> = {
     id: 'kirifuri-lakeside',
     name: '霧降湖',
     nameEn: 'KIRIFURI LAKESIDE',
+    style: 'touge',
     tagline: '月を映すカルデラ湖へ駆け下りる',
     description: '外輪山の稜線から杉林のヘアピンを抜け、湖畔の高速セクションへ。水面に映る月と温泉街の灯りが待つ、テクニカルで速いコース。',
     design: KIRIFURI_LAKESIDE,
@@ -93,6 +99,7 @@ export const COURSES: Record<CourseId, CourseInfo> = {
     id: 'tenrou-skyline',
     name: '天狼スカイライン',
     nameEn: 'TENROU SKYLINE',
+    style: 'touge',
     tagline: '星空の稜線を全開で駆け抜ける',
     description: '風車の並ぶ稜線を200km/h近くで駆け抜け、最後は七曲りのヘアピンで一気に谷へ。度胸とブレーキングが試される高速コース。',
     design: TENROU_SKYLINE,
@@ -115,9 +122,39 @@ export const COURSES: Record<CourseId, CourseInfo> = {
     music: 'bgm_race_tenrou',
     art: '/img/courses/tenrou.webp',
   },
+  autobahn: {
+    id: 'autobahn',
+    name: 'アウトバーン',
+    nameEn: 'AUTOBAHN',
+    style: 'autobahn',
+    tagline: '速度無制限、夜の高原を一直線に',
+    description: '森の高原から川の谷へ、約8kmを下る3車線の高速道路。跨道橋をくぐり、高架橋で谷を越える。カーブはすべて半径1200m以上、全開のまま踏み抜け。',
+    design: AUTOBAHN,
+    landform: PLATEAU,
+    surface: { grip: 1, label: '高速道路の舗装' },
+    rivals: {
+      // a drag race: no corner sorts the field, so the rivals' cars and tunes set the battle (tools/sim-run.ts):
+      // the rookie loses to any car driven flat out, the ace to the R34 and the RX-7, the legend only to a clean RX-7
+      rookie: { name: '早瀬 ユリア', title: 'ROOKIE / 留学帰りの新人', car: 'hayate', color: '#d8dde4', power: 0.95, portrait: '', description: 'ドイツ留学から帰ったばかり。速度無制限の道に憧れて、初めて夜のアウトバーンに挑む。' },
+      ace: { name: '神崎 ルカ', title: 'LOCAL ACE / 深夜便の運び屋', car: 'supra', color: '#14161a', portrait: '', description: '夜ごとこの道を往復する運び屋。追い越し車線の空け方まで知り尽くしている。' },
+      legend: { name: 'ファルケ', title: 'LEGEND / 無制限区間の亡霊', car: 'r34', color: '#9aa4ae', power: 1.02, portrait: '', description: '鷹の名で呼ばれる正体不明のドライバー。ミラーに映ったと思った時には、もう前にいる。' },
+    },
+    // flat out from a standing start, the legend AI's race time +1.5 % (a clean run; no corner to gain time in),
+    // silver +7 %, bronze +17 % (tools/sim-run.ts, 2026-11-06)
+    medals: {
+      hayate: { gold: 177_000, silver: 189_500, bronze: 207_500 },
+      raijin: { gold: 134_000, silver: 143_500, bronze: 157_000 },
+      shiden: { gold: 130_500, silver: 140_000, bronze: 153_000 },
+      supra: { gold: 134_500, silver: 144_000, bronze: 157_500 },
+      r34: { gold: 132_500, silver: 142_000, bronze: 155_500 },
+      s15: { gold: 145_000, silver: 155_500, bronze: 170_000 },
+    },
+    music: 'bgm_race_tenrou',
+    art: '/img/courses/autobahn.webp',
+  },
 };
 
-export const COURSE_ORDER: CourseId[] = ['oboro-downhill', 'kirifuri-lakeside', 'tenrou-skyline'];
+export const COURSE_ORDER: CourseId[] = ['oboro-downhill', 'kirifuri-lakeside', 'tenrou-skyline', 'autobahn'];
 export const DEFAULT_COURSE: CourseId = 'oboro-downhill';
 
 /**
@@ -149,14 +186,27 @@ export const TRAIN_MEDALS: Record<CourseId, Record<TrainId, { gold: number; silv
     tobu30000: { gold: 117_500, silver: 125_500, bronze: 136_500 },
     e5: { gold: 128_500, silver: 137_500, bronze: 149_000 },
   },
+  // the autobahn (2026-11-06): the legend AI's time from a standing start at GO, as a race times it (the trains' slow
+  // getaway is a share of the time here; the AI drives the course flat out without a fault, so a flying lap would
+  // put gold out of reach). The E5 reaches 305 km/h before the finish.
+  autobahn: {
+    e231: { gold: 262_000, silver: 280_500, bronze: 304_000 },
+    e235: { gold: 257_500, silver: 276_000, bronze: 299_000 },
+    keikyu1000: { gold: 240_000, silver: 257_000, bronze: 278_500 },
+    tobu30000: { gold: 255_000, silver: 273_000, bronze: 296_000 },
+    e5: { gold: 174_000, silver: 186_500, bronze: 202_000 },
+  },
 };
 
 /**
  * Medal times of the cockroach (joke entry) per course: gold = the legend AI's time with it (tools/sim-run.ts,
- * 2026-11-03), silver +7 %, bronze +16 %. The AI keeps to its 223 km/h cap on the straights: a player can beat gold.
+ * 2026-11-03), silver +7 %, bronze +16 %. On the mountain passes the AI keeps to its 223 km/h cap on the straights: a
+ * player can beat gold. The autobahn lifts the cap (`CourseDesign.aiTopSpeed`).
  */
 export const ROACH_MEDALS: Record<CourseId, { gold: number; silver: number; bronze: number }> = {
   'oboro-downhill': { gold: 76_000, silver: 81_500, bronze: 88_000 },
   'kirifuri-lakeside': { gold: 63_000, silver: 67_500, bronze: 73_000 },
   'tenrou-skyline': { gold: 55_500, silver: 59_500, bronze: 64_500 },
+  // the autobahn: from a standing start (as TRAIN_MEDALS); with no corners and no cap the AI runs at ~420 km/h
+  autobahn: { gold: 72_500, silver: 78_000, bronze: 84_500 },
 };

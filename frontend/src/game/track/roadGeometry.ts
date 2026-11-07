@@ -168,3 +168,89 @@ export function buildWallColliders(track: Track) {
   }
   return { vertices: verts, indices: Uint32Array.from(idx) };
 }
+
+/** Where an autobahn surface's texels sit in the shared road lightmap (render/autobahnScenery.ts). */
+export interface RoadLightmapLayout {
+  /** lateral range (m, + = right of the centreline) the lightmap's columns span */
+  lat: [number, number];
+  /** samples per lightmap row on the main road (rows of 2 m would overflow a 4096 texture on a long course) */
+  step: number;
+  /** rows of the whole lightmap (the main road's first, other surfaces after them) */
+  rows: number;
+}
+
+/**
+ * Autobahn carriageway: like buildRoadGeometry, but the texture's u is in metres across a marking atlas (the
+ * markings keep their real widths and positions, measured from the left asphalt edge) and `layout(i)` picks the
+ * atlas column (m) per sample: the plain layout or the exit lane's. Where the layout changes, the row is emitted
+ * twice (the quad between them is empty) so no quad blends the two. uv1 addresses the shared lightmap by lateral
+ * position and track distance.
+ */
+export function buildAutobahnRoadGeometry(
+  track: Track,
+  atlasWidth: number,
+  layout: (i: number) => number,
+  lm: RoadLightmapLayout,
+  /** the opposite carriageway: its centre's lateral offset, mirrored (its left edge, the median's, on our left) */
+  opts: { center?: number; mirror?: boolean } = {},
+) {
+  const center = opts.center ?? 0, mirror = opts.mirror ? -1 : 1;
+  // a row every 4 m and four quads across: the motorway bends gently (R ≥ 1200 m) and has no banked hairpins
+  const ROW = 4;
+  const lanesAcross = 4;
+  const cols = lanesAcross + 1 + 2;
+  const samples: [number, number][] = [];
+  let prev = layout(0);
+  for (let i = 0; ; i = Math.min(i + ROW, track.count - 1)) {
+    const l = layout(i);
+    if (l !== prev) samples.push([i, prev]);
+    samples.push([i, l]);
+    prev = l;
+    if (i === track.count - 1) break;
+  }
+  const rows = samples.length;
+  const pos = new Float32Array(rows * cols * 3);
+  const nor = new Float32Array(rows * cols * 3);
+  const uv = new Float32Array(rows * cols * 2);
+  const uv1 = new Float32Array(rows * cols * 2);
+  const p = new Vector3(), up = new Vector3();
+  samples.forEach(([i, atlasU], r) => {
+    const hw = track.width[i] / 2 + SHOULDER;
+    track.getUp(i, up);
+    for (let c = 0; c < cols; c++) {
+      let lat: number, drop = 0;
+      if (c === 0) {
+        lat = -hw - 0.6;
+        drop = 0.9;
+      } else if (c === cols - 1) {
+        lat = hw + 0.6;
+        drop = 0.9;
+      } else lat = -hw + ((c - 1) / lanesAcross) * hw * 2;
+      const world = center + mirror * lat;
+      track.pointAt(i, world, p);
+      p.addScaledVector(up, -drop);
+      const o = r * cols + c;
+      pos.set([p.x, p.y, p.z], o * 3);
+      nor.set([up.x, up.y, up.z], o * 3);
+      uv[o * 2] = (atlasU + Math.max(-0.3, Math.min(lat + hw, 2 * hw + 0.3))) / atlasWidth;
+      uv[o * 2 + 1] = i;
+      uv1[o * 2] = (world - lm.lat[0]) / (lm.lat[1] - lm.lat[0]);
+      uv1[o * 2 + 1] = (i / lm.step + 0.5) / lm.rows;
+    }
+  });
+  const idx: number[] = [];
+  for (let r = 0; r < rows - 1; r++)
+    for (let c = 0; c < cols - 1; c++) {
+      const a = r * cols + c, b = a + 1, d = a + cols, e = d + 1;
+      // mirrored, the columns run right to left: swap the winding so the faces still point up
+      if (mirror > 0) idx.push(a, b, d, b, e, d);
+      else idx.push(a, d, b, b, d, e);
+    }
+  const g = new BufferGeometry();
+  g.setAttribute('position', new BufferAttribute(pos, 3));
+  g.setAttribute('normal', new BufferAttribute(nor, 3));
+  g.setAttribute('uv', new BufferAttribute(uv, 2));
+  g.setAttribute('uv1', new BufferAttribute(uv1, 2));
+  g.setIndex(idx);
+  return g;
+}

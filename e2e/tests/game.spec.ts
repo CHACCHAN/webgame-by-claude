@@ -168,7 +168,7 @@ test('course select switches to another mountain and its own rivals', async ({ p
   await waitForTitle(page);
   await page.keyboard.press('Enter');
   await page.locator('.menu-list li', { hasText: 'RIVAL BATTLE' }).click();
-  await expect(page.locator('.course-card')).toHaveCount(3);
+  await expect(page.locator('.course-card')).toHaveCount(4);
   await page.keyboard.press('ArrowRight');
   await expect(page.locator('.course-card.active')).toContainText('KIRIFURI LAKESIDE');
   await page.keyboard.press('Enter');

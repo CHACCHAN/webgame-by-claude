@@ -32,6 +32,15 @@ return [
             'min_time_ms' => 38_000,
             'max_time_ms' => 30 * 60_000,
         ],
+        // 7.8 km of motorway: the cockroach's AI runs it flat out at its top speed (~71 s, ~420 km/h downhill),
+        // so the floor is an average of ~485 km/h, beyond any vehicle
+        'autobahn' => [
+            'name' => 'アウトバーン',
+            'name_en' => 'Autobahn',
+            'sectors' => 4,
+            'min_time_ms' => 58_000,
+            'max_time_ms' => 30 * 60_000,
+        ],
     ],
 
     // ids are stable (stored runs and ghosts refer to them); names follow the car models in use

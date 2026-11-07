@@ -5,7 +5,25 @@
 // Conventions: Y is up, +Z points south (towards the bay and the city lights),
 // heading 0 = driving towards +Z, positive arc angles turn LEFT.
 
-export type ZoneTag = 'start' | 'vista' | 'hairpins' | 'forest' | 'rockshed' | 'bridge' | 'finish' | 'crest' | 'lakeside';
+export type ZoneTag =
+  | 'start'
+  | 'vista'
+  | 'hairpins'
+  | 'forest'
+  | 'rockshed'
+  | 'bridge'
+  | 'finish'
+  | 'crest'
+  | 'lakeside'
+  // the autobahn's zones (scenery: render/TrackScenery.ts):
+  /** plain motorway */
+  | 'motorway'
+  /** a road bridge crosses above the carriageway at the zone's midpoint (no rain under its deck) */
+  | 'overpass'
+  /** noise walls on the right, village lights beyond */
+  | 'village'
+  /** street lamps, an exit lane and slip road on the right, overhead gantry signs before it */
+  | 'interchange';
 
 export interface Seg {
   /** straight length (m) when r is undefined, otherwise the arc radius (m) */
@@ -27,6 +45,19 @@ export interface CourseDesign {
   baseWidth: number;
   /** number of timing sectors (the finish line closes the last one) */
   sectors: number;
+  /** distance of the start line from the beginning of the road (m, default 40) */
+  startS?: number;
+  /** road left after the finish line to stop on (m, default 120) */
+  runoff?: number;
+  /** moving-average windows (m) of curvature and grade: longer = gentler transitions (default 24 / 60) */
+  smoothing?: { curvature?: number; grade?: number };
+  /**
+   * Flat graded ground (m) beyond the drivable edges, left and right: room for a median and the opposite
+   * carriageway, verges and slip roads. The terrain rises or falls into the landscape only beyond it (default 0).
+   */
+  formation?: { left: number; right: number };
+  /** the AI's speed limit on this course (m/s, default 62 ≈ 223 km/h on the mountain passes) */
+  aiTopSpeed?: number;
 }
 
 const S = (len: number, g: number, tag?: ZoneTag): Seg => ({ len, g, tag });
@@ -142,5 +173,49 @@ export const TENROU_SKYLINE: CourseDesign = {
     L(80, 60, -0.07, 'forest'),
     R(120, 45, -0.06, 'forest'),
     S(160, -0.05, 'finish'),
+  ],
+};
+
+// AUTOBAHN (アウトバーン): a German motorway at night, from a forested plateau down to a river valley. Three
+// lanes and a hard shoulder, every radius ≥ 1200 m: the trains and the cockroach finally run flat out.
+// The carriageway is ours alone (the median and the opposite carriageway on the left are scenery).
+export const AUTOBAHN: CourseDesign = {
+  id: 'autobahn',
+  start: { x: -4300, y: 440, z: -300, heading: Math.PI * 0.5 },
+  // 0.75 m edge strip + 3 × 3.75 m lanes + 2.5 m hard shoulder
+  baseWidth: 14.5,
+  sectors: 4,
+  // room behind the grid for a three-car train; a long run-off to stop from 300 km/h
+  startS: 100,
+  runoff: 650,
+  smoothing: { curvature: 160, grade: 220 },
+  // median + opposite carriageway on the left, verge (and the interchange's slip road) on the right
+  formation: { left: 30, right: 22 },
+  aiTopSpeed: 140,
+  segs: [
+    // the plateau: start straight, then a long left through the forest
+    S(420, -0.004, 'start'),
+    S(160, -0.01, 'motorway'),
+    L(1800, 26, -0.014, 'forest'),
+    S(200, -0.016, 'forest'),
+    S(260, -0.018, 'overpass'),
+    R(1400, 42, -0.022, 'motorway'),
+    S(100, -0.02, 'motorway'),
+    // the interchange, lit, with its exit on the right
+    S(620, -0.016, 'interchange'),
+    // off the plateau's edge, the viaduct over the side valley
+    L(1300, 34, -0.03, 'forest'),
+    S(160, -0.03, 'forest'),
+    S(520, -0.018, 'bridge'),
+    R(1600, 32, -0.032, 'forest'),
+    S(240, -0.032, 'overpass'),
+    S(120, -0.032, 'motorway'),
+    L(2000, 20, -0.032, 'village'),
+    S(180, -0.034, 'village'),
+    // the last descent into the river valley
+    R(1300, 20, -0.04, 'motorway'),
+    S(150, -0.035, 'motorway'),
+    S(140, -0.008, 'finish'),
+    S(650, 0, 'finish'),
   ],
 };

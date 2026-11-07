@@ -30,7 +30,11 @@ const KINDS = {
   cars: { dir: 'tools/blender/cars', out: 'public/models/cars', palette: false, textureSize: 1024, big: {}, ids: ['hayate', 'raijin', 'shiden', 'supra', 'r34', 's15'] },
   props: {
     dir: 'tools/blender/props', out: 'public/models/props', palette: false, textureSize: 1024, big: {}, outDir: true,
-    ids: ['street_light', 'wind_turbine', 'curve_mirror', 'vending_machine', 'torii', 'stone_lantern', 'bus_stop', 'traffic_cone'],
+    ids: [
+      'street_light', 'wind_turbine', 'curve_mirror', 'vending_machine', 'torii', 'stone_lantern', 'bus_stop', 'traffic_cone',
+      // the autobahn's (their textures and the sign atlas: tools/blender/props/paint_autobahn.py)
+      'sign_gantry', 'emergency_phone', 'village_house', 'village_farmhouse', 'village_church',
+    ],
   },
   creatures: { dir: 'tools/blender/creatures', out: 'public/models/roach', palette: false, textureSize: 1024, big: {}, resample: true, ids: ['roach'] },
 };

@@ -288,7 +288,7 @@ export class Game {
     this.terrain = buildTerrain(this.track, course.landform);
     await this.yieldFrame(0.5, '道路と森を配置中');
     this.physics = new PhysicsWorld(this.track);
-    this.scenery = buildScenery(this.track, this.terrain, { treeDensity: this.quality.treeDensity, shadows: this.quality.shadows, photoTextures: this.quality.photoTextures, treeLod: this.quality.treeLod });
+    this.scenery = buildScenery(this.track, this.terrain, { treeDensity: this.quality.treeDensity, shadows: this.quality.shadows, photoTextures: this.quality.photoTextures, treeLod: this.quality.treeLod, style: course.style });
     this.root.add(this.scenery.group);
     this.rain.setCovers(this.scenery.covers);
     this.lampSlots.fill(-1);
@@ -763,7 +763,7 @@ export class Game {
         // pull over to its side and stop; once slow, hold it with the handbrake and a light foot brake
         // (VehicleSim engages reverse when the brake is held above 0.3 at a standstill)
         r.input.throttle = 0;
-        r.input.brake = r.sim.forwardSpeed > 1.5 ? 0.4 : 0.25;
+        r.input.brake = r.sim.forwardSpeed > 1.5 ? this.stopBrake(r, 0.4, dt) : 0.25;
         r.input.handbrake = r.sim.forwardSpeed <= 1.5;
       }
     }
@@ -787,7 +787,30 @@ export class Game {
     r.ai.opponent = o ? { s: o.proj.s, lateral: o.proj.lateral, speed: o.sim.forwardSpeed } : null;
     r.ai.update(r.sim, dt, r.input);
     r.input.throttle = 0;
-    r.input.brake = r.sim.forwardSpeed > 4 ? 0.35 : 0;
+    // to a standstill: a light foot brake and the handbrake once slow (above 0.3 at a standstill VehicleSim engages
+    // reverse; coasting instead, a train rolled on for a minute and met the end of the road)
+    const slow = r.sim.forwardSpeed <= 1.5;
+    r.input.brake = slow ? 0.25 : this.stopBrake(r, 0.35, dt);
+    r.input.handbrake = slow;
+  }
+
+  /**
+   * Brake input for a car past the finish line: at least `gentle`, harder when the road left would not be enough to
+   * stop on. A train's brakes (~1 m/s²) cannot stop it from 300 km/h on any run-off: past the line a retarder takes
+   * off what they lack, so nothing reaches the end of the road at speed.
+   */
+  private stopBrake(r: Racer, gentle: number, dt: number) {
+    const v = r.sim.forwardSpeed;
+    const room = Math.max(5, this.track.length - 40 - r.proj.s);
+    const need = (v * v) / (2 * room);
+    const spec = r.sim.spec;
+    const brakes = Math.min(spec.brakeForce / spec.mass, Math.min(spec.gripFront, spec.gripRear) * 9.81 * 0.8);
+    if (need > brakes) {
+      const lv = r.sim.body.linvel();
+      const k = Math.max(0, 1 - ((need - brakes) * dt) / Math.max(v, 1));
+      r.sim.body.setLinvel({ x: lv.x * k, y: lv.y, z: lv.z * k }, true);
+    }
+    return clamp(Math.max(gentle, need / brakes), 0, 1);
   }
 
   private trackRacer(r: Racer, dt: number) {

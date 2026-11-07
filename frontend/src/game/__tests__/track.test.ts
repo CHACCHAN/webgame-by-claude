@@ -5,6 +5,11 @@ import { buildTerrain } from '../track/terrain';
 import { BAY } from '../track/landforms';
 import { findCorners } from '../track/corners';
 import { COURSES, COURSE_ORDER } from '../track/courses';
+import { AUTOBAHN } from '../track/courseDesign';
+import { PLATEAU } from '../track/landforms';
+
+/** the mountain passes (the autobahn has no bends worth a pace note, mirror or sign) */
+const TOUGE = COURSE_ORDER.filter((id) => COURSES[id].style === 'touge');
 
 const track = new Track(OBORO_DOWNHILL);
 
@@ -49,6 +54,65 @@ describe('Track', () => {
   });
 });
 
+describe('AUTOBAHN', () => {
+  const t = new Track(AUTOBAHN);
+  const y = (s: number) => t.pos[Math.round(s) * 3 + 1];
+
+  it('is about 8 km, gently downhill, with radii of 1200 m or more', () => {
+    const timed = t.finishS - t.startS;
+    expect(timed).toBeGreaterThan(7500);
+    expect(timed).toBeLessThan(8500);
+    const grade = (y(t.finishS) - y(t.startS)) / timed;
+    expect(grade).toBeLessThan(-0.02);
+    expect(grade).toBeGreaterThan(-0.025);
+    let kMax = 0, gMin = 0;
+    for (let i = 0; i < t.count; i++) kMax = Math.max(kMax, Math.abs(t.curvature[i]));
+    for (let i = 1; i < t.count; i++) gMin = Math.min(gMin, t.pos[i * 3 + 1] - t.pos[(i - 1) * 3 + 1]);
+    expect(1 / kMax).toBeGreaterThanOrEqual(1200);
+    expect(gMin).toBeGreaterThan(-0.045);
+    expect(findCorners(t, 600)).toHaveLength(0);
+    expect(t.width[Math.round(t.length / 2)]).toBeCloseTo(14.5, 1);
+  });
+
+  it('has room for a train behind the grid and a straight run-off to stop on', () => {
+    expect(t.startS).toBeGreaterThanOrEqual(90);
+    expect(t.length - t.finishS).toBeGreaterThanOrEqual(600);
+    for (let s = t.finishS; s < t.length; s++) expect(Math.abs(t.curvatureAt(s))).toBeLessThan(1e-4);
+  });
+
+  it('tags the zones the scenery is built from', () => {
+    const count = (tag: Parameters<Track['zoneRanges']>[0]) => t.zoneRanges(tag).length;
+    expect(count('overpass')).toBeGreaterThanOrEqual(2);
+    expect(count('interchange')).toBeGreaterThanOrEqual(1);
+    expect(count('village')).toBeGreaterThanOrEqual(1);
+    expect(count('bridge')).toBeGreaterThanOrEqual(1);
+    expect(count('start')).toBe(1);
+    expect(count('finish')).toBe(1);
+    const len = (tag: Parameters<Track['zoneRanges']>[0]) => t.zoneRanges(tag).reduce((a, [p, q]) => a + q - p, 0);
+    expect(len('forest')).toBeGreaterThan(2000);
+    expect(len('motorway')).toBeGreaterThan(1500);
+  });
+
+  it('grades flat ground for the median and the opposite carriageway; the viaduct spans a valley', () => {
+    const T = buildTerrain(t, PLATEAU);
+    for (let s = 20; s < t.length - 20; s += 50) {
+      const zone = t.zoneAt(s);
+      for (const lat of [-28, -20, -12, 12, 20]) {
+        const p = t.pointAt(s, lat);
+        const h = T.heightAt(p.x, p.z);
+        if (zone === 'bridge') expect(p.y - h).toBeGreaterThan(8);
+        else {
+          expect(h).toBeLessThan(p.y);
+          expect(p.y - h).toBeLessThan(1);
+        }
+      }
+    }
+    const [a, b] = t.zoneRanges('bridge')[0];
+    const mid = t.getPos(Math.round((a + b) / 2));
+    expect(mid.y - T.heightAt(mid.x, mid.z)).toBeGreaterThan(25);
+  });
+});
+
 describe('corner detection (pace notes and roadside signs)', () => {
   it('finds every authored hairpin once, in order, with the right direction', () => {
     const t = new Track(OBORO_DOWNHILL);
@@ -59,8 +123,9 @@ describe('corner detection (pace notes and roadside signs)', () => {
     for (const c of hairpins) expect(c.minRadius).toBeLessThan(30);
   });
 
-  it('every course has bends worth a call before them', () => {
-    for (const id of COURSE_ORDER) {
+  it('every mountain pass has bends worth a call before them', () => {
+    expect(TOUGE).toHaveLength(3);
+    for (const id of TOUGE) {
       const corners = findCorners(new Track(COURSES[id].design));
       expect(corners.filter((c) => c.kind !== 'medium').length).toBeGreaterThanOrEqual(2);
     }
@@ -112,7 +177,7 @@ describe('street lamps', () => {
 describe('curve mirrors', () => {
   it('stand once per tight bend on the inside, not in a row along it', async () => {
     const { curveMirrorSpots } = await import('../render/TrackScenery');
-    for (const id of COURSE_ORDER) {
+    for (const id of TOUGE) {
       const t = new Track(COURSES[id].design);
       const spots = curveMirrorSpots(t);
       const tight = findCorners(t, 30).length;

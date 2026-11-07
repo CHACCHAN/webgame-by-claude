@@ -10,7 +10,10 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
  * the open side of the bus shelter) towards +Z, a street light's arm along −X. Scenery falls back to its procedural
  * shapes for a model that did not load.
  */
-export type PropId = 'streetLight' | 'windTurbine' | 'curveMirror' | 'vending' | 'torii' | 'stoneLantern' | 'busStop' | 'cone';
+export type PropId =
+  | 'streetLight' | 'windTurbine' | 'curveMirror' | 'vending' | 'torii' | 'stoneLantern' | 'busStop' | 'cone'
+  // the autobahn's
+  | 'signGantry' | 'emergencyPhone' | 'villageHouse' | 'villageFarmhouse' | 'villageChurch';
 
 interface PropDef {
   file: string;
@@ -27,6 +30,8 @@ interface PropDef {
    * part that came with a model. The scale still comes from the whole model.
    */
   drop?: [number, number, number, number];
+  /** source height that becomes y = 0 (default the bottom of the model): a foundation or plinth below ground */
+  base?: number;
 }
 
 // heights as built (the street light is stretched 0.5 % to the lamp height the lighting is placed for)
@@ -39,6 +44,12 @@ const PROPS: Record<PropId, PropDef> = {
   stoneLantern: { file: 'stone_lantern.glb', height: 1.6 },
   busStop: { file: 'bus_stop.glb', height: 2.59, origin: [0, 0] },
   cone: { file: 'traffic_cone.glb', height: 0.7 },
+  // the autobahn's (heights as built; their foundations reach below the ground)
+  signGantry: { file: 'sign_gantry.glb', height: 8.75, origin: [0, 0], base: 0 },
+  emergencyPhone: { file: 'emergency_phone.glb', height: 1.52, origin: [0, 0], base: 0 },
+  villageHouse: { file: 'village_house.glb', height: 11.76, origin: [0, 0], base: 0 },
+  villageFarmhouse: { file: 'village_farmhouse.glb', height: 13.655, origin: [0, 0], base: 0 },
+  villageChurch: { file: 'village_church.glb', height: 37.9, base: 0 },
 };
 
 export interface PropPiece {
@@ -63,11 +74,29 @@ export function prop(id: PropId) {
   return models.get(id) ?? null;
 }
 
+let signAtlas: THREE.Texture | null = null;
+
+/** The autobahn's road signs (public/textures/autobahn_signs.webp, see autobahnSigns.json), or null if it did not load. */
+export function autobahnSignAtlas() {
+  return signAtlas;
+}
+
 export async function loadProps() {
   const loader = new GLTFLoader();
   loader.setMeshoptDecoder(MeshoptDecoder);
-  await Promise.all(
-    (Object.entries(PROPS) as [PropId, PropDef][]).map(async ([id, def]) => {
+  const atlas = signAtlas
+    ? null
+    : new THREE.TextureLoader()
+        .loadAsync('/textures/autobahn_signs.webp')
+        .then((t) => {
+          t.colorSpace = THREE.SRGBColorSpace;
+          t.anisotropy = 8;
+          signAtlas = t;
+        })
+        .catch((err) => console.warn('autobahn sign atlas not loaded', err));
+  await Promise.all([
+    atlas,
+    ...(Object.entries(PROPS) as [PropId, PropDef][]).map(async ([id, def]) => {
       if (models.has(id)) return;
       try {
         const gltf = await loader.loadAsync(`/models/props/${def.file}`);
@@ -76,7 +105,7 @@ export async function loadProps() {
         console.warn(`scenery model ${def.file} not loaded, using the procedural shape`, err);
       }
     }),
-  );
+  ]);
 }
 
 /** Float copies of position / normal / uv (the optimiser quantises them), the rest dropped. */
@@ -118,7 +147,7 @@ function normalise(scene: THREE.Object3D, def: PropDef): PropModel {
   const toProp = new THREE.Matrix4()
     .makeRotationY(def.yaw ?? 0)
     .multiply(new THREE.Matrix4().makeScale(s, s, s))
-    .multiply(new THREE.Matrix4().makeTranslation(-ox, -box.min.y, -oz));
+    .multiply(new THREE.Matrix4().makeTranslation(-ox, -(def.base ?? box.min.y), -oz));
   const moving = def.moving ? (scene.getObjectByName(def.moving) ?? null) : null;
   const pivot = moving ? new THREE.Vector3().setFromMatrixPosition(moving.matrixWorld).applyMatrix4(toProp) : null;
   const groups = new Map<string, { material: THREE.MeshStandardMaterial; geos: THREE.BufferGeometry[]; moving: boolean }>();
