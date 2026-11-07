@@ -31,6 +31,9 @@ VIEWS = {
     # ... "1986 Toyota Sprinter Trueno 3-door GT APEX.jpg" (960 x 588) and the rear photo 06 (render at 960 x 725)
     'p03': ((2.6131, 1.7997, 5.6356), (0.2758, 0.757, 1.3403), 60.97),
     'p06': ((-0.0484, 1.2243, -3.8504), (0.0607, -0.1067, 0.968), 39.57),
+    # close-ups of the nose (side, 3/4) for the bumper and the grille band
+    'nose_side': ((5.0, 0.62, 1.80), (0.0, 0.55, 1.80), 80),
+    'nose_34': ((2.3, 0.95, 4.3), (0.25, 0.55, 1.85), 45),
 }
 ORTHO = {
     'o_side': ((8.0, 0.65, 0.0), (0.0, 0.65, 0.0), 4.8),

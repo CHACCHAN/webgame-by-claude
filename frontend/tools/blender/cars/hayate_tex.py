@@ -55,18 +55,24 @@ def _srgb(h):
 def tail_lamp():
     """u: inboard (garnish side) → outboard round the corner; v: bottom → top"""
     c = Canvas(512, 128)
-    c.fill(_srgb('#3c0607'))                                     # smoked lower lens
+    c.fill(_srgb('#560a0d'))                                     # lower lens (red, a little deeper than the top)
     U, V = c.U, c.V
-    # upper red band with fine horizontal ribs
+    # upper red band
     top = c.box(-1, 2, 0.50, 1.2)
-    c.paint(top, _srgb('#c4141a'))
-    ribs = (np.sin(V * 2 * np.pi * 18) > 0.6) * top
-    c.paint(ribs * 0.45, _srgb('#ff4a3c'))
+    c.paint(top, _srgb('#a4121a'))
     # a middle red line across the lower part and vertical flutes
     c.paint(c.box(-1, 2, 0.22, 0.27) * 0.8, _srgb('#9a0e12'))
     flutes = (np.sin(U * 2 * np.pi * 60) > 0.7) * (1 - top)
-    c.paint(flutes * 0.25, _srgb('#6a0a0c'))
-    # chrome-ish divider and the housing edge
+    c.paint(flutes * 0.25, _srgb('#7a1014'))
+    # the middle cell (over the reverse lamp, x 0.43-0.51 of 0.285-0.614: u 0.447-0.693) is a brighter red
+    c.paint(c.box(0.447, 0.693, 0.50, 1.2) * 0.85, _srgb('#d8221e'))
+    # r06: horizontal ribs across both halves (a dark groove with a lit edge above it), 6 per half
+    f = np.mod(V * 12.5, 1.0)
+    c.paint((f < 0.13) * 0.55, _srgb('#2a0507'))
+    c.paint(((f >= 0.13) & (f < 0.26)) * 0.30, _srgb('#ff5a48'))
+    # cell dividers, the split between the halves and the housing edge
+    for u in (0.447, 0.693):
+        c.paint(c.box(u - 0.004, u + 0.004, -1, 2) * 0.8, _srgb('#1a0a0a'))
     c.paint(c.box(-1, 2, 0.47, 0.50), _srgb('#1a1a1c'))
     edge = np.maximum(c.box(-1, 2, 0.0, 0.04), c.box(-1, 2, 0.96, 1.01))
     c.paint(edge, _srgb('#121214'))

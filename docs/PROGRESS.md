@@ -74,6 +74,22 @@ Blender processes) and checked against photos (photos only to measure) before th
     the stored token only on a name change, so a token the server no longer knew (e.g. after the 2026-11-04 reset of
     the players) failed every submission. It now checks the token every time and registers again on 401
     (`src/api/__tests__/client.test.ts`). No 422 or 5xx on run submissions in the log since 2026-11-04.
+- **AE86 (`hayate`): our own model in the game** (owner approved the sheet, 2026-11-07; deployed). Replaces Lexyc16's
+  Sketchfab model.
+  - Built by `tools/blender/cars/hayate*.py`, fitted to 6 photos with `tools/carfit` plus a body lattice (`hayate_ffd.py`,
+    `fitdata/hayate/ffd.json`). Silhouette IoU 0.961–0.979, p95 1.7–3.2 % of the car width (bar 1.5 %: not met).
+    Dark-line and lamp-line errors are well below round 1.
+  - Panda livery; black front bumper bar with white corners (the owner's choice); pop-up lamps modelled raised
+    (`popup_l` / `popup_r`, closed 0.36 rad).
+  - 42 k triangles, 15 materials.
+  - Game side: there is no `headlight` material, so `deriveAnchors` now takes the beams from each pod's `popup_lens`.
+    The tailpipe anchor comes from its mesh (the `CarSpec.exhaust` override is gone). The physics specs are
+    unchanged: track 1.42 against the model's 1.35, a 3 cm difference per side in the visual wheel position only, so
+    medals and bots stand. `car-import.json` has no hayate entry any more, so an import can't overwrite the model.
+  - Checked in Chrome (RX 5700 XT): garage at night (pods up and lit, beams on the road), at dawn (pods flush), and a
+    night race. vitest 61/61.
+  - Known differences: slight wedge left in the side view of the nose; no SPRINTER lettering on the right tail lamp
+    (it would take a 17th material).
 - **New course AUTOBAHN** (owner, 2026-11-06: "the Shinkansen and others never ran flat out, too many corners: make
   a new map, an Autobahn"; `a7e685f`, deployed 2026-11-07, bundle `index-Cb8bCzhs.js`). Built by two agents in
   parallel (course / scenery):

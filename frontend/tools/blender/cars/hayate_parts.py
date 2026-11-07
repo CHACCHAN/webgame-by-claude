@@ -12,6 +12,7 @@ import hayate_kit as K
 import hayate_body as BD
 import hayate_wheel as WH
 import hayate_popup as PU
+import hayate_ffd as FF
 import hayate_details as DT
 import hayate_tex as TX
 import hayate_interior as IN
@@ -52,7 +53,7 @@ def materials():
     M['popup_lens'] = _principled('popup_lens', '#dfe6ee', metallic=0.3, roughness=0.12, emissive='#fff4e0')
     M['interior'] = _principled('interior', '#2a2a2d', roughness=0.85)
     M['amber'] = _principled('amber', '#e07a10', roughness=0.2, emissive='#ff8a10')
-    M['reverse'] = _principled('reverse', '#d4d8dc', roughness=0.15)
+    M['reverse'] = _principled('reverse', '#b9bec3', metallic=0.35, roughness=0.08)   # clear lens over a reflector
     M['disc'] = _principled('disc', '#77787b', metallic=0.85, roughness=0.45)
     M['plate'] = _principled('plate', '#ffffff', roughness=0.5)
     # painted textures: the lenses glow through their own pattern (as in the game: emissiveMap = map)
@@ -61,8 +62,6 @@ def materials():
         img = paint()
         t = TX.apply(M[name], img)
         TX.emission_from(M[name], t)
-        if name == 'headlight':
-            TX.apply(M['reverse'], img)          # the reverse lamps share the clear lamps' prism pattern
     TX.apply(M['tire'], TX.tyre(), multiply='#202020')
     img = TX.plate()
     if img is not None:
@@ -71,9 +70,19 @@ def materials():
 
 
 def lamps_on(M, night):
-    for name, s in (('headlight', 8.0), ('popup_lens', 30.0), ('taillight', 3.0 if night else 0.4), ('amber', 0.0)):
+    for name, s in (('headlight', 8.0), ('popup_lens', 30.0), ('taillight', 3.0 if night else 0.12), ('amber', 0.0)):
         p = M[name].node_tree.nodes['Principled BSDF']
         p.inputs['Emission Strength'].default_value = s if night or name == 'taillight' else 0.0
+
+
+def silver(M):
+    """check renders only: paint and the black accent panels in one light silver, so the surfaces read"""
+    for name in ('paint', 'accent'):
+        p = M[name].node_tree.nodes['Principled BSDF']
+        p.inputs['Base Color'].default_value = K.srgb('#c9ccd1')
+        p.inputs['Metallic'].default_value = 0.55
+        p.inputs['Roughness'].default_value = 0.28
+        M[name].diffuse_color = K.srgb('#c9ccd1')
 
 
 # ---------------------------------------------------------------- assembly
@@ -83,7 +92,8 @@ def tris_of(obj):
     return sum(len(p.vertices) - 2 for p in obj.data.polygons)
 
 
-def build_all(body, root, M, count):
+def build_all(body, root, M, count, ffd=True):
+    """ffd: True = the fitted field in fitdata/hayate/ffd.json (when present), False = none, or a Lattice"""
     parts = {}
     hull = K.Mesh('hull')
     BD.build_hull(hull)
@@ -148,11 +158,15 @@ def build_all(body, root, M, count):
     asym = K.Mesh('details_asym')
     DT.fuel_lid(asym, bvh)
     DT.plates(asym, bvh)
+    DT.badges(asym, bvh)
     det.merge(asym)
     # the lamp lenses go to their own objects (the game finds the lamps from the bounds of the meshes using them)
     for name, target in (('headlight', lamps_f), ('taillight', lamps_r)):
         _split_material(det, name, target)
     for m in (det, lamps_f, lamps_r):
+        if not len(m.bm.faces):
+            # the n44 bumper has no clear lamp: no 'headlight' faces, no empty object
+            continue
         o = m.build(body, M, sharp_deg=45)
         count[m.name] = tris_of(o)
     cab = K.Mesh('cabin')
@@ -165,6 +179,11 @@ def build_all(body, root, M, count):
     DT.exhaust(ex)
     o = ex.build(body, M, name='exhaust_pipe')
     count['exhaust'] = tris_of(o)
+
+    # the front end drops ahead of the cowl (measured nose heights), then the fitted field (fitdata/hayate/ffd.json)
+    FF.deform_body(body, parts['popups'], BD.front_drop)
+    if ffd is not False:
+        parts['ffd'] = FF.apply_to_body(body, parts['popups'], None if ffd is True else ffd)
 
     count['wheels'] = 0
     for name, x, z, front in (('fl', BD.TRACK_F / 2, BD.ZF, True), ('fr', -BD.TRACK_F / 2, BD.ZF, True),

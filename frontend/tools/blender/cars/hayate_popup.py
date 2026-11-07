@@ -11,7 +11,7 @@ from mathutils import Matrix, Vector
 import hayate_kit as K
 import hayate_body as BD
 
-CLOSED = 0.64           # rad: folded → raised turns the lamp face from 37° down to vertical (measured: 0.64 on photos)
+CLOSED = 0.36           # rad: raised, the lamp rises ~11 cm and the lid tilts up ~12° at the front (photo of open lamps)
 FACE_H = 0.165          # height of the pod's front face (lamp 142 mm + bezel)
 LAMP_W, LAMP_H = 0.200, 0.142
 TUB_FLOOR = 0.585
@@ -93,7 +93,7 @@ def build(side=1):
     lens_r = rect(LAMP_W, LAMP_H, 0.006)
     n = len(outer_r)
     for k in range(n):
-        pod.face([outer_r[k], outer_r[(k + 1) % n], lens_r[(k + 1) % n], lens_r[k]], 'chrome', out=tuple(nface), smooth=False)
+        pod.face([outer_r[k], outer_r[(k + 1) % n], lens_r[(k + 1) % n], lens_r[k]], 'trim', out=tuple(nface), smooth=False)
     # the lens with UVs across it (the reflector / lens pattern texture)
     uv = []
     for p in lens_r:

@@ -1,0 +1,22 @@
+{
+ "photo": "work/q02.jpg",
+ "livery": "white",
+ "vref": 231.0,
+ "width_px": 1022.0,
+ "classes": {
+  "dark": {
+   "iou": 0.281,
+   "mean_pct": 1.38,
+   "p90_pct": 3.06,
+   "model_to_photo_mean_pct": 1.59,
+   "photo_to_model_mean_pct": 1.17
+  },
+  "lamp": {
+   "iou": 0.208,
+   "mean_pct": 1.58,
+   "p90_pct": 4.11,
+   "model_to_photo_mean_pct": 1.83,
+   "photo_to_model_mean_pct": 1.15
+  }
+ }
+}

@@ -1,0 +1,30 @@
+{
+ "lattice": {
+  "seg": [
+   6,
+   6,
+   16
+  ],
+  "lo": [
+   -1,
+   -0.1,
+   -2.4
+  ],
+  "hi": [
+   1,
+   1.5,
+   2.3
+  ],
+  "mirror": true
+ },
+ "ffdfit_args": "--ls 2 --l0 0.01 --lc 1 --laml 0.1 --every 3 --huber 1 --wrim 60 --sdy 0.05 --seg 6,6,16",
+ "rim_anchored_alternative": "--wrim 600 (cams_rim_anchored.json + ffd_rim_anchored.json)",
+ "silfit": "band 0.09, masks as in photos.json, pop-ups closed, Workbench silhouette + id renders",
+ "base_shape": "hayate_body.front_drop (nose 8.5 cm lower at the hood edge, 6.5 cm at the face) applied before the FFD",
+ "round2": {
+  "cams": "cams.json (round 1: cams_round1.json)",
+  "ffd": "../ffd.json from ffdfit --iters 6 --lc 1 --ls 2 --l0 0.01 --fixcam q02 (start: ffd round 1, cameras refit with --noffd --iters 8 --lc 0.3)",
+  "base_shape": "front_drop: hood drop x (distance from the cowl)^1.6 (NOSE_EXP), a convex hood line",
+  "metrics": "silfit_r2/ (loop2.py: silhouette + dark/lamp line distances, % of car width)"
+ }
+}

@@ -3,7 +3,7 @@ Toyota Sprinter Trueno AE86 (3-door GT-APEX, late model 1985-87) for TOUGE NOCTU
 numbers and our own painted textures (no outside model, no photo pixels). Run with Blender 5.x:
 
   blender -t 4 --background --factory-startup --python tools/blender/cars/hayate.py -- --out <file.glb>
-      [--render <dir> --views front34,rear34,... --samples N --size WxH] [--night] [--closed]
+      [--render <dir> --views front34,rear34,... --samples N --size WxH] [--night] [--closed] [--silver]
 
 Modules: hayate_kit (mesh helpers, export), hayate_body (hull, glasshouse, bumpers), hayate_parts (pop-ups, lamps,
 wheels, interior, details), hayate_tex (painted textures), hayate_stage (the check scene).
@@ -62,6 +62,8 @@ def main():
         import hayate_stage as S
         S.scene(night=NIGHT)
         P.lamps_on(mats, NIGHT)
+        if '--silver' in argv:
+            P.silver(mats)
         if '--transparent' in argv:
             g = bpy.data.objects.get('ground')
             g.hide_render = True

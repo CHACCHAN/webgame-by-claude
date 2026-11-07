@@ -429,23 +429,25 @@ def subdivide(mesh, levels=1, creases=None):
 # ---------------------------------------------------------------- strips laid on a surface
 
 
-def lay_strip(mesh, bvh, path, width, mat, lift=0.002, direction=None, smooth=True, uv_v=(0.0, 1.0), steps=None, u_scale=1.0):
+def lay_strip(mesh, bvh, path, width, mat, lift=0.002, direction=None, smooth=True, uv_v=(0.0, 1.0), steps=None, u_scale=1.0,
+              u0=0.0):
     """
     A ribbon `width` m wide laid on the surface along `path` (game-frame points near the surface): each point is
     pulled onto the surface (nearest point, or a ray along `direction`), offset by `lift` along the normal; the ribbon
-    runs across the path within the surface. Returns the laid centre points.
+    runs across the path within the surface. `width` may be a list (one per path point). Returns the laid centre points.
     """
+    widths = list(width) if isinstance(width, (list, tuple)) else [width] * len(path)
     pts = []
-    for p in path:
+    for p, w in zip(path, widths):
         if direction is not None:
             h = hit(bvh, tuple(Vector(p) - Vector(direction) * 0.5), direction)
         else:
             h = nearest(bvh, p)
         if h is None:
             continue
-        pts.append(h)
+        pts.append((h[0], h[1], w))
     rows_a, rows_b, cen = [], [], []
-    for k, (p, n) in enumerate(pts):
+    for k, (p, n, width) in enumerate(pts):
         a = pts[max(0, k - 1)][0]
         b = pts[min(len(pts) - 1, k + 1)][0]
         t = (b - a).normalized()
@@ -461,7 +463,7 @@ def lay_strip(mesh, bvh, path, width, mat, lift=0.002, direction=None, smooth=Tr
     L = [0.0]
     for k in range(1, len(cen)):
         L.append(L[-1] + (cen[k] - cen[k - 1]).length)
-    uvs = [[(l * u_scale, uv_v[0]) for l in L], [(l * u_scale, uv_v[1]) for l in L]]
+    uvs = [[(u0 + l * u_scale, uv_v[0]) for l in L], [(u0 + l * u_scale, uv_v[1]) for l in L]]
     mesh.grid([rows_a, rows_b], mat, uvs=uvs, smooth=smooth)
     return cen
 

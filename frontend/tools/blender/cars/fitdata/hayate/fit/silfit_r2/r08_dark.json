@@ -1,0 +1,22 @@
+{
+ "photo": "work/r08.jpg",
+ "livery": "white",
+ "vref": 211.0,
+ "width_px": 1493.0,
+ "classes": {
+  "dark": {
+   "iou": 0.291,
+   "mean_pct": 1.14,
+   "p90_pct": 2.48,
+   "model_to_photo_mean_pct": 1.28,
+   "photo_to_model_mean_pct": 1.02
+  },
+  "lamp": {
+   "iou": 0.217,
+   "mean_pct": 1.6,
+   "p90_pct": 3.12,
+   "model_to_photo_mean_pct": 1.46,
+   "photo_to_model_mean_pct": 1.8
+  }
+ }
+}

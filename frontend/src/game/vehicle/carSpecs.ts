@@ -110,9 +110,9 @@ const CARS: Record<RoadCarId, CarSpec> = {
     driftiness: 0.85,
     stats: { power: 5, grip: 6, drift: 9, weight: 9 },
     colors: { body: '#e8e6e1', accent: '#16181c' },
-    // pop-up lamps come with the model (imported raised, folded by day: CarImportConfig.popUps)
-    exhaust: [0.44, 0.3, -2.09],
-    model: { title: 'Toyota Corolla AE86 Trueno', author: 'Lexyc16', url: 'https://sketchfab.com/3d-models/toyota-corolla-ae86-trueno-fe02fba6302e450ea8424591493341ea', license: 'CC BY 4.0' },
+    // our own model (tools/blender/cars/hayate*.py, fitted to photos): pop-up lamps modelled raised (popup_l/_r, folded
+    // by day), the beams start at their lenses; the tailpipe anchor comes from its mesh
+    model: { title: 'スプリンタートレノ AE86 GT-APEX（後期）', author: 'TOUGE NOCTURNE', url: '', license: '自作', own: true },
   },
   raijin: {
     id: 'raijin',

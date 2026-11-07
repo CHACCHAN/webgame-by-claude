@@ -1,0 +1,38 @@
+{
+ "photo": "work/q02.jpg",
+ "render": "final/q02_sil.png",
+ "iou": 0.9748,
+ "render_to_photo_mean_pct": 0.71,
+ "render_to_photo_p95_pct": 2.02,
+ "photo_to_render_mean_pct": 5.56,
+ "photo_to_render_p95_pct": 30.55,
+ "max_pct": 38.6,
+ "band_px": 91,
+ "car_bbox_px": [
+  1009,
+  629
+ ],
+ "zones": {
+  "top-left": {
+   "mean_signed_pct": -0.31,
+   "p90_abs_pct": 1.78
+  },
+  "bottom-left": {
+   "mean_signed_pct": 0.35,
+   "p90_abs_pct": 4.82
+  },
+  "top-middle": {
+   "mean_signed_pct": -0.59,
+   "p90_abs_pct": 0.99
+  },
+  "top-right": {
+   "mean_signed_pct": 0.39,
+   "p90_abs_pct": 1.07
+  },
+  "bottom-right": {
+   "mean_signed_pct": -1.22,
+   "p90_abs_pct": 2.03
+  }
+ },
+ "note": "pct = % of the car bbox width in the image; signed + = model outline outside the photo outline"
+}

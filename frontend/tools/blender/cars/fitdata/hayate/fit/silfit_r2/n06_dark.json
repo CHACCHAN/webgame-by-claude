@@ -1,0 +1,22 @@
+{
+ "photo": "work/n06.jpg",
+ "livery": "white",
+ "vref": 217.0,
+ "width_px": 1384.0,
+ "classes": {
+  "dark": {
+   "iou": 0.408,
+   "mean_pct": 1.49,
+   "p90_pct": 4.32,
+   "model_to_photo_mean_pct": 2.02,
+   "photo_to_model_mean_pct": 0.55
+  },
+  "lamp": {
+   "iou": 0.011,
+   "mean_pct": 4.17,
+   "p90_pct": 15.5,
+   "model_to_photo_mean_pct": 5.5,
+   "photo_to_model_mean_pct": 1.36
+  }
+ }
+}

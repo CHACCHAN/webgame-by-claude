@@ -12,6 +12,8 @@ Figures: Toyota catalogue (length 4,205 mm, width 1,625, height 1,335, wheelbase
 """
 import math
 
+import numpy as np
+
 from mathutils import Matrix, Vector
 
 import hayate_kit as K
@@ -36,7 +38,8 @@ Z_HATCH = -1.975                    # hatch glass base
 Z_LID = 1.648                       # rear edge of the pop-up lids
 
 LID_BANDS = (7, 8)                  # the lids span the fender top and the hood corner (rows h7..h9)
-Y_TT = 0.475                        # two-tone line along the doors (black below)
+Y_TT = 0.500                        # two-tone line along the doors (black below; photos: 0.50, a body-colour band
+                                    # up to the black side stripe at 0.585-0.645)
 
 # ---------------------------------------------------------------- hull rows: (z, x, y) key stations per row
 # rows from the bottom centre up the side and over the hood to the top centre; CREASES break the section spline
@@ -59,14 +62,15 @@ HULL_ROWS = {
                [0.52, 0.515, 0.505, 0.49, Y_TT, Y_TT, Y_TT, Y_TT, 0.48, 0.49, 0.50, 0.50]),
     'h5': _row([0.785, 0.803, 0.809, 0.811, 0.812, 0.812, 0.8125, 0.811, 0.806, 0.800, 0.790, 0.776],
                [0.62, 0.625, 0.635, 0.645, 0.65, 0.65, 0.65, 0.66, 0.67, 0.68, 0.69, 0.69]),
+    # the side's character line: nearly level from the corner lamps (0.72) to the top of the tail lamp band (0.76)
     'h6': _row([0.785, 0.802, 0.808, 0.810, 0.811, 0.811, 0.811, 0.808, 0.800, 0.795, 0.785, 0.772],
-               [0.70, 0.71, 0.735, 0.775, 0.81, 0.83, 0.84, 0.855, 0.87, 0.885, 0.895, 0.895]),
+               [0.700, 0.705, 0.712, 0.722, 0.732, 0.738, 0.742, 0.748, 0.752, 0.756, 0.760, 0.760]),
     'h7': _row([0.763, 0.779, 0.792, 0.794, 0.783, 0.774, 0.774, 0.762, 0.745, 0.740, 0.732, 0.722],
                [0.745, 0.756, 0.766, 0.808, 0.866, 0.905, 0.915, 0.935, 0.952, 0.968, 0.980, 0.972]),
     'h8': _row([0.738, 0.752, 0.757, 0.758, 0.758, 0.752, 0.750, 0.740, 0.720, 0.715, 0.705, 0.692],
                [0.752, 0.765, 0.784, 0.820, 0.878, 0.917, 0.927, 0.947, 0.964, 0.980, 0.992, 0.985]),
-    'h9': _row([0.36] * 12, [0.762, 0.776, 0.795, 0.833, 0.891, 0.930, 0.940, 0.960, 0.977, 0.993, 1.002, 0.995]),
-    'h10': _row([0.0] * 12, [0.766, 0.779, 0.799, 0.837, 0.895, 0.934, 0.944, 0.964, 0.981, 0.997, 1.005, 0.998]),
+    'h9': _row([0.36] * 9 + [0.44, 0.50, 0.49], [0.762, 0.776, 0.795, 0.833, 0.891, 0.930, 0.940, 0.960, 0.977, 0.986, 0.951, 0.943]),
+    'h10': _row([0.0] * 12, [0.766, 0.779, 0.799, 0.837, 0.895, 0.934, 0.944, 0.964, 0.981, 0.990, 0.954, 0.946]),
 }
 HULL_ORDER = ['h0', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'h7', 'h8', 'h9', 'h10']
 HULL_CREASE = {'h1', 'h4', 'h6', 'h7'}          # sharp: floor edge, fender-top / belt crease
@@ -79,7 +83,27 @@ def _arch_knots(zc):
 
 
 HULL_KNOTS = sorted({Z_NOSE, 1.93, 1.86, Z_LID, *_arch_knots(ZF), Z_COWL, 0.40, 0.10, -0.20, -0.50, -0.80,
-                     *_arch_knots(ZR), -1.72, -1.86, Z_HATCH, -2.04, Z_TAIL}, reverse=True)
+                     *_arch_knots(ZR), -1.72, -1.86, -1.93, Z_HATCH, -2.005, -2.03, -2.05, -2.067, -2.08, Z_TAIL},
+                    reverse=True)
+
+
+# The belt (greenhouse base) behind the cowl is lower than the side-view tables say: on the photos the side glass is
+# ~0.40 m tall at the B-pillar (glass bottom ~0.875 m) and the quarter window's tip sits at ~0.89 m, z -1.84 (n32, n06,
+# r08, n08: glass height against the door). The shoulder rows (h7, h8) drop by this much behind the cowl.
+BELT_DROP = Table([(Z_COWL, 0.0), (0.30, 0.02), (-0.10, 0.045), (-0.55, 0.065), (-1.00, 0.075), (-1.45, 0.085),
+                   (-1.84, 0.095), (-1.975, 0.085), (Z_TAIL, 0.08)])
+BELT_ROWS = ('h7', 'h8')
+# the tail's plan corners are round (r ~0.12 m): the side rows pull in towards the rear face
+TAIL_R = 0.035
+
+
+def tail_round(x, z):
+    zc = Z_TAIL + TAIL_R
+    if z >= zc or x < 0.55:
+        return x
+    u = min(1.0, (zc - z) / TAIL_R)
+    w = min(1.0, (x - 0.55) / 0.20)
+    return x - w * TAIL_R * (1 - math.sqrt(max(0.0, 1 - u * u)))
 
 
 class Rows:
@@ -89,7 +113,12 @@ class Rows:
         self.t = {k: Table([(z, (x, y)) for z, x, y in v]) for k, v in table.items()}
 
     def __call__(self, name, z):
-        return self.t[name](z)
+        x, y = self.t[name](z)
+        if name in BELT_ROWS and z < Z_COWL:
+            y -= BELT_DROP(z)
+        if name not in ('h0', 'h9', 'h10'):
+            x = tail_round(x, z)
+        return x, y
 
 
 HULL = Rows(HULL_ROWS)
@@ -150,11 +179,26 @@ def hull_grid():
     return rows, band, zs
 
 
+Y_BAND = 0.762          # top of the black tail lamp band = bottom of the hatch panel
+Y_RBUMP = 0.490         # rear bumper top
+
+
+def tail_lean(y):
+    """how far the rear face sits forward of Z_TAIL at height y: the lamp band nearly upright, the hatch panel above
+    it leaning in and rolling over into the hatch top"""
+    if y <= 0.50:
+        return 0.0
+    if y <= Y_BAND:
+        return 0.012 * (y - 0.50) / (Y_BAND - 0.50)
+    d = y - Y_BAND
+    return 0.012 + 0.22 * d + 1.1 * d * d
+
+
 def tail_warp(p):
     """lean the tail panel: the top of the rear face sits further forward than its bottom (as on the photos)"""
     x, y, z = p
     w = smoothstep(-1.80, Z_TAIL, z)
-    return (x, y, z + w * max(0.0, y - 0.50) * 0.20)
+    return (x, y, z + w * tail_lean(y))
 
 
 def hull_material(band_lo, z0, z1, xmid=None):
@@ -174,9 +218,13 @@ def build_hull(mesh):
     rows, band, zs = hull_grid()
     nj, ni = len(rows), len(zs)
 
+    z_wrap = Z_TAIL + TAIL_R * (1 - math.cos(math.radians(62)))
+
     def mat(i, j):
         z0, z1 = zs[i], zs[i + 1]
         m = hull_material(band[j], z0, z1)
+        if band[j] in (4, 5) and (z0 + z1) / 2 < z_wrap:
+            return 'trim'                   # the black lamp band wraps round the rear corners with the lamps
         # the pop-up lids are separate (they swing): leave their opening
         if band[j] in LID_BANDS and (z0 + z1) / 2 > Z_LID:
             return None
@@ -202,16 +250,18 @@ def lid_grid():
 # ---------------------------------------------------------------- the glasshouse
 # centre-line profile of windscreen, roof and hatch glass: (z, y)
 TOP_CENTRE = Table([(0.730, 0.926), (0.60, 1.020), (0.41, 1.140), (0.25, 1.228), (0.13, 1.284), (0.0, 1.314), (-0.22, 1.334),
-                    (-0.50, 1.336), (-0.72, 1.326), (-0.90, 1.296), (-1.15, 1.223), (-1.50, 1.118), (-1.85, 1.037), (-1.975, 1.004)])
+                    (-0.50, 1.336), (-0.72, 1.326), (-0.90, 1.296), (-1.15, 1.223), (-1.50, 1.115), (-1.85, 1.012), (-1.975, 0.952)])
 # half width of the glass area edge (windscreen edge / roof edge / hatch glass edge) and the crown (y drop at the edge)
 TOP_EDGE = Table([(0.695, (0.668, 0.034)), (0.40, (0.628, 0.040)), (0.10, (0.570, 0.046)), (-0.20, (0.562, 0.050)), (-0.60, (0.556, 0.050)),
-                  (-0.85, (0.540, 0.040)), (-1.20, (0.528, 0.034)), (-1.60, (0.575, 0.024)), (-1.975, (0.602, 0.008))])
+                  (-0.85, (0.540, 0.040)), (-1.20, (0.556, 0.034)), (-1.60, (0.579, 0.024)), (-1.975, (0.602, 0.008))])
 
 Z_ATOP = 0.13           # windscreen top / A-pillar top
 Z_B0, Z_B1 = -0.490, -0.590   # B-pillar (door window rear edge, quarter window front edge)
-Z_CTOP = -0.85          # hatch glass top
-Z_QBOT = -1.70          # quarter window rear edge at the belt
-Z_QTOP = -1.64          # ... and at the top
+Z_CTOP = -0.98          # hatch glass top (photos: the glass starts ~0.1 m behind the roof's highest point)
+Z_GBOT = -1.945         # hatch glass bottom: a short body-colour lip behind it, then the hatch panel rolls down
+Z_QBOT = -1.84          # quarter window rear tip at the belt
+Z_QTOP = Z_QBOT         # the rail's knot over the quarter window's tip (the window's top edge is the row gq)
+Q_TOP_DROP = 0.035      # the side glass's top edge below the drip rail (door frame; the quarter window's front)
 
 
 def g_belt(z):
@@ -231,7 +281,7 @@ def g_rail(z):
 
 RAIL = Table([(Z_COWL, (0.745, 0.918)), (0.55, (0.721, 1.022)), (0.40, (0.694, 1.122)), (0.25, (0.666, 1.204)), (Z_ATOP, (0.644, 1.258)),
               (-0.10, (0.630, 1.274)), (-0.50, (0.624, 1.284)), (-0.80, (0.618, 1.273)), (-1.00, (0.606, 1.238)),
-              (-1.30, (0.615, 1.160)), (-1.60, (0.637, 1.078)), (-1.85, (0.652, 1.015)), (Z_HATCH, (0.657, 0.998))])
+              (-1.30, (0.615, 1.160)), (-1.60, (0.637, 1.075)), (-1.85, (0.652, 1.008)), (Z_HATCH, (0.657, 0.972))])
 
 
 def g_top(z, s):
@@ -243,9 +293,31 @@ def g_top(z, s):
 
 
 # rows of the greenhouse: name → fn(z) → (x, y)
+def g_quarter(z):
+    """gq: the side glass's top edge between g1 and g2. Along the door Q_TOP_DROP under the rail; over the quarter
+    window it leaves the rail at the B-pillar and comes down to the window's rear tip at the belt (the C-pillar's
+    lower edge, 5-9 cm under the roof edge in the middle: r03, n24); over the sail it hugs g1"""
+    x1, y1 = g_glass_bottom(z)
+    x2, y2 = g_rail(z)
+    h = max(1e-6, y2 - y1)
+    if z >= Z_B1:
+        f = 1 - Q_TOP_DROP / h
+    elif z > Z_QBOT:
+        t = (Z_B1 - z) / (Z_B1 - Z_QBOT)
+        x1e, y1e = g_glass_bottom(Z_QBOT)
+        d_end = g_rail(Z_QBOT)[1] - y1e
+        d = Q_TOP_DROP + (d_end - Q_TOP_DROP) * t ** 1.6
+        f = 1 - d / h
+    else:
+        f = 0.0
+    f = min(0.97, max(0.04, f))
+    return lerp(x1, x2, f), lerp(y1, y2, f)
+
+
 G_ROWS = [
     ('g0', g_belt),
     ('g1', g_glass_bottom),
+    ('gq', g_quarter),
     ('g2', g_rail),
 ]
 G_TOP_SUBS = 7          # rows across the windscreen / roof / hatch from the edge to the centre line
@@ -254,11 +326,23 @@ G_TOP_SUBS = 7          # rows across the windscreen / roof / hatch from the edg
 G_KNOTS = {
     'g0':    [Z_COWL, Z_ATOP, Z_B0, Z_B1, Z_QBOT, Z_HATCH],
     'g1':    [Z_COWL, Z_ATOP, Z_B0, Z_B1, Z_QBOT, Z_HATCH],
+    'gq':    [Z_COWL, Z_ATOP, Z_B0, Z_B1, Z_QBOT, Z_HATCH],
     'g2':    [Z_COWL, Z_ATOP, Z_B0, Z_B1, Z_QTOP, Z_HATCH],
     'edge':  [Z_COWL + 0.005, Z_ATOP, Z_B0, Z_B1, Z_CTOP, Z_HATCH],
-    'centre': [0.730, Z_ATOP - 0.01, Z_B0, Z_B1, Z_CTOP - 0.03, Z_HATCH],
+    'centre': [0.730, Z_ATOP - 0.01, Z_B0, Z_B1, Z_CTOP - 0.02, Z_HATCH],
 }
-G_COUNTS = [10, 9, 1, 11, 7]
+G_COUNTS = [10, 9, 1, 11, 12]
+G_GLASS_END = G_COUNTS[4] - 1        # hatch glass columns (the last one is the body-colour lip to Z_HATCH)
+G_GLASS_T = (Z_GBOT - Z_CTOP) / (Z_HATCH - Z_CTOP)
+
+
+def _col_t(k, s):
+    """knot parameter of column s in knot span k: uniform, except over the hatch, where the column G_GLASS_END
+    lands on the glass's lower edge"""
+    n = G_COUNTS[k]
+    if k == len(G_COUNTS) - 1:
+        return G_GLASS_T * s / G_GLASS_END
+    return s / n
 
 
 def _knot_z(name, i_knot, t):
@@ -267,11 +351,11 @@ def _knot_z(name, i_knot, t):
 
 
 def greenhouse_grid():
-    """rows[j][i]: j = g0, g1, g2, round-over to the edge (2), across the top (G_TOP_SUBS); i along the knots"""
+    """rows[j][i]: j = g0, g1, gq, g2, round-over to the edge (2), across the top (G_TOP_SUBS); i along the knots"""
     cols = []          # (knot index, t)
     for k, n in enumerate(G_COUNTS):
         for s in range(n):
-            cols.append((k, s / n))
+            cols.append((k, _col_t(k, s)))
     cols.append((len(G_COUNTS) - 1, 1.0))
     rows = []
     kinds = []
@@ -305,23 +389,61 @@ def greenhouse_grid():
         for k, t in cols:
             sq = s
             if q == 1 and k == 4:
-                sq = lerp(1 / G_TOP_SUBS, 0.02, t)     # the hatch glass frame: wide at the roof, a thin lip at the base
+                sq = lerp(0.075, 0.055, t)             # the hatch glass's narrow body-colour frame
             z = lerp(_knot_z('edge', k, t), _knot_z('centre', k, t), sq)
             x, y = g_top(z, sq)
             row.append((x, y, z))
         rows.append(row)
         kinds.append('edge' if q == 0 else ('centre' if q == G_TOP_SUBS else 'top'))
+    _conform_end(rows, cols)
     rows = [[tail_warp(p) for p in row] for row in rows]
     return rows, kinds, cols
+
+
+Z_SAIL_END = -1.90      # from here back the sail and the hatch glass's lower corners roll onto the hull's deck
+
+
+def _profile_at(pts, s):
+    """point at normalised arc length s along a 2-D polyline"""
+    d = [0.0]
+    for a, b in zip(pts[:-1], pts[1:]):
+        d.append(d[-1] + math.hypot(b[0] - a[0], b[1] - a[1]))
+    L = s * d[-1]
+    for k in range(1, len(d)):
+        if L <= d[k] or k == len(d) - 1:
+            t = 0.0 if d[k] - d[k - 1] < 1e-12 else min(1.0, (L - d[k - 1]) / (d[k] - d[k - 1]))
+            return lerp(pts[k - 1][0], pts[k][0], t), lerp(pts[k - 1][1], pts[k][1], t)
+
+
+def _conform_end(rows, cols):
+    """the greenhouse's last column must lie on the hull's section at Z_HATCH (the deck behind it rolls from the
+    shoulder over the chamfered corner to the centre, r06): over the sail's last stretch every greenhouse column is
+    pulled onto the hull's section (h8 → h10) at the same normalised arc length, fully at Z_HATCH"""
+    last = len(G_COUNTS) - 1
+    for i, (k, _) in enumerate(cols):
+        if k != last:
+            continue
+        col = [rows[j][i] for j in range(len(rows))]
+        d = [0.0]
+        for a, b in zip(col[:-1], col[1:]):
+            d.append(d[-1] + math.hypot(b[0] - a[0], b[1] - a[1]))
+        for j, (x, y, z) in enumerate(col):
+            w = smoothstep(Z_SAIL_END, Z_HATCH, z)
+            if w <= 0.0:
+                continue
+            pts, band = section(HULL, HULL_ORDER, HULL_CREASE, HULL_SUB, z)
+            prof = pts[band.index(8):]
+            tx, ty = _profile_at(prof, d[j] / d[-1])
+            rows[j][i] = (lerp(x, tx, w), lerp(y, ty, w), z)
 
 
 def greenhouse_material(kinds, j, col):
     """material of the face from row j (to j + 1) in column `col` (knot index, t)"""
     k, _ = col
     kind = kinds[j]
-    if kind == 'g0':                      # belt weatherstrip
-        return 'trim'
-    if kind == 'g1':                      # the side glass band
+    if kind == 'g0':                      # belt weatherstrip (doors and quarter window; the sail is body colour)
+        return 'trim' if k <= 3 else 'paint'
+    if kind == 'g1':                      # the side glass up to its top edge
         if k in (0, 1):
             return 'glass'
         if k == 2:
@@ -329,14 +451,17 @@ def greenhouse_material(kinds, j, col):
         if k == 3:
             return 'glass'                # quarter window
         return 'paint'                    # the sail
+    if kind == 'gq':                      # the top edge to the rail: the door's black sash, the C-pillar's panel
+        return 'trim' if k <= 2 else 'paint'
     if kind in ('g2', 'round'):
         return 'paint'
     # across the top: windscreen, roof, hatch glass
     if k == 0:
         return 'glass'
     if k == 4:
-        # the hatch glass sits inside a body-colour frame (the first strip in from the edge)
-        return 'paint' if kind == 'edge' else 'glass'
+        # the hatch glass sits inside a narrow body-colour frame (the first strip in from the edge) and stops at
+        # Z_GBOT, ~0.1 m short of the hatch's rear edge
+        return 'paint' if kind == 'edge' or col[1] >= G_GLASS_T - 1e-6 else 'glass'
     return 'paint'
 
 
@@ -400,7 +525,7 @@ def arch_parts(liner, lip, bvh):
         n = 40
         angs = [-ARCH_A + 2 * ARCH_A * k / n for k in range(n + 1)]
         # liner: from the inner wall (x = 0.50) out to the body side
-        xs = [0.50, 0.62, 0.74, 0.86]
+        xs = [0.50, 0.60, 0.70, 0.775]
         rows = [[(x, *arch_point(a, front=front)) for a in angs] for x in xs]
         # rows[j][i]: j = x, i = angle; normal d/di × d/dj points away from the axis → flip
         liner.grid(rows, 'interior', flip=True)
@@ -499,21 +624,55 @@ def build_nose(mesh):
     mesh.grid(rows, mat)
 
 
-def build_tail(mesh):
-    """the rear face of the hull (tail lamp band and hatch panel sit on it; dark behind the bumper)"""
-    zt = Z_TAIL
+TAIL_LEVELS = [0.31, 0.40, Y_RBUMP - 0.01, 0.535, 0.585, 0.64, 0.70, 0.735, Y_BAND, 0.785, 0.81]
 
-    def depth(t, u):
-        return 0.0
-    rows = _cap_rows(zt, 0.31, 18, depth)
-    rows = [[tail_warp((x, y, z)) for x, y, z in row] for row in rows]
-    ny = len(rows) - 1
+
+def tail_rows(n_top=7):
+    """the rear face: rows at fixed heights (level lines: the lamp band and the hatch panel's lower edge), then rows
+    blending into the top edge (hatch top centre → the rounded corner)"""
+    pts, band = ring(Z_TAIL)
+    k7 = band.index(7)
+    top = list(reversed(pts[k7:]))
+    side = pts[:k7 + 1]
+    nu = len(top) - 1
+
+    def side_x(y):
+        for a, b in zip(side[:-1], side[1:]):
+            if a[1] <= y <= b[1] or b[1] <= y <= a[1]:
+                t = 0 if abs(b[1] - a[1]) < 1e-9 else (y - a[1]) / (b[1] - a[1])
+                return K.lerp(a[0], b[0], t)
+        return side[-1][0] if y > side[-1][1] else side[0][0]
+    rows = []
+    for y in TAIL_LEVELS:
+        xr = side_x(y)
+        rows.append([(xr * i / nu, y, Z_TAIL) for i in range(nu + 1)])
+    base = rows[-1]
+    yl = TAIL_LEVELS[-1]
+    corner = top[-1]
+    for k in range(1, n_top + 1):
+        t = k / n_top
+        row = []
+        for i in range(nu + 1):
+            tx, ty = top[i]
+            if i == nu:
+                y = K.lerp(yl, corner[1], t)
+                row.append((side_x(y), y, Z_TAIL))
+            else:
+                row.append((K.lerp(base[i][0], tx, t), K.lerp(yl, ty, t), Z_TAIL))
+        rows.append(row)
+    return [[tail_warp(p) for p in row] for row in rows]
+
+
+def build_tail(mesh):
+    """the rear face of the hull: dark behind the bumper, the black lamp band (lamps and garnish sit on it), the body-
+    colour hatch panel above"""
+    rows = tail_rows()
 
     def mat(i, j):
-        y = rows[j][i][1]
-        if y < 0.47:
+        y = (rows[j][i][1] + rows[j + 1][i][1]) / 2
+        if y < Y_RBUMP:
             return 'interior'
-        return 'trim' if y < 0.78 else 'paint'        # the full-width black tail panel round the lamps
+        return 'trim' if y < Y_BAND else 'paint'
     # facing −z: flip
     mesh.grid(rows, mat, flip=True)
 
@@ -524,7 +683,8 @@ def build_tail(mesh):
 def sweep(mesh, path, profile, mat_fn, flip=False, front=True):
     """
     a profile swept along a plan path: path [(x, z)] (from the centre line outwards), profile [(out, y)] with `out`
-    along the path's outward horizontal normal; mat_fn(k) for the profile span k
+    along the path's outward horizontal normal; mat_fn(i, j) for the face between path points i, i+1 and profile
+    points j, j+1
     """
     n = len(path)
     rows = []
@@ -539,17 +699,18 @@ def sweep(mesh, path, profile, mat_fn, flip=False, front=True):
             nx, nz = (-tz / l, tx / l) if front else (tz / l, -tx / l)
             row.append((path[i][0] + nx * out, y, path[i][1] + nz * out))
         rows.append(row)
-    mesh.grid(rows, lambda i, j: mat_fn(j), flip=flip)
+    mesh.grid(rows, mat_fn, flip=flip)
     return rows
 
 
-def _plan(front, z_face, z_end, half, r_corner, bow, n_front=10, n_corner=8, n_side=6):
-    """plan path from the centre line round the corner and back along the side (x ≥ 0)"""
+def _plan(front, z_face, z_end, half, r_corner, bow, n_front=10, n_corner=8, n_side=6, x_knots=()):
+    """plan path from the centre line round the corner and back along the side (x ≥ 0); x_knots: extra points on the
+    face (material splits)"""
     s = 1 if front else -1
     pts = []
     xc = half - r_corner
-    for k in range(n_front + 1):
-        x = xc * k / n_front
+    xs = sorted(set([xc * k / n_front for k in range(n_front + 1)] + [x for x in x_knots if 0 < x < xc]))
+    for x in xs:
         pts.append((x, z_face - s * bow * (x / half) ** 2))
     zc = z_face - s * bow * (xc / half) ** 2 - s * r_corner
     for k in range(1, n_corner + 1):
@@ -562,30 +723,71 @@ def _plan(front, z_face, z_end, half, r_corner, bow, n_front=10, n_corner=8, n_s
 
 
 # front bumper: (outward offset from the plan path, y) from the top back edge, over the white bar, down the black face
-F_BUMPER_PROFILE = [(-0.075, 0.670), (-0.030, 0.678), (-0.002, 0.674), (0.010, 0.662), (0.015, 0.644), (0.014, 0.620),
-                    (0.008, 0.606), (-0.004, 0.597), (-0.006, 0.589), (-0.008, 0.520), (-0.010, 0.420), (-0.012, 0.330),
-                    (-0.018, 0.312), (-0.034, 0.288), (-0.060, 0.272), (-0.180, 0.278)]
-F_BUMPER_MATS = ['paint'] * 7 + ['trim'] + ['accent'] * 6 + ['interior']
-R_BUMPER_PROFILE = [(-0.070, 0.488), (-0.030, 0.494), (-0.008, 0.489), (0.005, 0.474), (0.010, 0.440), (0.008, 0.395),
-                    (0.002, 0.368), (-0.006, 0.360), (-0.008, 0.352), (-0.010, 0.320), (-0.016, 0.285), (-0.030, 0.258),
-                    (-0.060, 0.248), (-0.200, 0.255)]
-R_BUMPER_MATS = ['paint'] * 7 + ['trim'] + ['accent'] * 5 + ['interior']
+# (outward offset, height) before front_drop: the body-colour bar (0.52-0.63 m after the drop) over a groove, the
+# black apron set back and leaning in, a small lip at the bottom
+F_BUMPER_PROFILE = [(-0.062, 0.625), (-0.050, 0.680), (-0.030, 0.694), (-0.002, 0.694), (0.008, 0.687), (0.013, 0.670),
+                    (0.014, 0.645), (0.012, 0.618), (0.006, 0.600), (-0.003, 0.590), (-0.008, 0.584), (-0.010, 0.570), (-0.014, 0.500),
+                    (-0.020, 0.400), (-0.024, 0.330), (-0.014, 0.300), (-0.016, 0.278), (-0.040, 0.266), (-0.180, 0.270)]
+# the bar is its own volume (r04, r09, n44): a narrow top, a dark gap behind it to the grille band (its back face trim)
+F_BUMPER_MATS = ['trim'] + ['paint'] * 8 + ['trim'] + ['accent'] * 7 + ['interior']
+# n44 / c13 / n08 (the owner's choice): the bar is black across the front; the corners are body colour from the bar's
+# top down to the turn lamps' upper edge (profile point F_WHITE_TO, y 0.57), from just outboard of the turn lamps
+F_WHITE_X = 0.588
+F_WHITE_TO = 11
+
+
+def _front_bumper_mat(path):
+    def mat(i, j):
+        m = F_BUMPER_MATS[j]
+        if 1 <= j < F_WHITE_TO and (path[i][0] + path[i + 1][0]) / 2 > F_WHITE_X:
+            return 'paint'
+        return 'accent' if m == 'paint' else m
+    return mat
+R_BUMPER_PROFILE = [(-0.070, 0.488), (-0.030, 0.494), (-0.008, 0.489), (0.005, 0.476), (0.011, 0.455), (0.010, 0.434),
+                    (0.004, 0.424), (-0.004, 0.420), (-0.006, 0.414), (-0.008, 0.380), (-0.012, 0.330), (-0.018, 0.290),
+                    (-0.030, 0.262), (-0.060, 0.250), (-0.200, 0.255)]
+# r06 / n32: the body-colour face 0.49-0.42 m, a groove, the black lower half 0.42-0.25 m
+R_BUMPER_MATS = ['paint'] * 6 + ['trim'] + ['accent'] * 6 + ['interior']
 
 
 def bumper_paths():
     zf_end = ZF + ARCH_R + 0.035
     zr_end = ZR - ARCH_R - 0.035
-    front = _plan(True, Z_FBUMP, zf_end, 0.800, 0.085, 0.030)
-    rear = _plan(False, Z_RBUMP, zr_end, 0.820, 0.080, 0.020)
+    front = _plan(True, Z_FBUMP, zf_end, 0.800, 0.085, 0.030, x_knots=(F_WHITE_X,))
+    rear = _plan(False, Z_RBUMP, zr_end, 0.820, 0.130, 0.025)
     return front, rear
 
 
 def build_bumpers(mesh):
     front, rear = bumper_paths()
-    fr = sweep(mesh, front, F_BUMPER_PROFILE, lambda k: F_BUMPER_MATS[k], flip=True)
-    rr = sweep(mesh, rear, R_BUMPER_PROFILE, lambda k: R_BUMPER_MATS[k], flip=False, front=False)
+    fr = sweep(mesh, front, F_BUMPER_PROFILE, _front_bumper_mat(front), flip=True)
+    rr = sweep(mesh, rear, R_BUMPER_PROFILE, lambda i, j: R_BUMPER_MATS[j], flip=False, front=False)
     # close the side ends against the arches
     for rows, s in ((fr, 1), (rr, -1)):
         ring_pts = [row[-1] for row in rows]
         mesh.face(ring_pts, 'accent', out=(0, 0, -s), smooth=False)
     return fr, rr
+
+
+# ---------------------------------------------------------------- front end height
+# The side-view tables put the nose too high: on three solved photos (r03, n24, n06; cameras anchored on the wheel
+# rims) the hood's front edge is at 0.665-0.68 m, the bumper's body-colour bar at 0.52-0.63, its lower edge at
+# 0.20-0.23. The hood (above the fender crease) drops linearly from the cowl to the nose, the face below it ahead of
+# the front arch; the fitted field (hayate_ffd) comes after this.
+NOSE_DROP_HOOD = 0.085
+NOSE_DROP_FACE = 0.065
+# the hood's drop grows faster towards the nose (a convex hood line in side view, as on r02, not a straight wedge)
+NOSE_EXP = 1.6
+
+
+def front_drop(G):
+    """displacement (N, 3) for game-frame points G (N, 3)"""
+    y, z = G[:, 1], G[:, 2]
+    ra = np.clip((z - Z_COWL) / (Z_NOSE - Z_COWL), 0.0, 1.0)
+    t = np.clip((z - 1.55) / (1.95 - 1.55), 0.0, 1.0)
+    rb = t * t * (3 - 2 * t)
+    u = np.clip((y - 0.60) / 0.15, 0.0, 1.0)
+    s = u * u * (3 - 2 * u)
+    d = np.zeros_like(G)
+    d[:, 1] = -(NOSE_DROP_HOOD * s * ra ** NOSE_EXP + NOSE_DROP_FACE * (1 - s) * rb)
+    return d

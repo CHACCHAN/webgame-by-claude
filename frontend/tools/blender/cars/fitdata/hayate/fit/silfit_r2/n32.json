@@ -1,0 +1,42 @@
+{
+ "photo": "work/n32.jpg",
+ "render": "r2/it15/n32_sil.png",
+ "iou": 0.9608,
+ "render_to_photo_mean_pct": 0.64,
+ "render_to_photo_p95_pct": 1.67,
+ "photo_to_render_mean_pct": 3.22,
+ "photo_to_render_p95_pct": 13.0,
+ "max_pct": 19.16,
+ "band_px": 119,
+ "car_bbox_px": [
+  1318,
+  537
+ ],
+ "zones": {
+  "top-left": {
+   "mean_signed_pct": -0.29,
+   "p90_abs_pct": 1.25
+  },
+  "bottom-left": {
+   "mean_signed_pct": -0.69,
+   "p90_abs_pct": 1.38
+  },
+  "top-middle": {
+   "mean_signed_pct": -0.32,
+   "p90_abs_pct": 0.76
+  },
+  "bottom-middle": {
+   "mean_signed_pct": -0.23,
+   "p90_abs_pct": 0.53
+  },
+  "top-right": {
+   "mean_signed_pct": 0.74,
+   "p90_abs_pct": 1.59
+  },
+  "bottom-right": {
+   "mean_signed_pct": 0.77,
+   "p90_abs_pct": 2.61
+  }
+ },
+ "note": "pct = % of the car bbox width in the image; signed + = model outline outside the photo outline"
+}

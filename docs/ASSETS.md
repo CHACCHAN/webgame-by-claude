@@ -68,7 +68,7 @@ owner puts the zips into `~/Downloads` (2026-11-02).
 | `raijin` | Subaru Impreza WRX STi 2004 Custom | Mac CGI (@MACCGI) | https://sketchfab.com/3d-models/08296bc950364621b6174a3078bb19e0 | CC BY 4.0 | **in game** (53 k tris, 0.57 MB) |
 | `r34` | Nissan Skyline R34 GT-R | Lexyc16 | https://sketchfab.com/3d-models/ff8fb2251dfa4bb9979e7022c5a6666c | CC BY 4.0 | **in game** (50 k tris, 0.52 MB) |
 | `supra` | Toyota Supra mk4 | Black Snow (@BlackSnow02) | https://sketchfab.com/3d-models/8bebdee25b774067929bb33e648533ac | CC BY 4.0 | **in game** (82 k tris, 1.1 MB), modified — see below |
-| `hayate` | Toyota Corolla AE86 Trueno | Lexyc16 | https://sketchfab.com/3d-models/fe02fba6302e450ea8424591493341ea | CC BY 4.0 | **in game** (26 k tris, 0.2 MB), modified — see below |
+| `hayate` | Toyota Sprinter Trueno AE86 GT-APEX (late) | **own** (Blender, `tools/blender/cars/hayate*.py`) | — | own | **in game** since 2026-11-07 (42 k tris, 0.27 MB); fitted to 6 Commons photos (measuring only, `fitdata/hayate/ref/list.json`) |
 
 AE86 notes: chosen over the other delivered candidate, "Toyota Trueno AE86 (Initial D)" by Flamestroke
 (https://sketchfab.com/3d-models/40c0a445f8fa42568c7ecf208b6d97bd, 157 k tris at 1/10 scale; delivered, not used),

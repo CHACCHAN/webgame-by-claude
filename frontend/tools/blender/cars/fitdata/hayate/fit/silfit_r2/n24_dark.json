@@ -1,0 +1,22 @@
+{
+ "photo": "work/n24.jpg",
+ "livery": "red",
+ "vref": 252.0,
+ "width_px": 1344.0,
+ "classes": {
+  "dark": {
+   "iou": 0.601,
+   "mean_pct": 1.31,
+   "p90_pct": 3.57,
+   "model_to_photo_mean_pct": 1.35,
+   "photo_to_model_mean_pct": 1.27
+  },
+  "lamp": {
+   "iou": 0.189,
+   "mean_pct": 4.72,
+   "p90_pct": 13.76,
+   "model_to_photo_mean_pct": 6.48,
+   "photo_to_model_mean_pct": 1.49
+  }
+ }
+}

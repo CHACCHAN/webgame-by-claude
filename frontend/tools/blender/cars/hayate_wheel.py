@@ -43,12 +43,12 @@ def rim(mesh):
     """barrel, lip, the spoked face and the centre"""
     # barrel (seen through the openings): from the inner flange to just behind the face, facing the axle
     barrel = [(0.068, R_RIM - 0.004), (0.020, R_RIM - 0.006), (-0.040, R_RIM - 0.006), (-0.072, R_RIM - 0.002), (-0.074, R_FLANGE - 0.004)]
-    mesh.lathe(barrel, 48, mats='rim')
+    mesh.lathe(barrel, 48, mats='brake')                 # in the shade behind the openings
     # polished lip on the outside: flange round-over
     lip = [(0.068, R_FLANGE + 0.003), (0.078, R_FLANGE + 0.001), (0.080, R_FLANGE - 0.006), (0.074, R_RIM + 0.004), (0.060, R_RIM + 0.002)]
     mesh.lathe(lip, 48, mats='chrome')
     # the face: polar grid per spoke sector
-    r_hub, r_in, r_out, r_face = 0.058, 0.088, 0.163, R_RIM + 0.002
+    r_hub, r_in, r_out, r_face = 0.058, 0.084, 0.168, R_RIM + 0.002
 
     def face_x(r):
         # a flat face, barely proud at the hub: proud at the hub, falling towards the lip
@@ -61,9 +61,10 @@ def rim(mesh):
         if r <= r_in:
             return sector / 2
         t = (r - r_in) / (r_out - r_in)
-        return sector / 2 - K.lerp(0.014, 0.150, t ** 0.85)
+        # r03: at the rim the openings are a little wider than the spokes
+        return sector / 2 - K.lerp(0.012, 0.208, t ** 0.8)
 
-    radii = [r_hub, 0.066, 0.074, 0.081, r_in, 0.104, 0.120, 0.136, 0.150, r_out, 0.170, r_face]
+    radii = [r_hub, 0.066, 0.072, 0.078, r_in, 0.100, 0.116, 0.132, 0.148, 0.160, r_out, r_face]
     for k in range(N_SPOKES):
         a0 = k * sector
         rows = []
@@ -94,7 +95,7 @@ def rim(mesh):
             mid = Vector(((a[1] + b[1]) / 2, (a[2] + b[2]) / 2))
             cen = Vector(((loop[0][1] + loop[len(loop) // 2][1]) / 2, (loop[0][2] + loop[len(loop) // 2][2]) / 2))
             d = (cen - mid)
-            mesh.face([a, b, b2, a2], 'rim', out=(0.0, d.x, d.y), smooth=False)
+            mesh.face([a, b, b2, a2], 'brake', out=(0.0, d.x, d.y), smooth=False)
     # the black centre with four lug nuts and a small cap
     cen = [(face_x(r_hub) + 0.001, r_hub), (face_x(r_hub) - 0.004, r_hub - 0.004), (face_x(r_hub) - 0.010, 0.050), (face_x(r_hub) - 0.010, 0.0)]
     mesh.lathe(cen, 32, mats='rim')

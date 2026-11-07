@@ -250,6 +250,19 @@ function deriveAnchors(root: THREE.Object3D, mats: CarMaterials, anchors: CarRig
     const b = boxOf((m) => uses(m, mats.headlight));
     if (!b.isEmpty()) anchors.headlights.push(...halves(b));
   }
+  if (!anchors.headlights.length) {
+    // a car whose only headlamps are its pop-ups (modelled raised): the beams start at each pod's lens
+    for (const name of ['popup_l', 'popup_r']) {
+      const hinge = root.getObjectByName(name);
+      if (!hinge) continue;
+      const b = new THREE.Box3();
+      hinge.traverse((o) => {
+        const m = o as THREE.Mesh;
+        if (m.isMesh && ([] as THREE.Material[]).concat(m.material).some((x) => x.name === 'popup_lens')) b.expandByObject(m);
+      });
+      if (!b.isEmpty()) anchors.headlights.push(b.getCenter(new THREE.Vector3()).setZ(b.max.z));
+    }
+  }
   if (!anchors.taillights.length) {
     const b = boxOf((m) => uses(m, mats.taillight));
     if (!b.isEmpty()) anchors.taillights.push(...halves(b));

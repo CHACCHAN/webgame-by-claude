@@ -1,10 +1,70 @@
 {
- "p06": {
-  "photo": "ref/06_TOYOTA_SPRINTER_TRUENO_1600GT-APEX_E-AE86_REAR_IMAGE.jpg",
-  "fold": true,
-  "args": [
-   "--mask",
-   "fit/masks/p06.png"
-  ]
+ "_note": "photos (ref/list.json files) resized to work_size; the masks mark the car (255), background (0) and uncertain bands (128, ignored). Build tools/fit*.json from this with photo = the resized work image. Superseded: the p03/p06 fit of 2026-11-04.",
+ "work_width": 1600,
+ "photos": {
+  "r03": {
+   "ref": "03_1986_Toyota_Sprinter_Trueno_3-door_GT_APEX.jpg",
+   "work_size": [
+    1600,
+    979
+   ],
+   "band": 0.09,
+   "mask": "fit/masks/r03.png"
+  },
+  "n24": {
+   "ref": "21_Toyota_E-AE86_Sprinter_Trueno_3door_GT_APEX_Sports_Package_No.105_24102010052.jpg",
+   "work_size": [
+    1600,
+    1067
+   ],
+   "band": 0.09,
+   "mask": "fit/masks/n24.png"
+  },
+  "r08": {
+   "ref": "08_Toyota_SPRINTER_TRUENO_3door_GT_APEX_E-AE86-FCMVF_rear.jpg",
+   "work_size": [
+    1600,
+    1200
+   ],
+   "band": 0.09,
+   "mask": "fit/masks/r08.png"
+  },
+  "q02": {
+   "ref": "24_AE86.jpg",
+   "work_size": [
+    1455,
+    1076
+   ],
+   "band": 0.09,
+   "mask": "fit/masks/q02.png"
+  },
+  "n32": {
+   "ref": "22_Toyota_E-AE86_Sprinter_Trueno_3door_GT_APEX_Sports_Package_No.63_23101509460.jpg",
+   "work_size": [
+    1600,
+    1067
+   ],
+   "band": 0.09,
+   "mask": "fit/masks/n32.png"
+  },
+  "n06": {
+   "ref": "23_TOYOTA_TRUENO_AE86_haru_q.jpg",
+   "work_size": [
+    1600,
+    1067
+   ],
+   "band": 0.09,
+   "mask": "fit/masks/n06.png"
+  }
+ },
+ "superseded": {
+  "p06": {
+   "photo": "ref/06_TOYOTA_SPRINTER_TRUENO_1600GT-APEX_E-AE86_REAR_IMAGE.jpg",
+   "fold": true,
+   "args": [
+    "--mask",
+    "fit/masks/p06.png"
+   ]
+  }
  }
 }
