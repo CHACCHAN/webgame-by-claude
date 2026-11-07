@@ -74,6 +74,30 @@ Blender processes) and checked against photos (photos only to measure) before th
     the stored token only on a name change, so a token the server no longer knew (e.g. after the 2026-11-04 reset of
     the players) failed every submission. It now checks the token every time and registers again on 401
     (`src/api/__tests__/client.test.ts`). No 422 or 5xx on run submissions in the log since 2026-11-04.
+- **New course AUTOBAHN** (owner, 2026-11-06: "the Shinkansen and others never ran flat out, too many corners: make
+  a new map, an Autobahn"; `a7e685f`, deployed 2026-11-07, bundle `index-Cb8bCzhs.js`). Built by two agents in
+  parallel (course / scenery):
+  - Course: 7.8 km timed (8.6 km of road, start at s 100, 650 m run-off), −2.4 % on average, every radius ≥ 1300 m,
+    14.5 m wide. Zones: forest, overpass ×2, interchange, bridge (viaduct over a side valley), village. Landform
+    `PLATEAU` (river valley, villages, turbines). `CourseDesign` gained `startS`, `runoff`, `smoothing`, `formation`
+    (flat ground beside the road for the median and the opposite carriageway) and `aiTopSpeed` (140 m/s here; 62
+    elsewhere). `CourseInfo.style` = `'autobahn'` switches off the touge dressing.
+  - Scenery (`render/autobahnScenery.ts`, `autobahnTraffic.ts`, `autobahnTextures.ts`): 3-lane markings, median with
+    a double guardrail, the opposite carriageway with oncoming traffic, traffic ahead, invented German signs
+    (procedural atlas), overpasses with rain covers, an interchange with gantries, lamps and a decorative slip road
+    (the wall blocks it), a box-girder viaduct, noise walls, the village. Own props: sign gantry, emergency phone,
+    village house, farmhouse, church.
+  - Physics: past the finish, cars brake for the road left and trains get a retarder (`Game.stopBrake`). The
+    cockroach's downforce stops growing above 70 m/s (`CarSpec.downforceTopSpeed`): at ~395 km/h it flipped. It is
+    unchanged on the passes, where its vmax is ~226 km/h (re-checked: 75.9 / 62.9 / 55.3 s, medals unchanged).
+  - Top speeds (sim): E5 305 km/h, cockroach 423, R34 239. Medals for all 12 vehicles from standing-start sims;
+    3 rivals (portraits empty, silhouettes) and 6 CPU ghosts (seeded on deploy, shown on the live leaderboard).
+  - Performance (RX 5700 XT, full course): high 442 draw calls p50 / 572 max, 2.16 M triangles, GPU 4.5 ms; less
+    than 朧峠 (364 / 530, 4.2 M). The key art is an in-game screenshot.
+  - Checks: tsc, vitest 61/61, backend 17/17 (container, `--build`). Chrome autodrive runs on night, rain and dawn
+    with no console errors. Live: the bundle names the course, the assets are served, and `/api/content` lists
+    `autobahn`. E2E not run (its course-card count was updated to 4).
+  - Open: owner-supplied portraits, key art and music (it reuses an existing track).
 - **Cars: paused** (owner, 2026-11-04: "your cost is very high: finish everything but the cars; the cars use the
   external models; I'll restart them next week or later"). The six cars stay on the Sketchfab models with credits.
   Modelling by eye against photos did not converge (owner: "not the same as the real cars"), so a measured fit was

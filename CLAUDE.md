@@ -77,6 +77,8 @@ pending. `docs/PLAN.md` holds the design.
   car's ends). Retractable lamps: `CarSpec.popUpLamps` (runtime pods in `CarVisual`); dark lens textures: `tailLampGain`.
 - Courses live in `track/courses.ts` (design + `Landform` from `track/landforms.ts` + rivals, medals, music, art).
   After changing a course design, regenerate the CPU ghosts (`npm run seed:bots`) and re-check medals with the sim.
+  `CourseInfo.style`: `'touge'` (the three passes) or `'autobahn'` (motorway scenery in `render/autobahn*.ts`, no touge
+  dressing). The AI's speed cap is `CourseDesign.aiTopSpeed` (default 62 m/s); sims take the course with `COURSE=<id>`.
 - Online battle (≤3 players): lobby/start/results via `RoomController`; car states are presence-channel client events
   (`client-state`, ~12 Hz) relayed by Reverb, which runs inside the `app` container (entrypoint, `START_REVERB`), proxied by
   nginx at `/app/`. Reverb key/secret are generated per container; never commit them. Client: `store/online.ts`,

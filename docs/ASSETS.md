@@ -109,6 +109,10 @@ Since 2026-11-03 every scenery model is our own: built from numbers by Python sc
 fails to load. No third-party geometry or textures; dimensions from public figures and photos (used for measuring
 only). Street light, wind turbine (rotor turns), curve mirror, vending machine (front lit at night; generic drinks,
 no brands or logos), torii, stone lantern, bus stop, traffic cone.
+The AUTOBAHN course (2026-11-06) adds a sign gantry, an emergency phone, a village house, a farmhouse and a church.
+Its sign atlas `textures/autobahn_signs.webp` is painted procedurally by `tools/blender/props/paint_autobahn.py` (invented
+place names, no real road signs copied). Its noise-wall, anti-glare and fence textures are generated in code
+(`render/autobahnTextures.ts`). Course art `img/courses/autobahn.webp` is an in-game screenshot.
 
 The Sketchfab models used before (KloWorks, Glowbox 3D, guru2fifa, ditovirnantio, Sahir Virmani, Jamie McFarlane,
 Mikail Karaca; CC BY 4.0) and their import tool were removed.
