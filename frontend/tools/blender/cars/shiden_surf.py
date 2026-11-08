@@ -338,11 +338,13 @@ class Shell:
     def faces_where(self, pred):
         return [f for f in self.bm.faces if pred(f)]
 
-    def split(self, outline, axis, side, select, mat=None, delete=False, snap=True, max_snap=0.05):
+    def split(self, outline, axis, side, select, mat=None, delete=False, snap=True, max_snap=0.05, lock=False):
         """
         Split the shell along `outline` (2-D, in the plane across `axis`, e.g. 'x' → (z, y)) on the faces that
         `select(face, centre_game, normal_game)` accepts: faces inside get `mat` (or are deleted); the vertices on the
         border are moved onto the outline and back onto the surface (seen from `side` = +1 / −1 along the axis).
+        lock: vertices an earlier locked split moved stay put (two openings close together would otherwise drag a
+        shared vertex from one outline to the other), and the ones moved now are locked too.
         Returns the faces inside (if kept).
         """
         a_u, a_v, a_d = AXES[axis]
@@ -369,9 +371,14 @@ class Shell:
                     others = [g for g in e.link_faces if g is not f]
                     if not others or any(g not in inset for g in others):
                         border.update(e.verts)
+            locked = self.__dict__.setdefault('_locked', set())
             for vtx in border:
                 if not any(g not in inset for g in vtx.link_faces):
                     continue
+                if lock and vtx in locked:
+                    continue
+                if lock:
+                    locked.add(vtx)
                 c = list(G(vtx.co))
                 q = nearest_on(poly, (c[a_u], c[a_v]))
                 if math.hypot(q[0] - c[a_u], q[1] - c[a_v]) > max_snap:

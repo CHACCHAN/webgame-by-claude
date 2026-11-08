@@ -186,9 +186,9 @@ const CARS: Record<RoadCarId, CarSpec> = {
     driftiness: 0.75,
     stats: { power: 8, grip: 7, drift: 8, weight: 6 },
     colors: { body: '#f5c400', accent: '#111111' },
-    popUpLamps: { x: 0.57, z: 0.5 },
-    exhaust: [-0.515, 0.3, -2.16],
-    model: { title: 'Mazda RX-7 FD', author: 'Lexyc16', url: 'https://sketchfab.com/3d-models/mazda-rx-7-fd-d35ff630df614771b82e7b2f59035b1e', license: 'CC BY 4.0' },
+    // our own model (tools/blender/cars/shiden*.py, fitted to photos): pop-up lamps modelled raised (popup_l/_r), the
+    // beams start at their lenses; the tailpipe anchor comes from its mesh
+    model: { title: 'RX-7（FD3S 後期 Type RS）', author: 'TOUGE NOCTURNE', url: '', license: '自作', own: true },
   },
   supra: {
     id: 'supra',

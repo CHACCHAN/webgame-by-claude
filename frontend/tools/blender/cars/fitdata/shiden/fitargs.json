@@ -1,1 +1,42 @@
-{}
+{
+ "s08": {
+  "band": 0.03,
+  "mask": "masks2/s08.png"
+ },
+ "s11": {
+  "band": 0.03,
+  "mask": "masks2/s11.png"
+ },
+ "s12": {
+  "band": 0.03,
+  "mask": "masks2/s12.png"
+ },
+ "s13": {
+  "band": 0.03,
+  "mask": "masks2/s13.png"
+ },
+ "s14": {
+  "band": 0.03,
+  "mask": "masks2/s14.png"
+ },
+ "r01": {
+  "band": 0.03,
+  "mask": "masks2/r01.png"
+ },
+ "r03": {
+  "band": 0.03,
+  "mask": "masks2/r03.png"
+ },
+ "r11": {
+  "band": 0.03,
+  "mask": "masks2/r11.png"
+ },
+ "r18": {
+  "band": 0.03,
+  "mask": "masks2/r18.png"
+ },
+ "r19": {
+  "band": 0.03,
+  "mask": "masks2/r19.png"
+ }
+}

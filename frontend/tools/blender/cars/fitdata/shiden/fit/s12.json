@@ -1,0 +1,42 @@
+{
+ "photo": "s12 (ref/list.json)",
+ "render": "s12_sil.png (silrender, solved camera s12)",
+ "iou": 0.9608,
+ "render_to_photo_mean_pct": 0.34,
+ "render_to_photo_p95_pct": 1.03,
+ "photo_to_render_mean_pct": 0.62,
+ "photo_to_render_p95_pct": 2.71,
+ "max_pct": 3.84,
+ "band_px": 38,
+ "car_bbox_px": [
+  1264,
+  413
+ ],
+ "zones": {
+  "top-left": {
+   "mean_signed_pct": 0.12,
+   "p90_abs_pct": 0.43
+  },
+  "bottom-left": {
+   "mean_signed_pct": -0.3,
+   "p90_abs_pct": 1.37
+  },
+  "top-middle": {
+   "mean_signed_pct": -0.02,
+   "p90_abs_pct": 0.68
+  },
+  "bottom-middle": {
+   "mean_signed_pct": 0.36,
+   "p90_abs_pct": 0.4
+  },
+  "top-right": {
+   "mean_signed_pct": -0.14,
+   "p90_abs_pct": 0.66
+  },
+  "bottom-right": {
+   "mean_signed_pct": 0.05,
+   "p90_abs_pct": 0.63
+  }
+ },
+ "note": "pct = % of the car bbox width in the image; signed + = model outline outside the photo outline"
+}

@@ -74,6 +74,16 @@ Blender processes) and checked against photos (photos only to measure) before th
     the stored token only on a name change, so a token the server no longer knew (e.g. after the 2026-11-04 reset of
     the players) failed every submission. It now checks the token every time and registers again on 401
     (`src/api/__tests__/client.test.ts`). No 422 or 5xx on run submissions in the log since 2026-11-04.
+- **RX-7 (`shiden`): our own model in the game** (owner approved the sheet, 2026-11-08; deployed). Replaces Lexyc16's
+  Sketchfab model.
+  - Fitted to 10 photos (5 Type RS, 5 Spirit R in a showroom). Mean silhouette IoU 0.968, mean p95 1.50 %;
+    5 photos pass every condition. Length set to the official 4285 mm.
+  - Pop-ups modelled raised (`popup_l` / `popup_r`, closed 0.68 rad).
+  - 57 k triangles, 16 materials.
+  - Game side: `deriveAnchors` now prefers the pop-up lenses for the beams, because the RX-7's 'headlight' material
+    is its bumper parking lamps. The runtime pods (`CarSpec.popUpLamps`) and the exhaust override are gone.
+  - Physics unchanged: track 1.50 against the model's 1.46.
+  - Checked in the garage at night (pods up and lit) and at dawn (flush). vitest 61/61.
 - **AE86 (`hayate`): our own model in the game** (owner approved the sheet, 2026-11-07; deployed). Replaces Lexyc16's
   Sketchfab model.
   - Built by `tools/blender/cars/hayate*.py`, fitted to 6 photos with `tools/carfit` plus a body lattice (`hayate_ffd.py`,

@@ -217,7 +217,7 @@ def build(body, mats, counts, cuts=None):
                         lambda f, c, n, s=side: c[0] * s > 0.45, delete=True)
     # openings: the main intake, the rear plate recess
     shell.split(intake_outline(), 'z', 1, lambda f, c, n: c[2] > 1.8 and n[2] > 0.2, delete=True)
-    shell.split(plate_recess_outline(), 'z', -1, lambda f, c, n: c[2] < -1.9 and n[2] < -0.2, mat='trim')
+    shell.split(plate_recess_outline(), 'z', -1, lambda f, c, n: c[2] < -1.9 and n[2] < -0.2, mat='paint')   # s14: body colour
     # glass: the shell is opened under each pane; the pane is laid on the untrimmed surface with a black band
     # (frit / seal) round it that hides the opening's ragged edge
     ws = lambda f, c, n: c[1] > 0.75 and -0.15 < c[2] < 0.7 and n[1] > 0.0

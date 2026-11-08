@@ -36,11 +36,26 @@ def lid_outline(s=1, inset=0.0):
     return [(s * x, z) for x, z in pts]
 
 
+def _refine(shell, s, passes=1):
+    """finer faces on the bumper corner, so the lamp and fog openings (4 cm apart) are cut cleanly"""
+    import bmesh
+    for _ in range(passes):
+        edges = set()
+        for f in shell.bm.faces:
+            c = G(f.calc_center_median())
+            n = G(f.normal)
+            if c[2] > 1.6 and n[2] > 0.1 and 0.38 < c[0] * s < 0.78 and 0.20 < c[1] < 0.56:
+                edges.update(f.edges)
+        bmesh.ops.subdivide_edges(shell.bm, edges=list(edges), cuts=1, use_grid_fill=True)
+    shell.bm.normal_update()
+
+
 def cut(shell):
     for s in (1, -1):
+        _refine(shell, s)
         for outline in (combo_outline(s), fog_outline(s)):
             shell.split(outline, 'z', 1, lambda f, c, n, s=s: c[2] > 1.6 and n[2] > 0.1 and c[0] * s > 0.3,
-                        delete=True)
+                        delete=True, lock=True)
     for s in (1, -1):
         shell.split(lid_outline(s), 'y', 1, lambda f, c, n, s=s: c[0] * s > 0.35 and c[1] > 0.5 and n[1] > 0.25,
                     delete=True)
@@ -236,23 +251,26 @@ def shrink(poly, d):
 
 
 def combo_outline(s):
-    ctrl = [(0.440, 0.472), (0.446, 0.512), (0.490, 0.535), (0.580, 0.552), (0.675, 0.576), (0.722, 0.582),
-            (0.739, 0.562), (0.716, 0.538), (0.640, 0.512), (0.560, 0.488), (0.490, 0.462)]
+    """the front combination lamp (photos r01, s08, back-projected onto the fitted body): a near-level lozenge, its
+    round outer end a little higher, the inner end the lowest and fullest"""
+    ctrl = [(0.730, 0.482), (0.712, 0.508), (0.660, 0.519), (0.600, 0.519), (0.540, 0.513), (0.495, 0.498),
+            (0.465, 0.472), (0.452, 0.440), (0.474, 0.418), (0.540, 0.421), (0.625, 0.429), (0.690, 0.441),
+            (0.718, 0.457)]
     return [(s * x, y) for x, y in smooth_outline(ctrl, 4)]
 
 
 # the rear lamp band: one smoked strip across the tail (x from −X_END to X_END), lamps outboard of ±X_LAMP
-X_END, X_LAMP = 0.748, 0.355
+X_END, X_LAMP = 0.765, 0.430
 
 
 def band_edges(x):
-    """bottom and top of the rear band at x (bundle cameras of r19 / r11: a thin garnish high up in the middle,
-    y 0.765–0.80; the lamps lower and taller, y 0.66–0.78 at x 0.55); the outer ends are rounded"""
-    t = abs(x) / X_END
-    top = 0.800 - 0.045 * t * t
-    lamp = _smooth(0.20, 0.40, abs(x))
-    bot = 0.765 - 0.105 * lamp + 0.012 * t * t
-    x0 = 0.67
+    """bottom and top of the rear band at x (photo s14 back-projected: a thin dark strip high up in the middle,
+    y 0.78-0.83; the lamp sections deeper, down to y 0.64 from x 0.48 outwards); the outer ends are rounded"""
+    t = abs(x) / 0.82
+    top = 0.828 - 0.070 * t * t
+    lamp = _smooth(0.33, 0.50, abs(x))
+    bot = 0.781 - 0.135 * lamp + 0.010 * t * t
+    x0 = 0.69
     if abs(x) > x0:
         f = math.sqrt(max(0.0, 1 - ((abs(x) - x0) / (X_END - x0)) ** 2))
         mid = (top + bot) / 2 + 0.008 * (1 - f)
@@ -293,6 +311,10 @@ def tail_band(m, shell):
     for s in (1, -1):
         a, b = (X_LAMP + 0.008, X_END - 0.006) if s > 0 else (-(X_END - 0.006), -(X_LAMP + 0.008))
         strip(m, shell, a, b, 'taillight', 0.004, 24, uv=True, inset=0.006)
+    # the high-mount stop lamp in the middle of the band (s14)
+    stop = smooth_outline([(0.145, 0.795), (0.150, 0.800), (0.145, 0.805), (-0.145, 0.805), (-0.150, 0.800),
+                           (-0.145, 0.795)], 3)
+    patch(m, shell, stop, 'z', -1, 'reflector', lift=0.004, rings=1)
     # the band's frame: a thin dark lip standing proud round the edge
     edge = [(x, band_edges(x)[1]) for x in np.linspace(-X_END, X_END, 61)] + \
            [(x, band_edges(x)[0]) for x in np.linspace(X_END, -X_END, 61)]
@@ -339,9 +361,25 @@ def disc(m, z_back, cx, cy, rx, ry, mat, lift, uv=False, n=20):
 
 
 def fog_outline(s):
-    ctrl = [(0.440, 0.296), (0.560, 0.288), (0.650, 0.300), (0.690, 0.335), (0.672, 0.385), (0.590, 0.405),
-            (0.470, 0.400), (0.430, 0.350)]
+    """the corner opening holding the fog lamp (photos r01, s08): a rounded box, its top rising inwards"""
+    ctrl = [(0.430, 0.255), (0.520, 0.245), (0.650, 0.250), (0.692, 0.272), (0.716, 0.322), (0.716, 0.356),
+            (0.600, 0.372), (0.432, 0.388), (0.415, 0.345)]
     return [(s * x, y) for x, y in smooth_outline(ctrl, 4)]
+
+
+def _box(m, c, size, mat):
+    cx, cy, cz = c
+    hx, hy, hz = size[0] / 2, size[1] / 2, size[2] / 2
+    for ax in range(3):
+        for sgn in (-1, 1):
+            q = []
+            for a, b in ((-1, -1), (1, -1), (1, 1), (-1, 1)):
+                v = [0, 0, 0]
+                v[ax], v[(ax + 1) % 3], v[(ax + 2) % 3] = sgn, a, b
+                q.append((cx + v[0] * hx, cy + v[1] * hy, cz + v[2] * hz))
+            o = [0, 0, 0]
+            o[ax] = sgn
+            m.face(q, mat, smooth=False, out=tuple(o))
 
 
 def ellipse(cx, cy, rx, ry, n=20):
@@ -355,25 +393,36 @@ def build(body, shell, mats, counts):
         # front combination lamp: a recessed unit — dark housing, round projector in a chrome ring, a chrome
         # reflector outboard and a small amber segment at the tip
         back = pocket(m, shell, combo_outline(s), 0.035, 'gloss_black', 'gloss_black')
-        disc(m, back, s * 0.492, 0.499, 0.032, 0.032, 'chrome', 0.004)
-        disc(m, back, s * 0.492, 0.499, 0.023, 0.023, 'headlight', 0.008, uv=True)
-        disc(m, back, s * 0.615, 0.533, 0.034, 0.016, 'chrome', 0.003)
-        disc(m, back, s * 0.700, 0.556, 0.016, 0.009, 'amber', 0.005)
-        # fog lamp deep in its own corner intake
+        disc(m, back, s * 0.537, 0.466, 0.034, 0.034, 'chrome', 0.004)
+        disc(m, back, s * 0.537, 0.466, 0.025, 0.025, 'headlight', 0.008, uv=True)
+        disc(m, back, s * 0.648, 0.474, 0.034, 0.031, 'chrome', 0.003)
+        disc(m, back, s * 0.648, 0.474, 0.027, 0.025, 'amber', 0.006)
+        # fog lamp at the inner end of its corner opening
+        # (a chrome-ringed reflector bowl behind clear glass; two dark slats across the opening's outer part)
         back = pocket(m, shell, fog_outline(s), 0.06, 'trim', 'trim')
-        disc(m, back, s * 0.530, 0.346, 0.042, 0.038, 'gloss_black', 0.010)
-        disc(m, back, s * 0.530, 0.346, 0.033, 0.030, 'lens_clear', 0.016)
-        # side marker (amber) on the front wing, side reflector (red) on the rear quarter
-        patch(m, shell, ellipse(0.646, 0.574, 0.022, 0.010), 'x', s, 'amber', lift=0.002, rings=2)
+        disc(m, back, s * 0.510, 0.300, 0.049, 0.047, 'gloss_black', 0.008)
+        disc(m, back, s * 0.510, 0.300, 0.044, 0.042, 'chrome', 0.012)
+        disc(m, back, s * 0.510, 0.300, 0.037, 0.035, 'headlight', 0.016, uv=True)
+        for y in (0.292, 0.326):
+            xs = np.linspace(0.570, 0.700, 4)
+            for xa, xb in zip(xs[:-1], xs[1:]):
+                xm = (xa + xb) / 2
+                box_z = back(s * xm, y) + 0.030
+                _box(m, (s * xm, y, box_z), (xb - xa + 0.002, 0.009, 0.024), 'gloss_black')
+        # side marker (amber lozenge, s12) on the front wing, side reflector (red) on the rear quarter
+        marker = smooth_outline([(0.774, 0.582), (0.755, 0.597), (0.700, 0.599), (0.680, 0.582), (0.700, 0.566),
+                                 (0.755, 0.567)], 4)
+        patch(m, shell, marker, 'x', s, 'amber', lift=0.002, rings=2)
         patch(m, shell, ellipse(-1.697, 0.445, 0.030, 0.008), 'x', s, 'reflector', lift=0.002, rings=2)
         # bumper: red reflector / rear fog bar with the clear reverse lamp at its inner end
-        bar = [(s * x, y) for x, y in smooth_outline([(0.395, 0.474), (0.615, 0.470), (0.622, 0.490),
-                                                      (0.400, 0.500)], 3)]
+        # (photo s14: 0.50-0.765 across, y 0.40-0.455; the clear reverse lamp is the inner 40 %)
+        bar = [(s * x, y) for x, y in smooth_outline([(0.500, 0.432), (0.512, 0.457), (0.740, 0.440),
+                                                      (0.766, 0.418), (0.748, 0.400), (0.515, 0.405)], 3)]
         patch(m, shell, bar, 'z', -1, 'gloss_black', lift=0.002, rings=2)
-        red = clip(shrink(bar, 0.004), 0.47, True, s)
-        rev = clip(shrink(bar, 0.004), 0.47, False, s)
-        patch(m, shell, red, 'z', -1, 'reflector', lift=0.004, rings=2)
-        patch(m, shell, rev, 'z', -1, 'lens_clear', lift=0.004, rings=2)
+        # (s14: a long red oval, the clear lamp an inset at its inner end with red all round it)
+        patch(m, shell, shrink(bar, 0.004), 'z', -1, 'reflector', lift=0.004, rings=2)
+        rev = clip(shrink(bar, 0.009), 0.600, False, s)
+        patch(m, shell, rev, 'z', -1, 'lens_clear', lift=0.006, rings=2)
     tail_band(m, shell)
     counts['lamps'] = m.tris()
     m.build(body, mats, weld=1e-6)

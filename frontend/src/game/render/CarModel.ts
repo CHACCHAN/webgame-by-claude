@@ -247,11 +247,8 @@ function deriveAnchors(root: THREE.Object3D, mats: CarMaterials, anchors: CarRig
   };
   const uses = (m: THREE.Mesh, mat: THREE.Material) => (Array.isArray(m.material) ? m.material.includes(mat) : m.material === mat);
   if (!anchors.headlights.length) {
-    const b = boxOf((m) => uses(m, mats.headlight));
-    if (!b.isEmpty()) anchors.headlights.push(...halves(b));
-  }
-  if (!anchors.headlights.length) {
-    // a car whose only headlamps are its pop-ups (modelled raised): the beams start at each pod's lens
+    // pop-up lamps (modelled raised) are the headlamps: the beams start at each pod's lens (a 'headlight' material
+    // elsewhere is then a parking lamp that only glows)
     for (const name of ['popup_l', 'popup_r']) {
       const hinge = root.getObjectByName(name);
       if (!hinge) continue;
@@ -262,6 +259,10 @@ function deriveAnchors(root: THREE.Object3D, mats: CarMaterials, anchors: CarRig
       });
       if (!b.isEmpty()) anchors.headlights.push(b.getCenter(new THREE.Vector3()).setZ(b.max.z));
     }
+  }
+  if (!anchors.headlights.length) {
+    const b = boxOf((m) => uses(m, mats.headlight));
+    if (!b.isEmpty()) anchors.headlights.push(...halves(b));
   }
   if (!anchors.taillights.length) {
     const b = boxOf((m) => uses(m, mats.taillight));

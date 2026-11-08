@@ -16,9 +16,16 @@ from shiden_surf import Mesh, lay_on, ribbon, smooth_outline, resample, patch
 
 def cut(shell):
     # black lip under the front bumper, black valance under the rear one
-    shell.split([(-0.62, -0.2), (0.62, -0.2), (0.62, 0.212), (0.0, 0.215), (-0.62, 0.212)],
+    shell.split([(-0.62, -0.2), (0.62, -0.2), (0.62, 0.200), (0.0, 0.203), (-0.62, 0.200)],
                 'z', 1, lambda f, c, n: c[2] > 1.72 and n[2] > 0.2 and n[1] < 0.7, mat='trim')
-    shell.split([(-0.70, -0.2), (0.70, -0.2), (0.70, 0.335), (0.45, 0.350), (0.0, 0.355), (-0.45, 0.350), (-0.70, 0.335)], 'z', -1, lambda f, c, n: c[2] < -1.85 and n[2] < -0.2 and n[1] < 0.7, mat='trim')
+    # (photo s14: body colour down to y 0.26 behind the plate, the black rising to 0.32 under the reflectors)
+    shell.split([(-0.70, -0.2), (0.70, -0.2), (0.70, 0.325), (0.55, 0.300), (0.40, 0.275), (0.0, 0.262), (-0.40, 0.275),
+                 (-0.55, 0.300), (-0.70, 0.325)], 'z', -1, lambda f, c, n: c[2] < -1.85 and n[2] < -0.2 and n[1] < 0.7,
+                mat='trim')
+    # the air outlets behind the front wheels: the shell is opened, a recess is built into it
+    for s in (1, -1):
+        shell.split(outlet_outline(0.0), 'x', s, lambda f, c, n, s=s: c[0] * s > 0.7 and n[0] * s > 0.5 and
+                    0.5 < c[2] < 0.85 and 0.25 < c[1] < 0.53, delete=True)
     # the underside
     idx = shell.mesh.slot('trim')
     for f in shell.bm.faces:
@@ -92,27 +99,39 @@ def tube_z(m, c, r, z0, z1, mat, n=16, inner=None, mat_in='trim'):
 
 
 def intake(m, shell):
-    """the duct behind the central mouth: black walls, a dark ribbed back"""
+    """the duct behind the central mouth: the bumper rolls in round its edge (body colour: the bright lip along the
+    bottom in photos r01 / s08), black walls run back to a ribbed core, a black bar crosses it low down"""
     half = SH.INTAKE
     outline = [(x, y) for x, y in half] + [(-x, y) for x, y in reversed(half[1:-1])]
-    rim = [(x, y, SH.front_face_z(x, y) + 0.004) for x, y in resample(outline, 0.03)]
-    depth = 0.15
-    zb = min(p[2] for p in rim) - depth
-    cx = 0.0
-    cy = np.mean([p[1] for p in rim])
-    n = len(rim)
+    P = resample(outline, 0.025)
+    n = len(P)
+    c2 = P.mean(axis=0)
+    inward = []
     for k in range(n):
-        a, b = rim[k], rim[(k + 1) % n]
-        q = [a, b, (b[0] * 0.97, b[1] + (cy - b[1]) * 0.15, zb), (a[0] * 0.97, a[1] + (cy - a[1]) * 0.15, zb)]
-        mid = np.mean(q, axis=0)
-        m.face(q, 'trim', out=(cx - mid[0], cy - mid[1], 0))
-    back = [(p[0] * 0.97, p[1] + (cy - p[1]) * 0.15, zb) for p in rim]
+        t = P[(k + 1) % n] - P[k - 1]
+        d = np.array((-t[1], t[0])) / max(np.linalg.norm(t), 1e-9)
+        inward.append(d if np.dot(d, c2 - P[k]) > 0 else -d)
+    zf = [SH.front_face_z(x, y) + 0.004 for x, y in P]
+    ring = lambda a, b: [(P[k][0] + inward[k][0] * a, P[k][1] + inward[k][1] * a, zf[k] - b) for k in range(n)]
+    rings = [ring(0.0, 0.0), ring(0.003, 0.006), ring(0.005, 0.016)]
+    depth = 0.20
+    zb = min(zf) - depth
+    cy = float(c2[1])
+    back = [(p[0] * 0.97, p[1] - (cy - p[1]) * 0.10, zb) for p in rings[-1]]
+    for ra, rb, mat in ((rings[0], rings[1], 'paint'), (rings[1], rings[2], 'paint'), (rings[2], back, 'trim')):
+        for k in range(n):
+            k2 = (k + 1) % n
+            q = [ra[k], ra[k2], rb[k2], rb[k]]
+            mid = np.mean(q, axis=0)
+            m.face(q, mat, out=(-0.2 * mid[0], cy - mid[1], 0.3 if mat == 'paint' else 0.0))
     m.face(back, 'trim', smooth=False, out=(0, 0, 1))
     # a mesh-like back: thin dark horizontal ribs
     ys = [p[1] for p in back]
     for j in range(4):
         y = min(ys) + (max(ys) - min(ys)) * (j + 0.5) / 4
-        box(m, (0.0, y, zb + 0.02), (0.78, 0.006, 0.03), 'gloss_black')
+        box(m, (0.0, y, zb + 0.02), (0.62, 0.006, 0.03), 'gloss_black')
+    # the bar across the mouth (photo r01: 4 cm under the plate's foot), set back from the face
+    box(m, (0.0, 0.262, SH.front_face_z(0.0, 0.262) - 0.06), (0.64, 0.014, 0.02), 'brake')
 
 
 # ---------------------------------------------------------------- plates
@@ -154,8 +173,15 @@ def plate(m, centre, front):
 
 
 WING_LE, WING_Y, WING_CHORD, WING_AOA = -1.85, 0.925, 0.20, math.radians(6)
-WING_SPAN = 0.585          # half span of the blade (it ends in the pods' tops)
-POD_X = (0.43, 0.555)      # the pods' centre at the deck → at the top (swept outwards as they rise)
+WING_SPAN = 0.580          # half span of the blade (its ends sit on the stays' tops)
+# the stays (photo s14 close up, s13): seen from behind each is an L — the blade's end turns down into a broad upright
+# at the outside, which bends round into a thick foot running inwards along the deck's crest to x 0.36; both are
+# long fore and aft (rounded slabs), the foot reaching further forward than the blade
+STAY_PATH = [(0.584, None), (0.597, 0.075), (0.585, 0.042), (0.540, 0.031), (0.450, 0.029), (0.360, 0.024)]
+#             (|x|, centre height over the deck; None = under the blade)
+STAY_T = (0.032, 0.030, 0.022)               # half thickness: upright, foot, tip
+STAY_Z = ((-2.000, -1.850), (-1.955, -1.770))  # fore-aft extent: under the blade .. along the foot
+STAY_DECK_Z = -1.94                          # behind this the tail rolls down: the foot stands on the deck's crest
 
 
 def wing_y(x):
@@ -191,35 +217,54 @@ def wing(m, shell):
             out = np.mean(q, axis=0) - (a.mean(axis=0) + b.mean(axis=0)) / 2
             out[0] = 0
             m.face([tuple(p) for p in q], 'paint', out=tuple(out))
-    # the pods: horizontal teardrop sections (round front, pointed back... reversed: long tapering nose running
-    # forward down the deck, full rounded tail under the blade), lofted from the deck to a rounded top
-    y_top = wing_y(WING_SPAN) + chord * math.tan(WING_AOA) + 0.030
+    for sec in (S[0], S[-1]):
+        m.face([tuple(p) for p in (sec if sec is S[-1] else sec[::-1])], 'paint', smooth=False,
+               out=(float(np.sign(sec[0][0])), 0, 0))
+    # the arms' tops follow the blade's mean line, 4 mm under it
+    y_blade = lambda z: wing_y(WING_SPAN) + min(1.0, max(0.0, (WING_LE - z) / chord)) * chord * math.tan(WING_AOA) - 0.004
+    nu = 16
+
+    def deck(x, z):
+        h = shell.hit((x, 3.0, max(z, STAY_DECK_Z)), (0, -1, 0))
+        return h[0][1] if h is not None else 0.82
+
     for s in (1, -1):
+        zmid = sum(STAY_Z[0]) / 2
+        P = [np.array((s * x, y_blade(zmid) if hgt is None else deck(s * x, zmid) + hgt)) for x, hgt in STAY_PATH]
+        P = [P[0] + (P[0] - P[1]) * 0.3] + P + [P[-1] + (P[-1] - P[-2]) * 0.3]
+        path = []
+        for i in range(1, len(P) - 2):
+            for t in np.linspace(0, 1, 4, endpoint=False):
+                p0, p1, p2, p3 = P[i - 1], P[i], P[i + 1], P[i + 2]
+                path.append(0.5 * (2 * p1 + (-p0 + p2) * t + (2 * p0 - 5 * p1 + 4 * p2 - p3) * t * t +
+                                   (-p0 + 3 * p1 - 3 * p2 + p3) * t ** 3))
+        path.append(P[-2])
+        n = len(path)
         secs = []
-        levels = 9
-        for i in range(levels + 1):
-            t = i / levels
-            cx = s * (POD_X[0] + (POD_X[1] - POD_X[0]) * t ** 0.8)
-            z_back = -1.995 - 0.05 * t
-            z_front = -1.70 + (-1.93 - -1.70) * t ** 0.7
-            half = 0.060 - 0.022 * t
-            if t > 0.75:            # round the top over
-                k = (t - 0.75) / 0.25
-                f = math.sqrt(max(0.0, 1 - k * k))
-                half *= max(f, 0.08)
-                zm = (z_front + z_back) / 2
-                z_front = zm + (z_front - zm) * max(f, 0.08) ** 0.5
-                z_back = zm + (z_back - zm) * max(f, 0.08) ** 0.5
+        for k, c in enumerate(path):
+            u = k / (n - 1)
+            tg = path[min(k + 1, n - 1)] - path[max(k - 1, 0)]
+            tg = tg / np.linalg.norm(tg)
+            across = np.array((-tg[1], tg[0]))                     # in the (x, y) plane
+            g = min(1.0, u / 0.45)
+            g = g * g * (3 - 2 * g)                                # upright → foot
+            za = STAY_Z[0][0] + (STAY_Z[1][0] - STAY_Z[0][0]) * g
+            zb = STAY_Z[0][1] + (STAY_Z[1][1] - STAY_Z[0][1]) * g
+            T = STAY_T[0] + (STAY_T[1] - STAY_T[0]) * g
+            if u > 0.8:                                            # the foot thins to a rounded tip
+                e = (u - 0.8) / 0.2
+                T += (STAY_T[2] - STAY_T[1]) * e
+                f = math.sqrt(max(0.15, 1 - e ** 4))
+                za, zb = (za + zb) / 2 - (zb - za) / 2 * f, (za + zb) / 2 + (zb - za) / 2 * f
+            zc, L = (za + zb) / 2, (zb - za) / 2
             sec = []
-            for j in range(14):
-                a = 2 * math.pi * j / 14
-                u = (1 - math.cos(a)) / 2                      # 0 at the front, 1 at the back
-                w = math.sin(a) * half * (u ** 0.55) * (1.0 - 0.25 * u)
-                z = z_front + (z_back - z_front) * u
-                x = cx + w
-                h = shell.hit((x, 3.0, z), (0, -1, 0))
-                y0 = (h[0][1] - 0.008) if h is not None else 0.80
-                sec.append((x, y0 + (y_top - y0) * t, z))
+            for j in range(nu):
+                th = 2 * math.pi * j / nu
+                ca, sa = math.cos(th), math.sin(th)
+                a_ = T * math.copysign(abs(sa) ** 0.7, sa)
+                z = zc + L * math.copysign(abs(ca) ** 0.7, ca)
+                tilt = (y_blade(z) - y_blade(zmid)) * (1 - g)          # the top follows the blade's incidence
+                sec.append((c[0] + across[0] * a_, c[1] + across[1] * a_ + tilt, z))
             secs.append(sec)
         loft(m, secs, 'paint', caps=True, smooth=True)
 
@@ -227,21 +272,30 @@ def wing(m, shell):
 # ---------------------------------------------------------------- mirrors, wipers, handles
 
 
+# door mirror head in the final (photo-fitted) shape: centre |x|, y, z and radii; measured on head-on, side and 3/4
+# photos (fitdata/shiden: the head's outline drawn from the solved cameras). The FFD moves the body afterwards, so the
+# head is placed where the deformation brings it onto these numbers.
+MIRROR = {'x': 0.915, 'y': 0.86, 'z': 0.12, 'rx': 0.097, 'ry': 0.075, 'rz': 0.08}
+
+
 def mirrors(m, shell):
-    """small aero mirrors: a teardrop head (round nose, tapering back to the glass) on a short curved stalk from the
-    door's front top corner, all body colour"""
+    """aero mirrors: an egg-shaped head (long round nose, short back holding the glass) on a slim neck that rises
+    from the door's front top corner to the head's inner underside, all body colour"""
+    import shiden_ffd as FFD
+    M = MIRROR
+    rx, ry, rz = M['rx'], M['ry'], M['rz']
     for s in (1, -1):
-        base = np.array(shell.hit((s * 2.0, 0.872, 0.31), (-s, 0, 0))[0])
-        hc = np.array((s * 0.838, 0.912, 0.30))
+        tgt = np.array((s * M['x'], M['y'], M['z']))
+        hc = tgt.copy()
+        for _ in range(3):
+            hc = tgt - (FFD.deform_game(hc[None])[0] - hc)
         nu, nv = 16, 9
-        rx, ry, rz = 0.086, 0.052, 0.056
         rings = []
         for j in range(1, nv):
             phi = math.pi * j / nv                     # 0 at the nose (+z), π at the back
             ring = []
             for i in range(nu):
                 th = 2 * math.pi * i / nu
-                # aero section: flatter top, fuller bottom, outer end rounder than the inner
                 x = rx * math.sin(phi) * math.cos(th)
                 y = ry * math.sin(phi) * math.sin(th) * (0.85 if math.sin(th) > 0 else 1.0)
                 z = rz * math.cos(phi) * (1.25 if phi < math.pi / 2 else 0.35)
@@ -261,23 +315,116 @@ def mirrors(m, shell):
             i2 = (i + 1) % nu
             m.face([last[i], last[i2], glass[i2], glass[i]], 'paint', smooth=False, out=(0, 0, -1))
         m.face(glass, 'chrome', smooth=False, out=(0, 0, -1))
-        # stalk: a flattened arm curving up and out from the door to the head's inner underside
-        tip = hc + (-s * rx * 0.55, -ry * 0.55, 0.0)
-        ctrl = [base + (s * 0.004, 0, 0), base + (s * 0.03, 0.012, 0.008), tip + (-s * 0.012, -0.008, 0.004), tip]
+        # neck: from the door skin up and out into the head's inner underside, flared at the door
+        top = hc + (-s * rx * 0.42, -ry * 0.55, 0.004)
+        base = np.array(shell.hit((s * 2.0, hc[1] - ry - 0.05, hc[2] + 0.012), (-s, 0, 0))[0])
+        mid = base + (s * 0.012, 0.03, 0.0)
+        ctrl = [base - (s * 0.004, 0, 0), mid, top - (s * 0.006, 0.012, 0), top + (s * 0.004, 0.012, 0)]
         secs = []
         for k, p in enumerate(ctrl):
-            w = 0.030 - 0.010 * k / 3
-            h = 0.011
-            secs.append([tuple(p + (0, -h, -w)), tuple(p + (0, -h, w)), tuple(p + (0, h, w)), tuple(p + (0, h, -w))])
+            a = ctrl[min(k + 1, 3)] - ctrl[max(k - 1, 0)]
+            t = a / np.linalg.norm(a)
+            wz = np.array((0.0, 0.0, 1.0))
+            wb = np.cross(t, wz); wb /= np.linalg.norm(wb)
+            w = (0.040, 0.030, 0.028, 0.030)[k]
+            h = (0.022, 0.015, 0.014, 0.016)[k]
+            secs.append([tuple(p - wz * w - wb * h), tuple(p + wz * w - wb * h), tuple(p + wz * w + wb * h),
+                         tuple(p - wz * w + wb * h)])
         loft(m, secs, 'paint', caps=False)
 
 
+# the air outlet behind each front wheel (photo s12, picked on the solved camera, (z, y)): a scoop pressed into the
+# wing, a rounded parallelogram leaning back, with a dark slot in its upper front part
+OUTLET = [(0.762, 0.489), (0.679, 0.495), (0.665, 0.488), (0.634, 0.417), (0.599, 0.346), (0.583, 0.294),
+          (0.691, 0.285), (0.795, 0.306), (0.791, 0.399)]
+OUTLET_SLOT = [(0.738, 0.472), (0.680, 0.479), (0.661, 0.438), (0.662, 0.369), (0.682, 0.333), (0.727, 0.349),
+               (0.747, 0.397)]
+
+
+def outlet_outline(grow):
+    return [tuple(p) for p in _grow(smooth_outline(OUTLET, 4), grow)]
+
+
+def _grow(poly, d):
+    """offset a convex-ish closed 2-D outline outwards by d (inwards if negative), along the vertex normals"""
+    P = np.asarray(poly, float)
+    n = len(P)
+    c = P.mean(axis=0)
+    out = []
+    for k in range(n):
+        t = P[(k + 1) % n] - P[k - 1]
+        nn = np.array((t[1], -t[0])) / max(np.linalg.norm(t), 1e-9)
+        if np.dot(nn, P[k] - c) < 0:
+            nn = -nn
+        out.append(P[k] + nn * d)
+    return np.array(out)
+
+
+def _ray_poly(c, d, poly):
+    """distance from c along the unit 2-D direction d to the outline (the farthest crossing)"""
+    best = None
+    n = len(poly)
+    for k in range(n):
+        a, b = np.asarray(poly[k]), np.asarray(poly[(k + 1) % n])
+        e = b - a
+        den = d[0] * (-e[1]) + d[1] * e[0]
+        if abs(den) < 1e-12:
+            continue
+        w = a - c
+        t = (w[0] * (-e[1]) + w[1] * e[0]) / den
+        u = (d[0] * w[1] - d[1] * w[0]) / den
+        if t > 0 and -1e-9 <= u <= 1 + 1e-9:
+            best = t if best is None else max(best, t)
+    return best
+
+
 def air_outlet(m, shell):
-    """the outlet behind each front wheel: its vertical slot, dark"""
+    """the scoop: a dish from the wing's surface down into the slot (body colour, its edge crisp), the slot's black
+    walls going on into the wing, and the side badge ahead of it"""
+    outer = outlet_outline(0.003)
+    slot = smooth_outline(OUTLET_SLOT, 4)
+    cs = np.mean(np.asarray(slot), axis=0)
+    N = 36
+    D1, D2 = 0.030, 0.075
+    ts = (0.0, 0.10, 0.25, 0.45, 0.70, 1.0)
     for s in (1, -1):
-        slot = smooth_outline([(0.795, 0.365), (0.765, 0.345), (0.735, 0.360), (0.722, 0.440), (0.730, 0.520),
-                               (0.755, 0.545), (0.785, 0.530), (0.800, 0.450)], 4)
-        patch(m, shell, slot, 'x', s, 'trim', lift=0.002, rings=3)
+        def at(z, y, depth):
+            h = shell.hit((s * 3.0, y, z), (-s, 0, 0))
+            x = h[0][0] if h is not None else s * 0.86
+            return (x - s * depth, y, z)
+        rings = [[] for _ in ts]
+        deep = []
+        for k in range(N):
+            ang = 2 * math.pi * k / N
+            d = np.array((math.cos(ang), math.sin(ang)))
+            ro, rs = _ray_poly(cs, d, outer), _ray_poly(cs, d, slot)
+            for i, t in enumerate(ts):
+                r = ro + (rs - ro) * t
+                depth = -0.0006 if t == 0 else D1 * (1 - (1 - t) ** 2)
+                z, y = cs + d * r
+                rings[i].append(at(z, y, depth))
+            z, y = cs + d * rs * 0.9
+            deep.append(at(z, y, D2))
+        for i in range(len(ts) - 1):
+            for k in range(N):
+                k2 = (k + 1) % N
+                m.face([rings[i][k], rings[i][k2], rings[i + 1][k2], rings[i + 1][k]], 'paint', out=(s, 0, 0))
+        last = rings[-1]
+        for k in range(N):
+            k2 = (k + 1) % N
+            q = [last[k], last[k2], deep[k2], deep[k]]
+            mid = np.mean(q, axis=0)
+            m.face(q, 'trim', out=(0.0, cs[1] - mid[1], cs[0] - mid[2]))
+        m.face(deep, 'trim', smooth=False, out=(s, 0, 0))
+        # the badge on the wing ahead of the scoop (s12): a chrome-rimmed black shield, a small rotor in it
+        shield = smooth_outline([(0.632, 0.601), (0.600, 0.604), (0.566, 0.600), (0.572, 0.576), (0.600, 0.548),
+                                 (0.627, 0.576)], 4)
+        patch(m, shell, shield, 'x', s, 'chrome', lift=0.0015, rings=2)
+        patch(m, shell, [tuple(p) for p in _grow(shield, -0.0035)], 'x', s, 'gloss_black', lift=0.0025, rings=2)
+        rotor = [(0.599 + 0.010 * math.cos(a + math.pi / 2), 0.582 + 0.010 * math.sin(a + math.pi / 2))
+                 for a in (2 * math.pi * i / 3 for i in range(3))]
+        rotor = smooth_outline(rotor, 4)
+        patch(m, shell, rotor, 'x', s, 'chrome', lift=0.0035, rings=1)
 
 
 def wipers(m, shell):
@@ -411,18 +558,86 @@ def cabin(m):
 
 
 def exhaust(mats, body, counts):
+    """twin round tips under the bumper's right-hand side (photo s14: 75 mm across, outboard under the reflector)"""
     m = Mesh('exhaust_tip')
-    x, y = -0.465, 0.300
-    z1 = SH.rear_face_z(x, y) - 0.025
-    tube_z(m, (x, y), 0.050, z1 + 0.30, z1, 'chrome', n=20)
+    for x in (-0.478, -0.556):
+        y = 0.290
+        z1 = SH.rear_face_z(-0.517, y) - 0.025
+        tube_z(m, (x, y), 0.037, z1 + 0.30, z1, 'chrome', n=16)
     counts['exhaust'] = m.tris()
     m.build(body, mats, weld=1e-6)
+
+
+# ---------------------------------------------------------------- badges (own shapes; the only font is Noto Sans CJK)
+
+
+FONT = '/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc'
+
+
+def lettering(m, shell, text, x0, x1, yc, h, lift=0.003):
+    """chrome letters laid on the tail: the text's box stretched from x0 to x1 (reading as seen from behind), h tall"""
+    import bpy
+    font = bpy.data.fonts.load(FONT, check_existing=True)
+    cu = bpy.data.curves.new('badge_text', 'FONT')
+    cu.body = text
+    cu.font = font
+    cu.resolution_u = 3
+    ob = bpy.data.objects.new('badge_text', cu)
+    bpy.context.scene.collection.objects.link(ob)
+    bpy.context.view_layer.update()
+    ev = ob.evaluated_get(bpy.context.evaluated_depsgraph_get())
+    me = ev.to_mesh()
+    me.calc_loop_triangles()
+    V = np.array([(v.co.x, v.co.y) for v in me.vertices])
+    T = [tuple(t.vertices) for t in me.loop_triangles]
+    ev.to_mesh_clear()
+    bpy.data.objects.remove(ob)
+    bpy.data.curves.remove(cu)
+    g0, g1 = V.min(axis=0), V.max(axis=0)
+    pts2 = [(x0 + (x1 - x0) * (gx - g0[0]) / (g1[0] - g0[0]), yc - h / 2 + h * (gy - g0[1]) / (g1[1] - g0[1]))
+            for gx, gy in V]
+    P = lay_on(shell, pts2, 'z', -1, lift)
+    for a, b, c in T:
+        if P[a] is None or P[b] is None or P[c] is None:
+            continue
+        m.face([tuple(P[a]), tuple(P[b]), tuple(P[c])], 'chrome', smooth=False, out=(0, 0, -1))
+
+
+def emblem(m, shell, cx, cy, rx, ry, side):
+    """the maker's badge as our own shape: a chrome oval ring, dark inside, a chrome wing (a broad V with an inner
+    tulip) across it; side +1 on the nose, −1 on the tail"""
+    ell = lambda a, b, n=28: [(cx + a * math.cos(2 * math.pi * i / n), cy + b * math.sin(2 * math.pi * i / n))
+                              for i in range(n)]
+    patch(m, shell, ell(rx, ry), 'z', side, 'chrome', lift=0.002, rings=2)
+    patch(m, shell, ell(rx - 0.0045, ry - 0.0045), 'z', side, 'gloss_black', lift=0.003, rings=2)
+    w = min(rx, ry) * 0.11
+    for poly in ([(-0.84, 0.22), (-0.52, 0.06), (-0.20, -0.36), (0.0, -0.74), (0.20, -0.36), (0.52, 0.06),
+                  (0.84, 0.22)],
+                 [(-0.30, 0.46), (-0.12, -0.20), (0.0, -0.74), (0.12, -0.20), (0.30, 0.46)]):
+        pts = [(cx + u * rx, cy + v * ry) for u, v in poly]
+        ribbon(m, shell, pts, 'z', side, 'chrome', width=w, lift=0.004, closed=False, step=0.004)
+
+
+def badges(m, shell):
+    """front: the maker's badge on the nose over the plate (r01); tail (s14): the badge in the middle of the
+    garnish, RX-7 on its left, mazda on its right, the hatch lock under the badge, the seam along the garnish's foot"""
+    emblem(m, shell, 0.0, 0.546, 0.038, 0.022, 1)
+    emblem(m, shell, 0.0, 0.721, 0.040, 0.030, -1)
+    lettering(m, shell, 'RX-7', 0.352, 0.236, 0.701, 0.020)
+    lettering(m, shell, 'mazda', -0.226, -0.350, 0.704, 0.022)
+    lock = [(0.0 + 0.011 * math.cos(2 * math.pi * i / 16), 0.668 + 0.011 * math.sin(2 * math.pi * i / 16))
+            for i in range(16)]
+    patch(m, shell, lock, 'z', -1, 'chrome', lift=0.002, rings=1)
+    patch(m, shell, [(-0.0015, 0.661), (0.0015, 0.661), (0.0015, 0.675), (-0.0015, 0.675)], 'z', -1, 'trim',
+          lift=0.003, rings=1)
+    seam = [(x, 0.676) for x in np.linspace(-0.455, 0.455, 31)]
+    ribbon(m, shell, seam, 'z', -1, 'trim', width=0.0035, lift=0.0008, closed=False, step=0.02)
 
 
 def front_lip(m, shell):
     """the Type RS's black lip spoiler: a blade standing 7 cm proud of the bumper's lower edge, arch to arch, its top
     sloping down to a sharp front edge"""
-    y_bot, y_in, y_edge = 0.168, 0.212, 0.184
+    y_bot, y_in, y_edge = 0.168, 0.200, 0.180
     inner, outer = [], []
     for a in np.linspace(-1.0, 1.0, 33):
         ang = a * 1.25
@@ -452,9 +667,10 @@ def build(body, shell, mats, counts):
     m = Mesh('details')
     front_lip(m, shell)
     intake(m, shell)
-    plate(m, (0.0, 0.476), True)
-    plate(m, (0.0, 0.421), False)
+    plate(m, (0.0, 0.398), True)      # front: top 0.48 (photos r01, s08), its foot over the mouth
+    plate(m, (0.0, 0.378), False)     # rear: s14
     wing(m, shell)
+    badges(m, shell)
     mirrors(m, shell)
     air_outlet(m, shell)
     wipers(m, shell)

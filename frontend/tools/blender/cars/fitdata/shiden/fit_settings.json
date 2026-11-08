@@ -1,0 +1,149 @@
+{
+ "note": "how the fit was run (tools/: loop.py = the one fit-loop command: build -> silrender every solved camera -> silfit per photo with fitargs.json; fit.py = joint LM fit of cameras + FFD lattices + rims; bake.py writes ffd.json). Photo pixels are only used as masks/measurements, never in textures.",
+ "masks": "IS-Net (isnet-general-use.onnx, onnxruntime) on a crop round the model projection; rays missing the car box -> background, entering below y 0.10 -> ignored (128); per-photo crop band/margin below",
+ "maskcfg": {
+  "s08": {
+   "band": 0.035,
+   "margin": 0.05
+  },
+  "s11": {
+   "band": 0.035,
+   "margin": 0.05
+  },
+  "s12": {
+   "band": 0.035,
+   "margin": 0.05
+  },
+  "s13": {
+   "band": 0.035,
+   "margin": 0.05
+  },
+  "s14": {
+   "band": 0.035,
+   "margin": 0.05
+  },
+  "r01": {
+   "band": 0.035,
+   "margin": 0.05
+  },
+  "r03": {
+   "band": 0.035,
+   "margin": 0.05
+  },
+  "r11": {
+   "band": 0.035,
+   "margin": 0.05
+  },
+  "r18": {
+   "band": 0.035,
+   "margin": 0.05
+  },
+  "r19": {
+   "band": 0.035,
+   "margin": 0.05
+  }
+ },
+ "ref_group": "spr",
+ "photos": {
+  "s08": {
+   "group": "spr",
+   "f": 1109.3,
+   "mask": "masks2/s08.png",
+   "fsig": 0.012
+  },
+  "s11": {
+   "group": "spr",
+   "f": 961.4,
+   "mask": "masks2/s11.png",
+   "fsig": 0.012
+  },
+  "s12": {
+   "group": "spr",
+   "f": null,
+   "mask": "masks2/s12.png"
+  },
+  "s13": {
+   "group": "spr",
+   "f": 961.4,
+   "mask": "masks2/s13.png",
+   "fsig": 0.012
+  },
+  "s14": {
+   "group": "spr",
+   "f": 961.4,
+   "mask": "masks2/s14.png",
+   "fsig": 0.012
+  },
+  "r01": {
+   "group": "rs1",
+   "f": null,
+   "mask": "masks2/r01.png"
+  },
+  "r03": {
+   "group": "rs3",
+   "f": 5250.8,
+   "mask": "masks2/r03.png"
+  },
+  "r11": {
+   "group": "blue",
+   "f": null,
+   "mask": "masks2/r11.png"
+  },
+  "r18": {
+   "group": "rs2",
+   "f": 1846.5,
+   "mask": "masks2/r18.png"
+  },
+  "r19": {
+   "group": "tr",
+   "f": null,
+   "mask": "masks2/r19.png"
+  }
+ },
+ "rim_prior": {
+  "rs3": [
+   0.25,
+   0.006,
+   0.11,
+   0.02
+  ]
+ },
+ "lattices": [
+  {
+   "lo": [
+    -0.98,
+    -0.06,
+    -2.32
+   ],
+   "hi": [
+    0.98,
+    1.36,
+    2.18
+   ],
+   "seg": [
+    3,
+    4,
+    9
+   ]
+  },
+  {
+   "lo": [
+    -0.98,
+    -0.06,
+    -2.32
+   ],
+   "hi": [
+    0.98,
+    1.36,
+    2.18
+   ],
+   "seg": [
+    5,
+    7,
+    16
+   ]
+  }
+ ],
+ "post": "ends: C1 overhang stretch to the official length 4285 mm (a camera-only fit at 4.207 m and at 4.285 m fit the photos equally well: distance and length trade off)",
+ "loop": "python3 tools/loop.py <tag> --cams cams.json  (fitargs.json: band 0.03, IS-Net masks)"
+}

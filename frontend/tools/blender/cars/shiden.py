@@ -4,6 +4,7 @@ no outside model, no photo pixels, no maker's marks.
 
   blender -t 4 --background --factory-startup --python tools/blender/cars/shiden.py -- --out <file.glb>
       [--render <dir> --views front34,rear34,... --samples N --size WxH] [--night] [--closed] [--silhouettes <dir>]
+      [--paint '#c8cbce'] (check renders in another body colour, e.g. light silver; the GLB keeps the default)
 
 Modules (tools/blender/cars/): shiden_surf (spline surface, trims, decals), shiden_shape (the body's numbers),
 shiden_body (shell, openings, glass), shiden_parts (materials; calls the rest), shiden_wheels (rims, tyres, discs,
@@ -26,6 +27,7 @@ sys.path.insert(0, HERE)
 import bpy  # noqa: E402
 
 import shiden_body as BODY  # noqa: E402
+import shiden_ffd as FFD  # noqa: E402
 import shiden_parts as PARTS  # noqa: E402
 
 argv = sys.argv[sys.argv.index('--') + 1:] if '--' in sys.argv else []
@@ -43,6 +45,7 @@ SIZE = tuple(int(v) for v in opt('--size', '1280x720').split('x'))
 SIL = opt('--silhouettes')
 NIGHT = '--night' in argv
 CLOSED = '--closed' in argv
+PAINT = opt('--paint')
 
 
 def empty(name, parent=None, loc=(0, 0, 0)):
@@ -66,12 +69,15 @@ def export(path, root):
 
 def build_car(night=False):
     bpy.ops.wm.read_factory_settings(use_empty=True)
+    if PAINT:
+        PARTS.MATS['paint'] = (PAINT, 0.55, 0.28)
     mats = PARTS.materials(night=night)
     root = empty('shiden')
     body = empty('body', root)
     counts = {}
     shell = BODY.build(body, mats, counts, cuts=PARTS.cut)
     PARTS.build(root, body, shell, mats, counts)
+    FFD.apply(body)
     return root, mats, counts
 
 
