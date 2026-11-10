@@ -16,6 +16,7 @@ import { loadSurfaceTextures } from './render/surfaceTextures';
 import { loadProps } from './render/props';
 import { findCorners, type Corner, type CornerKind } from './track/corners';
 import { RemoteRacers, SLOT_COLORS, type NetState, type Peer } from './net/RemoteRacers';
+import type { GameRenderer } from './render/RenderHost';
 
 /** lateral grid positions of the (up to three) online racers, by slot */
 const ONLINE_LANES = [-2.7, 2.7, 0];
@@ -218,7 +219,7 @@ export class Game {
   onlineSelfId = 0;
   private rideHeights = new Map<CarId, number>();
   /** stand-in for the post-processing buffer when compiling shaders (see precompile) */
-  private compileTarget: THREE.WebGLRenderTarget | null = null;
+  private compileTarget: THREE.RenderTarget | null = null;
   private cornerIdx = 0;
   private warnedCorner = -1;
   /** debug/testing: let an AI drive the player car and speed up simulated time */
@@ -226,7 +227,7 @@ export class Game {
   timeScale = 1;
 
   constructor(
-    readonly renderer: THREE.WebGLRenderer,
+    readonly renderer: GameRenderer,
     readonly scene: THREE.Scene,
     readonly camera: THREE.PerspectiveCamera,
     readonly quality: QualitySettings,
@@ -295,6 +296,12 @@ export class Game {
     // the autobahn's oncoming traffic is the game's own cars (light copies of their models)
     if (course.style === 'autobahn') await loadTrafficModels(CAR_ORDER);
     this.scenery = buildScenery(this.track, this.terrain, { treeDensity: this.quality.treeDensity, shadows: this.quality.shadows, photoTextures: this.quality.photoTextures, treeLod: this.quality.treeLod, style: course.style });
+    // an instanced mesh without instances has an empty matrix buffer, which WebGPU refuses to bind
+    const empty: THREE.Object3D[] = [];
+    this.scenery.group.traverse((o) => {
+      if ((o as THREE.InstancedMesh).isInstancedMesh && (o as THREE.InstancedMesh).instanceMatrix.count === 0) empty.push(o);
+    });
+    for (const o of empty) o.removeFromParent();
     this.root.add(this.scenery.group);
     this.rain.setCovers(this.scenery.covers);
     this.lampSlots.fill(-1);
@@ -326,8 +333,6 @@ export class Game {
         for (const mat of Array.isArray(m.material) ? m.material : [m.material]) {
           if (!mat) continue;
           for (const v of Object.values(mat)) if (v instanceof THREE.Texture) textures.add(v);
-          const uniforms = (mat as THREE.ShaderMaterial).uniforms;
-          if (uniforms) for (const u of Object.values(uniforms)) if (u.value instanceof THREE.Texture) textures.add(u.value);
           mat.dispose();
         }
       });
@@ -396,7 +401,7 @@ export class Game {
     return h;
   }
 
-  private createRacer(carId: CarId, s: number, lateral: number, opts: { ai?: AILevel; headlights: boolean; color?: string }): Racer {
+  private createRacer(carId: CarId, s: number, lateral: number, opts: { ai?: AILevel; headlights: boolean; color?: string; rival?: boolean }): Racer {
     // a train as fitted for its line (the livery picked: its inverter sound)
     const spec = specForLivery(CAR_SPECS[carId], opts.color);
     const p = this.track.pointAt(s, lateral);
@@ -410,7 +415,8 @@ export class Game {
       bodyColor: opts.color,
     });
     visual.rig.root.traverse((o) => {
-      if ((o as THREE.SpotLight).isSpotLight) (o as THREE.SpotLight).castShadow = this.quality.headlightShadows;
+      // only the car the camera follows: a rival's lamps would cost a whole shadow map for shadows hardly ever seen
+      if ((o as THREE.SpotLight).isSpotLight) (o as THREE.SpotLight).castShadow = this.quality.headlightShadows && !opts.rival;
     });
     visual.setHeadlights(this.env.preset.lampsOn > 0.5 ? 1 : 0.6);
     this.root.add(visual.root);
@@ -571,7 +577,7 @@ export class Game {
     this.player.sim.autoShift = this.autoShift;
     if (cfg.mode === 'rival' && cfg.rivalLevel) {
       const rival = this.course.rivals[cfg.rivalLevel];
-      this.rival = this.createRacer(rival.car, gridS, -2.0, { ai: cfg.rivalLevel, headlights: true, color: rival.color });
+      this.rival = this.createRacer(rival.car, gridS, -2.0, { ai: cfg.rivalLevel, headlights: true, color: rival.color, rival: true });
       this.rival.sim.powerScale = rival.power ?? 1;
     }
     if (cfg.ghost && (cfg.mode === 'ghost' || this.showGhost)) {
@@ -1083,8 +1089,6 @@ export class Game {
       this.smoke.update(dt);
       this.exhaust.update(dt);
     }
-    this.smoke.setViewportHeight(this.renderer.domElement.height);
-    this.exhaust.setViewportHeight(this.renderer.domElement.height);
 
     // ---- camera
     if (this.phase === 'attract' && this.attractCar) this.cinematicCamera(dt, this.attractCar.visual.root, this.attractCar.proj.s);
@@ -1428,13 +1432,14 @@ export class Game {
   }
 
   /**
-   * Compiles every material of the scene for the current lights, in parallel where the browser can. With
-   * post-processing the scene is drawn into an offscreen buffer, whose shader variants (linear output, no tone
-   * mapping) differ from the screen's ones: compiled against a stand-in target, or the work is wasted.
+   * Compiles every material of the scene for the current lights, in parallel where the browser can. The scene is
+   * drawn into the post-processing chain's offscreen buffer (half-float colour, depth): pipelines are compiled per
+   * target format, so against a stand-in target of that format, or the work is wasted.
    */
   private precompile() {
     const r = this.renderer, prev = r.getRenderTarget();
-    if (this.quality.bloom) r.setRenderTarget((this.compileTarget ??= new THREE.WebGLRenderTarget(1, 1)));
+    this.compileTarget ??= new THREE.RenderTarget(1, 1, { type: THREE.HalfFloatType, depthTexture: new THREE.DepthTexture(1, 1) });
+    r.setRenderTarget(this.compileTarget);
     const done = r.compileAsync(this.scene, this.camera);
     r.setRenderTarget(prev);
     return done.catch(() => undefined);

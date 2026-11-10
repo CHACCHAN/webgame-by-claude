@@ -1,4 +1,7 @@
 import * as THREE from 'three';
+import { MeshPhysicalNodeMaterial, MeshStandardNodeMaterial } from 'three/webgpu';
+import { abs, dot, materialColor, materialEmissive, normalGeometry, normalize, positionGeometry, smoothstep, uniform, varying, vec3, vec4 } from 'three/tsl';
+import type { Float, Vec3 } from './tslNoise';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { CarSpec } from '../vehicle/carSpecs';
 import { liverySwatch, trainBogiePath, trainCars, trainModelKey, trainNoseZ, trainTailZ, TRAIN_INFO, type LampPair, type Livery, type TrainId, type TrainInfo } from '../vehicle/trains';
@@ -321,30 +324,35 @@ function materials(t: TrainInfo, liv: Livery) {
 /** brightness of the lit side windows at night */
 const WINDOW_GLOW = 1.5;
 
+/** the lit windows' shared controls: the glow's level, and the band (y from, y to, the luminance up to which a texel is window) */
+interface WindowGlow {
+  glow: { value: number };
+  band: ReturnType<typeof windowBand>;
+}
+const windowBand = (from: number, to: number, lum: number) => uniform(new THREE.Vector3(from, to, lum));
+
 /**
- * Night interior light of a model car: texels that are dark, face sideways and lie in the window band glow
- * (the models bake their windows into textures or plain dark colours, so there is no glass part to light).
- * `toCar`: the mesh's transform into the car's frame (meshopt quantization leaves a scale on every mesh).
+ * A copy of a model car's material with the night interior light: texels that are dark, face sideways and lie in
+ * the window band glow (the models bake their windows into textures or plain dark colours, so there is no glass part
+ * to light). `toCar`: the mesh's transform into the car's frame (meshopt quantization leaves a scale on every mesh).
  */
-function lightWindows(mat: THREE.Material, uniforms: { uWinGlow: { value: number }; uWinBand: { value: THREE.Vector3 } }, toCar: THREE.Matrix4) {
-  const own = { uToCar: { value: toCar }, uToCarN: { value: new THREE.Matrix3().getNormalMatrix(toCar) } };
-  mat.onBeforeCompile = (shader) => {
-    Object.assign(shader.uniforms, uniforms, own);
-    shader.vertexShader = shader.vertexShader
-      .replace('#include <common>', '#include <common>\nuniform mat4 uToCar;\nuniform mat3 uToCarN;\nvarying vec3 vCarPos;\nvarying vec3 vCarNrm;')
-      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvCarPos = (uToCar * vec4(position, 1.0)).xyz;\nvCarNrm = uToCarN * normal;');
-    shader.fragmentShader = shader.fragmentShader
-      .replace('#include <common>', '#include <common>\nuniform float uWinGlow;\nuniform vec3 uWinBand;\nvarying vec3 vCarPos;\nvarying vec3 vCarNrm;')
-      .replace(
-        '#include <emissivemap_fragment>',
-        /* glsl */ `#include <emissivemap_fragment>
-        float winLum = dot(diffuseColor.rgb, vec3(0.2126, 0.7152, 0.0722));
-        float win = (1.0 - smoothstep(uWinBand.z * 0.3, uWinBand.z, winLum)) * smoothstep(0.6, 0.85, abs(normalize(vCarNrm).x))
-          * smoothstep(uWinBand.x - 0.02, uWinBand.x + 0.04, vCarPos.y) * (1.0 - smoothstep(uWinBand.y - 0.04, uWinBand.y + 0.02, vCarPos.y));
-        totalEmissiveRadiance += uWinGlow * win * vec3(1.0, 0.93, 0.8);`,
-      );
-  };
-  mat.customProgramCacheKey = () => 'train-windows';
+function lightWindows(src: THREE.Material, w: WindowGlow & { glow: Float }, toCar: THREE.Matrix4): THREE.Material {
+  const physical = (src as THREE.MeshPhysicalMaterial).isMeshPhysicalMaterial === true;
+  if (!physical && !(src as THREE.MeshStandardMaterial).isMeshStandardMaterial) return src.clone();
+  const mat = physical ? new MeshPhysicalNodeMaterial() : new MeshStandardNodeMaterial();
+  // the plain material's values, maps included (its own copy(), not the node material's: `src` has no node slots)
+  (physical ? THREE.MeshPhysicalMaterial : THREE.MeshStandardMaterial).prototype.copy.call(mat, src);
+  const carPos = varying(uniform(toCar).mul(vec4(positionGeometry, 1)).xyz) as unknown as Vec3;
+  const carNrm = varying(uniform(new THREE.Matrix3().getNormalMatrix(toCar)).mul(normalGeometry)) as unknown as Vec3;
+  const band = w.band as unknown as Vec3;
+  // the surface colour (map × colour)
+  const lum = dot((materialColor as unknown as Vec3).rgb, vec3(0.2126, 0.7152, 0.0722));
+  const win = smoothstep(band.z.mul(0.3), band.z, lum).oneMinus()
+    .mul(smoothstep(0.6, 0.85, abs(normalize(carNrm).x)))
+    .mul(smoothstep(band.x.sub(0.02), band.x.add(0.04), carPos.y))
+    .mul(smoothstep(band.y.sub(0.04), band.y.add(0.02), carPos.y).oneMinus());
+  mat.emissiveNode = (materialEmissive as unknown as Vec3).add(vec3(1, 0.93, 0.8).mul(w.glow).mul(win));
+  return mat as unknown as THREE.Material;
 }
 
 /**
@@ -412,7 +420,7 @@ export function buildTrain(spec: CarSpec, opts: { bodyColor?: string } = {}): Ca
   // the lights of the model drawn: the line's own when its cab differs, unless the base model stands in for it
   const lamps = (models.has(trainModelKey(spec.id, liv)) && liv.lamps) || t.lamps;
   // window band (y from, to) and the luminance up to which a texel there is window
-  const windows = { uWinGlow: { value: 0 }, uWinBand: { value: new THREE.Vector3(...(lamps?.windows ?? [0, 0]), lamps?.windowLum ?? 0.1) } };
+  const windows = { glow: uniform(0), band: windowBand(lamps?.windows?.[0] ?? 0, lamps?.windows?.[1] ?? 0, lamps?.windowLum ?? 0.1) };
   for (let k = 0; k < TRAIN.cars; k++) {
     const car = new THREE.Group();
     car.matrixAutoUpdate = false;
@@ -424,8 +432,8 @@ export function buildTrain(spec: CarSpec, opts: { bodyColor?: string } = {}): Ca
       piece.traverse((o) => {
         const m = o as THREE.Mesh;
         if (!m.isMesh) return;
-        m.material = (m.material as THREE.Material).clone();
-        if (lamps) lightWindows(m.material as THREE.Material, windows, m.matrixWorld.clone());
+        const own = m.material as THREE.Material;
+        m.material = lamps ? lightWindows(own, windows, m.matrixWorld.clone()) : own.clone();
         m.castShadow = true;
         m.receiveShadow = true;
       });
@@ -494,7 +502,7 @@ export function buildTrain(spec: CarSpec, opts: { bodyColor?: string } = {}): Ca
       if (t.body === 'painted') m.body.color.set(liv.body ?? '#f2f1ea');
     },
     setInterior(level) {
-      windows.uWinGlow.value = level * WINDOW_GLOW;
+      windows.glow.value = level * WINDOW_GLOW;
     },
   };
 

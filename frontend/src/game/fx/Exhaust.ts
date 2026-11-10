@@ -1,5 +1,7 @@
 import * as THREE from 'three';
+import { mix, smoothstep, texture, uniform, uv, vec3, vec4 } from 'three/tsl';
 import { makeSmokeTexture } from '../render/textures';
+import { makeSpritePool, type SpritePool } from './SpritePool';
 
 const MAX_PUFFS = 420;
 const MAX_FLAMES = 48;
@@ -14,7 +16,7 @@ export interface ExhaustState {
 export const newExhaustState = (): ExhaustState => ({ lastThrottle: 0, carry: 0, flameTime: 0 });
 
 interface Pool {
-  points: THREE.Points;
+  sprites: SpritePool;
   pos: Float32Array;
   vel: Float32Array;
   life: Float32Array;
@@ -28,29 +30,10 @@ interface Pool {
   cursor: number;
 }
 
-function makePool(n: number, material: THREE.ShaderMaterial): Pool {
-  const pos = new Float32Array(n * 3), size = new Float32Array(n), alpha = new Float32Array(n);
-  const geo = new THREE.BufferGeometry();
-  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3).setUsage(THREE.DynamicDrawUsage));
-  geo.setAttribute('size', new THREE.BufferAttribute(size, 1).setUsage(THREE.DynamicDrawUsage));
-  geo.setAttribute('alpha', new THREE.BufferAttribute(alpha, 1).setUsage(THREE.DynamicDrawUsage));
-  const points = new THREE.Points(geo, material);
-  points.frustumCulled = false;
-  return { points, pos, vel: new Float32Array(n * 3), life: new Float32Array(n), maxLife: new Float32Array(n), size, alpha, base: new Float32Array(n), fresh: new Uint8Array(n), cursor: 0 };
+function makePool(n: number, additive: boolean): Pool {
+  const sprites = makeSpritePool(n, { additive, fog: !additive });
+  return { sprites, pos: sprites.pos, vel: new Float32Array(n * 3), life: new Float32Array(n), maxLife: new Float32Array(n), size: sprites.size, alpha: sprites.alpha, base: new Float32Array(n), fresh: new Uint8Array(n), cursor: 0 };
 }
-
-const vertexShader = /* glsl */ `
-  attribute float size; attribute float alpha;
-  uniform float uScale;
-  varying float vAlpha;
-  #include <fog_pars_vertex>
-  void main() {
-    vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
-    gl_PointSize = size * uScale / max(-mvPosition.z, 0.5);
-    gl_Position = projectionMatrix * mvPosition;
-    vAlpha = alpha;
-    #include <fog_vertex>
-  }`;
 
 /**
  * Exhaust gas: thin puffs from the tailpipe (more on throttle and high revs, mostly visible at low
@@ -60,66 +43,27 @@ export class ExhaustFX {
   readonly group = new THREE.Group();
   private puffs: Pool;
   private flames: Pool;
-  private uniforms: Record<string, THREE.IUniform>;
-  private flameUniforms: Record<string, THREE.IUniform>;
+  private color = uniform(new THREE.Color('#8a9099'));
   density = 1;
 
   constructor() {
     const map = makeSmokeTexture();
-    this.uniforms = { uMap: { value: map }, uColor: { value: new THREE.Color('#8a9099') }, uScale: { value: 600 }, ...THREE.UniformsLib.fog };
-    this.puffs = makePool(
-      MAX_PUFFS,
-      new THREE.ShaderMaterial({
-        transparent: true,
-        depthWrite: false,
-        fog: true,
-        uniforms: this.uniforms,
-        vertexShader,
-        fragmentShader: /* glsl */ `
-          uniform sampler2D uMap; uniform vec3 uColor;
-          varying float vAlpha;
-          #include <fog_pars_fragment>
-          void main() {
-            vec4 t = texture2D(uMap, gl_PointCoord);
-            gl_FragColor = vec4(uColor, t.a * vAlpha);
-            #include <fog_fragment>
-            #include <colorspace_fragment>
-          }`,
-      }),
-    );
-    this.flameUniforms = { uMap: { value: map }, uScale: { value: 600 }, ...THREE.UniformsLib.fog };
-    this.flames = makePool(
-      MAX_FLAMES,
-      new THREE.ShaderMaterial({
-        transparent: true,
-        depthWrite: false,
-        blending: THREE.AdditiveBlending,
-        uniforms: this.flameUniforms,
-        vertexShader,
-        fragmentShader: /* glsl */ `
-          uniform sampler2D uMap;
-          varying float vAlpha;
-          void main() {
-            vec4 t = texture2D(uMap, gl_PointCoord);
-            float core = smoothstep(0.35, 1.0, t.a);
-            // blue-white core, orange edge; bright enough to bloom
-            vec3 c = mix(vec3(1.0, 0.42, 0.08), vec3(0.75, 0.85, 1.0), core);
-            gl_FragColor = vec4(c * t.a * vAlpha * 3.0, 1.0);
-          }`,
-      }),
-    );
-    this.puffs.points.renderOrder = 5;
-    this.flames.points.renderOrder = 6;
-    this.group.add(this.puffs.points, this.flames.points);
+    this.puffs = makePool(MAX_PUFFS, false);
+    this.puffs.sprites.material.colorNode = vec4(this.color, texture(map, uv()).a.mul(this.puffs.sprites.nodes.alpha));
+    this.flames = makePool(MAX_FLAMES, true);
+    {
+      const t = texture(map, uv()).a;
+      // blue-white core, orange edge; bright enough to bloom
+      const c = mix(vec3(1, 0.42, 0.08), vec3(0.75, 0.85, 1), smoothstep(0.35, 1, t));
+      this.flames.sprites.material.colorNode = vec4(c.mul(t).mul(this.flames.sprites.nodes.alpha).mul(3), 1);
+    }
+    this.puffs.sprites.object.renderOrder = 5;
+    this.flames.sprites.object.renderOrder = 6;
+    this.group.add(this.puffs.sprites.object, this.flames.sprites.object);
   }
 
   setColor(c: THREE.ColorRepresentation) {
-    this.uniforms.uColor.value.set(c);
-  }
-
-  setViewportHeight(h: number) {
-    this.uniforms.uScale.value = h * 0.55;
-    this.flameUniforms.uScale.value = h * 0.55;
+    this.color.value.set(c);
   }
 
   /**
@@ -192,17 +136,14 @@ export class ExhaustFX {
       pool.size[i] = size;
       pool.alpha[i] = alpha;
     }
-    const g = pool.points.geometry;
-    g.attributes.position.needsUpdate = true;
-    g.attributes.size.needsUpdate = true;
-    g.attributes.alpha.needsUpdate = true;
+    pool.sprites.commit();
   }
 
   clear() {
     for (const pool of [this.puffs, this.flames]) {
       pool.life.fill(0);
       pool.alpha.fill(0);
-      pool.points.geometry.attributes.alpha.needsUpdate = true;
+      pool.sprites.commit();
     }
   }
 }

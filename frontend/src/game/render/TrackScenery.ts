@@ -19,6 +19,7 @@ import { surfaceImage as photoImage, surfaceTexture as photoTexture, type Surfac
 import { findCorners } from '../track/corners';
 import { placeProp, prop, type PropModel } from './props';
 import type { CourseStyle } from '../track/courses';
+import { ChunkedLods, cutout } from './instancing';
 import { buildAutobahnScenery } from './autobahnScenery';
 
 export interface Lamp {
@@ -699,8 +700,8 @@ function buildSigns(track: Track, sides: ReturnType<typeof classifySides>, group
   const mats = {
     chevronL: new THREE.MeshStandardMaterial({ map: makeSignTexture('chevronL'), roughness: 0.35, emissive: '#ffffff', emissiveIntensity: 0.06 }),
     chevronR: new THREE.MeshStandardMaterial({ map: makeSignTexture('chevronR'), roughness: 0.35, emissive: '#ffffff', emissiveIntensity: 0.06 }),
-    hairpin: new THREE.MeshStandardMaterial({ map: makeSignTexture('hairpin'), roughness: 0.35, transparent: true, alphaTest: 0.5 }),
-    speed: new THREE.MeshStandardMaterial({ map: makeSignTexture('speed40'), roughness: 0.35, transparent: true, alphaTest: 0.5 }),
+    hairpin: cutout(new THREE.MeshStandardMaterial({ map: makeSignTexture('hairpin'), roughness: 0.35, transparent: true, alphaTest: 0.5 })),
+    speed: cutout(new THREE.MeshStandardMaterial({ map: makeSignTexture('speed40'), roughness: 0.35, transparent: true, alphaTest: 0.5 })),
     kanban: new THREE.MeshStandardMaterial({ map: makeSignTexture('kanban'), roughness: 0.5 }),
     start: new THREE.MeshStandardMaterial({ map: makeSignTexture('start'), roughness: 0.5, emissive: '#ffffff', emissiveMap: null, emissiveIntensity: 0.15 }),
     finish: new THREE.MeshStandardMaterial({ map: makeSignTexture('finish'), roughness: 0.5, emissive: '#ffffff', emissiveIntensity: 0.15 }),
@@ -864,7 +865,7 @@ export function buildTrees(
     clearance?: number;
     keep?: (x: number, z: number) => boolean;
     extra?: (add: (x: number, z: number, scale: number) => void) => void;
-    /** chunk size (m) of the trees in the near grid (default 320 m: one draw call per chunk) and outside it */
+    /** chunk size (m) of the trees in the near grid (default 320 m: a chunk changes its level of detail as a whole) and outside it */
     chunk?: number;
     farChunk?: number;
   } = {},
@@ -932,44 +933,18 @@ export function buildTrees(
     add(x, z, (12 + r() * 10) / 14, opts.farChunk ?? CHUNK);
   }
   opts.extra?.(add);
-  // two levels of detail per chunk; Scenery.update() picks one by camera distance
+  // two levels of detail, picked per chunk by camera distance (Scenery.update())
   const farGeo = farTreeGeometry();
-  const lods: { near: THREE.InstancedMesh; far: THREE.InstancedMesh; center: THREE.Vector3 }[] = [];
-  for (const [key, list] of chunks) {
-    const cols = colors.get(key)!;
-    const make = (g: THREE.BufferGeometry, shadow: boolean) => {
-      const mesh = new THREE.InstancedMesh(g, mat, list.length);
-      list.forEach((m, i) => {
-        mesh.setMatrixAt(i, m);
-        mesh.setColorAt(i, cols[i]);
-      });
-      mesh.castShadow = shadow;
-      mesh.receiveShadow = shadow;
-      mesh.computeBoundingSphere();
-      group.add(mesh);
-      return mesh;
-    };
-    const near = make(geo, true);
-    const far = make(farGeo, false);
-    far.visible = false;
-    lods.push({ near, far, center: near.boundingSphere!.center.clone() });
-  }
+  const lods = new ChunkedLods(geo, farGeo, mat, [...chunks].map(([key, matrices]) => ({ matrices, colors: colors.get(key)! })), lodDistance);
+  lods.near.castShadow = lods.near.receiveShadow = true;
+  group.add(lods.near, lods.far);
   group.userData.lods = lods;
-  group.userData.lodDistance = lodDistance;
   return group;
 }
 
 /** Switch tree chunks between the detailed and the impostor mesh. */
 export function updateTreeLods(trees: THREE.Object3D, camera: THREE.Vector3) {
-  const lods = trees.userData.lods as { near: THREE.InstancedMesh; far: THREE.InstancedMesh; center: THREE.Vector3 }[];
-  for (const l of lods) {
-    // hysteresis: a chunk right at the switch distance must not flap between meshes every frame
-    const d = l.center.distanceTo(camera);
-    const lod = trees.userData.lodDistance as number;
-    const near = l.near.visible ? d < lod + 60 : d < lod;
-    l.near.visible = near;
-    l.far.visible = !near;
-  }
+  (trees.userData.lods as ChunkedLods).update(camera);
 }
 
 /** Builds an indexed mesh from vertex streams (position, soft "volume" normal, colour, uv). */

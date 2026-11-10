@@ -1,9 +1,6 @@
-import { Canvas, useFrame, useThree } from '@react-three/fiber';
-import { Bloom, ChromaticAberration, EffectComposer, Noise, SMAA, ToneMapping, Vignette } from '@react-three/postprocessing';
-import { BlendFunction, ToneMappingMode } from 'postprocessing';
-import { useEffect, useMemo } from 'react';
-import * as THREE from 'three';
+import { useEffect, useRef, useState } from 'react';
 import { Game } from '../game/Game';
+import { RenderHost, type RenderOptions } from '../game/render/RenderHost';
 import type { CarId } from '../game/vehicle/carSpecs';
 import { currentCourseId, qualityProfile, useSettings } from '../store/settings';
 import { useApp } from '../store/app';
@@ -17,13 +14,15 @@ declare global {
   }
 }
 
-function GameBridge() {
-  const { gl, scene, camera } = useThree();
-  useEffect(() => {
+/** the renderer of the single game (kept with it: React may mount the canvas component twice in development) */
+const hostHolder: { host: RenderHost | null; starting: Promise<RenderHost> | null } = { host: null, starting: null };
+
+function startGame(host: RenderHost) {
+  {
     if (gameHolder.game) return;
     const s = useSettings.getState();
     const profile = qualityProfile(s.quality, s.resolutionScale);
-    const game = new Game(gl, scene, camera as THREE.PerspectiveCamera, profile);
+    const game = new Game(host.renderer, host.scene, host.camera, profile);
     const params = new URLSearchParams(location.search);
     game.assist = s.assist;
     game.autoShift = s.autoShift;
@@ -77,53 +76,50 @@ function GameBridge() {
     function app() {
       return useApp.getState();
     }
-  }, [gl, scene, camera]);
-  useFrame((_, dt) => gameHolder.game?.update(dt), -1);
-  return null;
+  }
+  host.start((dt) => gameHolder.game?.update(dt));
 }
 
-function Effects() {
-  const quality = useSettings((s) => s.quality);
-  const scale = useSettings((s) => s.resolutionScale);
-  const p = useMemo(() => qualityProfile(quality, scale), [quality, scale]);
-  if (!p.bloom) return null;
-  return (
-    <EffectComposer multisampling={0} enableNormalPass={false}>
-      <Bloom mipmapBlur luminanceThreshold={0.85} luminanceSmoothing={0.25} intensity={1.05} radius={0.72} />
-      <ToneMapping mode={ToneMappingMode.ACES_FILMIC} />
-      {p.smaa ? <SMAA /> : <></>}
-      {p.extraFx ? <ChromaticAberration offset={new THREE.Vector2(0.0005, 0.0005)} radialModulation modulationOffset={0.35} /> : <></>}
-      <Vignette offset={0.28} darkness={0.62} />
-      {p.extraFx ? <Noise opacity={0.028} blendFunction={BlendFunction.OVERLAY} /> : <></>}
-    </EffectComposer>
-  );
-}
+const renderOptions = (quality: Parameters<typeof qualityProfile>[0], scale: number): RenderOptions => {
+  const p = qualityProfile(quality, scale);
+  return { pixelRatio: p.pixelRatio, shadows: p.shadows, bloom: p.bloom, smaa: p.smaa, extraFx: p.extraFx };
+};
 
 export function GameCanvas() {
   const quality = useSettings((s) => s.quality);
   const scale = useSettings((s) => s.resolutionScale);
-  const p = useMemo(() => qualityProfile(quality, scale), [quality, scale]);
+  const canvas = useRef<HTMLCanvasElement>(null);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    if (!canvas.current || hostHolder.host || hostHolder.starting) return;
+    const s = useSettings.getState();
+    // ?webgl=1: the WebGL 2 backend even where WebGPU works (comparisons, troubleshooting)
+    const forceWebGL = new URLSearchParams(location.search).get('webgl') === '1';
+    hostHolder.starting = RenderHost.create(canvas.current, renderOptions(s.quality, s.resolutionScale), forceWebGL);
+    hostHolder.starting.then(
+      (host) => {
+        hostHolder.host = host;
+        startGame(host);
+      },
+      (err) => {
+        console.error(err);
+        setFailed(true);
+      },
+    );
+  }, []);
+  useEffect(() => {
+    hostHolder.host?.configure(renderOptions(quality, scale));
+  }, [quality, scale]);
   return (
-    <Canvas
-      className="game-canvas"
-      dpr={p.pixelRatio}
-      shadows={p.shadows ? 'percentage' : false}
-      gl={{ antialias: false, powerPreference: 'high-performance', stencil: false, preserveDrawingBuffer: false }}
-      camera={{ fov: 60, near: 0.25, far: 16000, position: [0, 600, 0] }}
-      fallback={
+    <div className="game-canvas">
+      <canvas ref={canvas} />
+      {failed && (
         <div className="no-webgl">
-          このブラウザでは WebGL2 が利用できないため、ゲームを表示できません。
+          このブラウザでは WebGPU / WebGL2 が利用できないため、ゲームを表示できません。
           <br />
           最新の Chrome / Edge / Firefox で、ハードウェアアクセラレーションを有効にしてお試しください。
         </div>
-      }
-      onCreated={({ gl }) => {
-        gl.toneMapping = THREE.ACESFilmicToneMapping;
-        gl.setClearColor('#05070c');
-      }}
-    >
-      <GameBridge />
-      <Effects />
-    </Canvas>
+      )}
+    </div>
   );
 }

@@ -2,6 +2,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import { registerCarTemplate } from './CarModel';
 import type { CarId } from '../vehicle/carSpecs';
+import { mergeRigidParts } from './mergeParts';
 
 /**
  * Loads the car GLBs from /models/cars/<id>.glb. Missing or broken files are
@@ -19,6 +20,7 @@ export async function loadCarTemplates(ids: CarId[]) {
         const type = head.headers.get('content-type') ?? '';
         if (!head.ok || type.includes('text/html')) return;
         const gltf = await loader.loadAsync(url);
+        mergeRigidParts(gltf.scene);
         registerCarTemplate(id, gltf.scene);
         loaded.push(id);
       } catch (e) {

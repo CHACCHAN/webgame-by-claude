@@ -1,71 +1,38 @@
 import * as THREE from 'three';
+import { MeshBasicNodeMaterial } from 'three/webgpu';
+import { attribute, texture, uniform, uv, vec4 } from 'three/tsl';
 import { makeSmokeTexture } from '../render/textures';
+import type { Float } from '../render/tslNoise';
+import { makeSpritePool, type SpritePool } from './SpritePool';
 
 const MAX_SMOKE = 700;
 
-/** Pooled billboard smoke particles rendered as one Points draw call. */
+/** Pooled billboard smoke particles drawn in one call. */
 export class TireSmoke {
-  readonly points: THREE.Points;
-  private pos = new Float32Array(MAX_SMOKE * 3);
+  readonly points: THREE.Object3D;
+  private pool: SpritePool;
+  private pos: Float32Array;
   private vel = new Float32Array(MAX_SMOKE * 3);
   private life = new Float32Array(MAX_SMOKE);
   private maxLife = new Float32Array(MAX_SMOKE);
-  private size = new Float32Array(MAX_SMOKE);
-  private alpha = new Float32Array(MAX_SMOKE);
+  private size: Float32Array;
+  private alpha: Float32Array;
   private cursor = 0;
-  private uniforms: Record<string, THREE.IUniform>;
+  private color = uniform(new THREE.Color('#9aa3ad'));
   density = 1;
 
   constructor() {
-    const geo = new THREE.BufferGeometry();
-    geo.setAttribute('position', new THREE.BufferAttribute(this.pos, 3).setUsage(THREE.DynamicDrawUsage));
-    geo.setAttribute('size', new THREE.BufferAttribute(this.size, 1).setUsage(THREE.DynamicDrawUsage));
-    geo.setAttribute('alpha', new THREE.BufferAttribute(this.alpha, 1).setUsage(THREE.DynamicDrawUsage));
-    this.uniforms = {
-      uMap: { value: makeSmokeTexture() },
-      uColor: { value: new THREE.Color('#9aa3ad') },
-      uScale: { value: 600 },
-      ...THREE.UniformsLib.fog,
-    };
-    const mat = new THREE.ShaderMaterial({
-      transparent: true,
-      depthWrite: false,
-      fog: true,
-      uniforms: this.uniforms,
-      vertexShader: /* glsl */ `
-        attribute float size; attribute float alpha;
-        uniform float uScale;
-        varying float vAlpha;
-        #include <fog_pars_vertex>
-        void main() {
-          vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
-          gl_PointSize = size * uScale / max(-mvPosition.z, 0.5);
-          gl_Position = projectionMatrix * mvPosition;
-          vAlpha = alpha;
-          #include <fog_vertex>
-        }`,
-      fragmentShader: /* glsl */ `
-        uniform sampler2D uMap; uniform vec3 uColor;
-        varying float vAlpha;
-        #include <fog_pars_fragment>
-        void main() {
-          vec4 t = texture2D(uMap, gl_PointCoord);
-          gl_FragColor = vec4(uColor, t.a * vAlpha);
-          #include <fog_fragment>
-          #include <colorspace_fragment>
-        }`,
-    });
-    this.points = new THREE.Points(geo, mat);
-    this.points.frustumCulled = false;
+    const pool = (this.pool = makeSpritePool(MAX_SMOKE));
+    this.pos = pool.pos;
+    this.size = pool.size;
+    this.alpha = pool.alpha;
+    pool.material.colorNode = vec4(this.color, texture(makeSmokeTexture(), uv()).a.mul(pool.nodes.alpha));
+    this.points = pool.object;
     this.points.renderOrder = 5;
   }
 
   setColor(c: THREE.ColorRepresentation) {
-    this.uniforms.uColor.value.set(c);
-  }
-
-  setViewportHeight(h: number) {
-    this.uniforms.uScale.value = h * 0.55;
+    this.color.value.set(c);
   }
 
   emit(p: THREE.Vector3, v: THREE.Vector3, intensity: number) {
@@ -103,15 +70,13 @@ export class TireSmoke {
       this.size[i] = 0.6 + t * 4.8;
       this.alpha[i] = Math.min(this.alpha[i] + dt * 0.6, 0.55) * (1 - t) ** 1.3;
     }
-    const g = this.points.geometry;
-    g.attributes.position.needsUpdate = true;
-    g.attributes.size.needsUpdate = true;
-    g.attributes.alpha.needsUpdate = true;
+    this.pool.commit();
   }
 
   clear() {
     this.life.fill(0);
     this.alpha.fill(0);
+    this.pool.commit();
   }
 }
 
@@ -136,19 +101,8 @@ export class SkidMarks {
       idx.set([b, b + 2, b + 1, b + 1, b + 2, b + 3], i * 6);
     }
     geo.setIndex(new THREE.BufferAttribute(idx, 1));
-    const mat = new THREE.ShaderMaterial({
-      transparent: true,
-      depthWrite: false,
-      polygonOffset: true,
-      polygonOffsetFactor: -4,
-      polygonOffsetUnits: -4,
-      vertexShader: /* glsl */ `
-        attribute float alpha; varying float vA;
-        void main() { vA = alpha; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
-      fragmentShader: /* glsl */ `
-        varying float vA;
-        void main() { gl_FragColor = vec4(0.02, 0.02, 0.02, vA * 0.7); }`,
-    });
+    const mat = new MeshBasicNodeMaterial({ transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4, fog: false });
+    mat.colorNode = vec4(0.02, 0.02, 0.02, (attribute('alpha', 'float') as unknown as Float).mul(0.7));
     this.mesh = new THREE.Mesh(geo, mat);
     this.mesh.frustumCulled = false;
     this.mesh.renderOrder = 1;

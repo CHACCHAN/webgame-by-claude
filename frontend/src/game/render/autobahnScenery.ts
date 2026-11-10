@@ -24,6 +24,7 @@ import {
   type SceneryResult,
 } from './TrackScenery';
 import { AutobahnTraffic } from './autobahnTraffic';
+import { cutout } from './instancing';
 
 /*
  * AUTOBAHN scenery (CourseInfo.style 'autobahn'): a German motorway at night, all procedural or our own models.
@@ -514,7 +515,7 @@ export function buildAutobahnScenery(track: Track, terrain: TerrainData, quality
 
   // anti-glare slats on the median by the junction and the village
   const glareRanges: [number, number][] = [...(junction ? [[junction[0] - 300, junction[1] + 150] as [number, number]] : []), ...villages];
-  const slatMat = new THREE.MeshStandardMaterial({ map: makeAntiGlareTexture(), alphaTest: 0.5, side: THREE.DoubleSide, roughness: 0.8 });
+  const slatMat = cutout(new THREE.MeshStandardMaterial({ map: makeAntiGlareTexture(), alphaTest: 0.5, side: THREE.DoubleSide, roughness: 0.8 }));
   const slatGeos = glareRanges.map(([a, b]) => ribbon(track, a, b, () => [[-(E + MEDIAN / 2), 0.75], [-(E + MEDIAN / 2), 1.75]], 4, 1, 1)).filter((g): g is THREE.BufferGeometry => !!g);
   if (slatGeos.length) {
     const slats = new THREE.Mesh(mergeGeometries(slatGeos), slatMat);
@@ -654,7 +655,7 @@ export function buildAutobahnScenery(track: Track, terrain: TerrainData, quality
 
   // wildlife fence along the forest (not on phones)
   if (!low && forests.length) {
-    const fenceMat = new THREE.MeshStandardMaterial({ map: makeFenceTexture(), alphaTest: 0.4, side: THREE.DoubleSide, roughness: 0.6, metalness: 0.4 });
+    const fenceMat = cutout(new THREE.MeshStandardMaterial({ map: makeFenceTexture(), alphaTest: 0.4, side: THREE.DoubleSide, roughness: 0.6, metalness: 0.4 }));
     const fenceGeos = forests.map(([a, b]) => ribbon(track, a, b, () => [[E + 6, -0.45], [E + 6, 1.35]], 4, 0.5, 1 / 1.8)).filter((g): g is THREE.BufferGeometry => !!g);
     const fencePosts: { m: THREE.Matrix4; s: number }[] = [];
     for (const [a, b] of forests) for (let i = a; i <= b; i += 4) fencePosts.push({ m: new THREE.Matrix4().compose(at(i, E + 6, 0.5), yawQ(track.heading[i]), one), s: i });
@@ -721,7 +722,7 @@ export function buildAutobahnScenery(track: Track, terrain: TerrainData, quality
   }
   for (const [a] of bridges) groundSign('bridge', a - 70, E + 1.8, 1.3);
   if (atlas && signGeos.length) {
-    const signMat = new THREE.MeshStandardMaterial({ map: atlas, emissive: '#ffffff', emissiveMap: atlas, emissiveIntensity: 0.12, roughness: 0.45, alphaTest: 0.5 });
+    const signMat = cutout(new THREE.MeshStandardMaterial({ map: atlas, emissive: '#ffffff', emissiveMap: atlas, emissiveIntensity: 0.12, roughness: 0.45, alphaTest: 0.5 }));
     nightEmissive.push(signMat);
     const signs = new THREE.Mesh(mergeGeometries(signGeos), signMat);
     signs.name = 'signs';

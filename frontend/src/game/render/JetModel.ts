@@ -1,4 +1,6 @@
 import * as THREE from 'three';
+import { MeshBasicNodeMaterial } from 'three/webgpu';
+import { abs, clamp as clampNode, dot, mix, normalView, positionViewDirection, pow, sin, uniform, uv, vec3, vec4 } from 'three/tsl';
 import type { CarSpec } from '../vehicle/carSpecs';
 import { adoptMaterials, createCarMaterials, modelAnchors, type CarMaterials, type CarRig } from './CarModel';
 import { clamp, damp } from '../util/math';
@@ -66,37 +68,18 @@ const AXIS_X = new THREE.Vector3(1, 0, 0), AXIS_Y = new THREE.Vector3(0, 1, 0);
 
 /** the afterburner plume: a hot core, an orange sheath and shock diamonds (additive, never written to depth) */
 function flameMaterial() {
-  return new THREE.ShaderMaterial({
-    transparent: true,
-    depthWrite: false,
-    blending: THREE.AdditiveBlending,
-    side: THREE.DoubleSide,
-    uniforms: { uAb: { value: 0 }, uMil: { value: 0 }, uTime: { value: 0 } },
-    vertexShader: /* glsl */ `
-      varying vec2 vUv; varying vec3 vN; varying vec3 vV;
-      void main() {
-        vUv = uv;
-        vN = normalize(normalMatrix * normal);
-        vec4 mv = modelViewMatrix * vec4(position, 1.0);
-        vV = normalize(-mv.xyz);
-        gl_Position = projectionMatrix * mv;
-      }`,
-    fragmentShader: /* glsl */ `
-      uniform float uAb; uniform float uMil; uniform float uTime;
-      varying vec2 vUv; varying vec3 vN; varying vec3 vV;
-      void main() {
-        // vUv.y: 1 at the nozzle, 0 at the tail of the plume
-        float t = clamp(vUv.y, 0.0, 1.0);
-        float edge = clamp(abs(dot(vN, vV)), 0.0, 1.0);
-        float core = pow(edge, 2.0);
-        float diamonds = 0.65 + 0.35 * sin((1.0 - t) * 28.0 - uTime * 3.0);
-        float ab = uAb * pow(t, 0.8) * diamonds;
-        float mil = uMil * pow(t, 6.0);
-        vec3 hot = mix(vec3(1.0, 0.45, 0.12), vec3(0.75, 0.82, 1.0), core);
-        vec3 col = hot * ab * core * 1.6 + vec3(1.0, 0.4, 0.15) * mil * core * 0.5;
-        gl_FragColor = vec4(col, 1.0);
-      }`,
-  });
+  const uAb = uniform(0), uMil = uniform(0), uTime = uniform(0);
+  const material = new MeshBasicNodeMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, fog: false });
+  // uv.y: 1 at the nozzle, 0 at the tail of the plume
+  const t = clampNode(uv().y, 0, 1);
+  const edge = clampNode(abs(dot(normalView, positionViewDirection)), 0, 1);
+  const core = edge.mul(edge);
+  const diamonds = sin(t.oneMinus().mul(28).sub(uTime.mul(3))).mul(0.35).add(0.65);
+  const ab = uAb.mul(pow(t, 0.8)).mul(diamonds);
+  const mil = uMil.mul(pow(t, 6));
+  const hot = mix(vec3(1, 0.45, 0.12), vec3(0.75, 0.82, 1), core);
+  material.colorNode = vec4(hot.mul(ab).mul(core).mul(1.6).add(vec3(1, 0.4, 0.15).mul(mil).mul(core).mul(0.5)), 1);
+  return { material, uAb, uMil, uTime };
 }
 
 export function buildJet(spec: CarSpec, opts: { bodyColor?: string; procedural?: boolean } = {}): CarRig & { jet: JetRig } {
@@ -133,7 +116,7 @@ export function buildJet(spec: CarSpec, opts: { bodyColor?: string; procedural?:
 
   // nozzles: each exit's centre and radius in the root's frame, with a plume
   const nozzles: JetRig['nozzles'] = [];
-  const flames: THREE.ShaderMaterial[] = [];
+  const flames: ReturnType<typeof flameMaterial>[] = [];
   const toRoot = root.matrixWorld.clone().invert();
   for (const name of ['nozzle_l', 'nozzle_r']) {
     const n = node(name);
@@ -142,8 +125,8 @@ export function buildJet(spec: CarSpec, opts: { bodyColor?: string; procedural?:
     const radius = Math.max(0.2, Math.min(box.max.x - box.min.x, box.max.y - box.min.y) / 2);
     const pos = new THREE.Vector3((box.min.x + box.max.x) / 2, (box.min.y + box.max.y) / 2, box.min.z);
     nozzles.push({ pos, radius });
-    const mat = flameMaterial();
-    flames.push(mat);
+    const flame = flameMaterial(), mat = flame.material;
+    flames.push(flame);
     const len = radius * 9;
     const plume = new THREE.Mesh(new THREE.CylinderGeometry(radius * 0.85, radius * 0.25, len, 20, 1, true).rotateX(-Math.PI / 2).translate(0, 0, -len / 2), mat);
     plume.position.copy(pos);
@@ -193,9 +176,9 @@ export function buildJet(spec: CarSpec, opts: { bodyColor?: string; procedural?:
         ab = damp(ab, live.afterburner, 10, dt);
       }
       for (const f of flames) {
-        f.uniforms.uAb.value = ab * (0.9 + 0.1 * Math.sin(time * 37));
-        f.uniforms.uMil.value = spool * (1 - ab);
-        f.uniforms.uTime.value = time;
+        f.uAb.value = ab * (0.9 + 0.1 * Math.sin(time * 37));
+        f.uMil.value = spool * (1 - ab);
+        f.uTime.value = time;
       }
       // the anti-collision beacons flash about once a second
       for (const l of lamps) l.mat.emissiveIntensity = l.beacon ? (time % 1.1 < 0.12 ? 6 : 0) : 3 * lightOn;

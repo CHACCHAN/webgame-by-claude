@@ -1,4 +1,6 @@
 import * as THREE from 'three';
+import { MeshBasicNodeMaterial } from 'three/webgpu';
+import { abs, clamp as clampNode, dot, normalView, positionViewDirection, pow, uniform, uv, vec3, vec4 } from 'three/tsl';
 import type { CarSpec } from '../vehicle/carSpecs';
 import { trainNoseZ } from '../vehicle/trains';
 import { traitsOf } from '../vehicle/kinds';
@@ -8,6 +10,8 @@ import { clamp, damp } from '../util/math';
 
 const _q = new THREE.Quaternion(), _p = new THREE.Vector3();
 const AXIS_Y = new THREE.Vector3(0, 1, 0), AXIS_X = new THREE.Vector3(1, 0, 0);
+/** the materials of a car model's parts that throw shadows */
+const SHADOW_PARTS = /^(paint|accent|trim|glass|tire|rim)$/;
 /** headlight level from which pop-up lamps open and position lamps count as "on" (below: daytime) */
 const LIGHTS_ON = 0.75;
 /** pop-up pod: width, height, depth (m); hinge angle closed / open (rad, + = folded into the bonnet) */
@@ -37,6 +41,8 @@ export class CarVisual {
   color: string | undefined;
   readonly headlights: THREE.SpotLight[] = [];
   private beams: THREE.Mesh[] = [];
+  /** brightness of the beam cones (shared by this car's cones) */
+  private beamLevel = uniform(0);
   private bodyPitch = 0;
   private bodyRoll = 0;
   private ghostMaterials: THREE.Material[] = [];
@@ -64,12 +70,18 @@ export class CarVisual {
     this.root.add(this.rig.root);
     this.rig.root.position.y = -opts.rideHeight;
 
+    const meshes: THREE.Mesh[] = [];
     this.rig.root.traverse((o) => {
-      if ((o as THREE.Mesh).isMesh) {
-        (o as THREE.Mesh).castShadow = opts.shadows && !opts.ghost;
-        (o as THREE.Mesh).receiveShadow = !opts.ghost;
-      }
+      if ((o as THREE.Mesh).isMesh) meshes.push(o as THREE.Mesh);
     });
+    const named = (m: THREE.Mesh, test: (name: string) => boolean) => ([] as THREE.Material[]).concat(m.material).some((x) => test(x.name));
+    // on our car models (their materials carry the contract's names) only the shell, the glass and the wheels throw
+    // shadows: every caster is a draw call in every shadow map, and the lamps, the cabin and the brakes sit inside
+    const sorted = meshes.some((m) => named(m, (n) => n === 'paint'));
+    for (const m of meshes) {
+      m.castShadow = opts.shadows && !opts.ghost && (!sorted || named(m, (n) => SHADOW_PARTS.test(n)));
+      m.receiveShadow = !opts.ghost;
+    }
 
     if (opts.ghost) this.makeGhost();
     if (this.rig.popUps && !opts.ghost) this.useModelPods(this.rig.popUps);
@@ -91,31 +103,15 @@ export class CarVisual {
       lamps.add(spot, spot.target);
       this.headlights.push(spot);
       // volumetric-ish beam cones
-      const beamMat = new THREE.ShaderMaterial({
-        transparent: true,
-        depthWrite: false,
-        blending: THREE.AdditiveBlending,
-        side: THREE.DoubleSide,
-        uniforms: { uIntensity: { value: 0.0 } },
-        vertexShader: /* glsl */ `
-          varying float vT; varying vec3 vN; varying vec3 vV;
-          void main() {
-            vT = uv.y;
-            vN = normalize(normalMatrix * normal);
-            vec4 mv = modelViewMatrix * vec4(position, 1.0);
-            vV = normalize(-mv.xyz);
-            gl_Position = projectionMatrix * mv;
-          }`,
-        fragmentShader: /* glsl */ `
-          uniform float uIntensity; varying float vT; varying vec3 vN; varying vec3 vV;
-          void main() {
-            float edge = pow(abs(dot(vN, vV)), 1.5);
-            // interpolation leaves vT a hair below 0 at the far rim: pow() of a negative base is NaN, and one NaN
-            // pixel spread by the bloom blur blacked out the whole frame
-            float a = pow(clamp(vT, 0.0, 1.0), 2.2) * edge * uIntensity;
-            gl_FragColor = vec4(vec3(1.0, 0.93, 0.8) * a, 1.0);
-          }`,
-      });
+      const beamMat = new MeshBasicNodeMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, fog: false });
+      {
+        // brightest seen along the cone's wall, fading to nothing at its far rim. The clamp matters: interpolation
+        // leaves v a hair below 0 at the rim, pow() of a negative base is NaN, and one NaN pixel spread by the bloom
+        // blur blacked out the whole frame
+        const edge = pow(abs(dot(normalView, positionViewDirection)), 1.5);
+        const a = pow(clampNode(uv().y, 0, 1), 2.2).mul(edge).mul(this.beamLevel);
+        beamMat.colorNode = vec4(vec3(1, 0.93, 0.8).mul(a), 1);
+      }
       // the beams come out of the raised pods on pop-up cars
       const sources = this.pods.length ? this.pods.map((h) => new THREE.Vector3(h.position.x, h.position.y + POD.h * 0.55, h.position.z + POD.d)) : this.rig.anchors.headlights;
       if (this.pods.length) spot.position.y = sources[0].y;
@@ -155,8 +151,8 @@ export class CarVisual {
 
   private applyBeams(level: number) {
     for (const s of this.headlights) s.intensity = 260 * level;
+    this.beamLevel.value = 0.05 * level;
     for (const b of this.beams) {
-      ((b.material as THREE.ShaderMaterial).uniforms.uIntensity.value as number) = 0.05 * level;
       b.visible = level > 0.05;
     }
   }

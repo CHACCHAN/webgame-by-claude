@@ -1,4 +1,11 @@
 import * as THREE from 'three';
+import { MeshBasicNodeMaterial, PMREMGenerator, SpriteNodeMaterial } from 'three/webgpu';
+import {
+  Fn, abs, cameraProjectionMatrix, clamp, cos, dot, exp, float, floor, fract, instancedBufferAttribute, max, mix, mod, modelViewMatrix, normalize,
+  positionLocal, positionWorld, pow, select, sin, smoothstep, step, texture, uniform, uv, vec2, vec3, vec4,
+} from 'three/tsl';
+import type { GameRenderer } from './RenderHost';
+import { fbm, hash3, vnoise, type Float, type Vec3 } from './tslNoise';
 import type { TerrainData } from '../track/terrain';
 import { rng } from '../util/math';
 import { makeGlowTexture } from './textures';
@@ -111,90 +118,80 @@ export const PRESETS: Record<TimeOfDay, Preset> = {
   },
 };
 
-const skyVert = /* glsl */ `
-varying vec3 vDir;
-void main() {
-  vDir = position;
-  vec4 p = modelViewMatrix * vec4(position, 1.0);
-  gl_Position = projectionMatrix * p;
-  gl_Position.z = gl_Position.w; // at infinity
-}`;
-
-const skyFrag = /* glsl */ `
-uniform vec3 uZenith, uHorizon, uGlow, uCloudColor, uKeyDir, uKeyColor, uCityDir, uGround;
-uniform float uCityGlow, uStars, uTime, uClouds, uIsSun, uDisc, uOvercast;
-varying vec3 vDir;
-float hash(vec3 p) { p = fract(p * 0.3183099 + 0.1); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
-float hash2(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
-float vnoise(vec2 p) {
-  vec2 i = floor(p), f = fract(p);
-  f = f * f * (3.0 - 2.0 * f);
-  return mix(mix(hash2(i), hash2(i + vec2(1, 0)), f.x), mix(hash2(i + vec2(0, 1)), hash2(i + vec2(1, 1)), f.x), f.y);
+/** a uniform the rig sets by `.value` */
+type U<T> = { value: T };
+interface SkyUniforms {
+  uZenith: U<THREE.Color>; uHorizon: U<THREE.Color>; uGlow: U<THREE.Color>; uCloudColor: U<THREE.Color>; uKeyDir: U<THREE.Vector3>;
+  uKeyColor: U<THREE.Color>; uCityDir: U<THREE.Vector3>; uGround: U<THREE.Color>;
+  uCityGlow: U<number>; uStars: U<number>; uTime: U<number>; uClouds: U<number>; uIsSun: U<number>; uDisc: U<number>; uOvercast: U<number>;
 }
-float fbm(vec2 p) { float a = 0.5, s = 0.0; for (int i = 0; i < 5; i++) { s += a * vnoise(p); p *= 2.03; a *= 0.5; } return s; }
-void main() {
-  vec3 d = normalize(vDir);
-  float h = d.y;
-  vec3 col = mix(uHorizon, uZenith, pow(clamp(h, 0.0, 1.0), 0.42));
-  col = mix(col, uHorizon * 0.55, smoothstep(0.0, -0.25, h));
-  // light pollution from the city below
-  vec3 flatDir = normalize(vec3(d.x, 0.0, d.z) + 1e-5);
-  float cityA = max(dot(flatDir, uCityDir), 0.0);
-  // strongest right at the horizon line, fading both upwards and below it (seen past the terrain edge)
-  col += uGlow * pow(cityA, 2.5) * exp(-max(h + 0.02, 0.0) * 10.0) * smoothstep(-0.16, -0.02, h) * uCityGlow;
-  // key light glow (sun at dawn) and disc (moon/sun)
-  float kd = max(dot(d, uKeyDir), 0.0);
-  col += uKeyColor * (pow(kd, 8.0) * 0.25 + pow(kd, 64.0) * 0.5) * (0.15 + uIsSun * 0.85);
-  float disc = smoothstep(mix(0.99955, 0.9993, uIsSun), mix(0.9997, 0.9996, uIsSun), kd);
-  vec3 discCol = mix(vec3(1.0, 0.97, 0.9) * 2.6, vec3(1.0, 0.85, 0.6) * 9.0, uIsSun);
-  // subtle craters on the moon
-  float crater = (1.0 - uIsSun) * (vnoise(d.xy * 900.0) * 0.25);
-  col = mix(col, discCol * (1.0 - crater), disc * uDisc);
-  // stars
-  if (uStars > 0.0 && h > 0.0) {
-    vec3 sp = d * 320.0;
-    vec3 cell = floor(sp);
-    float r = hash(cell);
-    if (r > 0.985) {
-      vec3 f = fract(sp) - 0.5;
-      float tw = 0.65 + 0.35 * sin(uTime * (1.5 + r * 6.0) + r * 100.0);
-      float b = smoothstep(0.25, 0.0, length(f)) * (r - 0.985) / 0.015;
-      col += vec3(0.8 + r * 0.2, 0.85, 1.0) * b * tw * 1.6 * uStars * smoothstep(0.0, 0.25, h);
-    }
+
+/** The sky dome: gradient, the city's glow on the horizon, moon or sun, stars and the milky band, thin clouds. */
+function skyMaterial(cityDir: THREE.Vector3) {
+  const u = {
+    uZenith: uniform(new THREE.Color()), uHorizon: uniform(new THREE.Color()), uGlow: uniform(new THREE.Color()),
+    uCloudColor: uniform(new THREE.Color()), uKeyDir: uniform(new THREE.Vector3(0, 1, 0)), uKeyColor: uniform(new THREE.Color()),
+    uCityDir: uniform(cityDir), uGround: uniform(new THREE.Color()),
+    uCityGlow: uniform(1), uStars: uniform(1), uTime: uniform(0), uClouds: uniform(0.4), uIsSun: uniform(0), uDisc: uniform(1), uOvercast: uniform(0),
+  };
+  const colour = Fn(() => {
+    const d = normalize(positionLocal);
+    const h = d.y;
+    const col = mix(u.uHorizon, u.uZenith, pow(clamp(h, 0, 1), 0.42)).toVar();
+    col.assign(mix(col, u.uHorizon.mul(0.55), smoothstep(0, -0.25, h)));
+    // light pollution from the city below: strongest right at the horizon line, fading both upwards and below it
+    // (seen past the terrain edge)
+    const flatDir = normalize(vec3(d.x, 0, d.z).add(1e-5));
+    const cityA = max(dot(flatDir, u.uCityDir), 0);
+    col.addAssign(u.uGlow.mul(pow(cityA, 2.5)).mul(exp(max(h.add(0.02), 0).mul(-10))).mul(smoothstep(-0.16, -0.02, h)).mul(u.uCityGlow));
+    // key light glow (sun at dawn) and disc (moon/sun)
+    const kd = max(dot(d, u.uKeyDir), 0);
+    col.addAssign(u.uKeyColor.mul(pow(kd, 8).mul(0.25).add(pow(kd, 64).mul(0.5))).mul(u.uIsSun.mul(0.85).add(0.15)));
+    const disc = smoothstep(mix(0.99955, 0.9993, u.uIsSun), mix(0.9997, 0.9996, u.uIsSun), kd);
+    const discCol = mix(vec3(1, 0.97, 0.9).mul(2.6), vec3(1, 0.85, 0.6).mul(9), u.uIsSun);
+    // subtle craters on the moon
+    const crater = float(1).sub(u.uIsSun).mul(vnoise(d.xy.mul(900)).mul(0.25));
+    col.assign(mix(col, discCol.mul(float(1).sub(crater)), disc.mul(u.uDisc)));
+    // stars (above the horizon): one in ~70 cells of a 320-unit grid on the dome
+    const above = step(0, h);
+    const sp = d.mul(320);
+    const r = hash3(floor(sp));
+    const f = fract(sp).sub(0.5);
+    const tw = sin(u.uTime.mul(r.mul(6).add(1.5)).add(r.mul(100))).mul(0.35).add(0.65);
+    const star = smoothstep(0.25, 0, f.length()).mul(max(r.sub(0.985), 0).div(0.015));
+    col.addAssign(vec3(r.mul(0.2).add(0.8), 0.85, 1).mul(star).mul(tw).mul(1.6).mul(u.uStars).mul(smoothstep(0, 0.25, h)).mul(above));
     // faint milky band
-    // b * b, not pow(b, 2.0): pow of a negative base is undefined (NaN on Direct3D)
-    float b = dot(d, normalize(vec3(0.35, 0.62, -0.7)));
-    float band = exp(-b * b * 22.0);
-    col += vec3(0.05, 0.055, 0.08) * band * smoothstep(0.45, 0.8, fbm(d.xz * 6.0 + d.y * 3.0)) * uStars;
-  }
-  // thin clouds
-  if (h > 0.0 && uClouds > 0.0) {
-    vec2 uv = d.xz / (h + 0.12) * 1.4 + vec2(uTime * 0.004, 0.0);
-    float c = smoothstep(0.52 - uOvercast * 0.45, 0.85 - uOvercast * 0.3, fbm(uv));
-    float lit = 0.5 + 0.5 * pow(kd, 4.0);
-    col = mix(col, uCloudColor * lit, c * uClouds * smoothstep(0.0, 0.18, h));
-  }
-  // below the horizon the dome stands in for distant, fogged ground (past the edge of the terrain)
-  col = mix(col, uGround, smoothstep(-0.004, -0.03, h));
-  gl_FragColor = vec4(col, 1.0);
-  #include <tonemapping_fragment>
-  #include <colorspace_fragment>
-}`;
+    const bandDot = dot(d, normalize(vec3(0.35, 0.62, -0.7)));
+    const band = exp(bandDot.mul(bandDot).mul(-22));
+    col.addAssign(vec3(0.05, 0.055, 0.08).mul(band).mul(smoothstep(0.45, 0.8, fbm(d.xz.mul(6).add(d.y.mul(3)), 5, 2.03))).mul(u.uStars).mul(above));
+    // thin clouds
+    const cuv = d.xz.div(max(h, 0).add(0.12)).mul(1.4).add(vec2(u.uTime.mul(0.004), 0));
+    const c = smoothstep(u.uOvercast.mul(-0.45).add(0.52), u.uOvercast.mul(-0.3).add(0.85), fbm(cuv, 5, 2.03));
+    const lit = pow(kd, 4).mul(0.5).add(0.5);
+    col.assign(mix(col, u.uCloudColor.mul(lit), c.mul(u.uClouds).mul(smoothstep(0, 0.18, h)).mul(above)));
+    // below the horizon the dome stands in for distant, fogged ground (past the edge of the terrain)
+    col.assign(mix(col, u.uGround, smoothstep(-0.004, -0.03, h)));
+    return vec4(col, 1);
+  });
+  const mat = new MeshBasicNodeMaterial({ side: THREE.BackSide, depthWrite: false, depthTest: false, fog: false });
+  mat.colorNode = colour();
+  return { mat, uniforms: u as SkyUniforms };
+}
 
 export interface EnvironmentRig {
   group: THREE.Group;
   sky: THREE.Mesh;
-  skyUniforms: Record<string, THREE.IUniform>;
+  skyUniforms: SkyUniforms;
   key: THREE.DirectionalLight;
   hemi: THREE.HemisphereLight;
   fog: THREE.FogExp2;
-  city: THREE.Points;
+  city: THREE.Object3D;
   sea: THREE.Mesh;
   cloudSea: THREE.Mesh;
   preset: Preset;
-  apply(tod: TimeOfDay, scene: THREE.Scene, renderer: THREE.WebGLRenderer): void;
+  apply(tod: TimeOfDay, scene: THREE.Scene, renderer: GameRenderer): void;
   update(time: number, focus: THREE.Vector3): void;
-  buildEnvMap(renderer: THREE.WebGLRenderer): THREE.Texture;
+  buildEnvMap(renderer: GameRenderer): THREE.Texture;
   /** frees the reflection environment's render target */
   dispose(): void;
 }
@@ -203,30 +200,12 @@ export function buildEnvironment(terrain: TerrainData): EnvironmentRig {
   const group = new THREE.Group();
   group.name = 'environment';
 
-  let envRT: THREE.WebGLRenderTarget | null = null;
+  let envRT: THREE.RenderTarget | null = null;
 
-  // ---- sky dome
-  const skyUniforms: Record<string, THREE.IUniform> = {
-    uZenith: { value: new THREE.Color() },
-    uHorizon: { value: new THREE.Color() },
-    uGlow: { value: new THREE.Color() },
-    uCloudColor: { value: new THREE.Color() },
-    uKeyDir: { value: new THREE.Vector3() },
-    uKeyColor: { value: new THREE.Color() },
-    uCityDir: { value: new THREE.Vector3(...terrain.landform.cityGlowDir).normalize() },
-    uCityGlow: { value: 1 },
-    uGround: { value: new THREE.Color() },
-    uStars: { value: 1 },
-    uTime: { value: 0 },
-    uClouds: { value: 0.4 },
-    uIsSun: { value: 0 },
-    uDisc: { value: 1 },
-    uOvercast: { value: 0 },
-  };
-  const sky = new THREE.Mesh(
-    new THREE.SphereGeometry(9000, 48, 24),
-    new THREE.ShaderMaterial({ uniforms: skyUniforms, vertexShader: skyVert, fragmentShader: skyFrag, side: THREE.BackSide, depthWrite: false }),
-  );
+  // ---- sky dome (drawn first and without depth: everything else covers it)
+  const skyParts = skyMaterial(new THREE.Vector3(...terrain.landform.cityGlowDir).normalize());
+  const skyUniforms = skyParts.uniforms;
+  const sky = new THREE.Mesh(new THREE.SphereGeometry(9000, 48, 24), skyParts.mat);
   sky.frustumCulled = false;
   sky.renderOrder = -10;
   group.add(sky);
@@ -292,61 +271,33 @@ export function buildEnvironment(terrain: TerrainData): EnvironmentRig {
   heightTex.magFilter = THREE.LinearFilter;
   heightTex.minFilter = THREE.LinearFilter;
   heightTex.needsUpdate = true;
-  const cloudMat = new THREE.ShaderMaterial({
-    transparent: true,
-    depthWrite: false,
-    fog: true,
-    uniforms: THREE.UniformsUtils.merge([
-      THREE.UniformsLib.fog,
-      {
-        uTime: { value: 0 }, uColor: { value: new THREE.Color('#fff0e6') }, uShade: { value: new THREE.Color('#8a90a8') },
-        uSun: { value: new THREE.Vector3() }, uOpacity: { value: 1 },
-        uHeight: { value: heightTex }, uHeightBox: { value: new THREE.Vector3(hx0, hz0, hSpan) }, uLayer: { value: lf.cloudLevel },
-      },
-    ]),
-    vertexShader: /* glsl */ `
-      varying vec3 vWorld;
-      #include <fog_pars_vertex>
-      void main() {
-        vec4 wp = modelMatrix * vec4(position, 1.0);
-        vWorld = wp.xyz;
-        vec4 mvPosition = viewMatrix * wp;
-        gl_Position = projectionMatrix * mvPosition;
-        #include <fog_vertex>
-      }`,
-    fragmentShader: /* glsl */ `
-      uniform float uTime, uOpacity, uLayer; uniform vec3 uColor, uShade, uSun, uHeightBox;
-      uniform sampler2D uHeight;
-      varying vec3 vWorld;
-      #include <fog_pars_fragment>
-      float hash2(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
-      float vnoise(vec2 p) { vec2 i = floor(p), f = fract(p); f = f*f*(3.0-2.0*f);
-        return mix(mix(hash2(i), hash2(i+vec2(1,0)), f.x), mix(hash2(i+vec2(0,1)), hash2(i+vec2(1,1)), f.x), f.y); }
-      float fbm(vec2 p) { float a = 0.5, s = 0.0; for (int i = 0; i < 6; i++) { s += a * vnoise(p); p *= 2.07; a *= 0.5; } return s; }
-      void main() {
-        vec2 uv = vWorld.xz / 900.0 + vec2(uTime * 0.003, uTime * 0.0015);
-        float n = fbm(uv);
-        float n2 = fbm(uv * 3.0 + 7.0);
-        float density = smoothstep(0.32, 0.62, n * 0.8 + n2 * 0.3);
-        vec2 huv = (vWorld.xz - uHeightBox.xy) / uHeightBox.z;
-        float ground = texture2D(uHeight, huv).r;
-        density *= smoothstep(-5.0, 45.0, uLayer - ground);
-        // fake lighting: crests catch the low sun
-        float crest = smoothstep(0.45, 0.9, n2);
-        vec3 col = mix(uShade, uColor, 0.35 + crest * 0.65);
-        gl_FragColor = vec4(col, density * uOpacity);
-        #include <fog_fragment>
-        #include <tonemapping_fragment>
-        #include <colorspace_fragment>
-      }`,
-  });
+  const cloudU = {
+    uTime: uniform(0), uColor: uniform(new THREE.Color('#fff0e6')), uShade: uniform(new THREE.Color('#8a90a8')), uOpacity: uniform(1),
+    uHeightBox: uniform(new THREE.Vector3(hx0, hz0, hSpan)), uLayer: uniform(lf.cloudLevel),
+  };
+  const cloudMat = new MeshBasicNodeMaterial({ transparent: true, depthWrite: false, fog: true });
+  {
+    const wp = positionWorld;
+    const cuv = wp.xz.div(900).add(vec2(cloudU.uTime.mul(0.003), cloudU.uTime.mul(0.0015)));
+    const n = fbm(cuv, 6, 2.07);
+    const n2 = fbm(cuv.mul(3).add(7), 6, 2.07);
+    const huv = wp.xz.sub(cloudU.uHeightBox.xy).div(cloudU.uHeightBox.z);
+    const ground = texture(heightTex, huv).r;
+    // thins out where the mountainside rises into the layer
+    const density = smoothstep(0.32, 0.62, n.mul(0.8).add(n2.mul(0.3))).mul(smoothstep(-5, 45, cloudU.uLayer.sub(ground)));
+    // fake lighting: crests catch the low sun
+    const crest = smoothstep(0.45, 0.9, n2);
+    cloudMat.colorNode = mix(cloudU.uShade, cloudU.uColor, crest.mul(0.65).add(0.35));
+    cloudMat.opacityNode = density.mul(cloudU.uOpacity);
+  }
   const cloudSea = new THREE.Mesh(new THREE.PlaneGeometry(30000, 30000, 1, 1).rotateX(-Math.PI / 2), cloudMat);
   cloudSea.position.set(terrain.near.x0 + (terrain.near.nx * terrain.near.cell) / 2, lf.cloudLevel, terrain.near.z0 + (terrain.near.nz * terrain.near.cell) / 2);
   cloudSea.renderOrder = 2;
   group.add(cloudSea);
 
   // ---- city lights
-  const city = buildCityLights(terrain);
+  const cityLights = buildCityLights(terrain);
+  const city = cityLights.object;
   group.add(city);
 
   const rig: EnvironmentRig = {
@@ -388,16 +339,15 @@ export function buildEnvironment(terrain: TerrainData): EnvironmentRig {
       scene.fog = fog;
       renderer.toneMappingExposure = p.exposure;
       seaMat.color.set(p.sea);
-      (city.material as THREE.ShaderMaterial).uniforms.uIntensity.value = p.cityLights;
+      cityLights.uniforms.uIntensity.value = p.cityLights;
       city.visible = p.cityLights > 0;
       cloudSea.visible = p.seaOfClouds > 0;
-      cloudMat.uniforms.uSun.value.copy(p.keyDir);
     },
     update(time, focus) {
       skyUniforms.uTime.value = time;
       sky.position.copy(focus);
-      (city.material as THREE.ShaderMaterial).uniforms.uTime.value = time;
-      cloudMat.uniforms.uTime.value = time;
+      cityLights.uniforms.uTime.value = time;
+      cloudU.uTime.value = time;
       seaNormal.offset.set(time * 0.002, time * 0.0013);
       // keep the shadow frustum around the focus point
       key.position.copy(focus).addScaledVector(rig.preset.keyDir, 250);
@@ -420,7 +370,7 @@ export function buildEnvironment(terrain: TerrainData): EnvironmentRig {
       const ground = new THREE.Mesh(new THREE.PlaneGeometry(2000, 2000).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: new THREE.Color(rig.preset.hemiGround) }));
       ground.position.y = -20;
       envScene.add(ground);
-      const pmrem = new THREE.PMREMGenerator(renderer);
+      const pmrem = new PMREMGenerator(renderer);
       const rt = pmrem.fromScene(envScene, 0.02, 1, 12000);
       pmrem.dispose();
       envScene.traverse((o) => {
@@ -556,53 +506,36 @@ function buildCityLights(terrain: TerrainData) {
   }
   for (const [x, z] of lf.features.turbines ?? []) push(x, terrain.heightAt(x, z) + 63, z, red, 3.4, 2);
 
-  const geo = new THREE.BufferGeometry();
-  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-  geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
-  geo.setAttribute('size', new THREE.Float32BufferAttribute(size, 1));
-  geo.setAttribute('anim', new THREE.Float32BufferAttribute(anim, 1));
-  const mat = new THREE.ShaderMaterial({
-    transparent: true,
-    depthWrite: false,
-    blending: THREE.AdditiveBlending,
-    uniforms: {
-      uTime: { value: 0 }, uIntensity: { value: 1 }, uMap: { value: makeGlowTexture() }, uPixelRatio: { value: 1 },
-      uFerris: { value: new THREE.Vector3(fw?.[0] ?? 0, 45, fw?.[1] ?? 0) },
-    },
-    vertexShader: /* glsl */ `
-      attribute float size; attribute float anim; attribute vec3 color;
-      uniform float uTime, uPixelRatio; uniform vec3 uFerris;
-      varying vec3 vColor; varying float vFade;
-      void main() {
-        vec3 p = position;
-        float blink = 1.0;
-        if (anim >= 3.0) {
-          // ferris wheel rotation
-          float a = (anim - 3.0) * 6.2831 + uTime * 0.05;
-          p = uFerris + vec3(cos(a), sin(a), 0.0) * 35.0;
-        } else if (anim >= 2.0) {
-          blink = step(0.5, fract(uTime * 0.5 + p.x * 0.01));
-        } else if (abs(anim) >= 1.0) {
-          p.x = mod(p.x + 3000.0 + uTime * 22.0 * anim, 7500.0) - 3000.0;
-        }
-        vec4 mv = modelViewMatrix * vec4(p, 1.0);
-        float dist = -mv.z;
-        gl_PointSize = clamp(size * 900.0 / dist, 1.2, 18.0) * uPixelRatio;
-        gl_Position = projectionMatrix * mv;
-        vColor = color * blink;
-        vFade = exp(-dist * 0.00016);
-      }`,
-    fragmentShader: /* glsl */ `
-      uniform sampler2D uMap; uniform float uIntensity;
-      varying vec3 vColor; varying float vFade;
-      void main() {
-        float a = texture2D(uMap, gl_PointCoord).r;
-        gl_FragColor = vec4(vColor * a * uIntensity * (0.35 + vFade * 1.6), 1.0);
-        #include <colorspace_fragment>
-      }`,
-  });
-  const pts = new THREE.Points(geo, mat);
+  // one camera-facing quad per light (WebGPU has no sized points): the position, colour, size and animation kind
+  // of each are per-instance attributes
+  const n = size.length;
+  const aPos = instancedBufferAttribute(new THREE.InstancedBufferAttribute(new Float32Array(pos), 3), 'vec3') as unknown as Vec3;
+  const aCol = instancedBufferAttribute(new THREE.InstancedBufferAttribute(new Float32Array(col), 3), 'vec3') as unknown as Vec3;
+  const aSize = instancedBufferAttribute(new THREE.InstancedBufferAttribute(new Float32Array(size), 1), 'float') as unknown as Float;
+  const aAnim = instancedBufferAttribute(new THREE.InstancedBufferAttribute(new Float32Array(anim), 1), 'float') as unknown as Float;
+  const uniforms = { uTime: uniform(0), uIntensity: uniform(1), uFerris: uniform(new THREE.Vector3(fw?.[0] ?? 0, 45, fw?.[1] ?? 0)) };
+  const glow = makeGlowTexture();
+  const mat = new SpriteNodeMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false });
+  // ferris wheel gondolas go round (anim ≥ 3), traffic runs along x (|anim| ≥ 1)
+  const wheelA = aAnim.sub(3).mul(6.2831).add(uniforms.uTime.mul(0.05));
+  const onWheel = uniforms.uFerris.add(vec3(cos(wheelA), sin(wheelA), 0).mul(35));
+  const moving = vec3(mod(aPos.x.add(3000).add(uniforms.uTime.mul(22).mul(aAnim)), 7500).sub(3000), aPos.y, aPos.z);
+  const isTraffic = abs(aAnim).greaterThanEqual(1).and(aAnim.lessThan(2));
+  const p = select(aAnim.greaterThanEqual(3), onWheel, select(isTraffic, moving, aPos));
+  // aviation lights blink (2 ≤ anim < 3)
+  const blink = select(aAnim.greaterThanEqual(2).and(aAnim.lessThan(3)), step(0.5, fract(uniforms.uTime.mul(0.5).add(aPos.x.mul(0.01)))), 1);
+  const dist = modelViewMatrix.mul(vec4(p, 1)).z.negate();
+  // 1 / tan(half the vertical field of view)
+  const projY = (cameraProjectionMatrix as unknown as Float[][])[1][1];
+  mat.positionNode = p;
+  // sized in pixels of a 1080-line screen (1.2–18 px), whatever the distance and the drawing resolution
+  mat.sizeAttenuation = false;
+  mat.scaleNode = clamp(aSize.mul(900).div(max(dist, 1)), 1.2, 18).div(1080).mul(2).div(projY);
+  const fade = exp(dist.mul(-0.00016));
+  mat.colorNode = aCol.mul(blink).mul(texture(glow, uv()).r).mul(uniforms.uIntensity).mul(fade.mul(1.6).add(0.35));
+  const pts = new THREE.Sprite(mat as unknown as THREE.SpriteMaterial);
+  pts.count = n;
   pts.frustumCulled = false;
   pts.name = 'city';
-  return pts;
+  return { object: pts, uniforms };
 }

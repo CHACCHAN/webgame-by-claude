@@ -6,7 +6,7 @@ pending. `docs/PLAN.md` holds the design.
 
 ## Layout
 - `backend/` Laravel 13 JSON API (players, runs, leaderboard, ghosts, online rooms) + Laravel Reverb WebSocket server. Tests: `php artisan test` (sqlite in-memory).
-- `frontend/` Vite + React 19 + three.js 0.186 + @react-three/fiber + postprocessing + Rapier (compat).
+- `frontend/` Vite + React 19 + three.js 0.186 (`WebGPURenderer`: WebGPU, or its WebGL 2 backend; node materials / TSL) + Rapier (compat).
   - `src/game/` engine code, DOM-free where possible so it runs in Node for headless sims:
     `track/` (course design, Track centerline, terrain, road geometry), `vehicle/` (PhysicsWorld, VehicleSim, specs),
     `ai/` (RacingLine, AIDriver), `race/Ghost.ts` (record/playback/codec), `render/` (scenery, environment, car models),
@@ -24,8 +24,10 @@ pending. `docs/PLAN.md` holds the design.
 - Headless driving sim: `cd frontend && npx tsx tools/sim-run.ts [cars] [levels]`
 - Handling numbers (wall hits: bounce / spin / thrown out; drift entries: time held, peak angle): `npx tsx tools/handling-feel.ts [cars]`
 - E2E: `docker compose --profile test run --rm e2e` (stack must be up)
-- Real-GPU performance (needs a host GPU + Google Chrome): `cd frontend && node tools/perf-gpu.cjs <course|quality|ab|census>`
-  (`vite preview` on :4173; compare builds with `URL=before@http://…:4174/,after@http://…:4173/`, see the file header).
+- Real-GPU performance (needs a host GPU + Google Chrome; `vite preview` on :4173): `cd frontend && node tools/perf-frame.cjs`
+  (frame cost, any backend; compare builds with `URL=before@http://…:4174/,after@http://…:4173/`, see the file header).
+  `tools/perf-gpu.cjs` (GPU time per pass) only works on builds with the old WebGLRenderer.
+- The look, on fixed viewpoints (every course × time of day, contact sheets): `node tools/shots.cjs <label>` → `~/.local/opt/quality/<label>`.
 
 ## Environment notes (cloud sessions)
 - dockerd is not running by default: `nohup dockerd > /tmp/dockerd.log 2>&1 &`.
@@ -47,7 +49,10 @@ pending. `docs/PLAN.md` holds the design.
   `API_PROXY=http://127.0.0.1:9 npx vite preview …` so test runs cannot create players or submit runs.
 - No Node on the host: use a user-space Node 24 tarball (nodejs.org) and `npm i playwright-core` outside the repo
   (`PW_MODULE=<that>/node_modules/playwright-core`); Chrome is `/usr/bin/google-chrome` and renders on the RX 5700 XT
-  headless (`--use-angle=vulkan --enable-features=Vulkan`, as in `tools/perf-gpu.cjs`).
+  headless (`--use-angle=vulkan --enable-features=Vulkan`, as in `tools/perf-frame.cjs`; WebGPU is there with these flags).
+  The GPU needs the `render` group (`dev` is in it since 11-10; a shell older than that login is not: check
+  `id -nG`, else Chrome silently renders with llvmpipe; `~/.local/opt/quality/gpurun.sh VAR=… <command>` runs one
+  through `sudo -u dev` with the groups, variables given as arguments).
 - The GPU picks its own clock (800–2100 MHz) and frame costs change ~2× with it: compare builds with paired runs.
 - ubuntu-dev is a Proxmox VM (QEMU Q35) with the RX 5700 XT passed through. Navi 10 cannot be reset from a VM restart:
   after a `reboot` (or a start within ~30 s of a shutdown) amdgpu fails (`PSP load smu failed`, no `/dev/dri`) and
@@ -57,6 +62,12 @@ pending. `docs/PLAN.md` holds the design.
   `restart: unless-stopped`, so it comes back by itself after the VM starts.
 
 ## Gotchas
+- Rendering (`render/RenderHost.ts`, created by `ui/GameCanvas.tsx`; no react-three-fiber): `WebGPURenderer` + a TSL
+  `RenderPipeline` (scene → bloom → tone mapping → SMAA → lens). `?webgl=1` forces the WebGL 2 backend. Custom
+  shaders are TSL node materials only: no `ShaderMaterial`, no `onBeforeCompile`, no `THREE.Points` with a size
+  (WebGPU points are 1 px: particles and lamps are instanced `Sprite`s, `fx/SpritePool.ts`). Plain three.js materials
+  (GLB, `MeshStandardMaterial`) still work: the renderer makes their node twins. An `InstancedMesh` with no instances
+  must not reach the scene (WebGPU refuses its empty buffer; `Game` drops them from the scenery).
 - Own 3D models (no third-party assets): Blender Python scripts built by `BLENDER=<bin> node tools/blender-models.cjs
   <trains|cars|props|creatures> [ids] [--render [dir]]` (Blender 5.2 headless → GLB → glTF-Transform: meshopt, WebP;
   trains also palette textures). Scenery: `tools/blender/props/<id>.py` → `public/models/props/<id>.glb`; size,

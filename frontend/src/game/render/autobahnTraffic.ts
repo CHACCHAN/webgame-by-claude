@@ -1,4 +1,7 @@
 import * as THREE from 'three';
+import { SpriteNodeMaterial } from 'three/webgpu';
+import { cameraPosition, cameraProjectionMatrix, cameraViewMatrix, clamp as clampNode, dot, exp, instancedBufferAttribute, instancedDynamicBufferAttribute, max, normalize, saturate as clamp01, select, smoothstep as smoothstepNode, uniform, uv, varying, vec4 } from 'three/tsl';
+import type { Float, Vec3, Vec4 } from './tslNoise';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { Track } from '../track/Track';
 import { clamp, rng, smoothstep } from '../util/math';
@@ -107,7 +110,10 @@ export class AutobahnTraffic {
   readonly group = new THREE.Group();
   private readonly vehicles: Vehicle[] = [];
   private readonly lights: LightDef[][] = [];
-  private readonly points: THREE.Points;
+  private readonly points: THREE.Sprite;
+  private readonly dynamic: THREE.InstancedBufferAttribute[] = [];
+  /** the scene's fog density (read from the scene the group is in) */
+  private readonly fogDensity = uniform(0);
   private readonly trucks: THREE.InstancedMesh;
   private readonly kinds: CarKind[] = [];
   private readonly pos: Float32Array;
@@ -151,49 +157,43 @@ export class AutobahnTraffic {
         size[o] = l.size;
       }),
     );
-    const geo = new THREE.BufferGeometry();
-    geo.setAttribute('position', new THREE.BufferAttribute(this.pos, 3).setUsage(THREE.DynamicDrawUsage));
-    geo.setAttribute('facing', new THREE.BufferAttribute(this.facing, 3).setUsage(THREE.DynamicDrawUsage));
-    geo.setAttribute('gain', new THREE.BufferAttribute(this.gain, 1).setUsage(THREE.DynamicDrawUsage));
-    geo.setAttribute('color', new THREE.BufferAttribute(color, 3));
-    geo.setAttribute('size', new THREE.BufferAttribute(size, 1));
-    const mat = new THREE.ShaderMaterial({
-      transparent: true,
-      depthWrite: false,
-      blending: THREE.AdditiveBlending,
-      fog: true,
-      uniforms: THREE.UniformsUtils.merge([THREE.UniformsLib.fog, { uIntensity: { value: 1 } }]),
-      vertexShader: /* glsl */ `
-        attribute vec3 color; attribute vec3 facing; attribute float size; attribute float gain;
-        uniform float fogDensity, uIntensity;
-        varying vec3 vColor;
-        void main() {
-          vec4 mv = modelViewMatrix * vec4(position, 1.0);
-          float dist = -mv.z;
-          vec3 toCam = normalize(cameraPosition - position);
-          // a lamp shines towards where it faces; marker lamps (no facing) all round
-          float face = dot(facing, facing) > 0.5 ? smoothstep(-0.05, 0.4, dot(facing, toCam)) : 1.0;
-          float fog = exp(-fogDensity * fogDensity * dist * dist);
-          float k = face * fog * gain;
-          float px = size * 900.0 / max(dist, 0.5);
-          // far away a lamp stays a 1.6 px dot and dims instead of shrinking away
-          float dim = clamp(px / 1.6, 0.0, 1.0);
-          gl_PointSize = clamp(px, 1.6, 44.0);
-          vColor = color * k * dim * uIntensity;
-          gl_Position = (k < 0.004 || dist < 0.5) ? vec4(2.0, 2.0, 2.0, 1.0) : projectionMatrix * mv;
-        }`,
-      fragmentShader: /* glsl */ `
-        varying vec3 vColor;
-        void main() {
-          vec2 d = gl_PointCoord - 0.5;
-          float r2 = dot(d, d) * 4.0;
-          // the halo fades to nothing at the sprite's rim (close up its square edge showed)
-          float a = (exp(-r2 * 7.0) + 0.35 * exp(-r2 * 2.2)) * clamp(1.0 - r2, 0.0, 1.0);
-          gl_FragColor = vec4(vColor * a, 1.0);
-          #include <colorspace_fragment>
-        }`,
-    });
-    this.points = new THREE.Points(geo, mat);
+    // one camera-facing quad per lamp (instanced: WebGPU has no sized points), sized in pixels of a 1080-line frame
+    const dyn = (array: Float32Array, size: number) => {
+      const attr = new THREE.InstancedBufferAttribute(array, size).setUsage(THREE.DynamicDrawUsage);
+      this.dynamic.push(attr);
+      return attr;
+    };
+    const aPos = instancedDynamicBufferAttribute(dyn(this.pos, 3), 'vec3') as unknown as Vec3;
+    const aFacing = instancedDynamicBufferAttribute(dyn(this.facing, 3), 'vec3') as unknown as Vec3;
+    const aGain = instancedDynamicBufferAttribute(dyn(this.gain, 1), 'float') as unknown as Float;
+    const aColor = instancedBufferAttribute(new THREE.InstancedBufferAttribute(color, 3), 'vec3') as unknown as Vec3;
+    const aSize = instancedBufferAttribute(new THREE.InstancedBufferAttribute(size, 1), 'float') as unknown as Float;
+    const mat = new SpriteNodeMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false });
+    mat.sizeAttenuation = false;
+    const toLamp = aPos.sub(cameraPosition);
+    const dist = (cameraViewMatrix.mul(vec4(aPos, 1)) as unknown as Vec4).z.negate();
+    // a lamp shines towards where it faces; marker lamps (no facing) all round
+    const face = select(dot(aFacing, aFacing).greaterThan(0.5), smoothstepNode(-0.05, 0.4, dot(aFacing, normalize(toLamp).negate())), 1);
+    // the scene's fog dims the lamp (drawn additively: it cannot be mixed towards the fog's colour)
+    const fd = this.fogDensity.mul(dist);
+    const k = face.mul(exp(fd.mul(fd).negate())).mul(aGain);
+    const px = aSize.mul(900).div(max(dist, 0.5));
+    // far away a lamp stays a 1.6 px dot and dims instead of shrinking away
+    const dim = clamp01(px.div(1.6));
+    const shown = k.greaterThanEqual(0.004).and(dist.greaterThanEqual(0.5));
+    const projY = (cameraProjectionMatrix as unknown as Float[][])[1][1];
+    mat.positionNode = aPos;
+    mat.scaleNode = select(shown, clampNode(px, 1.6, 44).div(1080).mul(2).div(projY), 0);
+    const lit = varying(aColor.mul(k).mul(dim));
+    {
+      const d = uv().sub(0.5);
+      const r2 = dot(d, d).mul(4);
+      // the halo fades to nothing at the sprite's rim (close up its square edge showed)
+      const halo = exp(r2.mul(-7)).add(exp(r2.mul(-2.2)).mul(0.35)).mul(clamp01(r2.oneMinus()));
+      mat.colorNode = vec4(lit.mul(halo), 1);
+    }
+    this.points = new THREE.Sprite(mat as unknown as THREE.SpriteMaterial);
+    this.points.count = n;
     this.points.frustumCulled = false;
     this.points.name = 'traffic-lights';
     const bodyMat = new THREE.MeshStandardMaterial({ color: '#16181b', roughness: 0.45, metalness: 0.4 });
@@ -302,8 +302,10 @@ export class AutobahnTraffic {
         kind.paint?.setColorAt(slot, v.color);
       }
     });
-    const geo = this.points.geometry;
-    for (const name of ['position', 'facing', 'gain']) geo.getAttribute(name).needsUpdate = true;
+    for (const attr of this.dynamic) attr.needsUpdate = true;
+    let top: THREE.Object3D = this.group;
+    while (top.parent) top = top.parent;
+    this.fogDensity.value = ((top as THREE.Scene).fog as THREE.FogExp2 | null)?.density ?? 0;
     this.trucks.instanceMatrix.needsUpdate = true;
     for (const k of this.kinds) {
       for (const mesh of k.meshes) {
