@@ -18,6 +18,18 @@ class Room extends Model
         return ['race_no' => 'integer', 'start_at_ms' => 'integer'];
     }
 
+    protected static function booted(): void
+    {
+        // a new course has to be loaded by every game again, and new conditions are for everyone to agree to again
+        static::updated(function (Room $room) {
+            if ($room->wasChanged('track_id')) {
+                $room->members()->update(['loaded' => false, 'ready' => false]);
+            } elseif ($room->wasChanged('time_of_day')) {
+                $room->members()->update(['ready' => false]);
+            }
+        });
+    }
+
     public function members(): HasMany
     {
         return $this->hasMany(RoomPlayer::class)->orderBy('slot');
@@ -71,6 +83,8 @@ class Room extends Model
                 'name' => $m->player->name,
                 'car_id' => $m->car_id,
                 'slot' => $m->slot,
+                // the game shows the room's course (automatic) / the player pressed 準備完了
+                'loaded' => $m->loaded,
                 'ready' => $m->ready,
                 'finish_ms' => $m->finish_ms,
             ])->values()->all(),

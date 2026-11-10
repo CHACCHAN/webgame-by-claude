@@ -7,7 +7,7 @@ import { ProxyCar } from './ProxyCar';
 import { newExhaustState, type ExhaustState } from '../fx/Exhaust';
 
 /** Paint per grid slot so identical cars stay distinguishable (also shown in the lobby and HUD). */
-export const SLOT_COLORS = ['#2a62d8', '#d6283c', '#ecedef'];
+export const SLOT_COLORS = ['#2a62d8', '#d6283c', '#ecedef', '#22dd44', '#cc99dd'];
 
 /** Car state a client broadcasts ~12 times a second while racing. */
 export interface NetState {
@@ -93,6 +93,8 @@ export class RemoteRacers {
       tag.position.set(0, 2.1, 0);
       visual.root.add(tag);
       this.root.add(visual.root);
+      // a train's cars are placed by its rig, not by the root: without this they stay at the origin until the first state
+      visual.refresh();
       this.cars.set(peer.id, { peer, visual, tag, buf: [], offset: Infinity, wheelSpin: 0, s: 0, fin: null, lastHeard: 0, proxy: null, fx: { speed: 0 }, exhaust: { ...newExhaustState(), speed: 0 } });
     }
   }

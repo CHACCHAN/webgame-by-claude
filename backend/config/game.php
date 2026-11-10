@@ -78,7 +78,7 @@ return [
 
     // Online battle rooms
     'online' => [
-        'max_players' => 3,
+        'max_players' => 5,
         'min_players_to_start' => 2,
         // the green light is this far after the host presses start (countdown on every client)
         'start_delay_ms' => 6_000,

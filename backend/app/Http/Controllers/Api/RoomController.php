@@ -62,9 +62,9 @@ class RoomController extends Controller
         $player = $this->player($request);
         $room = $this->room($code);
         if ($member = $room->memberFor($player)) {
-            // back in after a reload: loading the course again
-            if ($member->ready) {
-                $member->update(['ready' => false]);
+            // back in after a reload: loading the course again (and so not ready either)
+            if ($member->loaded || $member->ready) {
+                $member->update(['loaded' => false, 'ready' => false]);
                 $this->broadcastRoom($room);
             }
 
@@ -107,18 +107,43 @@ class RoomController extends Controller
         return response()->json($room->payload());
     }
 
-    /** The member's car, and `ready` once their game has loaded the room's course. */
+    /**
+     * The member's own state: the car, `loaded` (sent by the game once it shows the room's course) and `ready`
+     * (the 準備完了 button, a toggle). Another car takes the ready back; nobody is ready before their game has loaded.
+     */
     public function update(Request $request, string $code): JsonResponse
     {
         $data = $request->validate([
-            'car_id' => ['required_without:ready', 'string', Rule::in(array_keys(config('game.cars')))],
+            'car_id' => ['required_without_all:loaded,ready', 'string', Rule::in(array_keys(config('game.cars')))],
+            'loaded' => ['sometimes', 'boolean'],
             'ready' => ['sometimes', 'boolean'],
         ]);
         [$room, $member] = $this->membership($request, $code);
         if (isset($data['car_id']) && $room->status === 'racing') {
             return response()->json(['message' => 'レース中は車を変更できません'], 409);
         }
-        $member->update($data);
+        $changes = [];
+        if (isset($data['car_id']) && $data['car_id'] !== $member->car_id) {
+            $changes += ['car_id' => $data['car_id'], 'ready' => false];
+        }
+        if ($request->has('loaded')) {
+            $changes['loaded'] = $request->boolean('loaded');
+            if (! $changes['loaded']) {
+                $changes['ready'] = false;
+            }
+        }
+        if ($request->has('ready')) {
+            if ($request->boolean('ready')) {
+                if ($room->status !== 'waiting') {
+                    return response()->json(['message' => '準備完了にできるのはレースの前だけです'], 409);
+                }
+                if (! ($changes['loaded'] ?? $member->loaded)) {
+                    return response()->json(['message' => 'コースの読み込みが終わってから準備完了にできます'], 409);
+                }
+            }
+            $changes['ready'] = $request->boolean('ready');
+        }
+        $member->update($changes);
         $room->touch();
         $this->broadcastRoom($room);
 
@@ -146,16 +171,21 @@ class RoomController extends Controller
         if ($room->members()->count() < $min) {
             return response()->json(['message' => "{$min}人以上そろうとスタートできます"], 409);
         }
-        // nobody may start the countdown while another game is still loading the course
-        if ($room->members()->where('ready', false)->exists()) {
-            $this->pruneDisconnected($room);
-            if ($room->members()->where('ready', false)->exists()) {
-                return response()->json(['message' => 'まだコースを読み込んでいるプレイヤーがいます'], 409);
+        // nobody may start the countdown while another game is still loading the course, or before every guest
+        // has pressed 準備完了 (the host's own ready is this request)
+        if ($this->startBlocker($room)) {
+            $this->pruneDisconnected($room, $this->player($request));
+            if ($room->members()->count() < $min) {
+                return response()->json(['message' => "{$min}人以上そろうとスタートできます"], 409);
+            }
+            if ($blocker = $this->startBlocker($room)) {
+                return response()->json(['message' => $blocker], 409);
             }
         }
 
         DB::transaction(function () use ($room) {
-            $room->members()->update(['finish_ms' => null]);
+            // the race uses the readies up: back in the lobby everyone presses again
+            $room->members()->update(['finish_ms' => null, 'ready' => false]);
             $room->update([
                 'status' => 'racing',
                 'race_no' => $room->race_no + 1,
@@ -201,7 +231,8 @@ class RoomController extends Controller
             return response()->json(['message' => 'ホストだけが操作できます'], 403);
         }
         DB::transaction(function () use ($room) {
-            $room->members()->update(['finish_ms' => null]);
+            // `loaded` stays: the course is still on everybody's screen
+            $room->members()->update(['finish_ms' => null, 'ready' => false]);
             $room->update(['status' => 'waiting', 'start_at_ms' => null]);
         });
         $this->broadcastRoom($room);
@@ -288,8 +319,22 @@ class RoomController extends Controller
         $this->broadcastRoom($room);
     }
 
-    /** A full room may hold players who closed the game: drop members no longer on the channel. */
-    private function pruneDisconnected(Room $room): void
+    /** Why the host cannot start yet (a message for the host), or null when everyone is loaded and every guest ready. */
+    private function startBlocker(Room $room): ?string
+    {
+        if ($room->members()->where('loaded', false)->exists()) {
+            return 'まだコースを読み込んでいるプレイヤーがいます';
+        }
+        $waiting = $room->members()->where('ready', false)->where('player_id', '!=', $room->host_player_id)->count();
+
+        return $waiting > 0 ? "まだ準備完了になっていないプレイヤーがいます（あと{$waiting}人）" : null;
+    }
+
+    /**
+     * A full room may hold players who closed the game: drop members no longer on the channel (never `$keep`, the
+     * player whose request this is).
+     */
+    private function pruneDisconnected(Room $room, ?Player $keep = null): void
     {
         try {
             $response = Broadcast::connection('reverb')->getPusher()
@@ -299,6 +344,9 @@ class RoomController extends Controller
             return; // realtime server unreachable: keep everyone
         }
         foreach ($room->members()->with('player')->get() as $member) {
+            if ($member->player_id === $keep?->id) {
+                continue;
+            }
             if (! in_array($member->player_id, $online, true) && $member->updated_at < now()->subSeconds(30)) {
                 $this->removeMember($room, $member->player);
             }

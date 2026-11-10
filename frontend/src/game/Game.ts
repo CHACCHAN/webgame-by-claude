@@ -16,9 +16,7 @@ import { loadSurfaceTextures } from './render/surfaceTextures';
 import { loadProps } from './render/props';
 import { findCorners, type Corner, type CornerKind } from './track/corners';
 import { RemoteRacers, SLOT_COLORS, type NetState, type Peer } from './net/RemoteRacers';
-
-/** lateral grid positions of the (up to three) online racers, by slot */
-const ONLINE_LANES = [-2.7, 2.7, 0];
+import { onlineGrid } from './net/grid';
 import { BIKE_CAMERA, CAR_CAMERA, ChaseCamera, TRAIN_CAMERA } from './camera/ChaseCamera';
 import { hasExhaust, traitsOf } from './vehicle/kinds';
 import { InputManager } from './input/Input';
@@ -545,8 +543,11 @@ export class Game {
   startRace(cfg: RaceConfig) {
     this.clearRace();
     this.config = cfg;
-    const gridS = this.track.startS - 6;
-    const lane = cfg.online ? ONLINE_LANES[cfg.online.slot % ONLINE_LANES.length] : cfg.mode === 'rival' ? 2.0 : 0;
+    // online: everybody's place on the grid follows from the room alone, so every client agrees (net/grid.ts)
+    const grid = cfg.online ? onlineGrid([{ slot: cfg.online.slot, carId: cfg.carId }, ...cfg.online.peers], this.track.startS) : null;
+    const spot = grid?.get(cfg.online!.slot);
+    const gridS = spot ? spot.s : this.track.startS - 6;
+    const lane = spot ? spot.lateral : cfg.mode === 'rival' ? 2.0 : 0;
     this.player = this.createRacer(cfg.carId, gridS, lane, {
       headlights: true,
       // the colour picked in the car select (it used to be ignored); online: the slot colour tells players apart
@@ -560,10 +561,10 @@ export class Game {
     if (train !== this.cameraForTrain) this.chase.mode = train ? 'bumper' : 'chase';
     this.cameraForTrain = train;
     if (cfg.online) {
-      this.remotes.setPeers(cfg.online.peers, (slot) => ({
-        position: this.track.pointAt(gridS, ONLINE_LANES[slot % ONLINE_LANES.length]),
-        heading: this.track.headingAt(gridS),
-      }));
+      this.remotes.setPeers(cfg.online.peers, (slot) => {
+        const g = grid!.get(slot)!;
+        return { position: this.track.pointAt(g.s, g.lateral), heading: this.track.headingAt(g.s) };
+      });
       this.remotes.setHeadlights(this.env.preset.lampsOn > 0.5 ? 1 : 0.6);
       // other players are solid: physical stand-ins the local car can bump into
       this.remotes.enablePhysics(this.physics);

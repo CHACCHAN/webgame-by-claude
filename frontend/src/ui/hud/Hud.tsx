@@ -313,6 +313,8 @@ export function Hud() {
       <div className="hud-tl">
         <div className="hud-label">TIME</div>
         <div className="hud-time" ref={refs.time}>0:00.000</div>
+        {/* online: the live order (up to five) under the clock, clear of the bend warning in the middle */}
+        {mode === 'online' && <ol className="online-standings" ref={refs.standings} />}
         <div className="hud-splits" ref={refs.splits} />
       </div>
       <div className="hud-tc">
@@ -327,7 +329,6 @@ export function Hud() {
             </div>
           </div>
         )}
-        {mode === 'online' && <ol className="online-standings" ref={refs.standings} />}
         {mode === 'ghost' && ghostChoice && (
           <div className="ghost-tag">
             👻 VS {ghostChoice.label} <b>{formatTime(ghostChoice.timeMs)}</b>
