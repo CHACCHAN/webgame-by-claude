@@ -28,6 +28,19 @@ deployed yet: the owner sees each sheet first).
   updated (U9 ~64 s).
 - Verified: tsc, vitest (all pass), backend tests (container, `--build`), handling-feel, sims. **Not yet**: Chrome
   check of the garage / race / sounds (Blender agents running; no Chrome alongside), E2E.
+- **Metal looks metallic** (owner: 「金属光沢ついているものは金属光沢にしてほしい」): `CarSpec.bareMetal` draws the
+  Cybertruck's bare stainless swatch fully metallic without clear coat (`paintFinish`, `c46688a`); the own models'
+  chrome, rims and discs were already metallic. The agents' check renders now have something for metal to reflect.
+- **Lamp shapes** (owner: 「ライト部分の目の形が参考とはかなり違うかも」): every own model's lamps are traced on the
+  photos and scored per lens (IoU, p95 / max px) with close-up sheets. Supra round done (head lamp 0.78 → 0.89,
+  corner opening 0.47 → 0.92, indicator 0.70 → 0.95; far-side lamps limited by the camera solves); the four deployed
+  own cars are being re-checked.
+- **R34 and Cybertruck: our own models in the game** (owner approved, 「はい」, 2026-11-10). Built with
+  `blender-models.cjs cars r34,cybertruck`: R34 57 k tris, 0.56 MB (V-spec look, fitted to 6 photos; the exhaust
+  anchor comes from its `exhaust` part, so the `exhaust` override is gone; the import entry is dropped); Cybertruck
+  39 k tris, 0.27 MB (fitted to 6 photos; `tailLampGain: 12` for its smoked light-bar lens). Checked in Chrome
+  (software rendering, the GPU is off after a VM restart): garage at dawn and night for both, a night race start
+  behind the Cybertruck (light bar and tail bar lit, the stainless reflects). The Supra is the last third-party car.
 
 ## Session 7 (2026-11-03 – 11-04) — every model our own (Blender); the owner's train lineup; a livery per line
 

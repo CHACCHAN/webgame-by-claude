@@ -1,0 +1,12 @@
+{"_note": "camera annotations on the 1280-px-wide Commons thumbnails (ref/list.json); rims/<photo>.json from rimfit.py; f priors from the Commons EXIF (focal length, sensor; ~/carfit/r34/ann/exif.json); solve.py -> fit/cams.json", "r36": {"size": [1280, 791], "init": [-25.9, 0.6, 0.02, 1.5708, 0.0, 0.0, 7025], "rims": "rims/r36.json", "prior": {"steer": [0, 0.05], "f": [7025, 2500]}},
+ "r11": {"size": [1280, 559], "init": [-6.07, 1.53, -5.73, 0.858, -0.11, 0.0, 2282], "rims": "rims/r11.json", "prior": {"steer": [0, 0.1], "f": [2282, 100]},
+ "plate": {"size": null, "end": "r", "y": 0.4, "z": -2.27, "corners": {"tl": [167.5, 332.5], "tr": [222.5, 343.75], "br": [220, 401.25], "bl": [161.25, 387.5]}}},
+ "r38": {"size": [1280, 828], "init": [-3.1, 1.6, -19.8, 0.16, -0.03, 0.0, 7970], "rims": "rims/r38.json", "prior": {"steer": [0, 0.01], "f": [7970, 4000]},
+ "rim": 0.318, "lip": 0.085, "rim_sigma": 0.01, "_note": "r38: the thin ellipses are the tyres (outer sidewall edge), not the rim lips"},
+ "r37": {"size": [1280, 921], "init": [0.0, 1.2, -6.7, 0.0, -0.05, 0.0, 2780], "prior": {"f": [2780, 400], "pz": [-2.27, 0.04], "py": [0.42, 0.06], "y": [1.2, 0.3]},
+ "plate": {"size": [0.33, 0.165], "end": "r", "y": 0.42, "z": -2.27, "corners": {"tl": [501, 600], "tr": [740, 600], "br": [740, 719], "bl": [501, 719]}},
+ "_note": "r37: Pixel 6 at 24 mm equiv. would be f 1390 px, but the plate (seen square-on, 2:1) and the roof / wing spacing fit only a 2x zoom (f ~2780, camera ~4.4 m behind the plate)"},
+ "r29": {"size": [1280, 853], "init": [-0.05, 1.51, 4.6, 3.12, -0.316, 0.03, 1173], "prior": {"f": [1173, 40], "pz": [2.26, 0.04], "py": [0.36, 0.06], "y": [1.5, 0.15]},
+ "plate": {"size": [0.4, null], "end": "f", "y": 0.36, "z": 2.26, "corners": {"tl": [550.7, 552.7], "tr": [724, 555], "br": [725, 629.3], "bl": [550, 628.3]}},
+ "_note": "r29: the museum display plate is ~0.40 m wide (car width / plate width ratio), not a 330 mm JP plate"},
+ "r07": {"size": [1280, 733], "init": [6.2, 1.6, 4.5, -2.2, -0.12, 0.0, 1740], "rims": "rims/r07.json", "prior": {"steer": [0, 0.05], "f": [1740, 80]}}}

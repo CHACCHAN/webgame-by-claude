@@ -326,14 +326,17 @@ def shut_lines(part, surf, glass_surf):
     strip(part, surf, polyline([(-0.735, 0.875), (0.735, 0.875)]), 'y', 1, w, 'trim')
     for s in (1, -1):
         strip(part, surf, polyline([(s * 0.735, 0.875), (s * 0.745, 1.5), (s * 0.77, 2.02)]), 'y', 1, w, 'trim')
-    strip(part, surf, polyline([(-0.84, 0.753), (0.84, 0.753)]), 'z', 1, w, 'trim')
+    # the leading edge over the grille, between the lamps (the lamps' seals carry it on along their tops)
+    xs = np.linspace(-0.452, 0.452, 19)
+    strip(part, surf, [(x, float(SH.BONNET_EDGE(abs(x))) - 0.004) for x in xs], 'z', 1, w, 'trim')
     # boot lid: sides on the deck, rear edge between the inner lamps
     for s in (1, -1):
         strip(part, surf, polyline([(s * 0.64, -1.53), (s * 0.645, -2.0)]), 'y', 1, w, 'trim')
-        strip(part, surf, polyline([(s * 0.60, 0.978), (s * 0.405, 0.93), (s * 0.405, 0.72)]), 'z', -1, w, 'trim')
-    strip(part, surf, polyline([(0.405, 0.72), (-0.405, 0.72)]), 'z', -1, w, 'trim')
-    # fuel lid: right rear quarter (car's right = -x)
-    fl = FIT.resample(FIT.rounded_poly([(-1.06, 0.78), (-0.92, 0.78), (-0.92, 0.88), (-1.06, 0.88)], 0.02), 24)
+        strip(part, surf, polyline([(s * 0.62, 0.985), (s * 0.55, 0.974), (s * 0.47, 0.950), (s * 0.39, 0.918),
+                                    (s * 0.375, 0.87), (s * 0.375, 0.672)]), 'z', -1, w, 'trim')
+    strip(part, surf, polyline([(0.375, 0.672), (-0.375, 0.672)]), 'z', -1, w, 'trim')
+    # fuel lid: right rear wing over the wheel (car's right = -x; rear 3/4 photo r11), (z, y)
+    fl = FIT.resample(FIT.rounded_poly([(-1.732, 0.712), (-1.548, 0.712), (-1.548, 0.868), (-1.732, 0.868)], 0.025), 24)
     strip(part, surf, fl + [fl[0]], 'x', -1, 0.004, 'trim')
 
 

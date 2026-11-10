@@ -3,7 +3,8 @@ Nissan Skyline GT-R (BNR34, V-spec look, 1999-2002) for TOUGE NOCTURNE, built fr
 model, no photo pixels). Run with Blender 5.x:
 
   blender -t 4 --background --factory-startup --python tools/blender/cars/r34.py -- --out <file.glb>
-      [--render <dir> --views front34,rear34,... --samples N --size WxH] [--night] [--alpha] [--white] [--cams cams.json]
+      [--render <dir> --views front34,rear34,... --samples N --size WxH] [--night] [--alpha] [--white] [--noffd]
+      [--paint #rrggbb]
 
 Modules (cars/): r34_shell (the body surface: a B-spline control cage), r34_body (cuts, glass, lamps, grille, panel
 lines, trim), r34_wheels (stock 18" five-spoke wheels, tyres, brakes), r34_parts (wing, mirrors, interior, exhaust,
@@ -25,6 +26,7 @@ import bpy  # noqa: E402
 import r34_kit as K  # noqa: E402
 import r34_body as BODY  # noqa: E402
 import r34_wheels as WH  # noqa: E402
+import r34_ffd as FFD  # noqa: E402
 
 argv = sys.argv[sys.argv.index('--') + 1:] if '--' in sys.argv else []
 
@@ -44,9 +46,36 @@ WHITE = '--white' in argv          # renders only: white paint, as on the refere
 TEX = os.path.join(os.path.dirname(HERE), 'textures', 'r34')
 
 
-def main():
-    bpy.ops.wm.read_factory_settings(use_empty=True)
+def lamp_report(root):
+    """centre and size of each lamp lens (game frame), per side"""
+    out = {}
+    for o in root.children_recursive:
+        if o.type != 'MESH':
+            continue
+        names = [ms.name for ms in o.data.materials]
+        for p in o.data.polygons:
+            n = names[p.material_index] if p.material_index < len(names) else ''
+            if n in ('headlight', 'taillight'):
+                for vi in p.vertices:
+                    g = K.G(o.matrix_world @ o.data.vertices[vi].co)
+                    out.setdefault((n, 'L' if g[0] > 0 else 'R'), []).append(g)
+    res = {}
+    for (k, side), pts in sorted(out.items()):
+        lo = [min(p[i] for p in pts) for i in range(3)]
+        hi = [max(p[i] for p in pts) for i in range(3)]
+        res[(k, side)] = ([round((a + b) / 2, 3) for a, b in zip(lo, hi)], [round(b - a, 3) for a, b in zip(lo, hi)])
+        print('LAMP', k, side, 'centre', res[(k, side)][0], 'size', res[(k, side)][1])
+    return res
+
+
+def build(o=None):
+    """the whole car into the (cleared) scene. o: {'paint': '#rrggbb' (None: the default), 'ffd': True (the fitted
+    field, fitdata/r34/ffd.json) | False | an r34_ffd.Lattice}. Returns (root, materials, lamp report)"""
+    o = o or {}
     mats = BODY.materials(TEX)
+    if o.get('paint'):
+        bsdf = mats['paint'].node_tree.nodes['Principled BSDF']
+        bsdf.inputs['Base Color'].default_value = K.srgb(o['paint'])
     root = K.empty('r34')
     body = K.empty('body', parent=root)
     counts = {}
@@ -58,11 +87,21 @@ def main():
         print(f'TRIS {k} {v}')
     print('TRIS total', sum(counts.values()))
     used = set()
-    for o in bpy.data.objects:
-        if o.type == 'MESH' and o.name not in ('ground',):
-            for m in o.data.materials:
-                used.add(m.name)
+    for ob in root.children_recursive:
+        if ob.type == 'MESH':
+            used.update(m.name for m in ob.data.materials)
     print('MATERIALS', len(used), sorted(used))
+    if o.get('ffd', True) is not False:
+        # the fitted displacement field (fitdata/r34/ffd.json, from the photo silhouettes) on every body mesh
+        L = FFD.apply_to_body(body, None if o.get('ffd', True) is True else o['ffd'])
+        print('FFD', 'none' if L is None else 'applied')
+    bpy.context.view_layer.update()
+    return root, mats, lamp_report(root)
+
+
+def main():
+    bpy.ops.wm.read_factory_settings(use_empty=True)
+    root, mats, _ = build({'ffd': '--noffd' not in argv, 'paint': opt('--paint')})
     if OUT:
         bpy.ops.object.select_all(action='DESELECT')
         root.select_set(True)
@@ -78,23 +117,15 @@ def main():
             bpy.data.objects['ground'].hide_render = True
         if NIGHT:
             BODY.lamps_on(mats)
-        # the game shows the glass see-through (opacity 0.88); the GLB's glass stays opaque
-        mats['glass'].node_tree.nodes['Principled BSDF'].inputs['Alpha'].default_value = 0.88
         if WHITE:
             bsdf = mats['paint'].node_tree.nodes['Principled BSDF']
             bsdf.inputs['Base Color'].default_value = (0.80, 0.80, 0.78, 1)
             bsdf.inputs['Metallic'].default_value = 0.1
         os.makedirs(RENDER, exist_ok=True)
-        cams = {}
-        if opt('--cams'):                  # cameras solved from photos: {name: {loc, euler, lens, aspect}}
-            import json
-            cams = json.load(open(opt('--cams')))
         for v in VIEWS.split(','):
-            size = SIZE
-            if v in cams:
-                size = (SIZE[0], int(round(SIZE[0] * cams[v]['aspect'])))
-            S.render(cams.get(v, v), os.path.join(RENDER, f'{v}{"_night" if NIGHT else ""}{"_a" if ALPHA else ""}.png'),
-                     size=size, samples=SAMPLES, transparent=ALPHA)
+            S.render(v, os.path.join(RENDER, f'{v}{"_night" if NIGHT else ""}{"_a" if ALPHA else ""}.png'),
+                     size=SIZE, samples=SAMPLES, transparent=ALPHA)
 
 
-main()
+if __name__ == '__main__':
+    main()

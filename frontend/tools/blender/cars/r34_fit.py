@@ -105,6 +105,114 @@ class Surface:
         return p + n * lift
 
 
+
+class Unrolled:
+    """
+    The nose's surface unrolled round its corners: at height y, s is the distance round the horizontal section (s = x
+    up to x = S0 on the front, then the arc length on, round the wing's corner and back along the side). Sections are
+    ray-cast fans from inside the nose (left half), cached by height.
+    """
+    S0 = 0.43
+
+    def __init__(self, surf, zc=1.40, n=360, dy=0.002):
+        self.surf, self.zc, self.n, self.dy = surf, zc, n, dy
+        self.cache = {}
+
+    def section(self, k):
+        if k in self.cache:
+            return self.cache[k]
+        y = k * self.dy
+        P, N = [], []
+        for i in range(self.n + 1):
+            phi = math.radians(82.0) * i / self.n
+            d = np.array([math.sin(phi), 0.0, math.cos(phi)])
+            loc, nrm, _, _ = self.surf.bvh.ray_cast(K.B(0.0, y, self.zc), K.B(*d))
+            if loc is None:
+                continue
+            p, nn = np.array(K.G(loc)), np.array(K.G(nrm))
+            if np.dot(nn, d) < 0:
+                nn = -nn
+            P.append(p)
+            N.append(nn)
+        P, N = np.array(P), np.array(N)
+        i0 = int(np.argmax(P[:, 0] >= self.S0))
+        t = (self.S0 - P[i0 - 1, 0]) / (P[i0, 0] - P[i0 - 1, 0])
+        p0 = P[i0 - 1] + (P[i0] - P[i0 - 1]) * t
+        n0 = N[i0 - 1] + (N[i0] - N[i0 - 1]) * t
+        P, N = np.vstack([p0, P[i0:]]), np.vstack([n0, N[i0:]])
+        sv = self.S0 + np.concatenate([[0.0], np.cumsum(np.linalg.norm(np.diff(P, axis=0), axis=1))])
+        self.cache[k] = (sv, P, N)
+        return self.cache[k]
+
+    def _pair(self, y):
+        f = y / self.dy
+        k = int(math.floor(f))
+        return self.section(k), self.section(k + 1), f - k
+
+    def s_of(self, kind, a, y):
+        """s of a point given by its head-on x ('x') or, on the side, its station z ('z')"""
+        out = []
+        for sv, P, _ in self._pair(y)[:2]:
+            if kind == 'x':
+                if a <= self.S0:
+                    out.append(a)
+                    continue
+                i = int(np.argmax(P[:, 0] >= a))
+                t = (a - P[i - 1, 0]) / (P[i, 0] - P[i - 1, 0])
+            else:
+                i = int(np.argmax(P[:, 2] <= a))
+                t = (P[i - 1, 2] - a) / (P[i - 1, 2] - P[i, 2])
+            out.append(sv[i - 1] + (sv[i] - sv[i - 1]) * t)
+        f = self._pair(y)[2]
+        return out[0] + (out[1] - out[0]) * f
+
+    def at(self, s, y, lift=0.0):
+        """the surface point (game frame) at (s, y) on the left half, lifted along the normal; and the normal"""
+        if s <= self.S0:
+            hit = self.surf.onto(s, y, 'z', 1)
+            loc, nrm, _, _ = self.surf.bvh.ray_cast(K.B(s, y, 4.0), K.B(0, 0, -1.0))
+            n = np.array(K.G(nrm)) if nrm is not None else np.array((0, 0, 1.0))
+            if n[2] < 0:
+                n = -n
+            return (hit + n * lift if hit is not None else None), n
+        A, Bq, f = self._pair(y)
+        ps, ns = [], []
+        for sv, P, N in (A, Bq):
+            i = int(np.clip(np.searchsorted(sv, s) - 1, 0, len(sv) - 2))
+            t = float(np.clip((s - sv[i]) / max(sv[i + 1] - sv[i], 1e-9), 0, 1))
+            ps.append(P[i] + (P[i + 1] - P[i]) * t)
+            ns.append(N[i] + (N[i + 1] - N[i]) * t)
+        p = ps[0] + (ps[1] - ps[0]) * f
+        n = ns[0] + (ns[1] - ns[0]) * f
+        n /= np.linalg.norm(n)
+        return p + n * lift, n
+
+
+def patch_unrolled(part, U, poly, mat, lift=0.002, rings=3, uv_box=None, side=1):
+    """patch() on the unrolled nose: the outline poly [(s, y)] (left half; side -1 mirrors the result)"""
+    poly = np.array(poly, float)
+    c = poly.mean(axis=0)
+    grid = [[c + (p - c) * (k / rings) for p in poly] for k in range(rings, 0, -1)]
+    mir = np.array((side, 1.0, 1.0))
+    PN = [[U.at(q[0], q[1], lift) for q in ring] for ring in grid]
+    cpn = U.at(c[0], c[1], lift)
+    u0, v0, u1, v1 = uv_box if uv_box is not None else (*poly.min(axis=0), *poly.max(axis=0))
+    uvf = lambda q: ((q[0] - u0) / (u1 - u0), (q[1] - v0) / (v1 - v0))
+    n = len(poly)
+    for j in range(rings):
+        for i in range(n):
+            i2 = (i + 1) % n
+            if j + 1 < rings:
+                q = [PN[j][i], PN[j][i2], PN[j + 1][i2], PN[j + 1][i]]
+                uv = [uvf(grid[j][i]), uvf(grid[j][i2]), uvf(grid[j + 1][i2]), uvf(grid[j + 1][i])]
+            else:
+                q = [PN[j][i], PN[j][i2], cpn]
+                uv = [uvf(grid[j][i]), uvf(grid[j][i2]), uvf(c)]
+            if any(p[0] is None for p in q):
+                continue
+            want = np.mean([p[1] for p in q], axis=0) * mir
+            fix(part.face([tuple(p[0] * mir) for p in q], mat, smooth=True, uvs=uv), want)
+
 def patch(part, surf, poly, axis, side, mat, lift=0.002, rings=3, uv_box=None, centre=None):
     """a lens / plate laid on the surface over the closed outline `poly`: concentric rings towards the centre"""
     poly = np.array(poly, float)
@@ -194,6 +302,49 @@ def bevel_cutter(mats, surf, outer, inner, axis, side, depth, back_a, bevel='pai
     return part.build(mats, merge_dist=0)
 
 
+
+def offset_poly(poly, d):
+    """the closed outline moved inwards by d (mitred corners)"""
+    P = np.array(poly, float)
+    n = len(P)
+    area = 0.5 * sum(P[i, 0] * P[(i + 1) % n, 1] - P[(i + 1) % n, 0] * P[i, 1] for i in range(n))
+    sg = 1.0 if area > 0 else -1.0
+    out = []
+    for i in range(n):
+        a, b, c = P[i - 1], P[i], P[(i + 1) % n]
+        e0, e1 = (b - a) / np.linalg.norm(b - a), (c - b) / np.linalg.norm(c - b)
+        n0, n1 = sg * np.array([-e0[1], e0[0]]), sg * np.array([-e1[1], e1[0]])     # inward normals
+        m = n0 + n1
+        m /= np.linalg.norm(m)
+        out.append(tuple(b + m * d / max(0.3, float(np.dot(m, n0)))))
+    return out
+
+
+def naca_cutter(mats, surf, tri, depth):
+    """
+    A NACA duct: a ramp sunk into the bonnet, flush at its point (tri[2]) and `depth` deep at the open rear edge
+    (tri[0] .. tri[1]); the cutter's floor and walls become the duct's carbon (trim)
+    """
+    part = K.Part('cutter')
+    P = [np.array(p, float) for p in resample(list(tri), 24)]
+    zt, zr = tri[2][1], tri[0][1]
+    bot, top = [], []
+    for x, z in P:
+        hit = surf.onto(x, z, 'y', 1)
+        y = hit[1] if hit is not None else 0.85
+        f = float(np.clip((zt - z) / (zt - zr), 0.0, 1.0))
+        bot.append((x, y - 0.002 - depth * f ** 1.4, z))
+        top.append((x, y + 0.3, z))
+    part.face(bot, 'trim', smooth=False)
+    part.face(top[::-1], 'trim', smooth=False)
+    n = len(P)
+    for i in range(n):
+        i2 = (i + 1) % n
+        part.face([bot[i], top[i], top[i2], bot[i2]], 'trim', smooth=False)
+    bmesh.ops.remove_doubles(part.bm, verts=part.bm.verts, dist=1e-7)
+    bmesh.ops.recalc_face_normals(part.bm, faces=part.bm.faces)
+    return part.build(mats, merge_dist=0)
+
 def slab(part, ring, y0, y1, mat):
     """a closed slab over a plan outline [(x, z)] between heights y0 and y1"""
     bm = bmesh.new()
@@ -208,29 +359,45 @@ def slab(part, ring, y0, y1, mat):
 
 # ---------------------------------------------------------------- the nose
 
-# the lamp units: wide angular blocks from the grille's frame to the wing corner, the top edge straight under the
-# bonnet's leading edge, the lower edge stepping down towards the outside (head-on photo 22091110195, r04)
-HEADLAMP = [(0.336, 0.746), (0.60, 0.747), (0.800, 0.746), (0.836, 0.735), (0.851, 0.707), (0.850, 0.667),
-            (0.836, 0.637), (0.800, 0.618), (0.612, 0.617), (0.588, 0.630), (0.360, 0.634), (0.333, 0.645),
-            (0.329, 0.697)]
-LAMP_BOX = (0.329, 0.617, 0.851, 0.747)
-# the grille: a recessed slot between the lamps, as tall as they are, under a thin body-coloured top bar
-GRILLE = [(-0.272, 0.640), (0.272, 0.640), (0.276, 0.726), (-0.276, 0.726)]
-# the big central intake (intercooler behind), the tall outer ducts with the clear indicators above them; corner
-# order (lower inner/left, lower outer/right, upper outer/right, upper inner/left). Chamfers (l, r, b, t, depth):
-# the intake sits back under the bumper's brow (no chamfer at the top: the brow's underside), its sill and pillars
-# slope in; the outer ducts' inner edges and tops are wide angled faces
-INTAKE = [(-0.505, 0.222), (0.505, 0.222), (0.492, 0.462), (-0.492, 0.462)]
-INTAKE_BEVEL = dict(l=0.026, r=0.026, b=0.034, t=0.0)
-DUCT = [(0.600, 0.205), (0.838, 0.215), (0.836, 0.372), (0.612, 0.368)]
-DUCT_BEVEL = dict(l=0.045, r=0.012, b=0.010, t=0.026)
-INDICATOR = [(0.632, 0.402), (0.805, 0.404), (0.803, 0.460), (0.628, 0.458)]
-PLATE_F = (-0.300, 0.290)      # centre x (car's right, -x: off-centre as on Japanese cars), bottom edge y
+# The nose's layout, measured: the outlines traced on the head-on photo (r29, P&S museum) and the front 3/4 (r07),
+# carried back onto the fitted body and through the inverse FFD into this design frame (fitdata/r34/lamps.json,
+# tools/lampback.py); left half (+x), (x, y) seen head-on.
+# The head lamps: slanted "eyes" whose top edge is the bonnet's leading edge (SH.BONNET_EDGE) rising to the wing's
+# corner; the inner end a near-vertical edge beside the grille; the outer end wraps round the corner and runs back
+# along the wing's side to a D-shaped end at z 1.875, its top edge dropping towards the corner (side photo r36,
+# rear 3/4 r11). Points: ('x', x, y)
+# on the front (head-on x), ('z', z, y) on the side (station z); laid on the body unrolled (Unrolled, s by y)
+HEADLAMP = [('x', 0.452, 0.712), ('x', 0.50, 0.726), ('x', 0.55, 0.735), ('x', 0.60, 0.743), ('x', 0.65, 0.749),
+            ('x', 0.70, 0.755), ('x', 0.75, 0.760), ('x', 0.80, 0.762), ('x', 0.835, 0.757),
+            ('z', 2.06, 0.742), ('z', 2.00, 0.751), ('z', 1.94, 0.756), ('z', 1.905, 0.757),
+            ('z', 1.884, 0.748), ('z', 1.877, 0.730), ('z', 1.875, 0.705), ('z', 1.877, 0.680), ('z', 1.886, 0.656),
+            ('z', 1.899, 0.639), ('z', 1.924, 0.631), ('z', 1.96, 0.630), ('z', 2.03, 0.632), ('z', 2.08, 0.637),
+            ('x', 0.835, 0.646), ('x', 0.80, 0.646), ('x', 0.70, 0.635), ('x', 0.60, 0.623), ('x', 0.50, 0.609),
+            ('x', 0.456, 0.602), ('x', 0.444, 0.608), ('x', 0.447, 0.660)]
+# the lens's box in unrolled coordinates (s, y): the headlight texture spans it (r34_textures.LAMP_BOX)
+LAMP_BOX = (0.444, 0.602, 1.118, 0.765)
+# the grille: a wide recessed slot under a narrow body-coloured bar below the bonnet's edge
+GRILLE = [(-0.402, 0.524), (0.402, 0.524), (0.412, 0.650), (-0.412, 0.650)]
+# the big central intake (intercooler behind) under the bumper's brow; corner order (lower inner/left, lower
+# outer/right, upper outer/right, upper inner/left). Chamfers (l, r, b, t): the sill and pillars slope in, no
+# chamfer at the top (the brow's underside)
+INTAKE = [(-0.415, 0.262), (0.415, 0.262), (0.415, 0.412), (-0.415, 0.412)]
+INTAKE_BEVEL = dict(l=0.022, r=0.022, b=0.030, t=0.0)
+# the outer mesh openings under the indicators: a strip tapering towards the intake (left half)
+MESH = [(0.505, 0.344), (0.500, 0.290), (0.776, 0.284), (0.781, 0.384), (0.695, 0.391), (0.611, 0.382),
+        (0.545, 0.367)]
+MESH_BEVEL = 0.010
+# the clear indicator lenses (ribbed, amber bulb behind) between the lamps and the mesh openings, in black bezels;
+# the top edge rises a little outwards (head-on r29)
+INDICATOR = [(0.672, 0.449), (0.800, 0.452), (0.800, 0.516), (0.672, 0.513)]
+PLATE_F = (-0.255, 0.252)      # centre x (car's right, -x: off-centre as on Japanese cars), bottom edge y
 # (z, y) on the bumper's side: a pocket whose front edge is a long angled face (the crease from the bumper's corner
 # down to the wheel), the black slot at its back
 BRAKE_DUCT = [(1.730, 0.255), (1.905, 0.245), (1.955, 0.535), (1.755, 0.500)]
 BRAKE_BEVEL = dict(l=0.006, r=0.060, b=0.006, t=0.014)
-BONNET_VENT = [(-0.17, 1.30), (0.17, 1.30), (0.15, 1.54), (-0.15, 1.54)]      # (x, z) on the bonnet
+# the V-spec II's NACA duct in the carbon bonnet, car's left (x, z): the open rear edge, the point forward
+NACA = [(0.350, 1.320), (0.467, 1.320), (0.427, 1.480)]
+NACA_DEPTH = 0.026
 
 
 INTAKE_BACK = 2.17
@@ -239,13 +406,18 @@ INTAKE_BACK = 2.17
 def front_cutters(mats, surf):
     """surf: the uncut shell (the chamfers start on its surface)"""
     rp = lambda q, r: rounded_poly(q, r)
-    cs = [prism(mats, rp(GRILLE, 0.012), 'z', SH.nose_z(0.0, 0.68) - 0.045, 2.6),
+    # the grille in a body-coloured frame: a chamfer sloping in to the opening (head-on r29: the "nostril" surround)
+    cs = [bevel_cutter(mats, surf, rp(inset_quad(GRILLE, l=-0.010, r=-0.010, b=-0.010), 0.02),
+                       rp(inset_quad(GRILLE, l=0.008, r=0.008, b=0.006, t=0.004), 0.02), 'z', 1, 0.022,
+                       SH.nose_z(0.0, 0.59) - 0.045),
           bevel_cutter(mats, surf, rp(INTAKE, 0.03), rp(inset_quad(INTAKE, **INTAKE_BEVEL), 0.03), 'z', 1, 0.045,
                        INTAKE_BACK),
-          prism(mats, rp(BONNET_VENT, 0.03), 'y', 0.845, 1.3)]
-    o, i = rp(DUCT, 0.02), rp(inset_quad(DUCT, **DUCT_BEVEL), 0.02)
-    cs.append(bevel_cutter(mats, surf, o, i, 'z', 1, 0.045, 2.10))
-    cs.append(bevel_cutter(mats, surf, mirror_u(o), mirror_u(i), 'z', 1, 0.045, 2.10))
+          naca_cutter(mats, surf, NACA, NACA_DEPTH)]
+    o = resample(rp(MESH, 0.015), 40)
+    i = [tuple(p) for p in offset_poly(o, MESH_BEVEL)]
+    # the side openings are dark right up to their outline (the photo's traced edge): black chamfers
+    cs.append(bevel_cutter(mats, surf, o, i, 'z', 1, 0.03, 2.12, bevel='trim'))
+    cs.append(bevel_cutter(mats, surf, mirror_u(o), mirror_u(i), 'z', 1, 0.03, 2.12, bevel='trim'))
     o, i = rp(BRAKE_DUCT, 0.025), rp(inset_quad(BRAKE_DUCT, **BRAKE_BEVEL), 0.025)
     for s in (1, -1):
         cs.append(bevel_cutter(mats, surf, o if s > 0 else o[::-1], i if s > 0 else i[::-1], 'x', s, 0.045, s * 0.66))
@@ -254,22 +426,23 @@ def front_cutters(mats, surf):
 
 def front_fittings(part, surf):
     """lamps laid on the nose, the plate and intercooler in the intake, vent fins, the splitter"""
+    U = Unrolled(surf)
+    outline = [(U.s_of(k, a, y), y) for k, a, y in HEADLAMP]
+    hl = resample(rounded_poly(outline, 0.012), 96)
+    seal = offset_poly(hl, -0.004)
     for s in (1, -1):
-        hl = resample(rounded_poly(HEADLAMP if s > 0 else mirror_u(HEADLAMP), 0.012), 72)
-        u0, v0, u1, v1 = LAMP_BOX
-        box = (u0, v0, u1, v1) if s > 0 else (-u0, v0, -u1, v1)
-        cx = 0.59 * s
         # thin dark seal round the lens, then the clear lens over the lamp's works (headlight texture)
-        # (many rings: the outer end wraps round the wing's corner, coarse triangles would dip under the body there)
-        patch(part, surf, [(cx + (x - cx) * 1.012, 0.682 + (y - 0.682) * 1.05) for x, y in hl], 'z', 1, 'trim',
-              lift=0.0015, rings=7)
-        patch(part, surf, hl, 'z', 1, 'headlight', lift=0.003, rings=7, uv_box=box)
+        patch_unrolled(part, U, seal, 'trim', lift=0.0015, rings=7, side=s)
+        patch_unrolled(part, U, hl, 'headlight', lift=0.003, rings=7, uv_box=LAMP_BOX, side=s)
         # indicator: clear lens with the amber bulb behind
         ind = resample(rounded_poly(INDICATOR if s > 0 else mirror_u(INDICATOR), 0.01), 28)
+        bezel = resample(rounded_poly(offset_poly(INDICATOR if s > 0 else mirror_u(INDICATOR), -0.011), 0.02), 32)
+        patch(part, surf, bezel, 'z', 1, 'trim', lift=0.0015, rings=2)
+        # the clear ribbed lens (indicator texture: the amber bulb only a faint glow behind it)
         patch(part, surf, ind, 'z', 1, 'lens_clear', lift=0.0025, rings=2)
-        ic = np.array(ind).mean(axis=0)
-        bulb = [(ic[0] + (x - ic[0]) * 0.32, ic[1] + (y - ic[1]) * 0.55) for x, y in ind]
-        patch(part, surf, bulb, 'z', 1, 'amber', lift=0.0032, rings=1)
+    # GT-R emblem on the grille's mesh (own simple shape: a small chrome badge)
+    zb = SH.nose_z(0.0, 0.59) - 0.040
+    part.box('chrome', -0.034, 0.034, 0.552, 0.614, zb, zb + 0.008, bevel=0.006)
     # number plate off-centre on a bracket in the intake (the intercooler's mesh is the opening's back)
     z = SH.nose_z(PLATE_F[0], 0.36) + 0.006
     w, h = 0.330, 0.165
@@ -278,11 +451,6 @@ def front_fittings(part, surf):
     part.box('trim', x0 - 0.004, x0 + w + 0.004, y0 - 0.004, y0 + h + 0.004, z - 0.008, z - 0.002)
     fix(part.face([(x0, y0, z), (x0 + w, y0, z), (x0 + w, y0 + h, z), (x0, y0 + h, z)], 'plate', smooth=False,
                   uvs=[(0, 0), (1, 0), (1, 1), (0, 1)]), np.array((0, 0, 1.0)))
-    # bonnet vent fins
-    for k in range(5):
-        x = -0.12 + 0.06 * k
-        top = surf.onto(x, 1.42, 'y', 1)
-        part.box('trim', x - 0.004, x + 0.004, 0.82, (top[1] if top is not None else 0.90) - 0.008, 1.31, 1.53)
     # V-spec splitter: a crisp, flat black blade under the bumper, sticking out 4 cm
     xs = np.linspace(0.0, 0.86, 24)
     front = [(x, SH.nose_z(x, 0.16) + 0.04 - 0.02 * (x / 0.86) ** 6) for x in xs]
@@ -293,7 +461,10 @@ def front_fittings(part, surf):
 
 # ---------------------------------------------------------------- the tail
 
-TAIL_LAMPS = [(0.720, 0.845, 0.102), (0.510, 0.845, 0.083)]
+# (x, y, lens radius): the red lenses traced on the tail-on (r37) and rear 3/4 photos (r38, r11), ellipses fitted
+# (tools/lamptrace.py) and carried back onto the body (lampback.py); the outer lamps sit higher than the inner ones
+TAIL_LAMPS = [(0.690, 0.832, 0.102), (0.485, 0.806, 0.078)]
+TAIL_YAW = [math.radians(12.0), math.radians(8.0)]       # turned outwards (round lenses seen narrower than tall)
 PLATE_R = [(-0.19, 0.315), (0.19, 0.315), (0.19, 0.515), (-0.19, 0.515)]
 
 
@@ -301,44 +472,67 @@ def rear_cutters(mats):
     return [prism(mats, rounded_poly(PLATE_R, 0.02), 'z', -2.27, -2.7, back='trim', wall='paint')]
 
 
-def tail_lamp(part, surf, x, y, R, u_off):
-    """a round lamp: dark bezel ring, a domed lens (taillight texture: one lamp per half of the map)"""
+def tail_lamp(part, surf, x, y, R, u_off, yaw=0.0):
+    """
+    a round lamp: body-coloured lip seated on the panel, a thin dark gap and bright rim, a domed lens (taillight texture: one lamp
+    per half of the map). The lamp faces back and `yaw` (rad) outwards: the real lenses follow the panel as it turns
+    round the corners (the outer ones look narrower than tall on the tail-on photo)
+    """
+    sg = 1 if x > 0 else -1
     hit = surf.onto(x, y, 'z', -1)
     z0 = hit[2] if hit is not None else SH.lamp_face_z(x, y)
+    c = np.array((x, y, z0))
+    ez = np.array((-sg * math.sin(yaw), 0.0, math.cos(yaw)))        # into the car
+    ex = np.array((math.cos(yaw), 0.0, sg * math.sin(yaw)))
+    ey = np.array((0.0, 1.0, 0.0))
     # body-coloured lip round the lamp's cup, a black bezel, then the domed lens
-    prof = [(R + 0.024, 0.008), (R + 0.022, -0.003), (R + 0.016, -0.007), (R + 0.011, -0.006), (R + 0.005, -0.003),
+    prof = [(R + 0.020, 0.008), (R + 0.018, -0.003), (R + 0.010, -0.006), (R + 0.006, -0.005), (R + 0.003, -0.004),
             (R, -0.006), (R * 0.88, -0.014), (R * 0.62, -0.021), (R * 0.30, -0.025), (0.0, -0.026)]
     segs = 40
     V = []
-    for s in range(segs):
-        th = 2 * math.pi * s / segs
-        V.append([(x + r * math.cos(th), y + r * math.sin(th), z0 + a) for r, a in prof])
-    inside = np.array((x, y, z0 + 0.10))
-    sg = 1 if x > 0 else -1
-    for s in range(segs):
-        s2 = (s + 1) % segs
+    for k_ in range(segs):
+        th = 2 * math.pi * k_ / segs
+        ring = [c + r * (math.cos(th) * ex + math.sin(th) * ey) + a * ez for r, a in prof]
+        # the lip's outer edge sits on the panel itself (the lamp turned outwards would float off or sink in)
+        p0 = ring[0]
+        on = surf.onto(p0[0], p0[1], 'z', -1)
+        if on is not None:
+            ring[0] = np.array((p0[0], p0[1], on[2] + 0.002))
+        V.append([tuple(p) for p in ring])
+    inside = c + ez * 0.10
+    for k_ in range(segs):
+        k2 = (k_ + 1) % segs
         for k in range(len(prof) - 1):
-            q = [V[s][k], V[s2][k], V[s2][k + 1], V[s][k + 1]]
+            q = [V[k_][k], V[k2][k], V[k2][k + 1], V[k_][k + 1]]
             if k == len(prof) - 2:
-                q = [V[s][k], V[s2][k], V[s][k + 1]]
-            mat = 'paint' if k < 2 else ('trim' if k < 5 else 'taillight')
-            uv = [(u_off + 0.5 * (0.5 + sg * (p[0] - x) / (2.1 * R)), 0.5 + (p[1] - y) / (2.1 * R)) for p in q]
+                q = [V[k_][k], V[k2][k], V[k_][k + 1]]
+            mat = 'paint' if k < 2 else ('trim' if k < 4 else ('chrome' if k < 5 else 'taillight'))
+            uv = []
+            for p in q:
+                d = np.array(p) - c
+                uv.append((u_off + 0.5 * (0.5 + sg * float(d @ ex) / (2.1 * R)), 0.5 + float(d @ ey) / (2.1 * R)))
             f = part.face(q, mat, smooth=k >= 5 or k == 0, uvs=uv)
             if f is not None:
                 fix(f, np.mean(np.array(q), axis=0) - inside)
 
 
 def rear_fittings(part, surf_body, surf_bumper):
-    for x, y, R in TAIL_LAMPS:
+    for (x, y, R), yaw in zip(TAIL_LAMPS, TAIL_YAW):
         for s in (1, -1):
-            tail_lamp(part, surf_body, s * x, y, R, 0.0 if x > 0.6 else 0.5)
+            tail_lamp(part, surf_body, s * x, y, R, 0.0 if x > 0.6 else 0.5, yaw)
     # high-mount stop lamp on the lid's rear edge
-    stop = resample(rounded_poly([(0.095, 0.906), (-0.095, 0.906), (-0.095, 0.930), (0.095, 0.930)], 0.008), 28)
+    stop = resample(rounded_poly([(0.092, 0.930), (-0.092, 0.930), (-0.092, 0.959), (0.092, 0.959)], 0.008), 28)
     patch(part, surf_body, stop, 'z', -1, 'lens_red', lift=0.003, rings=2)
     # reverse lamp (car's left, +x) and fog lamp (right) beside the plate
     for s, mat in ((1, 'lens_clear'), (-1, 'lens_red')):
-        r = [(s * 0.225, 0.47), (s * 0.385, 0.47), (s * 0.385, 0.52), (s * 0.225, 0.52)]
+        r = [(s * 0.200, 0.463), (s * 0.335, 0.463), (s * 0.335, 0.534), (s * 0.200, 0.534)]
         patch(part, surf_bumper, resample(rounded_poly(r, 0.01), 28), 'z', -1, mat, lift=0.003, rings=2)
+    # Nissan roundel and the GT-R emblem on the lid's right-hand lower corner (own simple shapes; tail-on r37)
+    for (x, y), (w, h) in (((-0.270, 0.790), (0.030, 0.030)), ((-0.290, 0.712), (0.058, 0.046))):
+        hit = surf_body.onto(x, y, 'z', -1)
+        if hit is not None:
+            z = hit[2]
+            part.box('chrome', x - w / 2, x + w / 2, y - h / 2, y + h / 2, z - 0.006, z + 0.004, bevel=min(w, h) * 0.3)
     # plate on the recess back
     z = -2.27 - 0.003
     w, h, y0 = 0.330, 0.165, 0.332
@@ -348,10 +542,10 @@ def rear_fittings(part, surf_body, surf_bumper):
 
 
 def diffuser(part):
-    """V-spec rear diffuser: a black undertray below the bumper with fins"""
+    """V-spec rear diffuser: a black undertray below the bumper with fins, notched round the tailpipe"""
     zf = lambda x: -2.30 + 0.10 * (x / 0.86) ** 2
-    xs = np.linspace(0.0, 0.78, 14)
-    edge = [(x, zf(x)) for x in xs]
+    xs = [x for x in np.linspace(0.0, 0.78, 14) if not 0.40 < x < 0.64]
+    edge = [(x, zf(x)) for x in xs if x <= 0.40] + [(0.40, -1.90), (0.64, -1.90)] + [(x, zf(x)) for x in xs if x >= 0.64]
     ring = edge[::-1] + [(-x, z) for x, z in edge[1:]] + [(-0.78, -1.85), (0.78, -1.85)]
     slab(part, dedupe(ring), 0.235, 0.247, 'trim')
     for x in (-0.36, -0.18, 0.0, 0.18, 0.36):
@@ -361,7 +555,7 @@ def diffuser(part):
 def exhaust(mats, parent):
     """the stock single tailpipe, car's left, under the bumper"""
     part = K.Part('exhaust')
-    x, y, z = 0.50, 0.185, -2.29
+    x, y, z = 0.52, 0.272, -2.29          # in the recess under the bumper's lower edge (r37)
     prof = [(0.040, 0.30), (0.046, 0.06), (0.054, 0.02), (0.057, 0.003), (0.057, 0.0), (0.052, -0.002),
             (0.049, 0.0), (0.047, 0.08)]
     part.lathe(prof, 'chrome', (x, y, z), axis='z', segments=24, flip=True)

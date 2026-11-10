@@ -230,6 +230,7 @@ def _transform(base, top=None, hi=None, lo=None, bot=None, plan=None):
     """
     An end row made from a mid row: each group of columns gets its own height range, width scale and station.
       top  (c11..c17): dict(y=centre height, z=, sx=, crown=k)  heights keep the crown scaled by k
+                       (or yx=f: heights f(x))
       hi   (c8..c10):  dict(sx=, y0=, y1=, z=)
       lo   (c4..c7):   dict(sx=, y0=, y1=, z=)
       bot  (c0..c3):   dict(y=, z=, sx=)
@@ -240,7 +241,10 @@ def _transform(base, top=None, hi=None, lo=None, bot=None, plan=None):
         yc0 = base[17, 1]
         for c in range(11, 18):
             row[c, 0] = base[c, 0] * top.get('sx', 1.0)
-            row[c, 1] = top['y'] + (base[c, 1] - yc0) * top.get('crown', 1.0)
+            if 'yx' in top:
+                row[c, 1] = top['yx'](row[c, 0])
+            else:
+                row[c, 1] = top['y'] + (base[c, 1] - yc0) * top.get('crown', 1.0)
             row[c, 2] = top['z']
     for grp, cols in ((hi, (8, 9, 10)), (lo, (4, 5, 6, 7))):
         if not grp:
@@ -266,10 +270,11 @@ def _transform(base, top=None, hi=None, lo=None, bot=None, plan=None):
     return row
 
 
-def face_ring(W, yb, yt, rb, rt, zf, centre=None, k=1.0):
+def face_ring(W, yb, yt, rb, rt, zf, centre=None, k=1.0, top=None):
     """
     A closed half ring (18 points) round a rounded rectangle x <= W, yb <= y <= yt (corner radii rb at the bottom, rt
     at the top), laid on the height field z = zf(x, y); scaled by k towards `centre` (x = 0, y) for the inner rings.
+    top: the top edge's height by x (default: level at yt).
     Columns keep their roles: c0..c3 bottom (c3 in the lower corner), c4..c9 side, c10 upper corner, c11..c17 top.
     """
     pts = []
@@ -280,8 +285,10 @@ def face_ring(W, yb, yt, rb, rt, zf, centre=None, k=1.0):
     for f in (0.0, 0.14, 0.36, 0.58, 0.80, 0.95):
         pts.append((W, yb + rb + (yt - rt - yb - rb) * f))
     pts.append((W - rt + rt * math.cos(a), yt - rt + rt * math.sin(a)))
-    for f in (0.0, 0.08, 0.2, 0.36, 0.56, 0.78, 1.0):
-        pts.append(((W - rt) * (1 - f), yt))
+    # (the top columns line up with the bonnet's columns behind: no skew across the dipping edge)
+    for f in (0.0, 0.05, 0.123, 0.225, 0.381, 0.675, 1.0):
+        x = (W - rt) * (1 - f)
+        pts.append((x, yt if top is None else float(top(x))))
     pts = np.array(pts)
     if centre is not None:
         pts[:, 1] = centre + (pts[:, 1] - centre) * k
@@ -298,6 +305,18 @@ _NOSE = pchip([0.13, 0.155, 0.18, 0.25, 0.32, 0.40, 0.47, 0.53, 0.575, 0.61, 0.6
               [2.262, 2.276, 2.284, 2.284, 2.282, 2.288, 2.302, 2.302, 2.290, 2.248, 2.222, 2.200, 2.186])
 
 
+# the bonnet's leading edge seen head-on (x -> y): low and level over the grille, rising along the head lamps' top
+# edges to the wings' corners: the R34's sharp "brow" (head-on photo r29 and front 3/4 r07, outlines carried back onto
+# the body with fitdata/r34/tools/lampback.py)
+BONNET_EDGE = pchip([0.0, 0.40, 0.445, 0.50, 0.60, 0.70, 0.80, 0.90],
+                    [0.700, 0.703, 0.719, 0.733, 0.748, 0.760, 0.768, 0.772])
+
+
+def _sstep(t):
+    t = float(np.clip(t, 0.0, 1.0))
+    return t * t * (3 - 2 * t)
+
+
 def nose_z(x, y):
     t = min(abs(x) / 0.85, 1.0)
     return float(_NOSE(y)) - 0.028 * t ** 2 - 0.066 * t ** 6
@@ -311,13 +330,20 @@ def lamp_face_z(x, y):
 def front_rows():
     b = mid_row(2.0)
     rows = []
-    rows.append(_transform(b, top=dict(y=0.770, z=2.10), hi=dict(sx=0.997, z=2.09), lo=dict(sx=0.997, z=2.10),
-                           bot=dict(y=0.152, z=2.10), plan=(0.015, 0.86)))
-    rows.append(_transform(b, top=dict(y=0.768, z=2.165, sx=0.99), hi=dict(sx=0.99, y0=0.58, y1=0.768, z=2.16),
-                           lo=dict(sx=0.993, z=2.19), bot=dict(y=0.150, z=2.19), plan=(0.035, 0.86)))
+    # the bonnet dips between the lamps down to its leading edge over the grille (BONNET_EDGE)
+    rows.append(_transform(b, top=dict(z=2.10, yx=lambda x: 0.752 + 0.024 * _sstep((abs(x) - 0.30) / 0.50)),
+                           hi=dict(sx=0.997, z=2.09), lo=dict(sx=0.997, z=2.10), bot=dict(y=0.152, z=2.10),
+                           plan=(0.015, 0.86)))
+    rows.append(_transform(b, top=dict(z=2.165, sx=0.99, yx=lambda x: 0.716 + 0.055 * _sstep((abs(x) - 0.36) / 0.46)),
+                           hi=dict(sx=0.99, y0=0.58, y1=0.768, z=2.16), lo=dict(sx=0.993, z=2.19),
+                           bot=dict(y=0.150, z=2.19), plan=(0.035, 0.86)))
     centre = 0.40
     for k in (1.0, 0.95, 0.75, 0.50, 0.25):
-        rows.append(face_ring(0.85, 0.155, 0.760, 0.035, 0.018, nose_z, centre=centre, k=k))
+        # the outer rings follow the bonnet's edge; the inner ones stay level (no crease across the bumper)
+        # the outer rings follow the bonnet's edge, the inner ones less and less (no crease across the bumper)
+        damp = {1.0: 1.0, 0.95: 1.0, 0.75: 0.55, 0.50: 0.2, 0.25: 0.0}[k]
+        rows.append(face_ring(0.85, 0.155, 0.70 + 0.071 * damp, 0.035, 0.018, nose_z, centre=centre, k=k,
+                              top=lambda x, d=damp: 0.70 + (float(BONNET_EDGE(x)) - 0.70) * d))
     rows.append(np.tile(np.array([0.0, centre, nose_z(0.0, centre)]), (NCOL, 1)))
     return rows
 
@@ -456,11 +482,24 @@ def rear_bumper_path(n_side=10, n_corner=26):
     return out
 
 
-def rear_bumper_profile(f):
-    """closed profile (n outward, y) at f = 0 (side, by the arch) .. 1 (back centre)"""
+def rear_bumper_profile(f, x=0.0):
+    """
+    closed profile (n outward, y) at f = 0 (side, by the arch) .. 1 (back centre), x the row's station across.
+    As on the tail-on photo (r37): between the corners the face ends in a crisp edge at y 0.365 (0.30 under the
+    plate) and the bumper sweeps forward underneath (dark in its own shade) to the diffuser; the back corners hang
+    down to y ~0.15 as body-coloured fins; by the arches the bottom stays rounded at 0.285.
+    """
     yt = 0.600 + 0.022 * f
-    yb = 0.285 - 0.02 * f
+    ax = abs(x)
+    plate = 1.0 - _sstep((ax - 0.20) / 0.05)
+    c = (1.0 - _sstep((ax - 0.60) / 0.06)) * _sstep((f - 0.30) / 0.15)
+    fin = _sstep((ax - 0.62) / 0.06) * (1.0 - _sstep((ax - 0.81) / 0.04)) * _sstep((f - 0.12) / 0.15)
+    yb = 0.285 - 0.02 * f - 0.13 * fin
+    ye = 0.365 - 0.065 * plate
     bulge = 0.004 * f
-    return [(-0.20, yb + 0.02), (-0.05, yb - 0.004), (-0.012, yb - 0.003), (-0.002, yb + 0.004), (0.0, yb + 0.02),
-            (bulge * 0.7, yb + 0.12), (bulge, (yb + yt) / 2), (bulge * 0.6, yt - 0.05), (0.0, yt - 0.008),
-            (-0.004, yt - 0.001), (-0.018, yt), (-0.20, yt + 0.002)]
+    old = [(-0.20, yb + 0.02), (-0.05, yb - 0.004), (-0.012, yb - 0.003), (-0.002, yb + 0.004), (0.0, yb + 0.02)]
+    rec = [(-0.20, 0.262), (-0.115, 0.248), (-0.095, 0.252), (-0.012, ye - 0.02), (0.0, ye)]
+    bottom = [(o[0] + (r[0] - o[0]) * c, o[1] + (r[1] - o[1]) * c) for o, r in zip(old, rec)]
+    fb = bottom[-1][1]
+    return bottom + [(bulge * 0.7, fb + 0.30 * (yt - fb)), (bulge, fb + 0.55 * (yt - fb)), (bulge * 0.6, yt - 0.05),
+                     (0.0, yt - 0.008), (-0.004, yt - 0.001), (-0.018, yt), (-0.20, yt + 0.002)]

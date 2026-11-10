@@ -1,0 +1,67 @@
+{
+ "note": "The silhouette fit behind ffd.json (tools/ffdfit.py over the r34 scripts) and the settings the checks use. cams_ffd.json = the cameras and car poses (dy, pitch) solved with the lattice, used by loop.py / compare.py / lampfit.py / lampback.py (--cams fit/cams_ffd.json --ffd ffd.json). Roll set by hand after the fit (the silhouettes leave it free; the symmetric lamp pairs fix it): r29 +0.030 rad, r37 +0.002 rad. Photos are fetched to a scratch dir (tools/fetch.py, ref/), never copied into textures; masks/ are the hand masks of other cars and people in front of the car. A lattice refit with the lamp anchors added (lampanchors.py) made the silhouettes worse and was not adopted.",
+ "cams_start": "fit/cams.json (bundle adjustment on fit/anchors.json)",
+ "anchors": "fit/anchors.json",
+ "photos": {
+  "r36": {
+   "photo": "<photo dir>/r36.jpg",
+   "band": 0.04,
+   "mask": "masks/r36.png",
+   "livery": "white",
+   "fprior": [
+    7025,
+    2500
+   ]
+  },
+  "r11": {
+   "photo": "<photo dir>/r11.jpg",
+   "band": 0.04,
+   "mask": "masks/r11.png",
+   "livery": "white",
+   "fprior": [
+    2282,
+    100
+   ]
+  },
+  "r38": {
+   "photo": "<photo dir>/r38.jpg",
+   "band": 0.04,
+   "mask": "masks/r38.png",
+   "livery": "white",
+   "fprior": [
+    7970,
+    6000
+   ]
+  },
+  "r37": {
+   "photo": "<photo dir>/r37.jpg",
+   "band": 0.04,
+   "mask": "masks/r37.png",
+   "livery": "red",
+   "fprior": [
+    1390,
+    50
+   ]
+  },
+  "r29": {
+   "photo": "<photo dir>/r29.jpg",
+   "band": 0.04,
+   "mask": "masks/r29.png",
+   "livery": "red",
+   "fprior": [
+    1173,
+    40
+   ]
+  },
+  "r07": {
+   "photo": "<photo dir>/r07.jpg",
+   "band": 0.04,
+   "mask": "masks/r07.png",
+   "livery": "red",
+   "fprior": [
+    1740,
+    80
+   ]
+  }
+ }
+}

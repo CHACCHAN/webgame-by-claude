@@ -273,9 +273,8 @@ const CARS: Record<RoadCarId, CarSpec> = {
     driftiness: 0.4,
     stats: { power: 10, grip: 9, drift: 4, weight: 4 },
     colors: { body: '#2f4fa6', accent: '#111111' },
-    // tip on the left (the rear-right guess was the wrong side)
-    exhaust: [0.43, 0.29, -2.29],
-    model: { title: 'Nissan Skyline R34 GT-R', author: 'Lexyc16', url: 'https://sketchfab.com/3d-models/nissan-skyline-r34-gt-r-ff8fb2251dfa4bb9979e7022c5a6666c', license: 'CC BY 4.0' },
+    // our own model (tools/blender/cars/r34*.py, fitted to photos; V-spec look, the tailpipe is its `exhaust` part)
+    model: { title: 'スカイライン GT-R (BNR34)', author: 'TOUGE NOCTURNE', url: '', license: '自作', own: true },
   },
   s15: {
     id: 's15',
@@ -359,6 +358,8 @@ const CARS: Record<RoadCarId, CarSpec> = {
     colors: { body: '#b9bdc0', accent: '#1b1c1f' },
     // the body is bare brushed stainless (the other swatches are wraps)
     bareMetal: { colors: ['#b9bdc0'], roughness: 0.3 },
+    // the light bar's lens texture is smoked dark, as on the unlit truck: the lamps glow through it
+    tailLampGain: 12,
     model: { title: 'Cybertruck（Cyberbeast）', author: 'TOUGE NOCTURNE', url: '', license: '自作', own: true },
   },
   u9: {

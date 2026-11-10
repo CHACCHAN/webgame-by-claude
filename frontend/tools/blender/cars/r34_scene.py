@@ -154,3 +154,13 @@ def render(view, path, size=(1280, 720), samples=32, transparent=False):
     sc.render.film_transparent = transparent
     sc.render.filepath = path
     bpy.ops.render.render(write_still=True)
+
+
+def light_from(eye, target, offset=40.0):
+    """turn the sun so it lights the car from beside the camera (photo-camera renders)"""
+    sun = bpy.data.objects.get('sun')
+    if sun is None:
+        return
+    dx, dz = eye[0] - target[0], eye[2] - target[2]
+    theta = math.atan2(dx, dz) + math.radians(offset)
+    sun.rotation_euler = (math.radians(48), 0, theta)

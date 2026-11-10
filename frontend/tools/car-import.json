@@ -40,17 +40,5 @@
     },
     "textureSize": 512,
     "simplifyError": 0.002
-  },
-  "r34": {
-    "dir": "r34",
-    "simplify": 0.8,
-    "config": {
-      "wheels": "Material\\.01[02]$",
-      "paint": "Material\\.001$",
-      "glass": "Material\\.006$",
-      "headlights": "^Object_3 Material$",
-      "taillights": "Material\\.009$"
-    },
-    "textureSize": 512
   }
 }

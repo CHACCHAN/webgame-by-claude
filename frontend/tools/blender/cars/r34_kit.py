@@ -207,3 +207,17 @@ def bvh_of(obj):
 
 def tri_count(obj):
     return sum(len(p.vertices) - 2 for p in obj.data.polygons)
+
+
+def clear_scene():
+    bpy.ops.wm.read_factory_settings(use_empty=True)
+
+
+def export_glb(path, root):
+    bpy.ops.object.select_all(action='DESELECT')
+    root.select_set(True)
+    for c in root.children_recursive:
+        c.select_set(True)
+    bpy.ops.export_scene.gltf(filepath=path, export_format='GLB', use_selection=True, export_yup=True, export_apply=True,
+                              export_materials='EXPORT', export_extras=True, export_cameras=False, export_lights=False,
+                              export_image_format='AUTO')

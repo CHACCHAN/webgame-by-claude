@@ -39,7 +39,7 @@ def materials(tex):
     m['grille'] = K.material('grille', '#0c0c0d', roughness=0.5, image=img('mesh.png'))
     m['plate'] = K.material('plate', '#f2f2ee', roughness=0.4, image=img('plate.png'))
     m['amber'] = K.material('amber', '#d9780f', roughness=0.2, emissive='#ff8a1a', strength=0.0)
-    m['lens_clear'] = K.material('lens_clear', '#dfe3e6', metallic=0.3, roughness=0.12)
+    m['lens_clear'] = K.material('lens_clear', '#cdd1d5', metallic=0.1, roughness=0.18, image=img('indicator.png'))
     m['lens_red'] = K.material('lens_red', '#8a0d0c', roughness=0.2, emissive='#ff1a10', strength=0.0)
     return m
 
@@ -121,7 +121,7 @@ def rear_bumper(mats):
     for i, (x, z, nx, nz) in enumerate(full):
         k = i if i < n else 2 * (n - 1) - i
         f = min(1.0, max(0.0, (k - 9) / (n - 12)))
-        prof = SH.rear_bumper_profile(f)
+        prof = SH.rear_bumper_profile(f, x)
         rows.append([(x + nx * pn, py, z + nz * pn) for pn, py in prof])
     P = np.array(rows)
     part = K.Part('rear_bumper')
@@ -195,6 +195,9 @@ def split_material(obj, name, new_name):
     return new
 
 
+CUT_FRONT = True      # False: the nose stays uncut (fitdata tools: lamp / feature outlines carried onto the surface)
+
+
 def build(mats, parent, tex):
     shell, grid, classify = build_shell(mats)
     bumper = rear_bumper(mats)
@@ -205,7 +208,7 @@ def build(mats, parent, tex):
             for s in (1, -1):
                 cs.append(cylinder_cutter((0, yc, zc), r, s * 0.50, s * 1.3))
         return cs
-    cut(shell, arches((SH.ARCH_F, SH.ARCH_R)) + FIT.front_cutters(mats, FIT.Surface(shell)))
+    cut(shell, arches((SH.ARCH_F, SH.ARCH_R)) + (FIT.front_cutters(mats, FIT.Surface(shell)) if CUT_FRONT else []))
     cut(bumper, arches((SH.ARCH_R,)) + FIT.rear_cutters(mats))
     glass = split_material(shell, 'glass', 'glass')
     fit = K.Part('fittings')
