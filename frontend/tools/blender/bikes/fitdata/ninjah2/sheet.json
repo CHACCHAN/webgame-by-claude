@@ -1,12 +1,12 @@
 {
  "out": "/home/dev/.local/opt/carfit/bikes/ninjah2/sheet_ninjah2.png",
  "width": 1200,
- "title": "Ninja H2 - detail round 3: our model (no rider) from the solved cameras of Commons photos r01, r02 (Tokumeigakarinoaoshima, CC BY-SA 4.0) and r07 (stock bike, Rikita, CC BY-SA 4.0)",
+ "title": "Ninja H2 - detail round 3: our model (no rider) from the solved cameras of Commons photos r01, r02 (CC BY-SA 4.0) and r07 (stock bike, CC BY-SA 4.0)",
  "lines": [
-  "r01 bike-only silhouette IoU 0.946 (model-only 4.3 %, photo-only 1.4 %) | r02 lamps unchanged: lens 0.64 / max 12.8 px, housing 0.66, fangs 0.78 / 0.64 | 39,344 tris with the rider, 43 materials",
-  "discs: 45 mm steel rings (#8a8d90, metallic 1, roughness 0.35) with the drilled pattern and petal edge in a texture (no alpha); floating carriers in dark",
-  "anodised alloy with 10 gold bobbins and 6 gold bolts (r01: the carrier is dark, the bobbins gold); the spokes show between its five arms. Rear: the same ring on dark arms",
-  "fairing: every pressed face bows out by up to 20 mm between its creases, smooth-shaded (splits only at creases) | engine cases #3a3c40 (metallic 0.6, rough 0.4), round covers lighter | mirror paint as before"
+  "r01 silhouette IoU 0.946 (model-only 4.3 %, photo-only 1.4 %) | r02 lamps unchanged: lens 0.64 / 12.8 px, housing 0.66, fangs 0.78 / 0.64",
+  "39,344 tris with the rider, 43 materials | discs: 45 mm steel rings (#8a8d90, metallic 1, roughness 0.35), drilled pattern and petal",
+  "edge in a texture (no alpha); floating carriers dark (as on r01) with 10 gold bobbins, 6 gold bolts; spokes show between the arms",
+  "fairing faces bow out up to 20 mm between creases, smooth-shaded | engine cases #3a3c40 (metallic 0.6, rough 0.4), covers lighter"
  ],
  "rows": [
   [
