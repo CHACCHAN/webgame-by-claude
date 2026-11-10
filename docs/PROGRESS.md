@@ -78,6 +78,7 @@ deployed yet: the owner sees each sheet first).
 - Checked in Chrome (software rendering): garage at night and dawn (side windows glow at night; the four head lamps
   lit and lighting the road, seen head-on), a night race start in the cab view and the chase views; no page errors.
   The float above 150 km/h was not reached in the browser (the sim and the earlier stand-in cover it).
+  Deployed (`e880d4e`, bundle `index-D8DrH9l9.js`, `l0.glb` served hash-equal, leaderboard API 200). E2E not run.
 
 ## Session 7 (2026-11-03 – 11-04) — every model our own (Blender); the owner's train lineup; a livery per line
 
