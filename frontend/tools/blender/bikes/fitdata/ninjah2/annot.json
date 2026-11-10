@@ -1,0 +1,276 @@
+{
+ "_bike": {
+  "wb": 1.455,
+  "rf": 0.3,
+  "rr": 0.326,
+  "rake_deg": 24.9,
+  "trail": 0.103,
+  "lip_f": 0.006,
+  "lip_r": 0.004,
+  "rho": 0.225,
+  "wf": 0.12,
+  "wr": 0.2
+ },
+ "r01": {
+  "size": [
+   1920,
+   1440
+  ],
+  "rims": "r01_rims.json",
+  "side": "r",
+  "two_lips": true,
+  "rho_sigma": 0.01,
+  "lip_sigma": 0.01,
+  "trail_sigma": 0.005,
+  "inits": [
+   [
+    -4.0,
+    0.7,
+    0.0,
+    90,
+    0,
+    0,
+    3500
+   ],
+   [
+    -3.0,
+    0.6,
+    0.1,
+    92,
+    0,
+    0,
+    2700
+   ],
+   [
+    -6.0,
+    0.8,
+    0.0,
+    90,
+    0,
+    0,
+    5300
+   ]
+  ],
+  "prior": {
+   "roll": [
+    0,
+    10
+   ],
+   "steer": [
+    0,
+    15
+   ]
+  },
+  "steer0": 0
+ },
+ "r02": {
+  "size": [
+   1920,
+   1440
+  ],
+  "rims": "r02_rims.json",
+  "side": "l",
+  "two_lips": true,
+  "rho_sigma": 0.002,
+  "lip_sigma": 0.004,
+  "trail_sigma": 0.005,
+  "inits": [
+   [
+    0.5,
+    1.1,
+    3.0,
+    190,
+    -10,
+    0,
+    3000
+   ],
+   [
+    0.3,
+    1.0,
+    2.5,
+    185,
+    -12,
+    0,
+    2400
+   ],
+   [
+    -0.5,
+    0.5,
+    2.0,
+    160,
+    0,
+    7,
+    1700
+   ]
+  ],
+  "prior": {
+   "roll": [
+    5,
+    8
+   ],
+   "steer": [
+    25,
+    20
+   ],
+   "y": [
+    1.0,
+    0.3
+   ],
+   "f": [
+    1500,
+    150
+   ]
+  },
+  "steer0": 15,
+  "pts": {
+   "emblem": [
+    [
+     0,
+     0.79,
+     0.865
+    ],
+    [
+     1118,
+     368
+    ],
+    1.0
+   ],
+   "contact_f": [
+    [
+     0,
+     0.0,
+     0.73
+    ],
+    [
+     920,
+     1392
+    ],
+    0.5
+   ]
+  },
+  "note": "only the front wheel is visible and the tyre/stripe/emblem constraints disagree by ~10 px: weak camera (focal held near a phone main camera); the lamp score here is a layout check, not a precise fit. r02_tyres.json (outer tyre silhouette by eye) made the solve worse and is kept out"
+ },
+ "r07": {
+  "size": [
+   1920,
+   1282
+  ],
+  "rims": "none_rims.json",
+  "tyres": "r07_tyres.json",
+  "side": "r",
+  "two_lips": true,
+  "inits": [
+   [
+    -2.5,
+    1.0,
+    2.0,
+    129,
+    -17,
+    0,
+    1800
+   ],
+   [
+    -3.0,
+    1.2,
+    2.5,
+    125,
+    -15,
+    0,
+    2500
+   ],
+   [
+    -2.0,
+    0.8,
+    1.5,
+    135,
+    -12,
+    0,
+    1400
+   ]
+  ],
+  "prior": {
+   "roll": [
+    0,
+    5
+   ],
+   "steer": [
+    0,
+    3
+   ]
+  },
+  "steer0": 0,
+  "pts": {
+   "A": [
+    [
+     -0.13,
+     0.661,
+     -0.106
+    ],
+    [
+     663,
+     473
+    ],
+    1.0
+   ],
+   "B": [
+    [
+     -0.13,
+     0.69,
+     0.126
+    ],
+    [
+     810,
+     490
+    ],
+    0.3
+   ],
+   "C": [
+    [
+     -0.13,
+     0.55,
+     -0.128
+    ],
+    [
+     643,
+     593
+    ],
+    1.0
+   ],
+   "pivot": [
+    [
+     -0.13,
+     0.44,
+     -0.145
+    ],
+    [
+     633,
+     703
+    ],
+    1.0
+   ],
+   "axle_f": [
+    [
+     -0.13,
+     0.3,
+     0.7275
+    ],
+    [
+     1375,
+     950
+    ],
+    0.7
+   ]
+  },
+  "note": "stock bike on a display stand (both wheels off the floor): frame nodes and the front axle from the r01-fitted model + tyre silhouettes; for the stock silencer",
+  "trail_sigma": 0.003,
+  "init": [
+   -3.0,
+   1.2,
+   2.5,
+   125,
+   -15,
+   0,
+   2500
+  ]
+ }
+}

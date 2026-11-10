@@ -54,6 +54,8 @@ interface BikeDef {
   stats: CarSpec['stats'];
   bike: BikeInfo;
   model: NonNullable<CarSpec['model']>;
+  /** metal swatches (`CarSpec.bareMetal`): the H2's mirror coat */
+  bareMetal?: CarSpec['bareMetal'];
 }
 
 function bikeSpec(d: BikeDef): CarSpec {
@@ -95,6 +97,7 @@ function bikeSpec(d: BikeDef): CarSpec {
     stats: d.stats,
     colors: { body: d.bike.liveries[0].swatch, accent: '#16181c' },
     model: d.model,
+    ...(d.bareMetal ? { bareMetal: d.bareMetal } : {}),
     bike: d.bike,
   };
 }
@@ -163,13 +166,15 @@ const BIKES: BikeDef[] = [
       com: { height: 0.63, fromRear: 0.73 },
       maxLean: 0.98,
       liveries: [
-        { name: 'ミラーコートスパークブラック', swatch: '#3a3d44' },
+        { name: 'ミラーコートスパークブラック', swatch: '#64686e' },
         { name: 'メタリックスパークブラック', swatch: '#121316' },
         { name: 'ライムグリーン', swatch: '#5fb820' },
       ],
       figures: { engine: '水冷4スト 並列4気筒 998cc スーパーチャージャー', displacement: 998, power: '231 PS / 11500 rpm', torque: '141.7 N·m / 11000 rpm', weight: '装備 238 kg', topSpeed: 330, seat: 0.825 },
     },
     model: { title: 'Ninja H2', author: 'TOUGE NOCTURNE', url: '', license: '自作', own: true },
+    // the mirror coat: a silver mirror layer under a black-tinted clear coat (measured on the photos as #64686e)
+    bareMetal: { colors: ['#64686e'], roughness: 0.05, clearcoat: 1 },
   },
   {
     id: 'hayabusa',

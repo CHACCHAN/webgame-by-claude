@@ -1,0 +1,364 @@
+{
+ "out": "/home/dev/.local/opt/carfit/bikes/ninjah2/sheet_ninjah2.png",
+ "width": 1200,
+ "title": "Ninja H2 - detail round 3: our model (no rider) from the solved cameras of Commons photos r01, r02 (Tokumeigakarinoaoshima, CC BY-SA 4.0) and r07 (stock bike, Rikita, CC BY-SA 4.0)",
+ "lines": [
+  "r01 bike-only silhouette IoU 0.946 (model-only 4.3 %, photo-only 1.4 %) | r02 lamps unchanged: lens 0.64 / max 12.8 px, housing 0.66, fangs 0.78 / 0.64 | 39,344 tris with the rider, 43 materials",
+  "discs: 45 mm steel rings (#8a8d90, metallic 1, roughness 0.35) with the drilled pattern and petal edge in a texture (no alpha); floating carriers in dark",
+  "anodised alloy with 10 gold bobbins and 6 gold bolts (r01: the carrier is dark, the bobbins gold); the spokes show between its five arms. Rear: the same ring on dark arms",
+  "fairing: every pressed face bows out by up to 20 mm between its creases, smooth-shaded (splits only at creases) | engine cases #3a3c40 (metallic 0.6, rough 0.4), round covers lighter | mirror paint as before"
+ ],
+ "rows": [
+  [
+   {
+    "img": "ninjah2/ref/r01.jpg",
+    "crop": [
+     0,
+     200,
+     1920,
+     1300
+    ],
+    "label": "photo r01"
+   },
+   {
+    "img": "ninjah2/cy_nr/photo_r01.png",
+    "crop": [
+     0,
+     200,
+     1920,
+     1300
+    ],
+    "ref_size": [
+     1920,
+     1440
+    ],
+    "label": "model, r01 camera (Cycles)"
+   }
+  ],
+  [
+   {
+    "img": "ninjah2/ref/r01.jpg",
+    "crop": [
+     1150,
+     450,
+     1920,
+     1280
+    ],
+    "label": "front disc: photo r01"
+   },
+   {
+    "img": "ninjah2/cy_nr/photo_r01.png",
+    "crop": [
+     1150,
+     450,
+     1920,
+     1280
+    ],
+    "ref_size": [
+     1920,
+     1440
+    ],
+    "label": "model, r01 camera"
+   },
+   {
+    "img": "ninjah2/ref/r01.jpg",
+    "crop": [
+     700,
+     150,
+     1500,
+     900
+    ],
+    "label": "panels, engine: photo r01"
+   },
+   {
+    "img": "ninjah2/cy_nr/photo_r01.png",
+    "crop": [
+     700,
+     150,
+     1500,
+     900
+    ],
+    "ref_size": [
+     1920,
+     1440
+    ],
+    "label": "model, r01 camera"
+   }
+  ],
+  [
+   {
+    "img": "ninjah2/ref/r02.jpg",
+    "crop": [
+     960,
+     380,
+     1220,
+     640
+    ],
+    "poly": [
+     [
+      1129,
+      478
+     ],
+     [
+      1124,
+      496
+     ],
+     [
+      1111,
+      509
+     ],
+     [
+      1093,
+      514
+     ],
+     [
+      1075,
+      509
+     ],
+     [
+      1062,
+      496
+     ],
+     [
+      1057,
+      478
+     ],
+     [
+      1062,
+      460
+     ],
+     [
+      1075,
+      447
+     ],
+     [
+      1093,
+      442
+     ],
+     [
+      1111,
+      447
+     ],
+     [
+      1124,
+      460
+     ]
+    ],
+    "label": "lamp: photo (green = traced lens)"
+   },
+   {
+    "img": "ninjah2/cy_nr/photo_r02.png",
+    "crop": [
+     960,
+     380,
+     1220,
+     640
+    ],
+    "ref_size": [
+     1920,
+     1440
+    ],
+    "poly": [
+     [
+      1129,
+      478
+     ],
+     [
+      1124,
+      496
+     ],
+     [
+      1111,
+      509
+     ],
+     [
+      1093,
+      514
+     ],
+     [
+      1075,
+      509
+     ],
+     [
+      1062,
+      496
+     ],
+     [
+      1057,
+      478
+     ],
+     [
+      1062,
+      460
+     ],
+     [
+      1075,
+      447
+     ],
+     [
+      1093,
+      442
+     ],
+     [
+      1111,
+      447
+     ],
+     [
+      1124,
+      460
+     ]
+    ],
+    "mask": {
+     "ids": "ninjah2/loop/l/r02_ids.png",
+     "palette": "ninjah2/loop/l/palette.json",
+     "mat": "headlight"
+    },
+    "label": "lamp: model, day (red = model lamps)"
+   },
+   {
+    "img": "ninjah2/cy_nr/photo_r02_night.png",
+    "crop": [
+     960,
+     380,
+     1220,
+     640
+    ],
+    "ref_size": [
+     1920,
+     1440
+    ],
+    "label": "lamp: model, lit"
+   },
+   {
+    "img": "ninjah2/cy_nr/r01_clean_ov.jpg",
+    "label": "r01 clean mask: green photo only, red model only"
+   }
+  ],
+  [
+   {
+    "img": "ninjah2/ref/r02.jpg",
+    "crop": [
+     500,
+     100,
+     1700,
+     1300
+    ],
+    "label": "photo r02 (front)"
+   },
+   {
+    "img": "ninjah2/cy_nr/photo_r02.png",
+    "crop": [
+     500,
+     100,
+     1700,
+     1300
+    ],
+    "ref_size": [
+     1920,
+     1440
+    ],
+    "label": "model, r02 camera"
+   },
+   {
+    "img": "ninjah2/cy_nr/metal.png",
+    "label": "metal: trellis, swingarm, silencer, headers"
+   }
+  ],
+  [
+   {
+    "img": "ninjah2/cy_nr/r07_can_ov.jpg",
+    "crop": [
+     40,
+     350,
+     800,
+     900
+    ],
+    "label": "stock can r07: photo, red = model can outline"
+   },
+   {
+    "img": "ninjah2/cy_nr/r07_shade.jpg",
+    "crop": [
+     0,
+     0,
+     1920,
+     1282
+    ],
+    "label": "model at the r07 camera (fit shading)"
+   },
+   {
+    "img": "ninjah2/ref/r07.jpg",
+    "crop": [
+     0,
+     0,
+     1920,
+     1282
+    ],
+    "label": "photo r07 (stock)"
+   }
+  ],
+  [
+   {
+    "img": "ninjah2/cy/side.png",
+    "crop": [
+     180,
+     120,
+     1100,
+     640
+    ],
+    "label": "side, rider"
+   },
+   {
+    "img": "ninjah2/cy/front34.png",
+    "crop": [
+     300,
+     100,
+     1000,
+     690
+    ],
+    "label": "front 3/4"
+   },
+   {
+    "img": "ninjah2/cy/rear34.png",
+    "crop": [
+     300,
+     80,
+     1000,
+     690
+    ],
+    "label": "rear 3/4"
+   },
+   {
+    "img": "ninjah2/cy/front34_night.png",
+    "crop": [
+     300,
+     100,
+     1000,
+     690
+    ],
+    "label": "night"
+   }
+  ],
+  [
+   {
+    "img": "ninjah2/cy_nr/metal_f.png",
+    "label": "metal: forks, discs, calipers"
+   },
+   {
+    "img": "ninjah2/cy_nr/lamp.png",
+    "label": "lamps, day"
+   },
+   {
+    "img": "ninjah2/cy_nr/lamp_night.png",
+    "label": "lamps, lit"
+   },
+   {
+    "img": "ninjah2/cy_nr/tail.png",
+    "label": "tail lamp"
+   },
+   {
+    "img": "ninjah2/cy_nr/tail_night.png",
+    "label": "tail lamp, lit"
+   }
+  ]
+ ]
+}

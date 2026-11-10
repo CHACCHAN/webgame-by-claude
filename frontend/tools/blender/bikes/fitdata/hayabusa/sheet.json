@@ -1,0 +1,461 @@
+{
+ "out": "/home/dev/.local/opt/carfit/bikes/hayabusa/sheet_hayabusa.png",
+ "width": 1200,
+ "title": "GSX1300R Hayabusa (gen 1), detail round - our model (no rider) from the solved camera of Commons photo r01 (Yama kujira, CC0); r02-r05 for shapes",
+ "lines": [
+  "r01: bike-only silhouette IoU 0.965 (model-only 1.8 %, photo-only 1.7 %) | livery agreement 0.915 (blue IoU 0.84, silver 0.85; first pass 0.80)",
+  "r01 lamps: indicator lens IoU 0.83 / max 6.4 px, tail lamp 0.81 / max 6.6 px | 39,988 tris with the rider, 45 materials",
+  "new: smooth shading (splits at creases), livery traced on r01, dark engine + silver covers, cast frame plate and rear-sets traced on r01,",
+  "black seat rails, drilled discs on gold carriers, polished link pipes (r04). r04 camera coarse (rear tyre + 3 points, rms 7.9 px): clip-on end within ~10 px"
+ ],
+ "rows": [
+  [
+   {
+    "img": "hayabusa/ref/r01.jpg",
+    "crop": [
+     0,
+     150,
+     1920,
+     1180
+    ],
+    "label": "photo r01"
+   },
+   {
+    "img": "hayabusa/cy_nr/photo_r01.png",
+    "crop": [
+     0,
+     150,
+     1920,
+     1180
+    ],
+    "ref_size": [
+     1920,
+     1280
+    ],
+    "label": "model, r01 camera (Cycles)"
+   }
+  ],
+  [
+   {
+    "img": "hayabusa/ref/r01.jpg",
+    "crop": [
+     1480,
+     400,
+     1720,
+     640
+    ],
+    "poly": [
+     [
+      1572.5,
+      480
+     ],
+     [
+      1574,
+      472
+     ],
+     [
+      1582.5,
+      470
+     ],
+     [
+      1600,
+      477.5
+     ],
+     [
+      1615,
+      497.5
+     ],
+     [
+      1625,
+      517.5
+     ],
+     [
+      1631,
+      540
+     ],
+     [
+      1631,
+      555
+     ],
+     [
+      1625,
+      567.5
+     ],
+     [
+      1615,
+      565
+     ],
+     [
+      1600,
+      552.5
+     ],
+     [
+      1587.5,
+      532.5
+     ],
+     [
+      1580,
+      512.5
+     ],
+     [
+      1575,
+      495
+     ]
+    ],
+    "label": "indicator: photo (green = traced lens)"
+   },
+   {
+    "img": "hayabusa/cy_nr/photo_r01.png",
+    "crop": [
+     1480,
+     400,
+     1720,
+     640
+    ],
+    "ref_size": [
+     1920,
+     1280
+    ],
+    "poly": [
+     [
+      1572.5,
+      480
+     ],
+     [
+      1574,
+      472
+     ],
+     [
+      1582.5,
+      470
+     ],
+     [
+      1600,
+      477.5
+     ],
+     [
+      1615,
+      497.5
+     ],
+     [
+      1625,
+      517.5
+     ],
+     [
+      1631,
+      540
+     ],
+     [
+      1631,
+      555
+     ],
+     [
+      1625,
+      567.5
+     ],
+     [
+      1615,
+      565
+     ],
+     [
+      1600,
+      552.5
+     ],
+     [
+      1587.5,
+      532.5
+     ],
+     [
+      1580,
+      512.5
+     ],
+     [
+      1575,
+      495
+     ]
+    ],
+    "mask": {
+     "ids": "hayabusa/loop/i/r01_ids.png",
+     "palette": "hayabusa/loop/i/palette.json",
+     "mat": "indicator"
+    },
+    "label": "indicator: model (red = model lens)"
+   },
+   {
+    "img": "hayabusa/ref/r01.jpg",
+    "crop": [
+     60,
+     380,
+     300,
+     620
+    ],
+    "poly": [
+     [
+      159,
+      496
+     ],
+     [
+      158,
+      486
+     ],
+     [
+      163,
+      476
+     ],
+     [
+      170,
+      470
+     ],
+     [
+      180,
+      468
+     ],
+     [
+      192,
+      471
+     ],
+     [
+      199,
+      480
+     ],
+     [
+      200,
+      495
+     ],
+     [
+      198,
+      508
+     ],
+     [
+      188,
+      517
+     ],
+     [
+      172,
+      516
+     ],
+     [
+      162,
+      508
+     ]
+    ],
+    "label": "tail lamp: photo"
+   },
+   {
+    "img": "hayabusa/cy_nr/photo_r01.png",
+    "crop": [
+     60,
+     380,
+     300,
+     620
+    ],
+    "ref_size": [
+     1920,
+     1280
+    ],
+    "poly": [
+     [
+      159,
+      496
+     ],
+     [
+      158,
+      486
+     ],
+     [
+      163,
+      476
+     ],
+     [
+      170,
+      470
+     ],
+     [
+      180,
+      468
+     ],
+     [
+      192,
+      471
+     ],
+     [
+      199,
+      480
+     ],
+     [
+      200,
+      495
+     ],
+     [
+      198,
+      508
+     ],
+     [
+      188,
+      517
+     ],
+     [
+      172,
+      516
+     ],
+     [
+      162,
+      508
+     ]
+    ],
+    "mask": {
+     "ids": "hayabusa/loop/i/r01_ids.png",
+     "palette": "hayabusa/loop/i/palette.json",
+     "mat": "taillight"
+    },
+    "label": "tail lamp: model"
+   },
+   {
+    "img": "hayabusa/cy_nr/photo_r01_night.png",
+    "crop": [
+     60,
+     380,
+     300,
+     620
+    ],
+    "ref_size": [
+     1920,
+     1280
+    ],
+    "label": "tail lamp: model, lit"
+   }
+  ],
+  [
+   {
+    "img": "hayabusa/cy_nr/r01_clean_ov.jpg",
+    "label": "r01 clean mask: green photo only, red model only"
+   },
+   {
+    "img": "hayabusa/loop/i/livery_ov.jpg",
+    "label": "r01 livery: green agree, red model blue / photo silver"
+   },
+   {
+    "img": "hayabusa/ref/r01.jpg",
+    "crop": [
+     600,
+     450,
+     1250,
+     1000
+    ],
+    "label": "frame casting, rear-sets: photo"
+   },
+   {
+    "img": "hayabusa/cy_nr/photo_r01.png",
+    "crop": [
+     600,
+     450,
+     1250,
+     1000
+    ],
+    "ref_size": [
+     1920,
+     1280
+    ],
+    "label": "model, r01 camera"
+   }
+  ],
+  [
+   {
+    "img": "hayabusa/cy_nr/metal.png",
+    "label": "metal: spars, swingarm, silencers, headers"
+   },
+   {
+    "img": "hayabusa/cy_nr/metal_f.png",
+    "label": "metal: forks, discs, calipers"
+   },
+   {
+    "img": "hayabusa/ref/r04.jpg",
+    "crop": [
+     0,
+     0,
+     1920,
+     1440
+    ],
+    "label": "r04 (stock 2007)"
+   },
+   {
+    "img": "hayabusa/loop/r04/r04_shade.png",
+    "crop": [
+     0,
+     0,
+     1920,
+     1440
+    ],
+    "ref_size": [
+     1920,
+     1440
+    ],
+    "label": "model, r04 camera (coarse; fit shading)"
+   }
+  ],
+  [
+   {
+    "img": "hayabusa/cy/side.png",
+    "crop": [
+     180,
+     120,
+     1100,
+     640
+    ],
+    "label": "side, rider"
+   },
+   {
+    "img": "hayabusa/cy/front34.png",
+    "crop": [
+     300,
+     100,
+     1000,
+     690
+    ],
+    "label": "front 3/4"
+   },
+   {
+    "img": "hayabusa/cy/rear34.png",
+    "crop": [
+     300,
+     80,
+     1000,
+     690
+    ],
+    "label": "rear 3/4"
+   },
+   {
+    "img": "hayabusa/cy/front34_night.png",
+    "crop": [
+     300,
+     100,
+     1000,
+     690
+    ],
+    "label": "night"
+   }
+  ],
+  [
+   {
+    "img": "hayabusa/cy_nr/front.png",
+    "label": "front"
+   },
+   {
+    "img": "hayabusa/cy_nr/lamp.png",
+    "label": "lamps, day"
+   },
+   {
+    "img": "hayabusa/cy_nr/lamp_night.png",
+    "label": "lamps, lit"
+   },
+   {
+    "img": "hayabusa/cy_nr/tail.png",
+    "label": "tail lamp"
+   },
+   {
+    "img": "hayabusa/cy_nr/tail_night.png",
+    "label": "tail lamp, lit"
+   }
+  ]
+ ]
+}

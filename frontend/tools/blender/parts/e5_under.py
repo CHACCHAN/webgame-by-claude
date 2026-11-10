@@ -55,7 +55,7 @@ def _coupler(mm, sign):
 def _plough(mm):
     """the snow plough under the nose: a curved blade following the nose's plan, closed top and bottom"""
     yb, yt = 0.20, 0.36
-    front = 1.25                       # its front's distance behind the nose tip
+    front = 1.50                       # its front's distance behind the nose tip (under the cover's seam)
     rear = 3.30
     # plan outline (x, d) round the front: a superellipse half from the left rear corner to the right one
     hw0 = 1.02

@@ -79,6 +79,17 @@ deployed yet: the owner sees each sheet first).
   lit and lighting the road, seen head-on), a night race start in the cab view and the chase views; no page errors.
   The float above 150 km/h was not reached in the browser (the sim and the earlier stand-in cover it).
   Deployed (`e880d4e`, bundle `index-D8DrH9l9.js`, `l0.glb` served hash-equal, leaderboard API 200). E2E not run.
+- **E5/H5 nose refit** and **the three bikes' own models** (owner: 「配置できるものは配置してok」, 2026-11-10, after the
+  nose sheet and the H2 round-2 sheet). E5/H5: the canopy moved ~2 m back, the nose narrower for longer, the green line
+  kept high down the flank; on the solved Nasu-Shiobara camera the nose window's IoU 0.862 → 0.926, outline p95 50.6 →
+  31.7 px (one camera only; `fitdata/e5/`); consist and lamps unchanged; e5.glb 0.74 MB, e5-h5.glb 0.76 MB.
+  Bikes: NSR250R 39 k tris 0.32 MB, Ninja H2 (detail round 3: stock can, layered cambered panels, drilled discs, grey
+  engine) 0.37 MB, 隼 (detail round at a clean point) 0.35 MB; riders in the GLBs. The H2's mirror coat
+  (ミラーコートスパークブラック, swatch now #64686e) is a metal swatch under a clear coat (`bareMetal.clearcoat`).
+  `blender-models.cjs` now creates a kind's output folder. Checked in Chrome (software rendering): E5 head-on at dawn
+  and the H5 at night (lamps, window glow), the H2 and 隼 garage at dawn, the NSR garage at night and a night race start
+  (chase, rider and rear views); no page errors. The bikes' refinement continues (Hayabusa detail round finished after
+  this build; H2 round-3 sheet pending): rebuild and redeploy when they land.
 
 ## Session 7 (2026-11-03 – 11-04) — every model our own (Blender); the owner's train lineup; a livery per line
 

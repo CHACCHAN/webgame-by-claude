@@ -74,9 +74,10 @@ export interface CarSpec {
   tailLampGain?: number;
   /**
    * an unpainted metal body (the Cybertruck's brushed stainless): these swatches are the bare metal, drawn fully
-   * metallic without the paint's clear coat; any other swatch is paint or a wrap (render/CarModel.ts `paintFinish`)
+   * metallic without the paint's clear coat; any other swatch is paint or a wrap (render/CarModel.ts `paintFinish`).
+   * `clearcoat` keeps a coat over the metal (the Ninja H2's mirror-coated paint: a silver mirror under clear)
    */
-  bareMetal?: { colors: string[]; roughness: number };
+  bareMetal?: { colors: string[]; roughness: number; clearcoat?: number };
   /** tailpipe tip on the 3D model (body-local m, +x = left) where no part is named like an exhaust */
   exhaust?: [number, number, number];
   /** a train (joke entry, vehicle/trains.ts): drawn as three cars following the simulated front bogie */

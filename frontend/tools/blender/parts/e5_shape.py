@@ -11,10 +11,17 @@ Figures (ja.wikipedia 新幹線E5系・H5系電車, read 2026-11-03):
   ("ダブルカスプ" double cusp, after the E954's "アローライン"); sides lean in above the waist (車体傾斜, 内傾).
 - Bogie centres 17,500 mm, wheelbase 2,500 mm: the Shinkansen standard (not given for the E5 on the page: estimate).
   Body 24.5 m over the gangway faces (25.0 m over the couplers): the Shinkansen standard (estimate).
-Measured on Commons photos (see the e5 scratch list.json; every figure an estimate within ±5–10 cm):
+Measured on Commons photos (fitdata/e5/ref/list.json; every figure an estimate within ±5–10 cm):
+- 3/4 front "Shinkansen E5 with E3 at Nasu-Shiobara Station.jpg" (telephoto), camera solved on the end car's gap, doors
+  and windows and the far platform edge (2026-11-10): the nose read short because its front grew too fast and its
+  canopy sat ≈ 2 m too far forward. Ray-cast on the fitted shell: windscreen foot ≈ 6.2 m behind the tip (centre
+  line, ≈ 2.4 m up), the lamp row ≈ 7.5 m (2.86 m up), the side windows' rear end ≈ 8.5 m; the cap widest ≈ 1.1 m
+  behind the tip, the chin below it narrower, the lower cheeks at full width only round the bogie; the pink stripe
+  runs down the nose to ≈ 5 m from the tip, the white flank reaches ≈ 1.5 m up right behind the cap. (Its doors and
+  windows fit best ≈ 1.5 m further forward than ours: left as is, the published nose is 15 m.)
 - side view "E5 S11 Sendai 20090725.JPG" (car E514 of S11, nose right) with a projective fit along the car: the
-  nose's top line, canopy (windscreen from d ≈ 6.0 to 9.3), the green/white line on the nose, the skirt bottom
-  (≈ 0.30 m above the rail), the pink stripe (1.90–2.08 m);
+  nose's top line, canopy (windscreen from d ≈ 6.0 to 9.3), the skirt bottom (≈ 0.30 m above the rail), the pink
+  stripe (1.90–2.08 m);
 - head-on "E5系 U19編成.jpg" (telephoto, 143 px/m): canopy 1.70 m wide outside, four head lamps 0.16 m apart at
   ≈ 2.83 m, nose cap (coupler cover) 2.15 m wide, cap seam middle at ≈ 1.10 m;
 - "H523-1 omiya 20160327.jpg", "JRE E523-1.jpg", "E514-1.jpg", "JRE E5 U2 200 K47.jpg", the museum mock-up
@@ -47,28 +54,30 @@ BODY = dict(ybc=1.00, yb=0.30, xo=HW, fl=0.0, rbx=0.22, rby=0.75, ym=1.65, c=0.0
 # foot stands out by fl beyond xo, the width at the crease; head-on photos: the white "wings" low on the nose).
 _KEYS = ('ybc', 'yb', 'xo', 'fl', 'rbx', 'rby', 'ym', 'c', 'hc', 'xe', 'ye', 'yt', 'nr')
 _NOSE = [
-    # d      ybc   yb    xo     fl    rbx   rby   ym     c      hc    xe     ye    yt    nr
-    (0.000, 1.12, 1.12, 0.000, 0.00, 0.00, 0.00, 1.12, 0.00, 0.00, 0.000, 1.12, 1.12, 2.0),
-    (0.030, 0.84, 0.84, 0.270, 0.00, 0.13, 0.14, 1.09, 0.00, 0.02, 0.265, 1.14, 1.26, 2.0),
-    (0.100, 0.62, 0.62, 0.500, 0.00, 0.22, 0.22, 1.06, 0.00, 0.03, 0.490, 1.15, 1.36, 2.0),
-    (0.250, 0.48, 0.48, 0.770, 0.00, 0.30, 0.28, 1.04, 0.00, 0.03, 0.755, 1.13, 1.42, 2.0),
-    (0.500, 0.40, 0.40, 0.960, 0.00, 0.36, 0.32, 1.02, 0.00, 0.03, 0.945, 1.12, 1.47, 2.0),
-    (0.800, 0.37, 0.37, 1.070, 0.00, 0.28, 0.26, 1.01, 0.00, 0.03, 1.050, 1.12, 1.52, 2.05),
-    (1.200, 0.35, 0.35, 1.200, 0.10, 0.16, 0.16, 1.00, 0.10, 0.05, 1.090, 1.16, 1.61, 2.2),
-    (1.800, 0.33, 0.33, 1.340, 0.17, 0.10, 0.11, 0.99, 0.18, 0.08, 1.140, 1.24, 1.75, 2.35),
-    (2.600, 0.31, 0.31, 1.450, 0.20, 0.09, 0.10, 0.985, 0.27, 0.10, 1.165, 1.36, 1.91, 2.5),
-    (3.400, 1.00, 0.30, 1.510, 0.165, 0.09, 0.10, 0.975, 0.32, 0.12, 1.175, 1.48, 2.07, 2.65),
-    (4.500, 1.00, 0.30, 1.560, 0.115, 0.09, 0.11, 0.96, 0.33, 0.15, 1.210, 1.64, 2.21, 2.75),
-    (5.500, 1.00, 0.30, 1.600, 0.075, 0.10, 0.14, 0.96, 0.325, 0.17, 1.260, 1.80, 2.34, 2.8),
-    (6.500, 1.00, 0.30, 1.640, 0.035, 0.13, 0.28, 0.975, 0.31, 0.18, 1.310, 1.97, 2.45, 2.8),
-    (7.500, 1.00, 0.30, 1.665, 0.01, 0.18, 0.48, 1.01, 0.27, 0.18, 1.370, 2.14, 2.64, 2.7),
-    (8.500, 1.00, 0.30, 1.675, 0.00, 0.21, 0.62, 1.11, 0.20, 0.16, 1.450, 2.32, 2.85, 2.6),
-    (9.500, 1.00, 0.30, 1.675, 0.00, 0.22, 0.70, 1.27, 0.12, 0.13, 1.520, 2.50, 3.06, 2.5),
-    (10.50, 1.00, 0.30, 1.675, 0.00, 0.22, 0.74, 1.46, 0.05, 0.11, 1.558, 2.68, 3.27, 2.45),
-    (11.50, 1.00, 0.30, 1.675, 0.00, 0.22, 0.75, 1.60, 0.015, 0.115, 1.578, 2.85, 3.44, 2.42),
-    (12.50, 1.00, 0.30, 1.675, 0.00, 0.22, 0.75, 1.65, 0.00, 0.12, 1.588, 3.00, 3.56, 2.4),
-    (13.50, 1.00, 0.30, 1.675, 0.00, 0.22, 0.75, 1.65, 0.00, 0.12, 1.593, 3.12, 3.62, 2.4),
-    (14.60, 1.00, 0.30, 1.675, 0.00, 0.22, 0.75, 1.65, 0.00, 0.12, 1.595, 3.20, 3.65, 2.4),
+    # d      ybc   yb    xo     fl     rbx   rby   ym     c      hc     xe     ye    yt    nr
+    ( 0.000, 1.12, 1.12, 0.000, 0.000, 0.00, 0.00, 1.120, 0.000, 0.000, 0.000, 1.12, 1.12, 2.00),
+    ( 0.030, 0.89, 0.89, 0.222, 0.000, 0.11, 0.12, 1.096, 0.000, 0.017, 0.218, 1.14, 1.24, 2.00),
+    ( 0.100, 0.67, 0.67, 0.442, 0.000, 0.20, 0.20, 1.067, 0.000, 0.029, 0.434, 1.15, 1.34, 2.00),
+    ( 0.250, 0.52, 0.52, 0.688, 0.000, 0.28, 0.26, 1.046, 0.000, 0.030, 0.674, 1.14, 1.40, 2.00),
+    ( 0.500, 0.43, 0.43, 0.877, 0.000, 0.34, 0.31, 1.029, 0.000, 0.030, 0.862, 1.12, 1.45, 2.00),
+    ( 0.800, 0.39, 0.39, 0.993, 0.000, 0.35, 0.31, 1.017, 0.000, 0.030, 0.979, 1.12, 1.48, 2.00),
+    ( 1.100, 0.37, 0.37, 1.070, 0.000, 0.28, 0.26, 1.010, 0.000, 0.030, 1.050, 1.12, 1.52, 2.05),
+    ( 1.500, 0.35, 0.35, 1.139, 0.000, 0.29, 0.27, 1.001, 0.090, 0.047, 1.086, 1.15, 1.60, 2.18),
+    ( 2.000, 0.33, 0.33, 1.218, 0.009, 0.29, 0.27, 0.992, 0.163, 0.074, 1.131, 1.22, 1.72, 2.32),
+    ( 2.600, 0.32, 0.32, 1.302, 0.045, 0.23, 0.21, 0.987, 0.226, 0.090, 1.155, 1.30, 1.83, 2.42),
+    ( 3.400, 1.00, 0.31, 1.387, 0.092, 0.17, 0.16, 0.983, 0.285, 0.105, 1.168, 1.39, 1.95, 2.54),
+    ( 4.200, 1.00, 0.30, 1.451, 0.142, 0.12, 0.12, 0.975, 0.319, 0.119, 1.174, 1.47, 2.06, 2.65),
+    ( 5.000, 1.00, 0.30, 1.497, 0.145, 0.10, 0.11, 0.967, 0.327, 0.133, 1.187, 1.55, 2.14, 2.70),
+    ( 6.000, 1.00, 0.30, 1.541, 0.120, 0.09, 0.11, 0.960, 0.330, 0.150, 1.210, 1.64, 2.21, 2.75),
+    ( 7.000, 1.00, 0.30, 1.574, 0.094, 0.10, 0.12, 0.960, 0.327, 0.164, 1.242, 1.74, 2.30, 2.79),
+    ( 8.000, 1.00, 0.30, 1.610, 0.063, 0.11, 0.18, 0.963, 0.321, 0.175, 1.278, 1.86, 2.38, 2.80),
+    ( 9.000, 1.00, 0.30, 1.645, 0.030, 0.14, 0.31, 0.979, 0.306, 0.180, 1.319, 2.00, 2.47, 2.79),
+    (10.000, 1.00, 0.30, 1.666, 0.009, 0.18, 0.50, 1.016, 0.265, 0.180, 1.377, 2.16, 2.66, 2.69),
+    (11.000, 1.00, 0.30, 1.675, 0.000, 0.21, 0.63, 1.124, 0.192, 0.157, 1.458, 2.34, 2.87, 2.59),
+    (12.000, 1.00, 0.30, 1.675, 0.000, 0.22, 0.71, 1.318, 0.100, 0.123, 1.532, 2.55, 3.12, 2.48),
+    (13.000, 1.00, 0.30, 1.675, 0.000, 0.22, 0.75, 1.567, 0.023, 0.113, 1.573, 2.80, 3.39, 2.43),
+    (13.800, 1.00, 0.30, 1.675, 0.000, 0.22, 0.75, 1.650, 0.000, 0.120, 1.589, 3.01, 3.57, 2.40),
+    (14.600, 1.00, 0.30, 1.675, 0.000, 0.22, 0.75, 1.650, 0.000, 0.120, 1.595, 3.20, 3.65, 2.40),
 ]
 
 
@@ -187,26 +196,27 @@ def half_section(p):
 
 
 # ---------------------------------------------------------------- the canopy bubble and the relief of the nose's top
-# The cab's canopy stands proud of the nose as a bubble: a steep glazed front (the windscreen, the lamps along its top),
-# glazed flanks, a rounded cap behind running back into the roof. Head-on (U19, aligned on the roof line) it is a
-# bell: ≈ 1.70 m wide at its foot (≈ 2.2 m), ≈ 1.0 m over its rounded top (≈ 3.0 m), the sides slanting out as they go
-# down; from the side ("E514-1", "E5 S11 Sendai", a projective fit along the car) its foot is ≈ 4.2 m behind the tip,
-# the lamps ≈ 1.3 m further back. Around it the nose dips: a moat ahead of the foot (where the wipers park) and two
-# valleys along its flanks, between it and the shoulders that run forward to the cap ("hood" look head-on).
-# Our own: the profile functions below and their numbers (fitted on the head-on and 3/4 photos).
-BUB_D = (4.20, 10.60)           # the bubble's foot at the centre line, and where its cap has run into the roof
-_BH = _pchip_table([4.20, 4.40, 4.70, 5.00, 5.30, 5.55, 5.80, 6.20, 6.80, 7.60, 8.30, 9.00, 9.60, 10.20, 10.60],
+# The cab's canopy stands proud of the nose as a bubble: a raked glazed front (the windscreen, the lamps along its top),
+# glazed flanks, a long rounded cap behind running back into the roof. Head-on (U19, aligned on the roof line) it is a
+# bell: ≈ 1.70 m wide at its foot (≈ 2.4 m), ≈ 1.0 m over its rounded top (≈ 3.0 m), the sides slanting out as they go
+# down; from the front 3/4 (Nasu-Shiobara, a solved camera) its foot is ≈ 6.0 m behind the tip, the lamps ≈ 1.5 m
+# further back, the cap into the roof by ≈ 12.6 m. Around it the nose dips: a moat ahead of the foot (where the wipers
+# park) and two valleys along its flanks, between it and the shoulders that run forward to the cap ("hood" look
+# head-on). Our own: the profile functions below and their numbers (fitted on the head-on and 3/4 photos).
+BUB_D = (6.00, 12.60)           # the bubble's foot at the centre line, and where its cap has run into the roof
+_BH = _pchip_table([6.00, 6.29, 6.74, 7.17, 7.55, 7.82, 8.07, 8.45, 9.03, 9.79, 10.45, 11.11, 11.67, 12.23, 12.60],
                    [0.0, 0.07, 0.22, 0.36, 0.49, 0.58, 0.64, 0.67, 0.64, 0.53, 0.39, 0.25, 0.13, 0.04, 0.0])
-_BW = _pchip_table([4.2, 4.6, 5.2, 8.0, 9.5, 10.6], [0.80, 0.87, 0.90, 0.90, 0.85, 0.78])
+_BW = _pchip_table([6.0, 6.59, 7.43, 10.17, 11.57, 12.6], [0.80, 0.87, 0.90, 0.90, 0.85, 0.78])
 BUB_P = 2.2                     # across: cos²(π/2·u^P): a rounded top, steep flanks, a fillet at the foot
-BUB_SWEEP = 0.30                # in plan the foot curves back at the sides by this much
+BUB_SWEEP = 0.435               # in plan the foot curves back at the sides by this much
 # the valleys beside the bubble: depth and position along d; the moat ahead of the foot
-_VD = _pchip_table([1.2, 2.2, 3.2, 4.2, 5.5, 7.5, 9.0, 10.5, 11.5], [0.0, 0.03, 0.06, 0.075, 0.08, 0.07, 0.04, 0.012, 0.0])
-_VX = _pchip_table([1.2, 2.2, 3.2, 4.2, 5.0, 6.0, 9.0, 11.5], [0.45, 0.58, 0.70, 0.82, 0.95, 1.00, 1.00, 1.05])
+_VD = _pchip_table([1.55, 2.63, 3.96, 5.55, 7.49, 9.90, 11.37, 12.53, 13.20],
+                   [0.0, 0.03, 0.06, 0.075, 0.08, 0.07, 0.04, 0.012, 0.0])
+_VX = _pchip_table([1.55, 2.63, 3.96, 5.55, 6.76, 8.19, 11.37, 13.20], [0.45, 0.58, 0.70, 0.82, 0.95, 1.00, 1.00, 1.05])
 VAL_W = 0.22
 RIDGE = (0.55, 0.30, 0.14)      # the shoulders' ridge outboard of each valley: height (× the valley's depth), offset, width
-MOAT = (0.045, 3.95, 0.32)      # depth, centre d, half width (Gaussian)
-RELIEF_D = (1.2, 11.5)
+MOAT = (0.045, 5.75, 0.48)      # depth, centre d, half width (Gaussian)
+RELIEF_D = (1.55, 13.2)
 
 
 def _smooth(e0, e1, x):
@@ -253,10 +263,12 @@ def relief(x, d):
 
 # ---------------------------------------------------------------- livery lines
 STRIPE = (1.90, 2.08)           # pink stripe on the body (white below, green above)
-STRIPE_D = (7.6, 11.0)          # down the nose the stripe tapers out between these distances from the tip
-# on the nose the green/white line drops from the stripe to the cap's seam line (side view, d → y)
-_BOUND = _pchip_table([0.0, 0.5, 1.0, 2.0, 4.0, 6.0, 7.5, 8.5, 9.5, 10.5, 11.5, 12.5, 13.5, 14.6, 30.0],
-                      [1.06, 1.04, 1.03, 1.03, 1.05, 1.11, 1.16, 1.24, 1.36, 1.52, 1.68, 1.81, 1.88, 1.90, 1.90])
+STRIPE_D = (4.9, 7.2)           # down the nose the stripe tapers out between these distances from the tip
+CAP_D = 1.33                    # the coupler cover's seam: its rear edge on the nose's top and flanks
+# on the nose the green/white line follows the stripe down to ≈ 1.5 m, then steps down to the cap's line (≈ 1.05 m) at
+# the cover's seam (3/4 front: the white flank reaches ≈ 1.5 m up right behind the cap)
+_BOUND = _pchip_table([0.0, 0.5, CAP_D - 0.05, CAP_D + 0.30, 2.0, 2.7, 4.0, 5.0, 5.65, 7.25, 8.9, 10.5, 12.5, 14.6, 30.0],
+                      [1.06, 1.04, 1.04, 1.40, 1.48, 1.53, 1.57, 1.59, 1.62, 1.71, 1.81, 1.86, 1.89, 1.90, 1.90])
 
 
 def green_line(d):

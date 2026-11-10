@@ -1,0 +1,179 @@
+{
+ "_bike": {
+  "wb": 1.485,
+  "rf": 0.3,
+  "rr": 0.311,
+  "rake_deg": 24.2,
+  "trail": 0.098,
+  "lip_f": 0.045,
+  "lip_r": 0.076,
+  "rho": 0.229,
+  "wf": 0.12,
+  "wr": 0.19,
+  "_note": "GSX1300R (1999-2007): wheelbase 1485, caster 24.2 deg, trail 98 mm, 120/70ZR17 (R 0.300) and 190/50ZR17 (R 0.311); rim lips: 17 in bead seat + flange (0.229), at half the rim widths (3.50 / 6.00 in)"
+ },
+ "r01": {
+  "size": [
+   1920,
+   1280
+  ],
+  "rims": "none_rims.json",
+  "tyres": "r01_tyres.json",
+  "tyre_weight": 30.0,
+  "side": "r",
+  "two_lips": false,
+  "rho_sigma": 0.004,
+  "lip_sigma": 0.01,
+  "trail_sigma": 0.005,
+  "prior": {
+   "roll": [
+    0,
+    8
+   ],
+   "steer": [
+    0,
+    1
+   ]
+  },
+  "steer0": 0,
+  "inits": [
+   [
+    -3.3,
+    0.7,
+    0.0,
+    90,
+    0,
+    0,
+    2500
+   ],
+   [
+    -2.3,
+    0.5,
+    -0.6,
+    70,
+    0,
+    0,
+    1500
+   ],
+   [
+    -2.6,
+    0.6,
+    -0.4,
+    78,
+    0,
+    0,
+    1800
+   ],
+   [
+    -4.0,
+    0.7,
+    -0.3,
+    85,
+    0,
+    0,
+    3000
+   ],
+   [
+    -1.8,
+    0.6,
+    -0.8,
+    60,
+    0,
+    0,
+    1200
+   ]
+  ],
+  "pts": {},
+  "note": "black rims on black tyres: no usable rim lip; the camera rests on the tyre outlines (against the light asphalt) and the axle centres (front: the disc carrier bolt circle, rear: the axle nut / disc centre)"
+ },
+ "r04": {
+  "size": [
+   1920,
+   1440
+  ],
+  "rims": "none_rims.json",
+  "tyres": "r04_tyres.json",
+  "side": "r",
+  "two_lips": true,
+  "inits": [
+   [
+    -2.0,
+    1.2,
+    2.0,
+    135,
+    -12,
+    0,
+    1700
+   ],
+   [
+    -2.5,
+    1.4,
+    2.5,
+    130,
+    -15,
+    0,
+    2200
+   ],
+   [
+    -1.6,
+    1.0,
+    1.6,
+    140,
+    -10,
+    0,
+    1300
+   ]
+  ],
+  "prior": {
+   "roll": [
+    0,
+    5
+   ],
+   "steer": [
+    25,
+    10
+   ]
+  },
+  "steer0": 25,
+  "trail_sigma": 0.002,
+  "pts": {
+   "indicator": [
+    [
+     -0.2078,
+     0.8182,
+     0.7092
+    ],
+    [
+     1306,
+     556
+    ],
+    1.0
+   ],
+   "axle_f": [
+    [
+     -0.135,
+     0.3,
+     0.7425
+    ],
+    [
+     1367,
+     1061
+    ],
+    1.0
+   ],
+   "kanji": [
+    [
+     -0.2568,
+     0.6253,
+     0.5408
+    ],
+    [
+     1128,
+     744
+    ],
+    0.5
+   ]
+  },
+  "note": "stock 2007 (twin stock silencers) at a show: right indicator lens, front axle and the \u96bc centre picked on the r01-fitted model + tyre outlines"
+ }
+}

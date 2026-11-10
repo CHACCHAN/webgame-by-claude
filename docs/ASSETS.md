@@ -201,6 +201,14 @@ skinned, with a scuttle cycle; the texture painted by the script) built by `node
 into `frontend/public/models/roach/roach.glb`; scaled and tinted at runtime (`render/RoachModel.ts`). The Sketchfab
 model used before (CK / xcellf, CC BY 4.0) was removed.
 
+### Motorcycle models (own, Blender; 2026-11-10)
+Honda NSR250R (MC21), Kawasaki Ninja H2 and Suzuki GSX1300R 隼 (first generation), each with its rider:
+`frontend/tools/blender/bikes/<id>.py` + shared `bike_parts.py` / `bike_logos.py` / `bike_textures.py` (lamp lenses and
+disc rings drawn by the script, no photo pixels) → `node tools/blender-models.cjs bikes` →
+`frontend/public/models/bikes/<id>.glb` (contract in `render/BikeModel.ts`). Fitted to Wikimedia Commons photos, used
+for measuring only; the photos' credits are in `tools/blender/bikes/fitdata/<id>/photos.json`, the fit tools in
+`fitdata/tools/`. The makers' logos and the Hayabusa kanji are our own block shapes (owner's choice on logos).
+
 ### Music: Suno Pro (batch 3)
 All music was remade by the owner with Suno (Pro plan, which grants commercial use of songs made while subscribed)
 from the prompts in `docs/ASSET_REQUESTS.md` (batch 3: frenchcore / uptempo hardcore / speedcore), generated and

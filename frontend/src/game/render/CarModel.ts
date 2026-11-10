@@ -121,7 +121,7 @@ export function paintFinish(mat: THREE.MeshPhysicalMaterial, spec: CarSpec, colo
   const bare = spec.bareMetal?.colors.includes(color.toLowerCase()) ? spec.bareMetal : null;
   mat.metalness = bare ? 1 : PAINT.metalness;
   mat.roughness = bare ? bare.roughness : PAINT.roughness;
-  mat.clearcoat = bare ? 0 : PAINT.clearcoat;
+  mat.clearcoat = bare ? (bare.clearcoat ?? 0) : PAINT.clearcoat;
 }
 
 export function createCarMaterials(spec: CarSpec, bodyColor = spec.colors.body): CarMaterials {

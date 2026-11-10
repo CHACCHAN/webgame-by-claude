@@ -63,7 +63,8 @@ ARC_Y, ARC_K = 3.00, 0.30
 WS_W = (0.60, 0.50)
 PILLAR = 0.04
 LAMP_BAR = 2.755
-VISOR_REAR = 7.25                   # the side windows' rear edge (distance from the tip)
+VISOR_REAR = 8.85                   # the side windows' rear edge (distance from the tip)
+WS_REAR = 8.30                      # the windscreen's rear limit (the lamps' band runs to it)
 GASKET = (0.10, 0.105, 0.11)
 SEAM = (0.30, 0.31, 0.32)
 UNDER = (0.16, 0.16, 0.165)
@@ -249,7 +250,7 @@ class Shell:
             d = S.NOSE_LEN - 0.25
             while d > 2.0:
                 ds.append(d)
-                d -= 0.25 if d > 10.4 else (0.085 if d > 3.6 else 0.14)
+                d -= 0.25 if d > S.BUB_D[1] - 0.15 else (0.085 if d > 3.6 else 0.14)
             ds += list(np.geomspace(2.0, 0.006, 26))
             for d in ds:
                 st.append((S.NOSE_TIP - d, 0.0))
@@ -625,7 +626,7 @@ def _nose(pt):
     vis = top & (D > S.BUB_D[0] - 0.3) & (D < S.BUB_D[1])
     sd_frame = _smax([(0.012 - B) / 1.5, Y - y_arc - 0.055, D - VISOR_REAR - 0.15], 0.03)
     pt.paint(pt.cover(sd_frame, 0.006) * vis, FRAME, 0.30, 0.15)
-    sd_ws = _smax([(0.045 - B) / 1.5, ax - gw, Y - y_arc, D - 6.6], 0.035)
+    sd_ws = _smax([(0.045 - B) / 1.5, ax - gw, Y - y_arc, D - WS_REAR], 0.035)
     sd_sw = _smax([(0.022 - B) / 1.5, gw + PILLAR - ax, Y - y_arc + 0.02, D - VISOR_REAR], 0.04)
     for sd in (sd_ws, sd_sw):
         pt.paint(pt.cover(sd - 0.007, 0.004) * vis, (0.02, 0.022, 0.025), 0.4, 0.0)     # the gasket
@@ -639,13 +640,13 @@ def _nose(pt):
         sd = np.hypot(X - s * WIPER_X[0], (D - wiper_foot_d(WIPER_X[0])) * 0.8) - 0.035
         pt.paint(pt.cover(sd, 0.004) * top, (0.05, 0.05, 0.055), 0.5)
     # ---- the coupler cover: its seam all round (museum mock-up, head-on photos)
-    # (head-on: a closed oval 2.15 m wide round the nose's front metre, green above the line, white below)
-    # the cover: everything ahead of d = 1.1 above a curve rising from 0.55 m in the middle to the sides
-    sd = _smax([D - 1.0, 0.55 + 0.22 * np.abs(X) ** 2 - Y], 0.10)
+    # (head-on: a closed oval 2.15 m wide round the nose's front 1.3 m, green above the line, white below)
+    # the cover: everything ahead of d = CAP_D above a curve rising from 0.55 m in the middle to the sides
+    sd = _smax([D - S.CAP_D, 0.55 + 0.22 * np.abs(X) ** 2 - Y], 0.10)
     sd = np.abs(sd) - 0.015
     pt.paint(pt.cover(sd, 0.006) * (Y > 0.36), (0.03, 0.035, 0.04), 0.5)
     # ---- panel joints on the nose: the cab's side hatch outline, the skirt's joint
-    for d0, d1, y0, y1 in ((10.2, 11.4, 0.55, 1.15), (3.6, 4.9, 0.40, 0.95)):
+    for d0, d1, y0, y1 in ((12.3, 13.15, 0.55, 1.15), (3.6, 4.9, 0.40, 0.95)):
         sd = np.abs(_sd_box(D, Y, (d0 + d1) / 2, (y0 + y1) / 2, d1 - d0, y1 - y0, 0.04)) - 0.003
         pt.paint(pt.cover(sd) * (X > 0.6), SEAM, 0.4)
     # the white cheek's rear edge over the front bogie and the joint under the green line
@@ -761,10 +762,10 @@ def side_x(kind, z, y):
     return float(np.interp(y, ys[o], xs[o]))
 
 
-def face_d(x, y, d0=None, d1=6.4):
+def face_d(x, y, d0=None, d1=None):
     """distance from the tip where the canopy's front face reaches height y at x (bisection: the face rises with d)"""
     lo = S.BUB_D[0] - 0.3 if d0 is None else d0
-    hi = d1
+    hi = S.BUB_D[0] + 2.6 if d1 is None else d1
     for _ in range(40):
         mid = 0.5 * (lo + hi)
         if top_y(x, mid) < y:

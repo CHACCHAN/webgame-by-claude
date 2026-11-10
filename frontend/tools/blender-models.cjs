@@ -138,6 +138,7 @@ async function optimise(raw, out) {
       const log = build(script, [...(variant ? ['--variant', variant] : []), '--out', kind.outDir ? tmp : raw]).toString();
       for (const line of log.split('\n')) if (/^(TRIS|MATERIALS|PROP)/.test(line)) console.log(`  ${line}`);
       const out = path.join(kind.out, `${name}.glb`);
+      fs.mkdirSync(kind.out, { recursive: true });
       await optimise(raw, out);
       fs.rmSync(tmp, { recursive: true, force: true });
       console.log(out, fs.statSync(out).size, 'bytes');

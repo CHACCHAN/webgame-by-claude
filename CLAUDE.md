@@ -72,7 +72,7 @@ pending. `docs/PLAN.md` holds the design.
   `CarSpec.popUpLamps` (runtime pods in `CarVisual`). The optimiser prunes empty nodes, so `CarModel.deriveAnchors`
   rebuilds lamp and exhaust anchors from the geometry (a part named `exhaust` gives the tailpipe; else
   `CarSpec.exhaust`). Lamp materials only on lamp parts (check: only at the car's ends). Dark lens textures:
-  `tailLampGain`. Unpainted metal swatches (the Cybertruck's stainless): `CarSpec.bareMetal`. A new model goes in
+  `tailLampGain`. Unpainted metal swatches (the Cybertruck's stainless; with `clearcoat` the H2's mirror coat): `CarSpec.bareMetal`. A new model goes in
   only after the owner has seen its sheet; never label a third-party model 自作.
 - Never leave a transmissive (refractive) material in the scene: three.js then renders every opaque object a second
   time per frame. Loaded car materials are flattened by `CarModel.withoutTransmission`.
