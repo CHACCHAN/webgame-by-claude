@@ -72,6 +72,11 @@ export interface CarSpec {
   popUpLamps?: { x: number; z: number };
   /** tail lamp glow multiplier for models whose lens texture is dark (the lens glows through it) */
   tailLampGain?: number;
+  /**
+   * an unpainted metal body (the Cybertruck's brushed stainless): these swatches are the bare metal, drawn fully
+   * metallic without the paint's clear coat; any other swatch is paint or a wrap (render/CarModel.ts `paintFinish`)
+   */
+  bareMetal?: { colors: string[]; roughness: number };
   /** tailpipe tip on the 3D model (body-local m, +x = left) where no part is named like an exhaust */
   exhaust?: [number, number, number];
   /** a train (joke entry, vehicle/trains.ts): drawn as three cars following the simulated front bogie */
@@ -352,6 +357,8 @@ const CARS: Record<RoadCarId, CarSpec> = {
     driftiness: 0.3,
     stats: { power: 10, grip: 5, drift: 3, weight: 1 },
     colors: { body: '#b9bdc0', accent: '#1b1c1f' },
+    // the body is bare brushed stainless (the other swatches are wraps)
+    bareMetal: { colors: ['#b9bdc0'], roughness: 0.3 },
     model: { title: 'Cybertruck（Cyberbeast）', author: 'TOUGE NOCTURNE', url: '', license: '自作', own: true },
   },
   u9: {

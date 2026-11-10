@@ -109,13 +109,26 @@ export interface CarMaterials {
   brake: THREE.MeshStandardMaterial;
 }
 
+/** the paint: metallic flake under a clear coat */
+const PAINT = { metalness: 0.45, roughness: 0.32, clearcoat: 1 };
+
+/**
+ * Colour the body and give it its finish: paint under a clear coat, or for a bare-metal body's own swatch
+ * (`CarSpec.bareMetal`) the metal itself, fully metallic and without a coat.
+ */
+export function paintFinish(mat: THREE.MeshPhysicalMaterial, spec: CarSpec, color: string) {
+  mat.color.set(color);
+  const bare = spec.bareMetal?.colors.includes(color.toLowerCase()) ? spec.bareMetal : null;
+  mat.metalness = bare ? 1 : PAINT.metalness;
+  mat.roughness = bare ? bare.roughness : PAINT.roughness;
+  mat.clearcoat = bare ? 0 : PAINT.clearcoat;
+}
+
 export function createCarMaterials(spec: CarSpec, bodyColor = spec.colors.body): CarMaterials {
   const mats: CarMaterials = {
     paint: new THREE.MeshPhysicalMaterial({
       color: bodyColor,
-      metalness: 0.45,
-      roughness: 0.32,
-      clearcoat: 1,
+      ...PAINT,
       clearcoatRoughness: 0.035,
       envMapIntensity: 1.25,
     }),
@@ -138,6 +151,7 @@ export function createCarMaterials(spec: CarSpec, bodyColor = spec.colors.body):
     rim: new THREE.MeshStandardMaterial({ color: '#b9bcc2', metalness: 0.95, roughness: 0.22 }),
     brake: new THREE.MeshStandardMaterial({ color: '#c41d14', roughness: 0.4, metalness: 0.3 }),
   };
+  paintFinish(mats.paint, spec, bodyColor);
   // material names are the contract for GLB models (see docs/ASSETS.md)
   for (const [k, m] of Object.entries(mats)) m.name = k;
   return mats;

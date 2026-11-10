@@ -3,7 +3,7 @@ import type { CarSpec } from '../vehicle/carSpecs';
 import { trainNoseZ } from '../vehicle/trains';
 import { traitsOf } from '../vehicle/kinds';
 import type { VehicleSim } from '../vehicle/VehicleSim';
-import { buildCar, type CarRig } from './CarModel';
+import { buildCar, paintFinish, type CarRig } from './CarModel';
 import { clamp, damp } from '../util/math';
 
 const _q = new THREE.Quaternion(), _p = new THREE.Vector3();
@@ -231,7 +231,7 @@ export class CarVisual {
     this.color = color;
     if (this.rig.train) this.rig.train.setLivery(color);
     else if (this.rig.creature) this.rig.creature.setLivery(color);
-    else this.rig.materials.paint.color.set(color);
+    else paintFinish(this.rig.materials.paint, this.spec, color);
   }
 
   /** Per-frame animation (pop-up lamps take ~0.6 s; a train's cars follow the leading bogie; a creature's legs run). */
