@@ -74,7 +74,7 @@ Blender processes) and checked against photos (photos only to measure) before th
     the stored token only on a name change, so a token the server no longer knew (e.g. after the 2026-11-04 reset of
     the players) failed every submission. It now checks the token every time and registers again on 401
     (`src/api/__tests__/client.test.ts`). No 422 or 5xx on run submissions in the log since 2026-11-04.
-- **Autobahn: the oncoming traffic is the game's own cars** (owner, 2026-11-10: 「アウトバーンの反対車線にある自動車たちは
+- **Autobahn: the oncoming traffic is the game's own cars** (deployed 2026-11-10; owner: 「アウトバーンの反対車線にある自動車たちは
   実装済みの自動車を走らせてください」).
   - `render/trafficModels.ts` builds a light copy of each of the six cars from the same GLB the player drives (or its
     procedural fallback) when the autobahn loads.
@@ -112,7 +112,7 @@ Blender processes) and checked against photos (photos only to measure) before th
     - on +3 ‰ it still reaches 320 (the real train balances at 360).
   - The game matches, at the light-load end of the range; no change. New tool `tools/train-accel.ts`. The train test
     now also bounds the E5's 0→300 km/h time (265–300 s).
-- **S15 (`s15`): our own model in the game** (owner: 「入れて」 after the final sheet).
+- **S15 (`s15`): our own model in the game** (owner: 「入れて」 after the final sheet; deployed 2026-11-10, bundle `index-Dx7cGdnA.js`, together with the traffic above).
   - Replaces Mona x Supercars' Sketchfab model.
   - Built by `tools/blender/cars/s15*.py` (stock spec-R without the wing; `s15.py --wing` adds it) and fitted to 7
     photos with a body lattice (`s15_ffd.py`). Silhouette IoU 0.972–0.979 (mean 0.975).
