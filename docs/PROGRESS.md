@@ -116,6 +116,8 @@ deployed yet: the owner sees each sheet first).
   Checked in Chrome (software rendering): the garage card (0.9 s, 1225 km/h), the autobahn race with the speed pushed
   to 340 m/s (HUD "1201" in the small face, the cockroach in view in both chase views); no page errors. tsc, vitest
   64/64, handling-feel (corners 4–16° of slip, wall hits keep their speed).
+  Deployed (`c757b8c`, bundle `index-BXSzCoyg.js`; the live backend reports the new floors; leaderboard API 200). E2E
+  not run. Before it, the bikes were rebuilt from the finished scripts and redeployed (`0a099bb`, GLBs hash-equal).
 
 ## Session 7 (2026-11-03 – 11-04) — every model our own (Blender); the owner's train lineup; a livery per line
 
