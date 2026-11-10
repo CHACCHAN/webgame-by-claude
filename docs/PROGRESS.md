@@ -96,6 +96,8 @@ Plan: `docs/FABLE_PLAN.md`. Commits `2074c02` (renderer), `0c79c61` + merge `a4c
   vectors were not looked at). Tests: tsc, vitest 70, build; E2E on the isolated stack, four specs only (boot, time
   attack, rival battle, phone: 4 passed; the upscaler itself is off there, they cover the new precompile).
 - Tools: `tools/shots.cjs` takes `SET` (settings JSON) and `MOVING` (km/h); `tools/perf-frame.cjs` takes `VARIANTS`.
+- **Deployed** (`e4ad192`, bundle `index-C7BnGh_G.js`, the same hash as the local build; leaderboard API 200). The
+  live site itself was not opened in a browser.
 
 ## Session 8 (2026-11-10) — new vehicles: Cybertruck, Yangwang U9 Xtreme, three motorcycles, the L0 maglev
 
