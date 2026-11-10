@@ -50,7 +50,8 @@ deployed yet: the owner sees each sheet first).
   twisted it), the plate recess and rear seams redone; 73 k tris, 0.47 MB (the Sketchfab file was 1.1 MB). With no
   third-party car left, the import tools are gone (`import-cars.cjs`, `car-import.json`, `render/carImport.ts`, the
   `__importCar` / `__previewCar` hooks) and so is the procedural export (`export-cars.cjs`, `assets:cars`,
-  `__exportCar`). Checked in Chrome: garage at dawn and night, a night race start.
+  `__exportCar`). Checked in Chrome: garage at dawn and night, a night race start. Deployed (bundle `index-Y1K8yz12.js`, the GLB
+  served hash-equal).
 
 ## Session 7 (2026-11-03 – 11-04) — every model our own (Blender); the owner's train lineup; a livery per line
 
