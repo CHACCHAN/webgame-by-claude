@@ -7,6 +7,8 @@ import { Hint } from './Menus';
 import { liverySwatch, specForLivery, TRAIN_INFO, TRAIN_ORDER, trainLivery, type TrainId } from '../../game/vehicle/trains';
 import { ROACH_INFO } from '../../game/vehicle/roach';
 import { BIKE_ORDER, BIKE_SPECS, type BikeId } from '../../game/vehicle/bikes';
+import { TANK_ORDER, TANK_SPECS, type TankId } from '../../game/vehicle/tanks';
+import { JET_ORDER, JET_SPECS, jetForLivery, type JetId } from '../../game/vehicle/jets';
 import { sfx } from '../sfx';
 import { traitsOf } from '../../game/vehicle/kinds';
 
@@ -25,6 +27,10 @@ export const COLORS: Record<CarId, string[]> = {
   u9: ['#1b1d22', '#e8e9ea', '#1f5bd6', '#c9d400', '#8c1c22'],
   // motorcycles: one swatch per factory colour
   ...(Object.fromEntries(BIKE_ORDER.map((id) => [id, BIKE_SPECS[id].bike!.liveries.map((l) => l.swatch)])) as Record<BikeId, string[]>),
+  // tanks: their own camouflage
+  ...(Object.fromEntries(TANK_ORDER.map((id) => [id, [TANK_SPECS[id].colors.body]])) as Record<TankId, string[]>),
+  // fighters: one swatch per scheme / two-seat variant
+  ...(Object.fromEntries(JET_ORDER.map((id) => [id, JET_SPECS[id].jet!.liveries.map((l) => l.swatch)])) as Record<JetId, string[]>),
   // the cockroach: one swatch per species colouring
   roach: ROACH_INFO.liveries.map((l) => l.swatch),
 };
@@ -35,6 +41,7 @@ export function liveryName(id: CarId, color: string): string | null {
   if (spec.train) return trainLivery(spec.train, color).name;
   if (spec.creature) return spec.creature.liveries.find((l) => l.swatch === color)?.name ?? null;
   if (spec.bike) return spec.bike.liveries.find((l) => l.swatch === color)?.name ?? null;
+  if (spec.jet) return spec.jet.liveries.find((l) => l.swatch === color)?.name ?? null;
   return null;
 }
 
@@ -159,20 +166,85 @@ function BikeFigures({ spec, full }: { spec: CarSpec; full: boolean }) {
   );
 }
 
+/** "（推定）" after a figure nothing published backs */
+const est = (on: boolean | undefined) => (on ? '（推定）' : '');
+
+/** A tank's figures (vehicle/tanks.ts): published, estimates marked. */
+function TankFigures({ spec, full }: { spec: CarSpec; full: boolean }) {
+  const t = spec.tank!;
+  const f = t.figures;
+  const g = t.gun;
+  const ge = (k: NonNullable<typeof g.estimated>[number]) => est(g.estimated?.includes(k));
+  if (!full) {
+    return (
+      <div className="specs-row">
+        <div><small>MAIN GUN</small><b>{g.calibre} mm</b></div>
+        <div><small>WEIGHT</small><b>{f.weight}</b></div>
+        <div><small>TOP SPEED</small><b>{f.topSpeed} km/h</b></div>
+      </div>
+    );
+  }
+  return (
+    <dl className="spec-table">
+      <dt>製造</dt><dd>{t.maker}（{t.origin}）</dd>
+      <dt>エンジン</dt><dd>{f.engine}</dd>
+      <dt>出力</dt><dd>{f.power}</dd>
+      <dt>重量</dt><dd>{f.weight}</dd>
+      <dt>最高速度</dt><dd>{f.topSpeed} km/h（後進 {t.reverseSpeed} km/h）</dd>
+      <dt>変速機</dt><dd>{f.transmission}</dd>
+      <dt>主砲</dt><dd>{g.name}</dd>
+      <dt>砲弾</dt><dd>{g.round}・初速 {g.muzzleVelocity} m/s{ge('muzzleVelocity')}</dd>
+      <dt>装填</dt><dd>{g.loader === 'auto' ? '自動装填' : '手動装填'}・{g.reload} 秒{ge('reload')}・{g.ammo} 発{ge('ammo')}</dd>
+      <dt>俯仰角</dt><dd>{g.elevation[0]}° 〜 +{g.elevation[1]}°{ge('elevation')}</dd>
+      <dt>乗員</dt><dd>{f.crew} 名</dd>
+      {t.estimated?.length ? <><dt>推定値</dt><dd className="small">{t.estimated.join('・')}（公表値なし）</dd></> : null}
+    </dl>
+  );
+}
+
+/** A fighter's figures (vehicle/jets.ts). */
+function JetFigures({ spec, full, color }: { spec: CarSpec; full: boolean; color?: string }) {
+  const j = spec.jet!;
+  const f = j.figures;
+  const l = j.liveries.find((x) => x.swatch === color) ?? j.liveries[0];
+  if (!full) {
+    return (
+      <div className="specs-row">
+        <div><small>THRUST</small><b>{f.thrust.replace(/（.*）/, '')}</b></div>
+        <div><small>WEIGHT</small><b>{(spec.mass / 1000).toFixed(1)} t</b></div>
+        <div><small>MAX SPEED</small><b>{f.maxSpeed}</b></div>
+      </div>
+    );
+  }
+  return (
+    <dl className="spec-table">
+      <dt>製造</dt><dd>{j.maker}（{j.origin}）</dd>
+      <dt>エンジン</dt><dd>{f.engine}</dd>
+      <dt>推力</dt><dd>{f.thrust}</dd>
+      <dt>重量</dt><dd>{f.weight}{l.mass && l.mass !== spec.mass ? `（複座 ${(l.mass / 1000).toFixed(1)} t）` : ''}</dd>
+      <dt>最大速度</dt><dd>{f.maxSpeed}（高空）・地上は物理どおり</dd>
+      <dt>全長 × 全幅</dt><dd>{f.length.toFixed(2)} × {f.span.toFixed(2)} m</dd>
+      <dt>乗員</dt><dd>{l.crew} 名</dd>
+      <dt>走れるコース</dt><dd>エドワーズ空軍基地のみ</dd>
+      {j.estimated?.length ? <><dt>推定値</dt><dd className="small">{j.estimated.join('・')}</dd></> : null}
+    </dl>
+  );
+}
+
 /** Name, character and figures of a car: `full` adds the whole specification table (car list). */
-export function CarSheet({ spec: base, index, full = false, color }: { spec: CarSpec; index: number; full?: boolean; color?: string }) {
-  // a train's figures as fitted for the line picked
-  const spec = specForLivery(base, color);
+export function CarSheet({ spec: base, index, count = VEHICLE_ORDER.length, full = false, color }: { spec: CarSpec; index: number; count?: number; full?: boolean; color?: string }) {
+  // a train's figures as fitted for the line picked, a two-seat fighter's mass
+  const spec = jetForLivery(specForLivery(base, color), color);
   const power = peakPower(spec);
   const [trqRpm, trq] = peakTorque(spec);
   return (
     <>
       <div className="car-index">
-        {two(index + 1)} / {two(VEHICLE_ORDER.length)}
+        {two(index + 1)} / {two(count)}
         {traitsOf(spec).badge && <span className="train-badge">{traitsOf(spec).badge}</span>}
       </div>
       <h2 className="car-name">{spec.name}</h2>
-      <div className="car-tag">{spec.tagline} ・ {spec.train ? spec.train.operator : spec.creature ? `${spec.creature.figures.legs}本脚` : spec.bike ? spec.bike.maker : spec.engine.electric ? `EV・${spec.drive}` : spec.drive}</div>
+      <div className="car-tag">{spec.tagline} ・ {spec.train ? spec.train.operator : spec.creature ? `${spec.creature.figures.legs}本脚` : spec.bike ? spec.bike.maker : spec.tank ? spec.tank.origin : spec.jet ? spec.jet.origin : spec.engine.electric ? `EV・${spec.drive}` : spec.drive}</div>
       <p className="car-desc">{spec.description}</p>
       <div className="stats">
         <Stat label="POWER" v={spec.stats.power} />
@@ -186,6 +258,10 @@ export function CarSheet({ spec: base, index, full = false, color }: { spec: Car
         <CreatureFigures spec={spec} full={full} />
       ) : spec.bike ? (
         <BikeFigures spec={spec} full={full} />
+      ) : spec.tank ? (
+        <TankFigures spec={spec} full={full} />
+      ) : spec.jet ? (
+        <JetFigures spec={spec} full={full} color={color} />
       ) : full ? (
         <dl className="spec-table">
           <dt>{spec.engine.electric ? 'モーター' : 'エンジン'}</dt><dd>{spec.engineName}</dd>

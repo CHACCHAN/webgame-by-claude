@@ -4,7 +4,7 @@ import { enterFullscreen } from '../fullscreen';
 import { gameHolder } from '../GameCanvas';
 import { useApp } from '../../store/app';
 import { useMenuInput, hoverSelect } from '../useMenuInput';
-import { CAR_SPECS, VEHICLE_ORDER, singleRatio, type CarId } from '../../game/vehicle/carSpecs';
+import { CAR_SPECS, singleRatio, vehiclesFor, type CarId } from '../../game/vehicle/carSpecs';
 import type { AILevel } from '../../game/ai/AIDriver';
 import { COURSES, COURSE_ORDER, type CourseId } from '../../game/track/courses';
 import { Track } from '../../game/track/Track';
@@ -151,8 +151,10 @@ export function Hint({ items }: { items: [string, string][] }) {
 
 export function GarageScreen() {
   const { go, set, carId, mode, carColor } = useApp();
-  const [i, setI] = useState(Math.max(0, VEHICLE_ORDER.indexOf(carId)));
-  const id = VEHICLE_ORDER[i];
+  // the fighters only at Edwards
+  const [list] = useState(() => vehiclesFor(currentCourseId()));
+  const [i, setI] = useState(Math.max(0, list.indexOf(carId)));
+  const id = list[i];
   const spec = CAR_SPECS[id];
   const palette = COLORS[id];
   const color = carColor && palette.includes(carColor) ? carColor : palette[0];
@@ -181,8 +183,8 @@ export function GarageScreen() {
     else void startRaceFromState();
   };
   useMenuInput((a) => {
-    if (a === 'left') { setI((x) => (x + VEHICLE_ORDER.length - 1) % VEHICLE_ORDER.length); sfx.move(); }
-    if (a === 'right') { setI((x) => (x + 1) % VEHICLE_ORDER.length); sfx.move(); }
+    if (a === 'left') { setI((x) => (x + list.length - 1) % list.length); sfx.move(); }
+    if (a === 'right') { setI((x) => (x + 1) % list.length); sfx.move(); }
     if (a === 'up') cycleColor(-1);
     if (a === 'down') cycleColor(1);
     if (a === 'confirm') confirm();
@@ -194,7 +196,7 @@ export function GarageScreen() {
         <div className="crumb">SELECT YOUR CAR ― 車両選択</div>
       </div>
       <div className="garage-card">
-        <CarSheet spec={spec} index={i} color={color} />
+        <CarSheet spec={spec} index={i} count={list.length} color={color} />
         <CarRecord id={id} />
         <div className="colors">
           {palette.map((c) => (
@@ -206,8 +208,8 @@ export function GarageScreen() {
           この車に決定 <span>▶</span>
         </button>
       </div>
-      <button className="arrow left" onClick={() => setI((x) => (x + VEHICLE_ORDER.length - 1) % VEHICLE_ORDER.length)}>‹</button>
-      <button className="arrow right" onClick={() => setI((x) => (x + 1) % VEHICLE_ORDER.length)}>›</button>
+      <button className="arrow left" onClick={() => setI((x) => (x + list.length - 1) % list.length)}>‹</button>
+      <button className="arrow right" onClick={() => setI((x) => (x + 1) % list.length)}>›</button>
       <Hint items={[['←→', '車両'], ['↑↓', 'カラー'], ['ドラッグ', '視点'], ['Enter', '決定'], ['Esc', '戻る']]} />
     </div>
   );

@@ -1,0 +1,16 @@
+{"_note": "F-15C feature points for ba.py: initial guesses (game frame, m) and priors (published span 13.05 m: wtle |x| = 6.525)",
+ "wheel": {"wb": 5.42, "track": 2.75, "rn": [0.26, 0.03], "rm": [0.40, 0.03]},
+ "feats": {
+  "nose": {"init": [0, 1.75, 8.75]},
+  "wsb": {"init": [0, 2.4, 4.6]},
+  "ftle": {"sym": true, "init": [1.6, 5.5, -7.4]},
+  "ftte": {"sym": true, "init": [1.6, 5.5, -8.6]},
+  "nav": {"sym": true, "init": [6.4, 1.95, -4.6]},
+  "wtle": {"sym": true, "init": [6.525, 1.95, -4.2], "prior": {"x": [6.525, 0.03]}},
+  "wtte": {"sym": true, "init": [6.4, 1.95, -5.2]},
+  "stle": {"sym": true, "init": [4.3, 1.9, -8.4]},
+  "stte": {"sym": true, "init": [4.3, 1.9, -9.3]},
+  "iuo": {"sym": true, "init": [1.65, 2.2, 4.2]},
+  "ilo": {"sym": true, "init": [1.65, 1.0, 3.6]},
+  "nzc": {"sym": true, "init": [0.7, 1.6, -8.4]}
+ }}

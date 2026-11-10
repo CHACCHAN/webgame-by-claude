@@ -1,0 +1,11 @@
+{"_note": "points read off the 1280-px Commons thumbnails (ref/list.json, tools/fetch.py; panels by tools/panel.py); names: hl_ti / hl_to / hl_bi = head lamp upper segment inner tip / top-outer corner / lower segment inner tip, mir = mirror cap outer tip, logo_f / logo_r = emblem centres, tl_o / tl_ob = tail lamp outer end top / bottom corner; tools/ba.py -> fit/ba.json",
+ "_points": {"hl_ti": [0.42, 0.68, 2.25], "hl_to": [0.92, 0.8, 1.95], "hl_bi": [0.62, 0.5, 2.25], "mir": [1.1, 0.98, 0.55], "logo_f": [0.0, 0.62, 2.4], "tl_o": [0.92, 0.85, -2.3], "tl_ob": [0.93, 0.78, -2.3], "logo_r": [0.0, 0.86, -2.45]},
+ "_hub": {"xf": 0.91, "xr": 0.92, "y": 0.36},
+ "c12": {"size": [1280, 720], "pts": {"hl_ti_l": [821, 393], "hl_ti_r": [443, 389], "hl_to_l": [1090, 273], "hl_to_r": [161, 271], "hl_bi_l": [903, 489], "hl_bi_r": [357, 488], "mir_l": [1067, 176], "mir_r": [163, 177], "logo_f_c": [633, 395]}},
+ "c18": {"size": [1280, 960], "pts": {"tl_o_l": [163, 404], "tl_ob_l": [153, 460], "tl_o_r": [1102, 404], "tl_ob_r": [1115, 460], "logo_r_c": [621, 430]}, "f_exif": 3092, "f_sig": 0.15},
+ "c14": {"size": [1280, 640], "ref": true, "pts": {"hub_rr": [263.5, 421], "hub_fr": [1035, 417.5]}},
+ "c00": {"size": [1280, 720], "pts": {"hub_fr": [549, 479], "hub_rr": [113, 335], "hl_to_r": [684, 344], "hl_ti_r": [1031, 451], "logo_f_c": [1133, 436]}, "f_exif": 1577, "f_sig": 0.15},
+ "c01": {"size": [1280, 720], "pts": {"tl_o_l": [678, 268], "tl_ob_l": [692, 324], "tl_o_r": [1193, 252], "logo_r_c": [1085, 272], "hub_rl": [549, 483], "hub_fl": [114, 334]}, "f_exif": 1406, "f_sig": 0.15},
+ "c17": {"size": [1280, 960], "pts": {"tl_o_l": [226, 414], "tl_ob_l": [212, 452], "tl_o_r": [752, 432], "tl_ob_r": [747, 483], "logo_r_c": [370, 445], "hub_rr": [829, 601], "hub_fr": [1074, 467]}, "f_exif": 2098, "f_sig": 0.15},
+ "c32": {"size": [1280, 861], "pts": {"hl_ti_l": [366, 607], "hl_to_l": [722, 509], "hl_bi_l": [436, 698], "logo_f_c": [243, 580], "hub_fl": [840, 597], "hub_rl": [1158, 332]}, "f_exif": 1301, "f_sig": 0.15},
+ "_hub_prior": {"xf": [0.9, 0.03], "xr": [0.91, 0.03], "y": [0.358, 0.008]}}

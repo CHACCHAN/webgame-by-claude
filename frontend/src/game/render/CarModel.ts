@@ -1,6 +1,8 @@
 import { buildTrain, type TrainRig } from './TrainModel';
 import { buildRoach, type CreatureRig } from './RoachModel';
 import { buildBike, type BikeRig } from './BikeModel';
+import { buildTank, type TankRig } from './TankModel';
+import { buildJet, type JetRig } from './JetModel';
 import * as THREE from 'three';
 import type { CarId, CarSpec, RoadCarId } from '../vehicle/carSpecs';
 
@@ -445,12 +447,18 @@ export interface CarRig {
   creature?: CreatureRig;
   /** a motorcycle: it leans with the lateral acceleration (render/BikeModel.ts) */
   bike?: BikeRig;
+  /** a tank: turret and gun laid by the player, tracks running with the motion (render/TankModel.ts) */
+  tank?: TankRig;
+  /** a fighter: nose wheel, engines, gear retraction (render/JetModel.ts) */
+  jet?: JetRig;
 }
 
 export function buildCar(spec: CarSpec, opts: { bodyColor?: string; procedural?: boolean } = {}): CarRig {
   if (spec.train) return buildTrain(spec, opts);
   if (spec.creature) return buildRoach(spec, opts);
   if (spec.bike) return buildBike(spec, opts);
+  if (spec.tank) return buildTank(spec, opts);
+  if (spec.jet) return buildJet(spec, opts);
   const tpl = opts.procedural ? null : carTemplate(spec.id);
   if (tpl) return rigFromTemplate(tpl, spec, opts);
   return buildProceduralCar(spec, opts);

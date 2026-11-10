@@ -1,0 +1,45 @@
+{
+ "cams": "/home/dev/Desktop/service/internal/webgame-by-claude/frontend/tools/blender/cars/fitdata/u9/fit/cams.json",
+ "photos": {
+  "c00": {
+   "photo": "/home/dev/.local/opt/carfit/u9/ref/c00.jpg",
+   "band": 0.08,
+   "mask": "/home/dev/.local/opt/carfit/u9/masks/c00_w.png"
+  },
+  "c01": {
+   "photo": "/home/dev/.local/opt/carfit/u9/ref/c01.jpg",
+   "band": 0.08,
+   "mask": "/home/dev/.local/opt/carfit/u9/masks/c01_w.png"
+  },
+  "c17": {
+   "photo": "/home/dev/.local/opt/carfit/u9/ref/c17.jpg",
+   "band": 0.08,
+   "mask": "/home/dev/.local/opt/carfit/u9/masks/c17_w.png"
+  },
+  "c32": {
+   "photo": "/home/dev/.local/opt/carfit/u9/ref/c32.jpg",
+   "band": 0.08,
+   "mask": "/home/dev/.local/opt/carfit/u9/masks/c32_w.png"
+  },
+  "c12": {
+   "photo": "/home/dev/.local/opt/carfit/u9/ref/c12.jpg",
+   "band": 0.08,
+   "mask": "/home/dev/.local/opt/carfit/u9/masks/c12_w.png"
+  },
+  "c18": {
+   "photo": "/home/dev/.local/opt/carfit/u9/ref/c18.jpg",
+   "band": 0.08,
+   "mask": "/home/dev/.local/opt/carfit/u9/masks/c18_w.png"
+  },
+  "c14": {
+   "photo": "/home/dev/.local/opt/carfit/u9/ref/c14.jpg",
+   "band": 0.08,
+   "mask": "/home/dev/.local/opt/carfit/u9/masks/c14_w.png"
+  }
+ },
+ "det": "/home/dev/Desktop/service/internal/webgame-by-claude/frontend/tools/blender/cars/fitdata/u9/det",
+ "hub_x": {
+  "f": 0.913,
+  "r": 0.915
+ }
+}

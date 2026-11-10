@@ -9,3 +9,4 @@ dist/
 /docker/certs/*.crt
 /docker/certs/*.pem
 **/tools/scratch/
+__pycache__/

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { gameHolder } from '../GameCanvas';
 import { useApp } from '../../store/app';
 import { useMenuInput } from '../useMenuInput';
-import { CAR_SPECS, VEHICLE_ORDER, singleRatio, type CarId } from '../../game/vehicle/carSpecs';
+import { CAR_SPECS, singleRatio, vehiclesFor, type CarId } from '../../game/vehicle/carSpecs';
 import { traitsOf } from '../../game/vehicle/kinds';
 import { COURSES, COURSE_ORDER, type CourseId } from '../../game/track/courses';
 import { currentCourseId, useSettings } from '../../store/settings';
@@ -17,10 +17,11 @@ import type { TimeOfDay } from '../../game/render/Environment';
 
 const MAX_PLAYERS = 3;
 
-function CarPicker({ carId, disabled }: { carId: CarId; disabled?: boolean }) {
+/** the vehicles a course allows (the fighters only at Edwards) */
+function CarPicker({ carId, course, disabled }: { carId: CarId; course: string; disabled?: boolean }) {
   return (
     <div className="ol-cars">
-      {VEHICLE_ORDER.map((id) => (
+      {vehiclesFor(course).map((id) => (
         <button key={id} className={`chip ${id === carId ? 'on' : ''}`} disabled={disabled} onClick={() => { sfx.move(); chooseCar(id); }}>
           {CAR_SPECS[id].name}
         </button>
@@ -56,6 +57,10 @@ export function OnlineLobbyScreen() {
   const [course, setCourse] = useState<CourseId>(currentCourseId());
   const [tod, setTod] = useState<TimeOfDay>(useSettings.getState().timeOfDay);
   const [code, setCode] = useState('');
+  // the fighters race only at Edwards: picking another course swaps one for the first vehicle it allows
+  useEffect(() => {
+    if (!vehiclesFor(course).includes(useOnline.getState().carId)) chooseCar(vehiclesFor(course)[0]);
+  }, [course]);
   useEffect(() => {
     const stored = loadPlayer();
     if (stored && !useOnline.getState().player) useOnline.getState().set({ player: stored });
@@ -65,8 +70,9 @@ export function OnlineLobbyScreen() {
   useMenuInput((a) => {
     if (a === 'back') { sfx.back(); go('modes'); }
     if (a === 'left' || a === 'right') {
-      const i = VEHICLE_ORDER.indexOf(useOnline.getState().carId);
-      chooseCar(VEHICLE_ORDER[(i + (a === 'left' ? VEHICLE_ORDER.length - 1 : 1)) % VEHICLE_ORDER.length]);
+      const list = vehiclesFor(course);
+      const i = list.indexOf(useOnline.getState().carId);
+      chooseCar(list[(i + (a === 'left' ? list.length - 1 : 1)) % list.length]);
       sfx.move();
     }
   });
@@ -87,7 +93,7 @@ export function OnlineLobbyScreen() {
             <div className="ol-section">
               <label>エントリー</label>
               <div className="ol-me"><b>{player.name}</b></div>
-              <CarPicker carId={carId} />
+              <CarPicker carId={carId} course={course} />
               <GearboxPicker carId={carId} />
             </div>
             <div className="ol-split">
@@ -141,6 +147,11 @@ export function OnlineRoomScreen() {
   useEffect(() => {
     void gameHolder.game?.audio?.playMusic('bgm_online');
   }, []);
+  // a fighter picked in the lobby cannot race this room's course: the first vehicle it allows instead
+  const track = room?.track_id;
+  useEffect(() => {
+    if (track && !vehiclesFor(track).includes(carId)) chooseCar(vehiclesFor(track)[0]);
+  }, [track, carId]);
   const exit = () => {
     sfx.back();
     void leaveRoom();
@@ -149,8 +160,9 @@ export function OnlineRoomScreen() {
   useMenuInput((a) => {
     if (a === 'back') exit();
     if ((a === 'left' || a === 'right') && room?.status === 'waiting') {
-      const i = VEHICLE_ORDER.indexOf(carId);
-      chooseCar(VEHICLE_ORDER[(i + (a === 'left' ? VEHICLE_ORDER.length - 1 : 1)) % VEHICLE_ORDER.length]);
+      const list = vehiclesFor(room.track_id);
+      const i = list.indexOf(carId);
+      chooseCar(list[(i + (a === 'left' ? list.length - 1 : 1)) % list.length]);
       sfx.move();
     }
   });
@@ -190,7 +202,7 @@ export function OnlineRoomScreen() {
             );
           })}
         </ul>
-        <CarPicker carId={carId} disabled={room.status !== 'waiting'} />
+        <CarPicker carId={carId} course={room.track_id} disabled={room.status !== 'waiting'} />
         <GearboxPicker carId={carId} disabled={room.status !== 'waiting'} />
         <div className="ol-actions">
           {isHost ? (

@@ -148,6 +148,7 @@ export class CarVisual {
     } else {
       this.applyBeams(on);
       this.rig.materials.headlight.emissiveIntensity = 4 * on;
+      this.rig.jet?.setLights(on >= LIGHTS_ON ? 1 : 0);
     }
     this.setBrakeLights(false);
   }
@@ -239,6 +240,8 @@ export class CarVisual {
     this.rig.train?.update(this.rig.root, dt);
     this.rig.creature?.update(this.root, dt);
     this.rig.bike?.update(this.root, dt, this.live ?? undefined);
+    this.rig.tank?.update(this.root, dt);
+    this.rig.jet?.update(this.root, dt, this.live);
     if (!this.pods.length || this.podOpen === this.podTarget) return;
     const step = dt / 0.6;
     this.podOpen = this.podTarget > this.podOpen ? Math.min(this.podTarget, this.podOpen + step) : Math.max(this.podTarget, this.podOpen - step);

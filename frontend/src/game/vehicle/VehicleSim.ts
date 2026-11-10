@@ -3,6 +3,7 @@ import { clamp, damp, lerp, smoothstep } from '../util/math';
 import { type CarSpec, torqueAt } from './carSpecs';
 import { TRACTION_RISE } from './vvvf';
 import { bikeLimits } from './bikes';
+import { EDWARDS_AIR } from './jets';
 import { GROUP_CAR, GROUP_GROUND, GROUP_PROXY, GROUP_WALL, PhysicsWorld, RAPIER, groups } from './PhysicsWorld';
 
 export interface VehicleInput {
@@ -39,6 +40,8 @@ export interface WheelState {
   skid: number;
   contactPoint: Vector3;
   contactNormal: Vector3;
+  /** tyre radius (m): a jet's nose wheel is smaller than its main wheels */
+  radius: number;
 }
 
 export type AssistLevel = 0 | 1 | 2;
@@ -100,6 +103,14 @@ export class VehicleSim {
   /** forward acceleration (m/s², smoothed): a bike's load transfer */
   private longAcc = 0;
   private lastFwd = 0;
+  /** a jet's engines: spool (0 = idle, 1 = military power), afterburner (0…1), thrust of all engines (N) */
+  spool = 0;
+  afterburner = 0;
+  thrust = 0;
+  /** a jet's lift as a share of its weight (0…0.97) */
+  liftShare = 0;
+  /** a CVT's (the 10式's HMT) current overall ratio */
+  private cvtRatio = 0;
 
   // derived state (read by HUD/audio/fx/camera)
   speed = 0;
@@ -128,11 +139,17 @@ export class VehicleSim {
     this.spec = spec;
     const { width, height, length } = spec.size;
     this.halfHeight = height / 2;
-    const clearance = 0.16;
+    const clearance = spec.clearance ?? 0.16;
     const loadedLen = spec.suspension.rest - (spec.mass * 9.81) / 4 / spec.suspension.stiffness;
     // body origin height above the ground at rest
     this.rideHeight = clearance + this.halfHeight;
-    const mountY = spec.wheelRadius + loadedLen - this.rideHeight;
+    // a jet's nose wheel carries far less than its mains (and is smaller): each axle set at its own static load, so it
+    // stands level (the cars keep the equal split their tuning was done on)
+    const axleLen = (front: boolean) => {
+      if (!spec.jet) return loadedLen;
+      const share = front ? 0.5 + spec.comForward / spec.wheelbase : 0.5 - spec.comForward / spec.wheelbase;
+      return spec.suspension.rest - (spec.mass * 9.81 * share) / 2 / spec.suspension.stiffness;
+    };
 
     const q = new Quaternion().setFromAxisAngle(UP, heading);
     this.body = physics.world.createRigidBody(
@@ -166,12 +183,15 @@ export class VehicleSim {
     for (const front of [true, false]) {
       for (const left of [true, false]) {
         const z = front ? spec.wheelbase / 2 : -spec.wheelbase / 2;
-        const x = (left ? 1 : -1) * (spec.track / 2);
+        const x = (left ? 1 : -1) * ((front ? (spec.frontTrack ?? spec.track) : spec.track) / 2);
+        const radius = front ? (spec.frontWheelRadius ?? spec.wheelRadius) : spec.wheelRadius;
         this.wheels.push({
-          mount: new Vector3(x, mountY, z),
+          mount: new Vector3(x, radius + axleLen(front) - this.rideHeight, z),
+          radius,
           front,
           left,
-          driven: spec.drive === 'AWD' || !front,
+          // a jet's wheels roll free: its engines push
+          driven: !spec.jet && (spec.drive === 'AWD' || !front),
           grounded: false,
           compression: 0,
           length: spec.suspension.rest,
@@ -203,9 +223,10 @@ export class VehicleSim {
     this.rpm = this.spec.engine.idleRpm;
     this.wheelSpin = 0;
     this.traction = 0;
+    this.spool = this.afterburner = this.thrust = 0;
     for (const w of this.wheels) {
       w.compression = 0;
-      w.angularVelocity = speed / this.spec.wheelRadius;
+      w.angularVelocity = speed / w.radius;
     }
     this.syncState();
     this.prevPosition.copy(this.position);
@@ -230,8 +251,8 @@ export class VehicleSim {
   }
 
   private gearRatio(g = this.gear) {
-    // electric traction reverses the motors: same ratio both ways
-    if (g === -1) return this.spec.engine.electric ? -this.spec.gears[0] : -3.4;
+    // electric traction reverses the motors: same ratio both ways (a tank: its own reverse gearing)
+    if (g === -1) return this.spec.reverseRatio ? -this.spec.reverseRatio : this.spec.engine.electric ? -this.spec.gears[0] : -3.4;
     if (g === 0) return 0;
     return this.spec.gears[g - 1];
   }
@@ -276,6 +297,9 @@ export class VehicleSim {
         this.reverseTimer = 0;
       }
     } else this.reverseTimer = 0;
+    // a tank's or a jet's handbrake key is just the brakes, full on (no locked rear wheels to slide on)
+    const heavy = !!(spec.tank || spec.jet);
+    if (heavy && inp.handbrake) brake = 1;
 
     // a train's tractive effort follows the notch at a limited rate (its jerk limit): it builds up over TRACTION_RISE
     // and fades in half that after a notch-off (a quick re-notch keeps most of it); the brake or the grid hold cut it
@@ -305,7 +329,7 @@ export class VehicleSim {
     }
 
     // ---------------- engine
-    const ratio = this.gearRatio() * spec.finalDrive;
+    let ratio = this.gearRatio() * spec.finalDrive;
     let drivenRot = 0, drivenCount = 0;
     for (const w of this.wheels) {
       if (!w.driven) continue;
@@ -313,27 +337,45 @@ export class VehicleSim {
       drivenCount++;
     }
     drivenRot /= Math.max(1, drivenCount);
+    const cvt = spec.tank?.cvt;
+    if (cvt && this.gear !== 0) {
+      // the HMT holds the engine at the speed the throttle asks for (its rated speed flat out) and varies the ratio
+      // between its lowest and highest, the same both ways
+      const want = spec.engine.idleRpm + throttle * (spec.engine.redline - spec.engine.idleRpm);
+      this.cvtRatio = clamp((want * Math.PI) / 30 / Math.max(Math.abs(drivenRot), 1e-3), cvt.high, cvt.low);
+      ratio = this.cvtRatio * Math.sign(this.gear);
+    }
     const wheelRpm = (Math.abs(drivenRot) * Math.abs(ratio) * 60) / (Math.PI * 2);
     // a clutch slips at launch (revs up); an electric motor gives full torque from standstill
-    // (a bike's clutch is slipped higher, to the middle of its rev range)
-    const launchRpm = spec.bike ? spec.engine.redline * 0.55 - spec.engine.idleRpm : 3800;
+    // (a bike's clutch is slipped higher, to the middle of its rev range; a tank's torque converter stalls at ~3/4 of
+    // its governed speed)
+    const launchRpm = spec.bike ? spec.engine.redline * 0.55 - spec.engine.idleRpm : spec.tank ? spec.engine.redline * 0.75 - spec.engine.idleRpm : 3800;
     const launch = spec.engine.electric ? 0 : spec.engine.idleRpm + throttle * launchRpm * (1 - smoothstep(4, 14, Math.abs(fwdSpeed)));
     let targetRpm = Math.max(wheelRpm * (1 + this.wheelSpin * 0.6), launch, spec.engine.idleRpm);
     const freeRevving = this.gear === 0 || !!inp.hold;
     if (freeRevving) targetRpm = spec.engine.idleRpm + throttle * (spec.engine.redline - spec.engine.idleRpm);
     this.rpm = damp(this.rpm, Math.min(targetRpm, spec.engine.redline + 250), 18, dt);
-    if (this.rpm > spec.engine.redline) this.limiterCut = 0.08;
+    // (a CVT holds the engine at the speed it asks for: no limiter)
+    if (cvt && this.gear !== 0) this.rpm = damp(this.rpm, Math.max(spec.engine.idleRpm, (Math.abs(drivenRot) * this.cvtRatio * 30) / Math.PI), 18, dt);
+    else if (this.rpm > spec.engine.redline) this.limiterCut = 0.08;
     if (this.limiterCut > 0) {
       this.limiterCut -= dt;
       throttle = 0;
     }
-    const wantBoost = spec.engine.turbo && throttle > 0.5 && this.rpm > 2800 ? 1 : 0;
+    // (the boost builds from 2,800 rpm, a slow diesel's from under half its governed speed)
+    const wantBoost = spec.engine.turbo && throttle > 0.5 && this.rpm > Math.min(2800, spec.engine.redline * 0.45) ? 1 : 0;
     this.boost = damp(this.boost, wantBoost, wantBoost ? 2.2 : 5, dt);
+    // a CVT at its highest ratio: the governor holds the rated speed
+    if (cvt && this.rpm > spec.engine.redline) throttle *= clamp(1 - (this.rpm - spec.engine.redline) / 40, 0, 1);
     let engineTorque = torqueAt(spec, this.rpm) * throttle * this.powerScale;
     if (spec.engine.turbo) engineTorque *= 0.72 + 0.28 * this.boost;
     // engine braking
     engineTorque -= (1 - throttle) * (this.rpm / spec.engine.redline) * 38 * smoothstep(1, 5, Math.abs(fwdSpeed));
-    let driveForceTotal = freeRevving ? 0 : (engineTorque * ratio * 0.86) / spec.wheelRadius;
+    // (a tank loses far more on the way to the ground than a car: torque converter, steering unit, tracks)
+    let driveForceTotal = freeRevving || spec.jet ? 0 : (engineTorque * ratio * (spec.tank?.running === 'tracks' ? 0.62 : 0.86)) / spec.wheelRadius;
+    // a tank's driver (and the 10式's HMT) feeds no more than its tracks or tyres hold: they never spin up like a car's
+    if (spec.tank) driveForceTotal = clamp(driveForceTotal, -spec.gripRear * this.gripScale * spec.mass * 9.81 * 0.98, spec.gripRear * this.gripScale * spec.mass * 9.81 * 0.98);
+    if (spec.jet) this.jetEngines(dt, throttle, !!inp.hold);
     if (spec.bike) {
       // a bike's front lifts once the drive passes its weight × (centre of mass ahead of the rear axle) / its height:
       // the drive is held at that limit (anti-wheelie) and the model shows the front going light; the brakes stop
@@ -366,7 +408,7 @@ export class VehicleSim {
     if (drifting > 0 && isCounter) maxSteer = lerp(maxSteer, (spec.maxSteerDeg * Math.PI) / 180, drifting);
     // steer > 0 means right; positive rotation about up turns left
     let steerAngle = -this.steerSmoothed * maxSteer;
-    if (this.assist > 0 && drifting > 0) {
+    if (this.assist > 0 && drifting > 0 && !heavy) {
       // nudge the front wheels towards the direction of travel (auto counter-steer)
       const k = this.assist === 2 ? 0.75 : 0.4;
       steerAngle += -this.slipAngle * k * drifting * (fwdSpeed > 0 ? 1 : 0);
@@ -376,7 +418,6 @@ export class VehicleSim {
     // ---------------- wheels
     const world = this.physics.world;
     const restLen = spec.suspension.rest;
-    const r = spec.wheelRadius;
     const com = body.worldCom();
     const lin = this.velocity;
     const angv = _w.set(av.x, av.y, av.z);
@@ -396,7 +437,7 @@ export class VehicleSim {
     // corner).
     const powerTrigger = throttle > 0.85 && this.sinceLift < 0.35 && steerAbs > 0.6 && this.gear > 0 && this.gear <= 3 && spec.driftiness > 0.35 && planarSpeed > 11;
     // the AI and a bike grip-drive: no drift tricks (on a bike the handbrake is just the rear brake)
-    const noTricks = this.gripDriver || !!spec.bike;
+    const noTricks = this.gripDriver || !!spec.bike || heavy;
     const trigger = noTricks
       ? Math.abs(this.slipAngle) > 0.3
       : (inp.handbrake && steerAbs > 0.2) || feint || powerTrigger || Math.abs(this.slipAngle) > 0.28;
@@ -404,7 +445,7 @@ export class VehicleSim {
     else this.driftHold = Math.max(0, this.driftHold - dt);
     // the drift lasts while it is driven (throttle) and the tail is out; once the car straightens to ~7° it grips
     // (a bike never enters the drift state: its rear would lose grip to it)
-    const sustain = fast && !spec.bike && (this.driftHold > 0 || (this.driftState > 0.3 && Math.abs(this.slipAngle) > 0.12 && throttle > 0.2));
+    const sustain = fast && !spec.bike && !heavy && (this.driftHold > 0 || (this.driftState > 0.3 && Math.abs(this.slipAngle) > 0.12 && throttle > 0.2));
     this.driftState = damp(this.driftState, sustain ? 1 : 0, sustain ? 7 : 2.5, dt);
     this.driftAge = this.driftState > 0.3 ? this.driftAge + dt : 0;
     // throttle widens the angle, lifting tightens it
@@ -413,6 +454,7 @@ export class VehicleSim {
     // angle governor: the rear bites back beyond ~32° of slip (full grip by 50°), so a power slide settles at a
     // holdable angle instead of swinging out to 75° and spinning
     if (!this.gripDriver) rearGripDrift = lerp(rearGripDrift, 1.05, smoothstep(0.55, 0.87, Math.abs(this.slipAngle)));
+    if (heavy) rearGripDrift = 1;
     // a pull on the handbrake with steering starts the rotation (the rear alone barely turned the car)
     if (inp.handbrake && !this.lastHandbrake && fast && steerAbs > 0.2 && !noTricks) {
       const iy = (spec.mass / 12) * (spec.size.width ** 2 + spec.size.length ** 2);
@@ -431,6 +473,7 @@ export class VehicleSim {
       const ray = this.ray;
       ray.origin = { x: origin.x, y: origin.y, z: origin.z };
       ray.dir = { x: dir.x, y: dir.y, z: dir.z };
+      const r = w.radius;
       const hit = world.castRayAndGetNormal(
         ray,
         restLen + r,
@@ -466,8 +509,8 @@ export class VehicleSim {
       const compVel = (w.compression - prevCompression) / dt;
       let fz = spec.suspension.stiffness * w.compression + spec.suspension.damping * compVel;
       fz = Math.max(0, fz);
-      // bump stop
-      if (w.length < 0.04) fz += (0.04 - w.length) * 400000;
+      // bump stop (as stiff for a 60 t tank or a 25 t jet as for a car)
+      if (w.length < 0.04) fz += (0.04 - w.length) * 400000 * (heavy ? spec.mass / 1500 : 1);
       w.load = Math.min(fz, spec.mass * 9.81 * 1.6);
       _imp.copy(this.up).multiplyScalar(fz * dt);
       body.applyImpulseAtPoint(_imp, origin, true);
@@ -532,8 +575,9 @@ export class VehicleSim {
         // (a bike's slipper clutch: engine braking never more than a third of what the rear tyre holds)
         fx += bikeG && driveForceTotal < 0 ? Math.max(driveForceTotal * share, -mu * load * 0.3) : driveForceTotal * share;
       }
-      // a rider brakes each wheel by what it carries (hard on the front as the load comes onto it), a car 60:40
-      const brakeShare = bikeG ? (load / bikeG) * 2 : w.front ? 0.6 : 0.4;
+      // a rider brakes each wheel by what it carries (hard on the front as the load comes onto it), a car 60:40, a jet
+      // only its main wheels, a tank both tracks alike
+      const brakeShare = bikeG ? (load / bikeG) * 2 : spec.jet ? (w.front ? 0 : 1) : spec.tank ? 0.5 : w.front ? 0.6 : 0.4;
       let brakeF = brake * spec.brakeForce * brakeShare * 0.5;
       // a bike's handbrake key is its rear brake, worked to the tyre's limit without locking it
       if (bikeG && handbrake && !w.front) brakeF = Math.max(brakeF, mu * load * 0.9);
@@ -541,7 +585,7 @@ export class VehicleSim {
       fx -= Math.sign(vF) * Math.min(brakeF, stopLong);
       // rolling resistance (roughly constant, ~1.5% of load for tyres)
       fx -= Math.sign(vF) * Math.min(Math.abs(vF) * 40, load * (spec.rolling ?? 0.015));
-      const locked = handbrake && !w.front && !bikeG && Math.abs(vF) > 1;
+      const locked = handbrake && !w.front && !bikeG && !heavy && Math.abs(vF) > 1;
 
       // --- friction circle (lateral keeps a share of grip even when spinning)
       const maxF = mu * load * 1.05;
@@ -579,8 +623,8 @@ export class VehicleSim {
       body.applyImpulseAtPoint(_imp, _p, true);
 
       // wheel rotation (visual + rpm source)
-      const lockedRear = handbrake && !w.front && !bikeG;
-      let omega = vF / r;
+      const lockedRear = handbrake && !w.front && !bikeG && !heavy;
+      let omega = vF / w.radius;
       if (w.driven && this.gear > 0) omega *= 1 + this.wheelSpin;
       if (lockedRear) omega = 0;
       w.angularVelocity = omega;
@@ -592,6 +636,8 @@ export class VehicleSim {
     }
     this.wheelSpin = damp(this.wheelSpin, clamp(spinDemand * 0.8, 0, 1.5), spinDemand > this.wheelSpin ? 8 : 3, dt);
     this.airborne = grounded === 0;
+    if (spec.tank?.running === 'tracks' && grounded >= 2) this.skidSteer(dt, fwdSpeed);
+    if (spec.jet) this.jetAero(dt, brake, fwdSpeed, latSpeed);
 
     // ---------------- aero
     const v2 = planarSpeed * planarSpeed;
@@ -601,7 +647,7 @@ export class VehicleSim {
     if (grounded > 0) body.applyImpulse(_imp.copy(this.up).multiplyScalar(-spec.downforce * Math.min(v2, dfV * dfV) * dt), true);
 
     // ---------------- assists
-    if (grounded >= 2 && this.assist > 0 && planarSpeed > 6) {
+    if (grounded >= 2 && this.assist > 0 && planarSpeed > 6 && !heavy) {
       const level = this.assist === 2 ? 1.4 : 1;
       // keep momentum through slides: push along the direction of travel
       if (drifting > 0 && throttle > 0.25 && fwdSpeed > 0) {
@@ -624,6 +670,82 @@ export class VehicleSim {
       // gentle self-righting in the air
       _imp.crossVectors(this.up, UP).multiplyScalar(spec.mass * 2.5 * dt);
       body.applyTorqueImpulse(_imp, true);
+    }
+  }
+
+  /**
+   * A tracked vehicle steers by the difference between its tracks: the steering asks for a yaw rate (the pivot rate at a
+   * standstill; on the move what ~0.85 of the tracks' grip allows), and the tracks give a yaw moment towards it, at most
+   * what they hold (μ·W·gauge/2). Reversing turns the hull the way a car's reversing does.
+   */
+  private skidSteer(dt: number, fwdSpeed: number) {
+    const spec = this.spec;
+    const t = spec.tank!;
+    const v = Math.abs(fwdSpeed);
+    const mu = spec.gripRear * this.gripScale;
+    const pivot = (t.pivotRate * Math.PI) / 180;
+    const wMax = Math.min(Math.max(pivot, v / 9), (mu * 9.81 * 0.85) / Math.max(v, 0.5));
+    const dir = fwdSpeed < -0.5 ? -1 : 1;
+    const target = -clamp(this.steerSmoothed, -1, 1) * wMax * dir;
+    const iy = (spec.mass / 12) * (spec.size.width ** 2 + spec.size.length ** 2);
+    const cap = mu * spec.mass * 9.81 * (spec.track / 2);
+    const tq = clamp(iy * (target - this.yawRate) * 8, -cap, cap);
+    this.body.applyTorqueImpulse(_imp.copy(this.up).multiplyScalar(tq * dt), true);
+  }
+
+  /**
+   * A jet's engines: the spool follows the throttle with the engines' lag (idle ⇄ military power in `spoolUp` /
+   * `spoolDown` s), the afterburner lights above 85 % throttle once at military power. Thrust per engine: the static
+   * figure by the spool and the afterburner, less with the thinner air (σ^0.75) and changing with the Mach number as an
+   * afterburning low-bypass turbofan's does (estimated lapse). On the grid the chocks hold it (no thrust applied).
+   */
+  private jetEngines(dt: number, throttle: number, hold: boolean) {
+    const e = this.spec.jet!.engines;
+    const wantN = Math.min(1, throttle / 0.85);
+    const wantAb = throttle > 0.85 && this.spool > 0.95 ? (throttle - 0.85) / 0.15 : 0;
+    this.spool += clamp(wantN - this.spool, -dt / e.spoolDown, dt / e.spoolUp);
+    this.afterburner += clamp(wantAb - this.afterburner, -dt / 0.3, dt / 1.2);
+    // the sound and the gauge: N2 from 65 % at idle to 100 % at military power (a touch more in reheat)
+    this.rpm = (65 + 35 * this.spool + 2 * this.afterburner) * 100;
+    const m = this.speed / EDWARDS_AIR.sound;
+    const lapse = Math.pow(EDWARDS_AIR.density / 1.225, 0.75);
+    const dry = lerp(e.idle, e.dry, this.spool) * (1 - 0.15 * m + 0.3 * m * m);
+    const reheat = (e.ab - e.dry) * this.afterburner * (1 + 0.6 * m * m);
+    this.thrust = e.count * (dry + reheat) * lapse;
+    if (!hold) this.body.applyImpulse(_imp.copy(this.forward).multiplyScalar(this.thrust * dt), true);
+  }
+
+  /**
+   * The air on a jet's airframe at the ground attitude: drag (zero-lift, gear and doors, the transonic rise from Mach
+   * 0.85, the speed brake with the brake pedal), lift (held below the weight: it stays on the ground, with less and less
+   * on its tyres), side force from the sideslip, and the yaw from the rudder (the steering), the fin's weathervane and
+   * its damping.
+   */
+  private jetAero(dt: number, brake: number, fwdSpeed: number, latSpeed: number) {
+    const spec = this.spec;
+    const w = spec.jet!.wing;
+    const v = this.speed;
+    if (v < 0.5) {
+      this.liftShare = 0;
+      return;
+    }
+    const rho = EDWARDS_AIR.density;
+    const q = 0.5 * rho * v * v;
+    const m = v / EDWARDS_AIR.sound;
+    const cd = w.cd0 + w.cdGear + 0.035 * smoothstep(0.85, 1.05, m);
+    const drag = q * (w.area * cd + w.speedBrake * brake);
+    const b = this.body;
+    b.applyImpulse(_imp.copy(this.velocity).multiplyScalar((-drag / v) * dt), true);
+    const weight = spec.mass * 9.81;
+    const lift = Math.min(q * w.area * w.cl0 * Math.max(0, Math.sign(fwdSpeed)), weight * 0.97);
+    this.liftShare = lift / weight;
+    b.applyImpulse(_imp.copy(this.up).multiplyScalar(lift * dt), true);
+    const beta = Math.atan2(latSpeed, Math.max(Math.abs(fwdSpeed), 1));
+    b.applyImpulse(_imp.copy(this.right).multiplyScalar(-q * w.area * 0.6 * beta * dt), true);
+    if (fwdSpeed > 5) {
+      const qsb = q * w.area * w.span;
+      const yaw = -qsb * 0.025 * this.steerSmoothed - qsb * 0.1 * beta - ((qsb * w.span) / (2 * v)) * 0.3 * this.yawRate;
+      b.applyTorqueImpulse(_imp.copy(this.up).multiplyScalar(yaw * dt), true);
     }
   }
 

@@ -6,10 +6,12 @@ import type { CarSpec } from './carSpecs';
  * the camera profile and the spec sheet. What differs between kinds in shared code is read from `KIND_TRAITS` here or
  * dispatched on `kindOf(spec)`, so a new kind is one entry plus its modules, not a branch at every call site.
  */
-export type VehicleKind = 'car' | 'bike' | 'train' | 'creature';
+export type VehicleKind = 'car' | 'bike' | 'tank' | 'jet' | 'train' | 'creature';
 
-export const kindOf = (spec: Pick<CarSpec, 'train' | 'creature' | 'bike'>): VehicleKind =>
-  spec.train ? 'train' : spec.creature ? 'creature' : spec.bike ? 'bike' : 'car';
+type KindKeys = Pick<CarSpec, 'train' | 'creature' | 'bike' | 'tank' | 'jet'>;
+
+export const kindOf = (spec: KindKeys): VehicleKind =>
+  spec.train ? 'train' : spec.creature ? 'creature' : spec.bike ? 'bike' : spec.tank ? 'tank' : spec.jet ? 'jet' : 'car';
 
 export interface KindTraits {
   /** badge on the car select (the joke entries) */
@@ -31,10 +33,14 @@ export const KIND_TRAITS: Record<VehicleKind, KindTraits> = {
   // a train stands straight along the road and is framed on its leading car (the root is its front bogie); the light
   // sits higher (right above its roof it burnt a white patch into it)
   train: { badge: 'TRAIN ・ ネタ枠', noun: '電車', exhaust: false, lampHeight: 1.1, garage: { scale: 2.6, yaw: 0, focusBack: 7, lightHeight: 16, light: 120 } },
+  // a tank sits higher and wider than a car; its lamps are small convoy lamps on the hull front
+  tank: { badge: 'TANK ・ ネタ枠', noun: 'この戦車', exhaust: false, lampHeight: 1.4, garage: { scale: 1.6, yaw: 0.45, focusBack: 0, lightHeight: 10, light: 110 } },
+  // a fighter is framed whole (19–23 m long, 13–17 m span); the taxi lamp sits on the nose gear
+  jet: { badge: 'FIGHTER ・ エドワーズ限定', noun: 'この機体', exhaust: false, lampHeight: 1.6, garage: { scale: 3.2, yaw: 0.6, focusBack: 1.5, lightHeight: 16, light: 160 } },
   creature: { badge: 'CREATURE ・ ネタ枠', noun: 'この乗り物', exhaust: false, lampHeight: 0.75, garage: { scale: 1, yaw: 0.35, focusBack: 0, lightHeight: 7, light: 70 } },
 };
 
-export const traitsOf = (spec: Pick<CarSpec, 'train' | 'creature' | 'bike'>) => KIND_TRAITS[kindOf(spec)];
+export const traitsOf = (spec: KindKeys) => KIND_TRAITS[kindOf(spec)];
 
 /** Puffs, backfires and pops from a tailpipe: engines only (not trains, the cockroach or electric cars). */
 export const hasExhaust = (spec: CarSpec) => traitsOf(spec).exhaust && !spec.engine.electric;

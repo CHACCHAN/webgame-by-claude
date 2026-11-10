@@ -3,10 +3,12 @@
 import { TRAIN_ORDER, trainSpec, type TrainId, type TrainInfo } from './trains';
 import { ROACH_SPEC, type CreatureInfo } from './roach';
 import { BIKE_ORDER, BIKE_SPECS, type BikeId, type BikeInfo } from './bikes';
+import { TANK_ORDER, TANK_SPECS, type TankId, type TankInfo } from './tanks';
+import { JET_ORDER, JET_SPECS, type JetId, type JetInfo } from './jets';
 
-export type CarId = 'hayate' | 'raijin' | 'shiden' | 'supra' | 'r34' | 's15' | 'cybertruck' | 'u9' | BikeId | TrainId | 'roach';
+export type CarId = 'hayate' | 'raijin' | 'shiden' | 'supra' | 'r34' | 's15' | 'cybertruck' | 'u9' | BikeId | TankId | JetId | TrainId | 'roach';
 /** the real cars (AI, bots, medals per course, procedural fallback bodies) */
-export type RoadCarId = Exclude<CarId, TrainId | BikeId | 'roach'>;
+export type RoadCarId = Exclude<CarId, TrainId | BikeId | TankId | JetId | 'roach'>;
 
 export interface CarSpec {
   id: CarId;
@@ -86,6 +88,17 @@ export interface CarSpec {
   creature?: CreatureInfo;
   /** a motorcycle (vehicle/bikes.ts): two wheels, leans, wheelie and stoppie limits, a rider */
   bike?: BikeInfo;
+  /** a tank (vehicle/tanks.ts): tracks (or the 16式's eight wheels), a turret and a gun the player fires */
+  tank?: TankInfo;
+  /** a fighter aircraft (vehicle/jets.ts): thrust, lift and drag, a steered nose wheel, braked main wheels */
+  jet?: JetInfo;
+  /** belly clearance under the collision box (m; default 0.16) */
+  clearance?: number;
+  /** wheel track of the front axle when it differs (a jet's nose wheel) and its wheel radius */
+  frontTrack?: number;
+  frontWheelRadius?: number;
+  /** overall reverse ratio (default: 3.4 × the final drive; an electric car its forward ratio) */
+  reverseRatio?: number;
 }
 
 const CARS: Record<RoadCarId, CarSpec> = {
@@ -414,14 +427,25 @@ const CARS: Record<RoadCarId, CarSpec> = {
 export const CAR_SPECS: Record<CarId, CarSpec> = {
   ...CARS,
   ...BIKE_SPECS,
+  ...TANK_SPECS,
+  ...JET_SPECS,
   ...(Object.fromEntries(TRAIN_ORDER.map((id) => [id, trainSpec(id)])) as Record<TrainId, CarSpec>),
   roach: ROACH_SPEC,
 };
 
 /** the cars (AI rivals, bot ghosts and models use these) */
 export const CAR_ORDER: CarId[] = ['hayate', 's15', 'shiden', 'supra', 'raijin', 'r34', 'cybertruck', 'u9'];
-/** everything a player can drive: the cars, the motorcycles, the trains, then the cockroach */
-export const VEHICLE_ORDER: CarId[] = [...CAR_ORDER, ...BIKE_ORDER, ...TRAIN_ORDER, 'roach'];
+/** everything a player can drive: the cars, the motorcycles, the tanks, the fighters (Edwards only: `allowedOn`), the
+ * trains, then the cockroach */
+/**
+ * The tanks and fighters are unfinished (no gun, no Edwards course, not in the backend's list yet: docs/FABLE_PLAN.md
+ * §1.2): kept out of every player-facing list until this is switched on.
+ */
+export const UNRELEASED_VEHICLES = false;
+export const VEHICLE_ORDER: CarId[] = [...CAR_ORDER, ...BIKE_ORDER, ...(UNRELEASED_VEHICLES ? [...TANK_ORDER, ...JET_ORDER] : []), ...TRAIN_ORDER, 'roach'];
+
+/** what a player may drive on a course (the fighters only at Edwards) */
+export const vehiclesFor = (courseId: string): CarId[] => VEHICLE_ORDER.filter((id) => !CAR_SPECS[id].jet || CAR_SPECS[id].jet!.courses.includes(courseId));
 
 /** one fixed ratio (trains, the cockroach, electric cars): no AT/MT choice */
 export const singleRatio = (spec: CarSpec) => spec.gears.length === 1;
