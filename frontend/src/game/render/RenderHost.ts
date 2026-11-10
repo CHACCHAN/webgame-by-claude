@@ -1,10 +1,12 @@
 import * as THREE from 'three';
-import { BlendMode, RenderPipeline, WebGPURenderer, type Node, type NodeBuilder } from 'three/webgpu';
+import { BlendMode, RenderPipeline, WebGPURenderer, type Node, type NodeBuilder, type TextureNode } from 'three/webgpu';
 import { Fn, convertToTexture, dot, float, fract, luminance, mrt, output, pass, renderOutput, sRGBTransferEOTF, sRGBTransferOETF, screenUV, sin, smoothstep, time, uniform, vec2, vec3, vec4, velocity } from 'three/tsl';
 import { bloom } from 'three/addons/tsl/display/BloomNode.js';
 import { fsr1 } from 'three/addons/tsl/display/FSR1Node.js';
 import { sharpen } from 'three/addons/tsl/display/SharpenNode.js';
 import { smaa } from 'three/addons/tsl/display/SMAANode.js';
+import { ambientOcclusion } from './ambientOcclusion';
+import { graded } from './grade';
 import { TemporalUpscaler, biasSceneTextures, sceneTextureBias, temporalUpscale } from './TemporalUpscaler';
 
 /** The renderer every engine module draws with (WebGPU, or its WebGL 2 backend where the browser has no WebGPU). */
@@ -18,6 +20,8 @@ export interface RenderOptions {
   smaa: boolean;
   /** chromatic aberration and film grain */
   extraFx: boolean;
+  /** ambient occlusion: creases, the underside of cars, where things meet the ground */
+  ao: boolean;
   /**
    * The scene drawn at `renderScale` of the output and brought up to it: over time from jittered frames (WebGPU: the
    * temporal upscaler, which is also the anti-aliasing) or within the frame (the WebGL 2 backend: FSR 1).
@@ -68,13 +72,19 @@ const ADDITIVE_REACTIVE = 6;
 /** the bloom: what is brighter than `threshold` (… + `smooth`: fully) glows, summed over five blur levels */
 const BLOOM = { strength: 0.3, radius: 0.6, threshold: 0.85, smooth: 0.25 };
 
+/**
+ * The ambient occlusion (`ambientOcclusion`, at half the output's size) and above which light (linear) a pixel is
+ * left alone: the occlusion is laid over the finished picture, and a lamp or a lit pool of road is not ambient light.
+ */
+const AO = { scale: 0.5, radius: 1.4, maxScreen: 0.25, samples: 8, strength: 1.6, keepAbove: [1.2, 3.5] as const };
+
 /** which backend the renderer ended up with */
 export type RenderBackend = 'webgpu' | 'webgl2';
 
 /**
  * Owns the canvas' renderer, the scene, the camera and the post-processing chain, and drives the frame loop:
- * `frame(dt)` (the game's update) then the render. Post-processing: scene (HDR) → bloom → tone mapping and output
- * colour space → SMAA → chromatic aberration → vignette → grain.
+ * `frame(dt)` (the game's update) then the render. Post-processing: scene (HDR) → bloom → tone mapping (AgX), output
+ * colour space and the grade → SMAA → chromatic aberration → vignette → grain.
  */
 export class RenderHost {
   readonly scene = new THREE.Scene();
@@ -99,10 +109,11 @@ export class RenderHost {
 
   /** Creates the renderer on `canvas` (sized by its parent element). Rejects when neither WebGPU nor WebGL 2 works. */
   static async create(canvas: HTMLCanvasElement, options: RenderOptions, forceWebGL = false) {
-    const renderer = new WebGPURenderer({ canvas, antialias: false, powerPreference: 'high-performance', stencil: false, forceWebGL });
+    // (`?gputime`: the passes' GPU times, for tools/perf-pass.cjs)
+    const renderer = new WebGPURenderer({ canvas, antialias: false, powerPreference: 'high-performance', stencil: false, forceWebGL, trackTimestamp: new URLSearchParams(location.search).has('gputime') });
     await renderer.init();
     const host = new RenderHost(renderer, canvas, options);
-    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMapping = THREE.AgXToneMapping;
     renderer.setClearColor('#05070c');
     renderer.shadowMap.enabled = options.shadows;
     renderer.shadowMap.type = THREE.PCFShadowMap;
@@ -124,7 +135,7 @@ export class RenderHost {
   /** Changes the drawing resolution and the effects (the settings screen). */
   configure(options: RenderOptions) {
     const was = this.options;
-    const rebuild = options.bloom !== was.bloom || options.smaa !== was.smaa || options.extraFx !== was.extraFx
+    const rebuild = options.bloom !== was.bloom || options.smaa !== was.smaa || options.extraFx !== was.extraFx || options.ao !== was.ao
       || options.upscale !== was.upscale || options.renderScale !== was.renderScale || (options.sharpness > 0) !== (was.sharpness > 0);
     this.options = options;
     this.renderer.shadowMap.enabled = options.shadows;
@@ -161,12 +172,14 @@ export class RenderHost {
       hdr = vec4((this.upscaler as unknown as Node<'vec4'>).rgb, 1);
     }
     let lit: Node<'vec4'> = hdr;
+    // (the occlusion goes in where the picture is put together, not in a pass of its own: a full-size pass less)
+    if (o.ao) lit = this.occluded(hdr, scenePass.getTextureNode('depth'));
     if (o.bloom) {
       const glow = bloom(hdr, BLOOM.strength, BLOOM.radius, BLOOM.threshold);
       glow.smoothWidth.value = BLOOM.smooth;
-      lit = hdr.add(glow);
+      lit = lit.add(glow);
     }
-    let out: Node<'vec4'> = renderOutput(lit);
+    let out: Node<'vec4'> = graded(renderOutput(lit));
     // (the temporal upscaler is the anti-aliasing; FSR 1 wants an anti-aliased picture)
     if (o.smaa && !temporal) out = smaa(out) as unknown as Node<'vec4'>;
     if (spatial) out = fsr1(out, this.sharpness) as unknown as Node<'vec4'>;
@@ -174,6 +187,16 @@ export class RenderHost {
     if (o.bloom) out = lens(out, o.extraFx);
     pipeline.outputNode = out;
     this.pipeline = pipeline;
+  }
+
+  /** `colour` darkened by the ambient occlusion worked out from `depth` (as part of whatever samples the returned node) */
+  private occluded(colour: Node<'vec4'>, depth: TextureNode): Node<'vec4'> {
+    const shade = ambientOcclusion(depth, this.camera, AO);
+    return Fn(() => {
+      const c = vec4(colour).toVar();
+      const lit = smoothstep(AO.keepAbove[0], AO.keepAbove[1], luminance(c.rgb));
+      return vec4(c.rgb.mul(shade.sample(screenUV).r.add(lit).min(1)), c.a);
+    })();
   }
 
   /**

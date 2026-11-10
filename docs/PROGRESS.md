@@ -99,6 +99,33 @@ Plan: `docs/FABLE_PLAN.md`. Commits `2074c02` (renderer), `0c79c61` + merge `a4c
 - **Deployed** (`e4ad192`, bundle `index-C7BnGh_G.js`, the same hash as the local build; leaderboard API 200). The
   live site itself was not opened in a browser.
 
+### C1: tone mapping and grade, ambient occlusion (plan C1 and the first part of C3)
+- **Tone mapping**: ACES → AgX, with a grade per time of day on the displayed picture (`render/grade.ts`: an S-curve
+  for contrast, saturation, a tint for shadows and one for highlights; values in the `Environment` presets). Shot
+  side by side first (ACES / AgX / Khronos Neutral, then AgX with the grade): plain AgX is flat, Neutral dark and
+  very saturated; AgX with the grade keeps ACES' contrast and rolls lamps and headlights off without the orange
+  clipping. A modest change by design: the look comes from the lighting items that follow.
+- **Ambient occlusion** on high / ultra (`QualityProfile.ao`, `render/ambientOcclusion.ts`): from the depth buffer,
+  half the output's size, eight taps on a spiral turned in a five-pixel pattern, two five-tap blurs that keep to
+  the surface and cancel that pattern, laid over the picture where it is put together (not a pass of its own),
+  pixels brighter than a threshold left alone (a lamp's pool is not ambient light). Seen at kerbs, under the wing
+  and the cars, between bushes and rocks.
+- **What it cost to get there** (kept as a warning): three's `GTAONode` took 3.2 ms of GPU at 4K (half-size target;
+  the whole scene is 10.9 ms), the same with 6 samples or a third of the radius; 4K fell from 60 to 48 fps, 1440p
+  from 101 to 88. Our own pass is 0.68 ms + 0.19 ms of blur there.
+- **New tool** `tools/perf-pass.cjs`: GPU time per render pass (WebGPU timestamp queries, `?gputime=1`), which is
+  what found the above. At 4K ultra, 朧峠 night: scene 10.8 ms, shadow maps 0.4 ms, bloom 0.5 ms, SMAA 0.7 ms,
+  occlusion 0.87 ms. GPU time of the occlusion: 0.87 ms at 4K, 0.38 ms at 1440p, 0.22 ms at 1080p.
+- Checked: 96 viewpoints (4 courses × 3 times, ultra) and 16 on the WebGL 2 backend without page errors; the
+  occlusion with the upscaler on (pictures; a still scene: 0.40–0.45 % of pixels changing against 0.23 % for the
+  film grain alone at this quality and 0.11 % for the upscaler alone at medium); tsc, vitest 70, build.
+- **Not verified**: the frame rate after the change, paired. The paired runs of the final build were taken while
+  three agents were using every core (load average 19) and are worthless (the game is CPU-bound); only the GPU
+  times per pass above stand. Phones. The grade on a real screen by the owner's eye.
+- **Found on the way, not fixed**: the WebGL 2 backend's picture is darker than WebGPU's and was before this round
+  (same viewpoint, dawn: mean 93.6 against 102.4 on `588ddb3`; car body and trees clearly darker). A B1 leftover
+  to look into: the earlier "same look" check compared WebGL 2 with itself.
+
 ## Session 8 (2026-11-10) — new vehicles: Cybertruck, Yangwang U9 Xtreme, three motorcycles, the L0 maglev
 
 Owner: 「テスラのサイバートラック、バイクを3台、リニアモータ新幹線を実装してください」 (bikes chosen: Honda NSR250R,

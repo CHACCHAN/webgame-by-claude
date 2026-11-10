@@ -84,7 +84,7 @@ function startGame(host: RenderHost) {
 const renderOptions = (s: Pick<Settings, 'quality' | 'resolutionScale' | 'upscale' | 'upscaleMode' | 'sharpness'>): RenderOptions => {
   const p = qualityProfile(s.quality, s.resolutionScale);
   return {
-    pixelRatio: p.pixelRatio, shadows: p.shadows, bloom: p.bloom, smaa: p.smaa, extraFx: p.extraFx,
+    pixelRatio: p.pixelRatio, shadows: p.shadows, bloom: p.bloom, smaa: p.smaa, extraFx: p.extraFx, ao: p.ao,
     upscale: s.upscale ?? false, renderScale: UPSCALE_SCALE[s.upscaleMode] ?? 1, sharpness: s.sharpness ?? 0,
   };
 };

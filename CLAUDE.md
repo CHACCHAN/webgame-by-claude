@@ -27,7 +27,8 @@ pending. `docs/PLAN.md` holds the design.
 - Real-GPU performance (needs a host GPU + Google Chrome; `vite preview` on :4173): `cd frontend && node tools/perf-frame.cjs`
   (frame cost, any backend; compare builds with `URL=before@http://…:4174/,after@http://…:4173/`, settings with
   `VARIANTS='{"native":{},"quality":{"upscale":true}}'`, see the file header).
-  `tools/perf-gpu.cjs` (GPU time per pass) only works on builds with the old WebGLRenderer.
+  GPU time per render pass (WebGPU only; says which pass a difference comes from, and holds while the CPU is busy):
+  `node tools/perf-pass.cjs`. `tools/perf-gpu.cjs` only works on builds with the old WebGLRenderer.
 - The look, on fixed viewpoints (every course × time of day, contact sheets): `node tools/shots.cjs <label>` → `~/.local/opt/quality/<label>`.
   `SET='<settings JSON>'` changes the stored settings, `MOVING=<km/h>` takes each picture on the move.
 
@@ -65,11 +66,14 @@ pending. `docs/PLAN.md` holds the design.
 
 ## Gotchas
 - Rendering (`render/RenderHost.ts`, created by `ui/GameCanvas.tsx`; no react-three-fiber): `WebGPURenderer` + a TSL
-  `RenderPipeline` (scene → bloom → tone mapping → SMAA → lens). `?webgl=1` forces the WebGL 2 backend. Custom
+  `RenderPipeline` (scene → ambient occlusion → bloom → tone mapping (AgX) + the time of day's grade → SMAA → lens). `?webgl=1` forces the WebGL 2 backend. Custom
   shaders are TSL node materials only: no `ShaderMaterial`, no `onBeforeCompile`, no `THREE.Points` with a size
   (WebGPU points are 1 px: particles and lamps are instanced `Sprite`s, `fx/SpritePool.ts`). Plain three.js materials
   (GLB, `MeshStandardMaterial`) still work: the renderer makes their node twins. An `InstancedMesh` with no instances
   must not reach the scene (WebGPU refuses its empty buffer; `Game` drops them from the scenery).
+  A post pass at less than full size is `rtt(node, null, null, { resolutionScale })` (`convertToTexture` is always full
+  size). three's `GTAONode` cost 3.2 ms at 4K whatever its settings: the occlusion is our own (`render/ambientOcclusion.ts`).
+  Measure a new pass with `tools/perf-pass.cjs` before keeping it.
   What costs main-thread time in this renderer (each found with a CPU profile, 34 → 133 fps):
   a shader is built per `InstancedMesh` (never one per chunk: `render/instancing.ts`, `ChunkedLods` = two meshes for
   all trees, instance data as geometry attributes); `alphaTest` on anything that throws a shadow (use `cutout()`, a

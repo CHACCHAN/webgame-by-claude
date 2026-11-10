@@ -8,6 +8,7 @@ import type { GameRenderer } from './RenderHost';
 import { fbm, hash3, vnoise, type Float, type Vec3 } from './tslNoise';
 import type { TerrainData } from '../track/terrain';
 import { rng } from '../util/math';
+import { setGrade, type Grade } from './grade';
 import { makeGlowTexture } from './textures';
 
 export type TimeOfDay = 'night' | 'rain' | 'dawn';
@@ -27,6 +28,8 @@ interface Preset {
   hemiIntensity: number;
   stars: number;
   exposure: number;
+  /** the look over the tone-mapped picture (render/grade.ts) */
+  grade: Grade;
   lampsOn: number;
   cityLights: number;
   sea: string;
@@ -56,6 +59,7 @@ export const PRESETS: Record<TimeOfDay, Preset> = {
     hemiIntensity: 1.15,
     stars: 1,
     exposure: 1.15,
+    grade: { contrast: 1.32, saturation: 1.12, shadows: '#00030a', highlights: '#0a0500' },
     lampsOn: 1,
     cityLights: 1,
     sea: '#04101c',
@@ -81,6 +85,7 @@ export const PRESETS: Record<TimeOfDay, Preset> = {
     hemiIntensity: 0.95,
     stars: 0,
     exposure: 1.2,
+    grade: { contrast: 1.3, saturation: 1.08, shadows: '#00040a', highlights: '#080400' },
     lampsOn: 1,
     cityLights: 0.8,
     sea: '#050b12',
@@ -106,6 +111,7 @@ export const PRESETS: Record<TimeOfDay, Preset> = {
     hemiIntensity: 0.9,
     stars: 0,
     exposure: 0.95,
+    grade: { contrast: 1.25, saturation: 1.1, shadows: '#000308', highlights: '#0a0600' },
     lampsOn: 0.15,
     cityLights: 0.0,
     sea: '#3b5470',
@@ -340,6 +346,7 @@ export function buildEnvironment(terrain: TerrainData): EnvironmentRig {
       fog.density = p.fogDensity;
       scene.fog = fog;
       renderer.toneMappingExposure = p.exposure;
+      setGrade(p.grade);
       seaMat.color.set(p.sea);
       cityLights.uniforms.uIntensity.value = p.cityLights;
       city.visible = p.cityLights > 0;
