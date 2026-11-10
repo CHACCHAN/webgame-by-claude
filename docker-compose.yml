@@ -3,6 +3,8 @@ name: touge-nocturne
 services:
   db:
     image: postgres:16-alpine
+    # the live stack comes back by itself after the VM restarts (the GPU's recovery needs a cold VM restart)
+    restart: unless-stopped
     environment:
       POSTGRES_DB: ${DB_DATABASE:-touge}
       POSTGRES_USER: ${DB_USERNAME:-touge}
@@ -19,6 +21,7 @@ services:
     build:
       context: .
       dockerfile: docker/php/Dockerfile
+    restart: unless-stopped
     environment:
       APP_NAME: "Touge Nocturne"
       APP_ENV: ${APP_ENV:-production}
@@ -55,6 +58,7 @@ services:
     build:
       context: .
       dockerfile: docker/web/Dockerfile
+    restart: unless-stopped
     ports:
       - "${WEB_PORT:-8080}:80"
     networks:

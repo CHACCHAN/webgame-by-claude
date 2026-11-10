@@ -49,6 +49,12 @@ pending. `docs/PLAN.md` holds the design.
   (`PW_MODULE=<that>/node_modules/playwright-core`); Chrome is `/usr/bin/google-chrome` and renders on the RX 5700 XT
   headless (`--use-angle=vulkan --enable-features=Vulkan`, as in `tools/perf-gpu.cjs`).
 - The GPU picks its own clock (800–2100 MHz) and frame costs change ~2× with it: compare builds with paired runs.
+- ubuntu-dev is a Proxmox VM (QEMU Q35) with the RX 5700 XT passed through. Navi 10 cannot be reset from a VM restart:
+  after a `reboot` (or a start within ~30 s of a shutdown) amdgpu fails (`PSP load smu failed`, no `/dev/dri`) and
+  Chrome falls back to llvmpipe. Recovery: shut the VM down, wait ≥ 3 min, start it from Proxmox (boots 11-08 and 10-15
+  failed this way; every start after ≥ 3 min worked). Rebinding amdgpu inside the VM does not help (mode1 reset fails).
+  The lasting fix is vendor-reset on the Proxmox host. Check with `ls /dev/dri` before GPU work. The live stack has
+  `restart: unless-stopped`, so it comes back by itself after the VM starts.
 
 ## Gotchas
 - Own 3D models (no third-party assets): Blender Python scripts built by `BLENDER=<bin> node tools/blender-models.cjs
