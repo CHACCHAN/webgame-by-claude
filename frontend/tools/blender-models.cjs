@@ -1,6 +1,7 @@
 // Our own 3D models, built from numbers by Python scripts in Blender (tools/blender/) and optimised for the game:
 //   node tools/blender-models.cjs trains [ids]   tools/blender/<id>.py        → public/models/trains/<id>.glb
 //   node tools/blender-models.cjs cars [ids]     tools/blender/cars/<id>.py   → public/models/cars/<id>.glb
+//   node tools/blender-models.cjs bikes [ids]    tools/blender/bikes/<id>.py  → public/models/bikes/<id>.glb
 //   node tools/blender-models.cjs props [ids]    tools/blender/props/<id>.py  → public/models/props/<id>.glb
 //   node tools/blender-models.cjs creatures      tools/blender/creatures/roach.py → public/models/roach/roach.glb
 //   … --render [dir]   also renders each model's check views with its script (default dir: /tmp/<id>-render)
@@ -24,10 +25,12 @@ const { execFileSync } = require('child_process');
 const KINDS = {
   trains: {
     dir: 'tools/blender', out: 'public/models/trains', palette: true, joinNamed: true, textureSize: 2048, big: { led: 4096 },
-    ids: ['e231', 'e235', 'keikyu1000', 'tobu30000', 'e5'],
+    ids: ['e231', 'e235', 'keikyu1000', 'tobu30000', 'e5', 'l0'],
     variants: { e231: ['sobu', 'joban', 'tozai', 'kinkou'], e235: ['sobu', 'chuosobu'], tobu30000: ['isesaki'], e5: ['h5'] },
   },
-  cars: { dir: 'tools/blender/cars', out: 'public/models/cars', palette: false, textureSize: 1024, big: {}, ids: ['hayate', 'raijin', 'shiden', 'supra', 'r34', 's15'] },
+  cars: { dir: 'tools/blender/cars', out: 'public/models/cars', palette: false, textureSize: 1024, big: {}, ids: ['hayate', 'raijin', 'shiden', 'supra', 'r34', 's15', 'cybertruck', 'u9'] },
+  // the motorcycles: nodes steer / spin_f / spin_r stay apart (render/BikeModel.ts turns and spins them)
+  bikes: { dir: 'tools/blender/bikes', out: 'public/models/bikes', palette: false, textureSize: 1024, big: {}, ids: ['nsr250r', 'ninjah2', 'hayabusa'] },
   props: {
     dir: 'tools/blender/props', out: 'public/models/props', palette: false, textureSize: 1024, big: {}, outDir: true,
     ids: [
