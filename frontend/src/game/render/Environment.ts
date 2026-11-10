@@ -366,6 +366,9 @@ export function buildEnvironment(terrain: TerrainData): EnvironmentRig {
       // environment for reflections: the sky plus a ring of warm lights
       const envScene = new THREE.Scene();
       const skyClone = new THREE.Mesh(sky.geometry, sky.material);
+      // (a tenth of the dome's size: on the WebGL 2 backend the generator's camera keeps its own far plane, 2 km,
+      // whatever is asked, and the sky was cut out of the reflections there; the dome's colour is by direction only)
+      skyClone.scale.setScalar(0.1);
       envScene.add(skyClone);
       const lampMat = new THREE.MeshBasicMaterial({ color: new THREE.Color('#ffb070').multiplyScalar(4 * rig.preset.lampsOn + 0.2) });
       const r = rng(3);

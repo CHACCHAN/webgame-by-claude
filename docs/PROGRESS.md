@@ -122,9 +122,14 @@ Plan: `docs/FABLE_PLAN.md`. Commits `2074c02` (renderer), `0c79c61` + merge `a4c
 - **Not verified**: the frame rate after the change, paired. The paired runs of the final build were taken while
   three agents were using every core (load average 19) and are worthless (the game is CPU-bound); only the GPU
   times per pass above stand. Phones. The grade on a real screen by the owner's eye.
-- **Found on the way, not fixed**: the WebGL 2 backend's picture is darker than WebGPU's and was before this round
-  (same viewpoint, dawn: mean 93.6 against 102.4 on `588ddb3`; car body and trees clearly darker). A B1 leftover
-  to look into: the earlier "same look" check compared WebGL 2 with itself.
+- **Found on the way and fixed** (`Environment.buildEnvMap`): the WebGL 2 backend's picture was darker than
+  WebGPU's since B1 (same viewpoint, dawn: mean 93.6 against 102.4 on `588ddb3`; car body and trees clearly
+  darker; the earlier "same look" check had compared WebGL 2 with itself). The sky was missing from the reflection
+  environment there: three's PMREM generator keeps its camera's default far plane (2 km) on that backend whatever
+  `fromScene` is given, and the sky dome is 9 km. The copy of the dome in the environment scene is now a tenth
+  of the size (its colour is by direction only). Checked on a still scene (lower half of the picture, mean RGB):
+  WebGPU 74.8 / 59.2 / 55.7 before and after, WebGL 2 57.9 / 42.1 / 32.2 → 74.6 / 59.0 / 55.7; with the
+  environment taken away both give 56 / 41 / 31. WebGL 2 pictures taken before this fix (`c1-gl`) are dark.
 - **Deployed** (`26841c0`, bundle `index-SYHO0olc.js`, the same hash as the local build; leaderboard API 200). The
   live site itself was not opened in a browser.
 
