@@ -93,10 +93,12 @@ def round_poly(pts, r, seg=3):
 
 
 # outlines seen from the front (+x on the right), counter-clockwise
-GRILLE = round_poly([(-0.205, 0.562), (0.205, 0.562), (0.242, 0.592), (0.284, 0.668), (0.268, 0.690), (-0.268, 0.690),
-                     (-0.284, 0.668), (-0.242, 0.592)], 0.016)
+# the grille: a wide rounded hexagon between the lamps' inner ends (measured on the head-on photo, back-projected)
+GRILLE = round_poly([(-0.300, 0.552), (0.300, 0.552), (0.352, 0.575), (0.372, 0.622), (0.350, 0.668), (0.300, 0.676),
+                     (-0.300, 0.676), (-0.350, 0.668), (-0.372, 0.622), (-0.352, 0.575)], 0.02)
 INTAKE = round_poly([(-0.430, 0.274), (0.430, 0.274), (0.392, 0.455), (-0.392, 0.455)], 0.034)
-# side intake (fog lamp pocket), in its own frame on the bumper's corner: x along the face (outwards), y up
+# the corner pocket (a body-colour cover with a vertical black duct; the JDM fog lamps sit in the central intake),
+# in its own frame on the bumper's corner: x along the face (outwards), y up
 FOG = round_poly([(-0.112, -0.066), (0.122, -0.066), (0.138, 0.036), (0.104, 0.070), (-0.112, 0.050)], 0.016)
 FOG_AT = (0.612, 0.355, 2.0)
 FOG_YAW = 28.0

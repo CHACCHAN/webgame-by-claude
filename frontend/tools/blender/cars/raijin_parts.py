@@ -203,10 +203,10 @@ def _edge_ribbon(part, rows, i, i_towards, width, mat, lift=0.0015):
 
 
 def lips(part, rows):
-    """the black lower lip round the front bumper and the diffuser lip under the rear one (left side)"""
+    """the body-colour lip spoiler round the front bumper (left side); the rear bumper rolls under without one"""
     ib, il = sum(SH.SEGS[:SH.IDX['sill_b']]), sum(SH.SEGS[:SH.IDX['low']])
     up = Vector((0, 1, 0))
-    for sub, extra in ((rows[-15:], 0.014), (rows[:15], -0.004)):
+    for sub, extra in ((rows[-15:], -0.002),):
         profs = []
         pts = [Vector(r[ib]) for r in sub]
         for j, r in enumerate(sub):
@@ -227,7 +227,7 @@ def lips(part, rows):
         bm.faces.new(vs[0])
         bm.faces.new(vs[-1][::-1])
         bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
-        part.merge(bm, 'trim', smooth=False)
+        part.merge(bm, 'paint', smooth=True)
 
 
 def shut_lines(part, surf, rows=None):
@@ -281,22 +281,82 @@ def fuel_lid(part, surf):
     strip(part, surf, side, rounded(-1.585, -1.425, 0.812, 0.930, 0.022), 0.005, 'under', closed=True)
 
 
-def grilles(part, surf):
-    """honeycomb in the grille with its thin bar, the central intake's mesh and bar, the side intakes' fog lamps"""
+def grilles(part, surf, clean=None):
+    """the grille's honeycomb with the Subaru oval, the central intake's mesh and bar with the fog lamps at its ends,
+    the corner pockets' covers with their vertical ducts (clean: the uncut shell, to find the pocket's mouth)"""
     import raijin_cuts as CU
-    z = 1.996
-    part.face([(x, y, z) for x, y in CU.GRILLE], 'grille', uvs=[(x * 4, y * 4) for x, y in CU.GRILLE])
-    part.box('paint', -0.272, 0.272, 0.621, 0.633, 1.997, 2.034, bevel=0.004, segments=1)
+    srf = clean or surf
+
+    def front_z(x, y, inset):
+        h = srf.hit((x, y, 3.0), (0, 0, -1))
+        return max(1.996, (h[0].z if h else 2.02) - inset)
+
+    # the mesh 25 mm inside the opening's mouth, following the nose's curve in plan
+    gc = (0.0, 0.614)
+    ctr = (gc[0], gc[1], front_z(*gc, 0.025))
+    ring = [(x, y, front_z(x, y, 0.025)) for x, y in CU.GRILLE]
+    for i in range(len(ring)):
+        a, b = ring[i], ring[(i + 1) % len(ring)]
+        part.face([ctr, a, b], 'grille', uvs=[(ctr[0] * 9, ctr[1] * 9), (a[0] * 9, a[1] * 9), (b[0] * 9, b[1] * 9)])
+    emblem(part, ctr[2] + 0.004)
     z = 2.085
     part.face([(x, y, z) for x, y in CU.INTAKE], 'grille', uvs=[(x * 4, y * 4) for x, y in CU.INTAKE])
     part.box('trim', -0.42, 0.42, 0.352, 0.372, 2.086, 2.125, bevel=0.004, segments=1)
-    # fog lamps in the side intakes (left; mirrored with the rest), a mesh behind them
+    # fog lamps at the intake's outer ends (left; mirrored with the rest)
+    _disc(part, Vector((0.336, 0.408, 2.098)), (0, 0, 1), 0.038, 0.030, 'chrome', 'lamp_clear')
+    # the corner pocket: a body-colour cover 5 mm inside the bumper's surface (following its curve, so the pocket's
+    # black wall reads as a panel gap), a vertical black duct near its inner end
     m = CU.fog_frame(1)
-    c = m @ Vector((0.012, 0.0, 0.040))
     ax = (m.to_3x3() @ Vector((0, 0, 1))).normalized()
-    _disc(part, c, ax, 0.044, 0.030, 'chrome', 'lamp_clear')
-    back = [tuple(m @ Vector((x, y, 0.032))) for x, y in CU.FOG]
-    part.face(back, 'grille', uvs=[(p[0] * 4, p[1] * 4) for p in back])
+
+    def depth(x, y):
+        """frame z of the bumper's (uncut) surface at frame (x, y), less the cover's inset"""
+        p = m @ Vector((x, y, 0.6))
+        h = srf.hit(tuple(p), tuple(-ax))
+        return max(0.034, (h[0] - m @ Vector((x, y, 0.0))).dot(ax) - 0.005) if h else 0.034
+
+    cov = [(x * 0.975, y * 0.96) for x, y in CU.FOG]
+    c0 = (sum(p[0] for p in cov) / len(cov), sum(p[1] for p in cov) / len(cov))
+    rings = []
+    for t in (1.0, 0.8, 0.6, 0.4, 0.2, 0.05):
+        rg = [(c0[0] + (x - c0[0]) * t, c0[1] + (y - c0[1]) * t) for x, y in cov]
+        rings.append([tuple(m @ Vector((x, y, depth(x, y)))) for x, y in rg])
+    part.grid(rings, 'paint', closed_u=True)        # one welded grid: smooth shading over the cover
+    part.face(rings[-1], 'paint')
+    duct = CU.round_poly([(-0.046, -0.058), (-0.022, -0.058), (-0.022, 0.044), (-0.046, 0.044)], 0.008)
+    front = [tuple(m @ Vector((x, y, depth(x, y) + 0.0015))) for x, y in duct]
+    back = [tuple(m @ Vector((x, y, depth(x, y) - 0.03))) for x, y in duct]
+    part.face(front, 'under')
+    n = len(duct)
+    for i in range(n):
+        j = (i + 1) % n
+        part.face([front[j], front[i], back[i], back[j]], 'under')
+
+
+def emblem(part, z):
+    """the Subaru oval on the grille (its back at z): a chrome ring round a dark field with the six stars"""
+    cx, cy, a, b = 0.0, 0.616, 0.062, 0.036
+    seg = 32
+    ring = lambda k, s: [(cx + a * k * math.cos(2 * math.pi * i / seg), cy + b * k * math.sin(2 * math.pi * i / seg), z + s)
+                         for i in range(seg)]
+    outer, inner, back = ring(1.0, 0.012), ring(0.84, 0.014), ring(1.0, 0.0)
+    for i in range(seg):
+        j = (i + 1) % seg
+        part.face([outer[i], outer[j], inner[j], inner[i]], 'chrome')
+        part.face([back[i], back[j], outer[j], outer[i]], 'chrome')
+    part.face(inner, 'trim')
+
+    def star(sx, sy, r, zz):
+        pts = []
+        for k in range(8):
+            rr = r if k % 2 == 0 else r * 0.38
+            t = math.pi / 2 + math.pi * k / 4
+            pts.append((cx + sx + rr * math.cos(t), cy + sy + rr * math.sin(t), zz))
+        part.face(pts, 'chrome')
+    zs = z + 0.0145
+    star(-0.026, 0.004, 0.0105, zs)
+    for sx, sy in ((0.004, 0.012), (0.016, -0.004), (0.030, 0.008), (0.036, -0.012), (0.022, -0.016)):
+        star(sx, sy, 0.0065, zs)
 
 
 def _disc(part, centre, axis, r, depth, rim_mat, lens_mat, seg=20):
@@ -354,6 +414,17 @@ def _deck(surf, x, z):
     return h[0].y if h else 1.0
 
 
+def _lid_edge(surf, x):
+    """z of the trunk lid's rear edge at column x: the last point before the deck drops away"""
+    z, y = -1.90, _deck(surf, x, -1.90)
+    while z > -2.30:
+        y2 = _deck(surf, x, z - 0.002)
+        if y2 < y - 0.004:
+            return z
+        z, y = z - 0.002, y2
+    return z
+
+
 def _extrude_x(part, mat, poly, x0, x1, bevel=0.0):
     """a polygon in the (z, y) plane, counter-clockwise seen from +x, extruded from x0 to x1"""
     bm = bmesh.new()
@@ -383,45 +454,46 @@ def _loft_x(part, mat, sections, closed=True, smooth=True):
 
 def wing(part, surf):
     """the STI's big rear wing: two broad swept uprights standing on the trunk lid's edges, the blade at about roof
-    height between them; a small lip along the lid's rear edge (left half + mirror)"""
+    height between them, flush with the uprights' tops (one inverted U with rounded corners, as on the photos); a raised
+    base along the lid's rear edge with the high-mount stop lamp in its rear face (left half + mirror)"""
     x0, x1 = 0.572, 0.628
     xm = (x0 + x1) / 2
     db = lambda z: _deck(surf, xm, z)
-    # upright: long foot on the lid, the front edge sweeping up and back, the top under the blade, a near-vertical rear
-    poly = [(-1.955, db(-1.95) - 0.012), (-1.500, db(-1.50) - 0.012), (-1.515, db(-1.50) + 0.012),
-            (-1.560, db(-1.56) + 0.040), (-1.620, db(-1.62) + 0.085), (-1.680, 1.215), (-1.730, 1.262),
-            (-1.780, 1.284), (-1.980, 1.296), (-2.020, 1.282), (-2.030, 1.230), (-1.975, db(-1.95) + 0.045)]
-    _extrude_x(part, 'paint', poly, x0, x1, bevel=0.012)
-    # blade: a cambered airfoil, leading edge (front, low) → trailing edge (rear, high), from the middle to the uprights'
-    # outer faces
+    # blade: a cambered airfoil, leading edge (front, low) → trailing edge (rear, high)
     le, te = (-1.735, 1.268), (-2.035, 1.318)
     upper, lower = [], []
     for k in range(13):
         t = (1 - math.cos(math.pi * k / 12)) / 2
         z = le[0] + (te[0] - le[0]) * t
         y = le[1] + (te[1] - le[1]) * t + 0.016 * math.sin(math.pi * t)      # camber
-        th = 0.050 * (1.4845 * math.sqrt(t) - 0.63 * t - 1.758 * t * t + 1.4215 * t ** 3 - 0.5075 * t ** 4) / 0.6 + 0.002
+        th = 0.060 * (1.4845 * math.sqrt(t) - 0.63 * t - 1.758 * t * t + 1.4215 * t ** 3 - 0.5075 * t ** 4) / 0.6 + 0.007 * t
         upper.append((z, y + th * 0.6))
         lower.append((z, y - th * 0.4))
+    # upright: long foot on the lid, the front edge sweeping up and back to the blade's nose, the top along the blade's
+    # upper surface (flush), the rear edge from the trailing edge down and forward to the lid
+    poly = [(-1.955, db(-1.95) - 0.012), (-1.500, db(-1.50) - 0.012), (-1.515, db(-1.50) + 0.012),
+            (-1.560, db(-1.56) + 0.040), (-1.620, db(-1.62) + 0.085), (-1.680, 1.212), (-1.715, 1.250)]
+    poly += [(z, y - 0.001) for z, y in upper[1:]]
+    poly += [(-2.042, 1.300), (-2.036, 1.240), (-1.975, db(-1.95) + 0.045)]
+    _extrude_x(part, 'paint', poly, x0, x1, bevel=0.012)
     sec = list(reversed(lower[1:])) + upper     # trailing edge (lower) → leading edge → trailing edge (upper)
     sec = list(reversed(sec))
-    _loft_x(part, 'paint', [(x, sec) for x in (0.0, 0.25, 0.48, x1 + 0.002)], closed=False)
-    end = [(x1 + 0.002, y, z) for z, y in sec]
-    part.face(end[::-1], 'paint', smooth=False)
-    # lip along the lid's rear edge
+    _loft_x(part, 'paint', [(x, sec) for x in (0.0, 0.25, 0.48, xm)], closed=False)
+    # raised base along the lid's rear edge (found on the shell: where the deck drops away), between the uprights
     secs = []
-    for x in (0.0, 0.15, 0.30, 0.42, 0.50, 0.56):
-        ze = -2.040 + 0.06 * (x / 0.6) ** 4          # the lid's rear edge rounds forward towards the corners
-        zf = ze + 0.16
+    for x in (0.0, 0.15, 0.30, 0.42, 0.50, 0.58):
+        ze = _lid_edge(surf, x) + 0.004
+        zf = ze + 0.17
         d0, d1 = _deck(surf, x, zf), _deck(surf, x, ze)
-        r = [(ze - 0.008, d1 - 0.010), (zf, d0 - 0.006), (zf - 0.01, d0 + 0.002), (ze + 0.004, d1 + 0.020),
-             (ze - 0.008, d1 + 0.016)]
+        r = [(ze - 0.010, d1 - 0.012), (zf, d0 - 0.006), (zf - 0.02, d0 + 0.004), (ze + 0.012, d1 + 0.030),
+             (ze - 0.010, d1 + 0.026)]
         secs.append((x, r))
     _loft_x(part, 'paint', secs, closed=False)
-    part.face([(0.56, y, z) for z, y in secs[-1][1]], 'paint', smooth=False)
-    # high-mount stop lamp in the lip's rear face
-    d = _deck(surf, 0.0, -2.040)
-    part.face([(0.14, d + 0.000, -2.0485), (0.0, d + 0.000, -2.0485), (0.0, d + 0.012, -2.0485), (0.14, d + 0.012, -2.0485)],
+    part.face([(0.58, y, z) for z, y in secs[-1][1]], 'paint', smooth=False)
+    # high-mount stop lamp in the base's rear face
+    e = _lid_edge(surf, 0.0) + 0.004
+    d, zl = _deck(surf, 0.0, e), e - 0.0105
+    part.face([(0.16, d + 0.002, zl), (0.0, d + 0.002, zl), (0.0, d + 0.016, zl), (0.16, d + 0.016, zl)],
               'lamp_clear')
 
 
@@ -435,13 +507,13 @@ def door_mirror(part, surf):
     bm = bmesh.new()
     bmesh.ops.create_uvsphere(bm, u_segments=20, v_segments=12, radius=1.0)
     c = Vector((0.940, 0.990, 0.560))
-    hx, hy, hz = 0.122, 0.064, 0.095
+    hx, hy, hz = 0.122, 0.066, 0.100
     for v in bm.verts:
         x, y, z = v.co.x, v.co.z, -v.co.y      # Blender sphere → game axes
-        # a superellipsoid: boxier than a sphere
-        sx = math.copysign(abs(x) ** 0.7, x)
-        sy = math.copysign(abs(y) ** 0.7, y)
-        sz = math.copysign(abs(z) ** 0.8, z)
+        # a superellipsoid: boxy like the real housing (a rounded box, flat glass face)
+        sx = math.copysign(abs(x) ** 0.5, x)
+        sy = math.copysign(abs(y) ** 0.55, y)
+        sz = math.copysign(abs(z) ** 0.7, z)
         gx, gy, gz = sx * hx, sy * hy, sz * hz
         gz = max(gz, -0.052)                      # flat back for the glass
         gz += 0.018 * (gx / hx + 1) * 0.5 * (gz < 0)   # the outer end sweeps back a little less
@@ -449,8 +521,8 @@ def door_mirror(part, surf):
         v.co = K.B(c.x + gx, c.y + gy, c.z + gz)
     part.merge(bm, 'paint', smooth=True)
     # glass on the flat back
-    gl = [(c.x + 0.100 * math.copysign(abs(math.cos(math.radians(a))) ** 0.7, math.cos(math.radians(a))),
-           c.y + 0.056 * math.copysign(abs(math.sin(math.radians(a))) ** 0.7, math.sin(math.radians(a))))
+    gl = [(c.x + 0.106 * math.copysign(abs(math.cos(math.radians(a))) ** 0.5, math.cos(math.radians(a))),
+           c.y + 0.056 * math.copysign(abs(math.sin(math.radians(a))) ** 0.55, math.sin(math.radians(a))))
           for a in range(0, 360, 20)]
     pts = [(x, y - 0.012 * ((x - c.x) / hx), c.z - 0.0525) for x, y in gl]
     part.face(pts[::-1], 'chrome')
@@ -467,7 +539,7 @@ def hood_scoop(part, surf):
         t = k / nz
         z = z_rear + (z_front - z_rear) * t
         hw = 0.255 + 0.060 * t
-        h = 0.060 * min(1.0, (t / 0.6)) ** 0.9 + 0.004
+        h = 0.074 * min(1.0, (t / 0.65)) ** 0.9 + 0.004
         base_c = _deck(surf, 0.0, z)
         top = max(base_c + h, base_c + 0.004)
         sec = []
@@ -487,7 +559,7 @@ def hood_scoop(part, surf):
     cx = 0.0
     cy = sum(p[1] for p in front) / len(front)
     for x, y, z in front:
-        inner.append((x * 0.86, cy + (y - cy) * 0.55 + 0.004, z))
+        inner.append((x * 0.93, cy + (y - cy) * 0.72 + 0.003, z))
     back = [(x, y, z - 0.07) for x, y, z in inner]
     n = len(front)
     for i in range(n - 1):

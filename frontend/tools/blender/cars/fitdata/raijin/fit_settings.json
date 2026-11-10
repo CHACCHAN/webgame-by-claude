@@ -1,0 +1,75 @@
+{
+ "photos": [
+  "r02",
+  "r10",
+  "r13",
+  "r16",
+  "r17"
+ ],
+ "silfit": {
+  "r02": {
+   "band": 0.04,
+   "livery": "white"
+  },
+  "r10": {
+   "band": 0.04,
+   "livery": "white"
+  },
+  "r13": {
+   "band": 0.04,
+   "livery": "white"
+  },
+  "r16": {
+   "band": 0.04,
+   "livery": "white"
+  },
+  "r17": {
+   "band": 0.04,
+   "livery": "white"
+  }
+ },
+ "masks": "masks/<photo>.png (255 car, 0 not, 128 ignore); r13, r16, r17 corrected by hand with the polygons of masks/fix.json (white = car: r16 bumper bottom and left corner, r17 bumper bottom, r13 tail lamp tip; grey = ignore: r17 tailpipe)",
+ "cams": "fit/cams.json (cameras + body pose per photo, solved together with the lattice)",
+ "anchors": "fit/anchors_rims.json (wheel rim anchors on r02, r10, r13)",
+ "ffdfit": "ffdfit.py -- fit.json - ffd.json cams.json --iters 10 --seg 6,6,16 --ls 2 --l0 0.01 --laml 0.1 --huber 1 --every 3 --sdy 0.02 --spitch 0.005 --length 4.415 --width 1.74 --height 1.425 --wrim 100",
+ "pins": {
+  "length": 4.415,
+  "width": 1.74,
+  "height": 1.425,
+  "result": {
+   "length": 4.4149,
+   "width": 1.7401,
+   "height": 1.425
+  }
+ },
+ "lattice": {
+  "seg": [
+   6,
+   6,
+   16
+  ],
+  "note": "the largest control point moves (up to 0.20 m) are at the empty outer corners above the bonnet (|x| 1.33, y >= 1.45, z >= 1.75); rms 0.05"
+ },
+ "result (loop.py, 2026-11-10)": {
+  "r02": [
+   0.9661,
+   1.5
+  ],
+  "r10": [
+   0.9662,
+   1.82
+  ],
+  "r13": [
+   0.9644,
+   1.11
+  ],
+  "r16": [
+   0.9599,
+   1.88
+  ],
+  "r17": [
+   0.9667,
+   2.62
+  ]
+ }
+}

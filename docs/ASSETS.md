@@ -65,7 +65,7 @@ owner puts the zips into `~/Downloads` (2026-11-02).
 |---|---|---|---|---|---|
 | `shiden` | Mazda RX-7 FD3S (late Type RS) | **own** (Blender, `tools/blender/cars/shiden*.py`) | — | own | **in game** since 2026-11-08 (57 k tris, 0.33 MB); fitted to 10 Commons photos (measuring only, `fitdata/shiden/ref/list.json`) |
 | `s15` | Nissan Silvia S15 spec-R | **own** (Blender, `tools/blender/cars/s15*.py`) | — | own | **in game** since 2026-11-10 (48 k tris, 0.29 MB); fitted to 7 Commons photos (measuring only, `fitdata/s15/ref/list.json`) |
-| `raijin` | Subaru Impreza WRX STi 2004 Custom | Mac CGI (@MACCGI) | https://sketchfab.com/3d-models/08296bc950364621b6174a3078bb19e0 | CC BY 4.0 | **in game** (53 k tris, 0.57 MB) |
+| `raijin` | Subaru Impreza WRX STI (GDB-C, 2004) | **own** (Blender, `tools/blender/cars/raijin*.py`) | — | own | **in game** since 2026-11-10 (49 k tris, 0.44 MB); fitted to 5 of the 20 listed Commons photos (measuring only, `fitdata/raijin/ref/list.json`) |
 | `r34` | Nissan Skyline R34 GT-R | Lexyc16 | https://sketchfab.com/3d-models/ff8fb2251dfa4bb9979e7022c5a6666c | CC BY 4.0 | **in game** (50 k tris, 0.52 MB) |
 | `supra` | Toyota Supra mk4 | Black Snow (@BlackSnow02) | https://sketchfab.com/3d-models/8bebdee25b774067929bb33e648533ac | CC BY 4.0 | **in game** (82 k tris, 1.1 MB), modified — see below |
 | `hayate` | Toyota Sprinter Trueno AE86 GT-APEX (late) | **own** (Blender, `tools/blender/cars/hayate*.py`) | — | own | **in game** since 2026-11-07 (42 k tris, 0.27 MB); fitted to 6 Commons photos (measuring only, `fitdata/hayate/ref/list.json`) |

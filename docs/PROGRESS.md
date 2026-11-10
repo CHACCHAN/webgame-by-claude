@@ -74,6 +74,14 @@ Blender processes) and checked against photos (photos only to measure) before th
     the stored token only on a name change, so a token the server no longer knew (e.g. after the 2026-11-04 reset of
     the players) failed every submission. It now checks the token every time and registers again on 401
     (`src/api/__tests__/client.test.ts`). No 422 or 5xx on run submissions in the log since 2026-11-04.
+- **Impreza (`raijin`): our own model in the game** (owner: 「はい、入れてください」 after the final sheet; deployed 2026-11-10).
+  - Replaces Mac CGI's Sketchfab model. Stock WRX STI GDB-C (2004 "blobeye") with the factory wing and gold 12-spoke wheels.
+  - Built by `tools/blender/cars/raijin*.py` and fitted to 5 photos with a body lattice (`raijin_ffd.py`, `fitdata/raijin/ffd.json`).
+    Silhouette IoU 0.958–0.967; p95 passes on the front 3/4 and the side (1.41 / 1.09 %). The rear and the head-on
+    photo stay at 1.8–2.6 %: their cameras do not agree (wing vs bumper) and one mask is drawn by hand.
+  - 49 k triangles, 16 materials, 0.44 MB (was 0.57 MB). Exhaust anchor moved to the model's own tip.
+  - Not yet: the WRX / STi badges (only the Subaru oval); the lamp interiors are simple drawings.
+  - Checked in Chrome (software GL, API cut off): the garage at night and a night race start.
 - **Autobahn: the oncoming traffic is the game's own cars** (deployed 2026-11-10; owner: 「アウトバーンの反対車線にある自動車たちは
   実装済みの自動車を走らせてください」).
   - `render/trafficModels.ts` builds a light copy of each of the six cars from the same GLB the player drives (or its

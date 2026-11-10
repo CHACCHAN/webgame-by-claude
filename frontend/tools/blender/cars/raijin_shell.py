@@ -101,22 +101,26 @@ def _tables():
                  [(-1.55, 1.040), (-1.30, 1.030), (C_BASE, 1.024), (-0.95, 1.170), (-0.75, 1.302), (-0.5, 1.338),
                   (-0.3, 1.342), (HEADER, 1.332), (0.0, 1.302), (0.4, 1.098), (A_BASE, 0.948), (1.0, 0.900)])
     # roof rail = the windscreen's and the rear window's side edge
-    T['rail'] = ([(-1.72, 0.33), (-1.58, 0.33), (BACKLIGHT_LOW, 0.555), (-1.2, 0.574), (REAR_HEADER, 0.585),
-                  (-0.5, 0.586), (HEADER, 0.590), (0.4, 0.655), (COWL, 0.700), (HOOD_REAR + 0.04, 0.33), (1.7, 0.33)], None)
+    # (the rear window narrows towards its top: measured on the rear 3/4 photo, the C pillars are wide at the roof)
+    T['rail'] = ([(-1.72, 0.33), (-1.58, 0.33), (BACKLIGHT_LOW, 0.562), (-1.26, 0.537), (-1.12, 0.514), (REAR_HEADER, 0.480),
+                  (-0.72, 0.548), (-0.5, 0.580), (HEADER, 0.590), (0.4, 0.655), (COWL, 0.700), (HOOD_REAR + 0.04, 0.33),
+                  (1.7, 0.33)], None)
     T['centre'] = ([(0, 0.0)], None)
     return T
 
 
 FRONT = {'floor_c': (1.95, 0.235, 2.0), 'floor_e': (2.04, 0.180, 2.6), 'sill_b': (2.11, 0.172, 2.8),
          'sill': (2.150, 0.265, 3.0), 'low': (2.158, 0.42, 3.0), 'maxw': (2.125, 0.555, 2.8),
-         'shoulder': (2.070, 0.690, 2.3), 'belt': (2.055, 0.705, 2.2), 'gl_b': (2.050, 0.710, 2.1),
-         'gl_t': (2.045, 0.716, 2.0), 'sash': (2.040, 0.720, 2.0), 'rail': (2.030, 0.728, 2.0),
-         'frit': (2.025, 0.732, 2.0), 'centre': (2.020, 0.738, 2.0)}
-REAR = {'floor_c': (-2.06, 0.33, 2.0), 'floor_e': (-2.16, 0.335, 3.0), 'sill_b': (-2.215, 0.345, 3.4),
-        'sill': (-2.240, 0.40, 3.6), 'low': (-2.257, 0.50, 3.6), 'maxw': (-2.245, 0.630, 3.6),
-        'shoulder': (-2.125, 0.820, 3.4), 'belt': (-2.082, 0.978, 3.6), 'gl_b': (-2.074, 0.995, 3.6),
-        'gl_t': (-2.070, 1.003, 3.6), 'sash': (-2.067, 1.008, 3.6), 'rail': (-2.064, 1.013, 3.6),
-        'frit': (-2.062, 1.017, 3.6), 'centre': (-2.060, 1.021, 2.0)}
+         'shoulder': (2.070, 0.690, 2.3), 'belt': (2.055, 0.720, 2.2), 'gl_b': (2.050, 0.724, 2.1),
+         'gl_t': (2.045, 0.727, 2.0), 'sash': (2.040, 0.730, 2.0), 'rail': (2.030, 0.733, 2.0),
+         'frit': (2.025, 0.735, 2.0), 'centre': (2.020, 0.738, 2.0)}
+REAR = {'floor_c': (-2.06, 0.33, 2.0), 'floor_e': (-2.17, 0.318, 3.0), 'sill_b': (-2.230, 0.328, 3.4),
+        'sill': (-2.250, 0.365, 3.6), 'low': (-2.257, 0.50, 3.6), 'maxw': (-2.245, 0.630, 3.6),
+        'shoulder': (-2.125, 0.820, 3.4), 'belt': (-2.082, 1.004, 3.6), 'gl_b': (-2.074, 1.010, 3.6),
+        'gl_t': (-2.070, 1.013, 3.6), 'sash': (-2.067, 1.016, 3.6), 'rail': (-2.064, 1.018, 3.6),
+        'frit': (-2.062, 1.020, 3.6), 'centre': (-2.060, 1.021, 3.6)}
+# (the hood's and the lid's edges, `belt` at the centre, sit only ~2 cm under the deck's crown: lower, the deck's
+# parabola between them sags into a V at the centre)
 
 
 class Lines:
@@ -225,7 +229,32 @@ def section(L, st):
         yc = sec[-1][1]
         if xb > 1e-4:
             sec = sec[:ib + 1] + [(x, K.lerp(y, yc - (yc - yb) * (x / xb) ** 2, wd)) for x, y in sec[ib + 1:]]
+        # the bonnet's raised centre: two soft creases from beside the scoop to the grille's top corners
+        sec = sec[:ib + 1] + [(x, y + bulge(x, z)) for (x, y), z in zip(sec[ib + 1:], zs[ib + 1:])]
+    if kind == 'front':
+        # the "beak": over the grille the bonnet's leading edge comes down onto the grille's top (above the lamps
+        # it stays high); the bumper's top band under it goes down with it, into the grille opening
+        i_sh, i_b = sum(SEGS[:IDX['shoulder']]), sum(SEGS[:IDX['belt']])
+        out = []
+        for k, ((x, y), z) in enumerate(zip(sec, zs)):
+            w = 0.0 if k < i_sh else (1.0 if k >= i_b else 0.7 + 0.3 * (k - i_sh) / (i_b - i_sh))
+            out.append((x, y - w * beak(x, z)))
+        sec = out
     return [(x, y, z) for (x, y), z in zip(sec, zs)]
+
+
+def beak(x, z):
+    """how far the bonnet's front edge drops over the grille at (x, z)"""
+    return 0.030 * K.smoothstep(1.80, 2.05, z) * (1.0 - K.smoothstep(0.30, 0.44, abs(x)))
+
+
+def bulge(x, z):
+    """the bonnet's power bulge: height over the plain deck at (x, z); 0 off the bonnet"""
+    if z < COWL:
+        return 0.0
+    h = 0.016 * K.smoothstep(HOOD_REAR - 0.02, HOOD_REAR + 0.10, z) * (1.0 - 0.5 * K.smoothstep(1.75, 2.06, z))
+    xc = K.lerp(0.40, 0.31, K.smoothstep(1.0, 1.95, z))
+    return h * (1.0 - K.smoothstep(xc - 0.035, xc + 0.045, abs(x)))
 
 
 def band_of_column():
@@ -241,7 +270,7 @@ def material(band, z, kind):
     if n0 in ('floor_c', 'floor_e'):
         return 'under'
     if kind != 'mid':
-        return 'trim' if n0 == 'sill_b' else 'paint'     # black lower lip (front) / diffuser lip (rear)
+        return 'paint'          # the bumpers are body colour down to their lower edge (the STI's lip spoiler too)
     glass_side = C_BASE - 0.02 < z < A_BASE + 0.02
     if HOOD_REAR - 0.005 > z > COWL - 0.03 and band >= IDX['belt']:
         return 'cowl'

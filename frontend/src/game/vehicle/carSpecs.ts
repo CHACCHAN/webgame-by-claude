@@ -148,9 +148,10 @@ const CARS: Record<RoadCarId, CarSpec> = {
     driftiness: 0.45,
     stats: { power: 9, grip: 9, drift: 5, weight: 5 },
     colors: { body: '#d9dbde', accent: '#1d4fa8' },
-    // the HKS tip on the left (the rear-right guess was the wrong side)
-    exhaust: [0.36, 0.31, -2.26],
-    model: { title: 'Subaru Impreza WRX STi 2004 Custom', author: 'Mac CGI', url: 'https://sketchfab.com/3d-models/subaru-impreza-wrx-sti-2004-custom-08296bc950364621b6174a3078bb19e0', license: 'CC BY 4.0' },
+    // the stock single tip, rear left
+    exhaust: [0.456, 0.296, -2.3],
+    // our own model (tools/blender/cars/raijin*.py, fitted to photos; GDB-C 2004 with the factory wing)
+    model: { title: 'インプレッサ WRX STI (GDB)', author: 'TOUGE NOCTURNE', url: '', license: '自作', own: true },
   },
   shiden: {
     id: 'shiden',

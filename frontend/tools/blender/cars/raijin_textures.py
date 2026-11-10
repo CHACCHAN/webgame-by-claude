@@ -84,22 +84,25 @@ def headlight():
     s = Sheet(D.HEAD_BOX, 512, round(512 * (v1 - v0) / (w1 - w0)), (28, 30, 34))
     outline = D.closed_spline(D.HEAD_OUTLINE, 4)
     # chrome bowl behind the clear lens: bright at the top, darker low down
-    _vgrad(s, outline, (138, 143, 150), (72, 76, 84))
+    _vgrad(s, outline, (196, 200, 206), (118, 123, 131))
     # the reflector's faceting: soft vertical bands
     for k in range(14):
         w = w0 + (w1 - w0) * (k + 0.5) / 14
         x, _ = s.px(w, 0)
-        s.d.line([(x, 0), (x, s.H)], fill=(104, 110, 118), width=SS)
+        s.d.line([(x, 0), (x, s.H)], fill=(150, 156, 164), width=SS)
     s.img = Image.composite(s.img, Image.new('RGB', (s.W, s.H), (28, 30, 34)), _mask(s, outline))
+    # the inner end's dark housing round the projector (the real lamp shows a black bezel there)
+    px, py, pr = D.HEAD_PROJECTOR
+    s.circle(px, py, pr * 1.40, (92, 96, 104))
     s.d = ImageDraw.Draw(s.img)
     # high beam: a deep chrome bowl with a bulb cap
     hx, hy, hr = D.HEAD_HIGH
-    s.circle(hx, hy, hr * 1.04, (96, 100, 108))
-    s.radial(hx, hy, hr, (190, 194, 200), (92, 98, 106))
+    s.circle(hx, hy, hr * 1.04, (140, 144, 152))
+    s.radial(hx, hy, hr, (220, 224, 230), (136, 142, 150))
     for k in range(1, 4):
-        s.circle(hx, hy, hr * (0.28 + 0.22 * k), None, (150, 156, 164), width=SS)
-    s.circle(hx, hy, hr * 0.22, (100, 104, 112))
-    s.circle(hx, hy, hr * 0.12, (60, 62, 68))
+        s.circle(hx, hy, hr * (0.28 + 0.22 * k), None, (172, 178, 186), width=SS)
+    s.circle(hx, hy, hr * 0.22, (186, 190, 198))
+    s.circle(hx, hy, hr * 0.12, (118, 122, 130))
     # low beam projector in the tear: dark shroud, chrome ring, glass lens with a bright crescent
     px, py, pr = D.HEAD_PROJECTOR
     s.circle(px, py, pr * 1.10, (84, 88, 96))
@@ -107,12 +110,20 @@ def headlight():
     s.circle(px, py, pr * 0.74, (52, 58, 68))
     s.radial(px, py, pr * 0.70, (128, 138, 152), (58, 64, 74))
     s.circle(px - pr * 0.22, py + pr * 0.26, pr * 0.16, (236, 242, 250))
+    # the indicator's amber reflector in the outer end, seen through the clear lens: muted, with the chrome's facets
+    amber = D.closed_spline(D.HEAD_AMBER, 3)
+    _vgrad(s, amber, (200, 162, 124), (164, 124, 92))
+    s.d = ImageDraw.Draw(s.img)
+    lines = s.img.copy()
+    ld = ImageDraw.Draw(lines)
+    for k in range(14):
+        x, _ = s.px(w0 + (w1 - w0) * (k + 0.5) / 14, 0)
+        ld.line([(x, 0), (x, s.H)], fill=(150, 112, 82), width=SS)
+    s.img = Image.composite(lines, s.img, _mask(s, amber))
+    s.d = ImageDraw.Draw(s.img)
     # position lamp bulb near the top of the outer part
     qx, qy, qr = D.HEAD_POSITION
     s.radial(qx, qy, qr, (250, 250, 252), (150, 154, 160))
-    # amber indicator strip at the outer end
-    amber = D.closed_spline(D.HEAD_AMBER, 3)
-    s.poly(amber, (196, 120, 48))
     # the lens's gasket and the clear lens's highlight along the top edge
     s.d.line([s.px(*p) for p in outline + outline[:1]], fill=(24, 26, 30), width=4 * SS)
     top = [p for p in D.closed_spline(D.HEAD_OUTLINE, 4) if p[1] > 0.035 and p[0] < 0.29]
@@ -135,18 +146,20 @@ def taillight():
     s.img = Image.composite(ribs, s.img, mask)
     s.d = ImageDraw.Draw(s.img)
     # the two round elements: Fresnel rings
-    for cx, cy, cr in (D.TAIL_ROUND, D.TAIL_ROUND2):
+    for cx, cy, cr in [e for e in (D.TAIL_ROUND, D.TAIL_ROUND2) if e]:
         s.circle(cx, cy, cr * 1.06, (96, 8, 10))
         s.radial(cx, cy, cr, (238, 52, 50), (150, 16, 18))
         for k in range(1, 6):
             s.circle(cx, cy, cr * k / 6, None, (128, 14, 16), width=SS)
     # the clear upper inner part: silver reflector behind a clear lens, a bulb in the middle
     clear = D.closed_spline(D.TAIL_CLEAR, 3)
-    s.img = Image.composite(Image.new('RGB', (s.W, s.H), (150, 152, 158)), s.img, _mask(s, clear))
+    _vgrad(s, clear, (206, 208, 214), (140, 142, 150))
     s.d = ImageDraw.Draw(s.img)
-    cx = sum(p[0] for p in D.TAIL_CLEAR) / len(D.TAIL_CLEAR)
-    cy = sum(p[1] for p in D.TAIL_CLEAR) / len(D.TAIL_CLEAR)
-    s.radial(cx, cy, 0.030, (214, 216, 222), (138, 140, 146))
+    for bx, by, br in D.TAIL_BULBS:        # chrome bowls with a bulb in each
+        s.circle(bx, by, br * 1.12, (120, 122, 130))
+        s.radial(bx, by, br, (236, 238, 242), (128, 130, 138))
+        s.circle(bx, by, br * 0.55, None, (150, 152, 160), width=SS)
+        s.circle(bx, by, br * 0.22, (250, 250, 252))
     s.d.line([s.px(*p) for p in clear + clear[:1]], fill=(70, 20, 20), width=2 * SS)
     s.d.line([s.px(*p) for p in outline + outline[:1]], fill=(36, 8, 8), width=4 * SS)
     s.save(os.path.join(OUT, 'taillight.png'), (512, s.H // SS))

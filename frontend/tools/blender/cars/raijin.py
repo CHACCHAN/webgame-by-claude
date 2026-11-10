@@ -1,10 +1,10 @@
 """
 Subaru Impreza WRX STI sedan (GDB, 2004: the "tear-drop" face, stock, with the factory high rear wing) for TOUGE
 NOCTURNE, game id `raijin`, built from published figures and our own measurements of photos (no outside model, no
-photo pixels, no badges). Run with Blender 5.x:
+photo pixels; the Subaru oval on the grille is our own simple drawing). Run with Blender 5.x:
 
   blender -t 4 --background --factory-startup --python tools/blender/cars/raijin.py -- --out <file.glb>
-      [--render <dir> --views a,b --samples N --size WxH] [--night]
+      [--render <dir> --views a,b --samples N --size WxH] [--night] [--noffd] [--paint #rrggbb]
 
 GLB contract (render/CarModel.ts): metres, +Y up, +Z forward, ground at y = 0, origin midway between the axles;
 node `body` (all body meshes), wheel pivots wheel_fl/fr/rl/rr at the wheel centres with spin_* children (tyre, rim,
@@ -23,6 +23,7 @@ import raijin_shell as SH  # noqa: E402
 import raijin_cuts as CU  # noqa: E402
 import raijin_parts as PT  # noqa: E402
 import raijin_wheels as WH  # noqa: E402
+import raijin_ffd as FFD  # noqa: E402
 import bpy  # noqa: E402
 
 argv = sys.argv[sys.argv.index('--') + 1:] if '--' in sys.argv else []
@@ -43,9 +44,9 @@ NIGHT = '--night' in argv
 TEX = os.path.join(os.path.dirname(HERE), 'textures', 'raijin')
 
 
-def materials():
+def materials(paint='#1f47a8'):
     m = K.Materials()
-    m.add('paint', '#1f47a8', metallic=0.55, roughness=0.34, coat=0.35)
+    m.add('paint', paint, metallic=0.55, roughness=0.34, coat=0.35)
     m.add('glass', '#0d1218', metallic=0.1, roughness=0.05)
     m.add('trim', '#111214', roughness=0.6)
     m.add('under', '#0b0b0c', roughness=0.9)
@@ -53,7 +54,7 @@ def materials():
     m.add('indicator', '#d98c3c', roughness=0.12, metallic=0.2)
     m.add('lamp_clear', '#c9ccd2', roughness=0.12, metallic=0.6)
     m.add('interior', '#232325', roughness=0.85)
-    m.add('rim', '#b8964a', metallic=0.9, roughness=0.3)
+    m.add('rim', '#a3844c', metallic=0.75, roughness=0.38)
     m.add('brake', '#c8a032', metallic=0.3, roughness=0.4)
     m.add('disc', '#6a6c70', metallic=0.85, roughness=0.45)
     load = lambda n: bpy.data.images.load(os.path.join(TEX, n))
@@ -91,12 +92,14 @@ def lamp_report(root):
     return res
 
 
-def main():
-    K.clear_scene()
-    m = materials()
+def build(o=None):
+    """the whole car into the (cleared) scene; o: {'paint': '#rrggbb', 'ffd': True (fitdata/raijin/ffd.json) | False |
+    a raijin_ffd.Lattice}. Returns (root, materials, lamp report)"""
+    o = o or {}
+    m = materials(o.get('paint', '#1f47a8'))
     root = K.empty('raijin')
     body = K.empty('body', parent=root)
-    shell = K.Part('shell')
+    shell = K.Part('body_shell')
     _, shell_rows = SH.build(shell)
     print('TRIS shell', shell.tris())
     shell_obj = shell.build(body, m.mats, sharp=50.0)
@@ -111,7 +114,7 @@ def main():
     PT.shut_lines(det, surf, shell_rows)
     PT.lips(det, shell_rows)
     PT.side_details(det, surf)
-    PT.grilles(det, surf)
+    PT.grilles(det, surf, clean)
     PT.door_mirror(det, surf)
     PT.nozzles(det, surf)
     PT.arch_lips(det, surf)
@@ -132,7 +135,7 @@ def main():
     PT.interior(cab)
     ex = K.Part('exhaust')
     PT.exhaust(ex)
-    tris = {'shell': sum(len(p.vertices) - 2 for p in shell_obj.data.polygons), 'details': det.tris(), 'exhaust': ex.tris(),
+    tris = {'body_shell': sum(len(p.vertices) - 2 for p in shell_obj.data.polygons), 'details': det.tris(), 'exhaust': ex.tris(),
             'aero': aero.tris(), 'interior': cab.tris()}
     cab.build(body, m.mats, sharp=40.0)
     aero.build(body, m.mats, sharp=40.0)
@@ -146,28 +149,33 @@ def main():
         print('TRIS', k, v)
     print('TRIS total', sum(tris.values()))
     used = set()
-    for o in root.children_recursive:
-        if o.type == 'MESH':
-            used.update(ms.name for ms in o.data.materials)
+    for ob in root.children_recursive:
+        if ob.type == 'MESH':
+            used.update(ms.name for ms in ob.data.materials)
     print('MATERIALS', len(used), sorted(used))
+    if o.get('ffd', True) is not False:
+        # the fitted displacement field (fitdata/raijin/ffd.json, from the photo silhouettes) on every body mesh
+        L = FFD.apply_to_body(body, None if o.get('ffd', True) is True else o['ffd'])
+        print('FFD', 'none' if L is None else 'applied')
+    bpy.context.view_layer.update()
     lamps = lamp_report(root)
+    return root, m.mats, lamps
+
+
+def main():
+    K.clear_scene()
+    root, mats, lamps = build({'ffd': '--noffd' not in argv, 'paint': opt('--paint', '#1f47a8')})
     if OUT:
         K.export_glb(OUT, root)
     if RENDER:
         import raijin_scene as S
         S.scene(night=NIGHT)
         if NIGHT:
-            S.night_lights(m.mats, lamps)
+            S.night_lights(mats, lamps)
         os.makedirs(RENDER, exist_ok=True)
         for v in VIEWS.split(','):
-            if v.startswith('photo13'):
-                # Commons "Streetcarl Subaru impreza sti (6661190347)": 1280×960, 264 px/m at the wheel faces
-                D = 9.0
-                view = S.photo_view(D, 1.37, -0.15, 264 * (D - 0.80), 1280)
-                body.location = K.B(0, -float(opt('--drop', '0.06')), 0)
-                S.render(view, os.path.join(RENDER, f'{v}.png'), size=(1280, 960), samples=SAMPLES, mask=True)
-                continue
             S.render(v, os.path.join(RENDER, f'{v}.png'), size=SIZE, samples=SAMPLES)
 
 
-main()
+if __name__ == '__main__':
+    main()

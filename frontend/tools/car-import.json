@@ -1,15 +1,4 @@
 {
-  "raijin": {
-    "dir": "impreza",
-    "simplify": 0.65,
-    "config": {
-      "wheels": "^(Tire|Rim)",
-      "paint": "Car_Paint",
-      "glass": "Window|Clear$|Clear_Side",
-      "headlights": "HL[ _]Glass",
-      "taillights": "TL[ _]Glass"
-    }
-  },
   "supra": {
     "dir": "supra",
     "simplify": 0.3,

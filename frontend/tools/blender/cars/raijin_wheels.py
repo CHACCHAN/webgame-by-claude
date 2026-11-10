@@ -1,5 +1,5 @@
 """
-The GDB STI's wheels: 225/45R17 tyres on the stock 17 × 7.5J twin-five-spoke (ten spokes in pairs) wheels, brake
+The GDB STI's wheels: 225/45R17 tyres on the stock 17 × 7.5J gold forged wheels (twelve slim spokes in six pairs), brake
 discs and the Brembo calipers (four-pot front, two-pot rear). Built for the left side (+x outwards) and mirrored for
 the right. Pivots at the wheel centres; tyre, rim and disc under spin_*, the caliper beside spin (it steers, it does
 not roll).
@@ -50,16 +50,17 @@ def tyre(part):
 
 
 def rim(part):
-    """barrel, lip, the ten spokes in five pairs, hub, nuts, cap"""
+    """barrel, lip, the twelve spokes in six pairs, hub, nuts, cap"""
     # outer lip and the barrel's inside (seen through the spokes)
     lip = [(R_RIM - 0.004, 0.096), (R_RIM + 0.008, 0.098), (R_RIM + 0.010, 0.104), (R_RIM - 0.002, 0.107), (0.200, 0.100),
            (0.196, 0.088)]
     _lathe(part, 'rim', lip, flip=False)
     barrel = [(0.196, 0.088), (0.199, 0.020), (0.200, -0.060), (0.205, -0.095)]
     _lathe(part, 'rim', barrel, flip=False)
-    # spokes: pairs every 72°, each spoke a tapered bar from the hub to the lip, dished outwards at the rim
-    for k in range(5):
-        a0 = 2 * math.pi * k / 5
+    # spokes: six pairs, each spoke a slim bar from the hub to the lip, the pairs meeting at the hub (twelve nearly
+    # evenly spaced spokes at the rim), dished outwards at the rim
+    for k in range(6):
+        a0 = 2 * math.pi * k / 6
         for s in (-1, 1):
             _spoke(part, a0, s)
     # hub face and centre
@@ -78,10 +79,10 @@ def _spoke(part, a0, s):
         a = a0 + s * off / r
         return Vector((0.0, math.cos(a), math.sin(a))), Vector((0.0, -math.sin(a), math.cos(a)))
     rows = []
-    stations = [(0.060, 0.007, 0.060), (0.100, 0.011, 0.070), (0.145, 0.016, 0.080), (0.185, 0.021, 0.088), (0.199, 0.023, 0.091)]
+    stations = [(0.060, 0.008, 0.060), (0.100, 0.020, 0.070), (0.145, 0.034, 0.080), (0.185, 0.047, 0.088), (0.199, 0.051, 0.091)]
     for r, off, xf in stations:
         radial, tang = frame(r, off)
-        hw = 0.0068 + 0.0030 * (r - 0.07) / 0.13
+        hw = 0.0058 + 0.0026 * (r - 0.07) / 0.13
         depth = 0.024
         c = radial * r
         # cross-section: back-left, front-left (rounded), front-right, back-right
