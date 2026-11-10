@@ -1,0 +1,22 @@
+{
+ "photo": "r48.jpg",
+ "livery": "white",
+ "vref": 134.0,
+ "width_px": 1193.0,
+ "classes": {
+  "dark": {
+   "iou": 0.1,
+   "mean_pct": 6.72,
+   "p90_pct": 18.42,
+   "model_to_photo_mean_pct": 8.32,
+   "photo_to_model_mean_pct": 0.89
+  },
+  "lamp": {
+   "iou": 0.755,
+   "mean_pct": 0.43,
+   "p90_pct": 0.99,
+   "model_to_photo_mean_pct": 0.55,
+   "photo_to_model_mean_pct": 0.31
+  }
+ }
+}

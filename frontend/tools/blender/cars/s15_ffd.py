@@ -1,0 +1,122 @@
+"""
+A smooth free-form deformation (FFD) of the Silvia S15's body, fitted to the reference photos' silhouettes
+(tools/carfit + fitdata/s15/ffd.json). The body is built from measured profile, plan and section curves first (s15_body); this
+field then moves every body vertex by a cubic B-spline displacement in the game frame, mirror-symmetric about x = 0,
+so the details laid on the body (lamps, trim, glass, mirrors, interior) move with it and the surfaces stay smooth.
+
+ffd.json: {"lo": [x, y, z], "hi": [x, y, z], "seg": [sx, sy, sz], "c": [[[dx, dy, dz] per control point]]}
+(control points (sx + 3) x (sy + 3) x (sz + 3), index order x, y, z; only the half x >= 0 is free, the rest mirrors).
+"""
+import json
+import os
+
+import numpy as np
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+DEFAULT = os.path.join(HERE, 'fitdata', 's15', 'ffd.json')
+
+
+def _basis(t):
+    """uniform cubic B-spline weights for local parameter t in [0, 1) (rows: points, cols: 4)"""
+    t = np.asarray(t, float)
+    t2, t3 = t * t, t * t * t
+    return np.stack([(1 - t) ** 3, 3 * t3 - 6 * t2 + 4, -3 * t3 + 3 * t2 + 3 * t + 1, t3], -1) / 6.0
+
+
+class Lattice:
+    def __init__(self, lo=(-1.0, -0.1, -2.45), hi=(1.0, 1.45, 2.35), seg=(4, 4, 12)):
+        self.lo = np.array(lo, float)
+        self.hi = np.array(hi, float)
+        self.seg = np.array(seg, int)
+        self.n = self.seg + 3
+        self.h = (self.hi - self.lo) / self.seg
+        self.c = np.zeros((*self.n, 3))
+
+    @classmethod
+    def load(cls, path=DEFAULT):
+        if not os.path.exists(path):
+            return None
+        d = json.load(open(path))
+        L = cls(d['lo'], d['hi'], d['seg'])
+        L.c = np.array(d['c'], float).reshape(*L.n, 3)
+        return L
+
+    def save(self, path):
+        json.dump({'lo': self.lo.tolist(), 'hi': self.hi.tolist(), 'seg': self.seg.tolist(),
+                   'c': np.round(self.c, 5).tolist()}, open(path, 'w'))
+
+    def weights(self, P):
+        """for points P (N, 3): control indices (N, 64) into the flat lattice and their weights (N, 64)"""
+        P = np.asarray(P, float)
+        u = (np.clip(P, self.lo, self.hi - 1e-9) - self.lo) / self.h
+        i0 = np.floor(u).astype(int)
+        t = u - i0
+        bx, by, bz = _basis(t[:, 0]), _basis(t[:, 1]), _basis(t[:, 2])
+        ii = i0[:, 0, None] + np.arange(4)[None]
+        jj = i0[:, 1, None] + np.arange(4)[None]
+        kk = i0[:, 2, None] + np.arange(4)[None]
+        idx = (ii[:, :, None, None] * self.n[1] + jj[:, None, :, None]) * self.n[2] + kk[:, None, None, :]
+        w = bx[:, :, None, None] * by[:, None, :, None] * bz[:, None, None, :]
+        return idx.reshape(len(P), 64), w.reshape(len(P), 64)
+
+    def displace(self, P):
+        idx, w = self.weights(P)
+        C = self.c.reshape(-1, 3)
+        return (C[idx] * w[:, :, None]).sum(1)
+
+    def symmetrize(self):
+        """mirror the x >= 0 half onto x < 0 (x component negated); the centre column has dx = 0"""
+        nx = self.n[0]
+        for i in range(nx // 2):
+            j = nx - 1 - i
+            self.c[i] = self.c[j] * np.array([-1, 1, 1])
+        if nx % 2:
+            self.c[nx // 2, :, :, 0] = 0.0
+
+
+def apply_to_body(body, lattice=None):
+    """the fitted field (fitdata/s15/ffd.json unless a Lattice is given) on every mesh under body; None when there is none"""
+    L = lattice if lattice is not None else Lattice.load()
+    if L is None:
+        return None
+    deform_body(body, L.displace)
+    return L
+
+
+def _world_game(o):
+    me = o.data
+    co = np.empty(len(me.vertices) * 3)
+    me.vertices.foreach_get('co', co)
+    M = np.array(o.matrix_world)
+    return blender_to_game(co.reshape(-1, 3) @ M[:3, :3].T + M[:3, 3])
+
+
+def _set_world_game(o, G):
+    Mi = np.linalg.inv(np.array(o.matrix_world))
+    W = game_to_blender(G)
+    o.data.vertices.foreach_set('co', (W @ Mi[:3, :3].T + Mi[:3, 3]).ravel())
+    o.data.update()
+
+
+def deform_body(body, disp):
+    """move every mesh vertex under `body` by disp(G) (game frame, (N, 3) -> (N, 3))"""
+    import bpy
+    bpy.context.view_layer.update()
+    for o in body.children_recursive:
+        if o.type == 'MESH' and len(o.data.vertices):
+            G = _world_game(o)
+            if 'ffd_rigid' in o:
+                # a part kept rigid (door mirrors): each side moves by the field's displacement at its anchor
+                A = np.array([list(o['ffd_rigid'])], float)
+                dl, dr = disp(A)[0], disp(A * np.array([-1, 1, 1]))[0]
+                _set_world_game(o, G + np.where(G[:, :1] >= 0, dl[None], dr[None]))
+            else:
+                _set_world_game(o, G + disp(G))
+
+
+def blender_to_game(W):
+    return np.stack([W[:, 0], W[:, 2], -W[:, 1]], 1)
+
+
+def game_to_blender(G):
+    return np.stack([G[:, 0], -G[:, 2], G[:, 1]], 1)

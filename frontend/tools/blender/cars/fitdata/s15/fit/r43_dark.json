@@ -1,0 +1,15 @@
+{
+ "photo": "r43.jpg",
+ "livery": "white",
+ "vref": 215.0,
+ "width_px": 1167.0,
+ "classes": {
+  "dark": {
+   "iou": 0.237,
+   "mean_pct": 3.78,
+   "p90_pct": 10.29,
+   "model_to_photo_mean_pct": 5.02,
+   "photo_to_model_mean_pct": 1.03
+  }
+ }
+}

@@ -298,8 +298,8 @@ const CARS: Record<RoadCarId, CarSpec> = {
     driftiness: 0.9,
     stats: { power: 7, grip: 7, drift: 10, weight: 7 },
     colors: { body: '#f5cf30', accent: '#111111' },
-    tailLampGain: 2.5,
-    model: { title: 'Nissan Silvia (S15)', author: 'Mona x Supercars', url: 'https://sketchfab.com/3d-models/nissan-silvia-s15-20a8388a009e4a7aae61a9bb50ad8945', license: 'CC BY 4.0' },
+    // our own model (tools/blender/cars/s15*.py, fitted to photos; stock spec-R without the wing, `s15.py --wing` adds it)
+    model: { title: 'シルビア S15 spec-R', author: 'TOUGE NOCTURNE', url: '', license: '自作', own: true },
   },
 };
 

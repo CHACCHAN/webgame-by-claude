@@ -1,0 +1,22 @@
+{
+ "photo": "r10.jpg",
+ "livery": "white",
+ "vref": 130.0,
+ "width_px": 1155.0,
+ "classes": {
+  "dark": {
+   "iou": 0.149,
+   "mean_pct": 2.01,
+   "p90_pct": 5.19,
+   "model_to_photo_mean_pct": 2.33,
+   "photo_to_model_mean_pct": 1.72
+  },
+  "lamp": {
+   "iou": 0.0,
+   "mean_pct": 17.11,
+   "p90_pct": 19.51,
+   "model_to_photo_mean_pct": 15.34,
+   "photo_to_model_mean_pct": 17.54
+  }
+ }
+}

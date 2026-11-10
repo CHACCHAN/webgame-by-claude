@@ -78,63 +78,96 @@ def windshield():
 
 
 def backlight():
-    """top view (x, z) of the rear window, x >= 0"""
-    pts = []
-    # (narrower than the roof: the C-pillars are wide body-coloured sails)
-    for x in np.linspace(0.0, 0.44, 8):
-        pts.append((x, -0.88 + 0.03 * (1 - (x / 0.50) ** 2)))
-    for i in range(0, 21):
-        z = lerp(-0.90, -1.44, i / 20)
-        pts.append((lerp(0.49, 0.575, (i / 20) ** 0.9), z))
-    for x in np.linspace(0.545, 0.0, 9):
-        pts.append((x, -1.47 - 0.02 * (1 - (x / 0.66) ** 2)))
+    """top view (x, z) of the rear window, x >= 0: its top and bottom edges run at constant heights (~1.225 and ~0.966)
+    across the crowned roof and deck, straight in the rear view, so in plan they bow rearwards at the centre
+    (ray hits on r30: bottom centre z -1.675, corners (0.62, -1.44) and (0.51, -0.86))"""
+    top = [(0.0, -1.000), (0.15, -0.988), (0.30, -0.950), (0.42, -0.902), (0.50, -0.861)]
+    side = [(0.578, -0.925), (0.600, -1.10), (0.612, -1.30), (0.622, -1.44)]
+    bottom = [(x, -1.675 + 0.57 * x * x) for x in (0.58, 0.45, 0.30, 0.15, 0.0)]
+    pts = K.round_poly(top + side + bottom, [0, 0, 0, 0, 0.05, 0.03, 0, 0, 0.04, 0.02, 0, 0, 0, 0], 3)
     return mirror_x(pts)
 
 
 def headlamp():
-    """front view (x, y) of the headlamp opening, x >= 0: a slanted wedge from the inner tip to the wrapped outer end"""
-    # a swept teardrop: narrow at the inner tip, ~0.15 m tall at the outer end where it wraps into the fender
-    upper = [(0.300, 0.672), (0.34, 0.698), (0.42, 0.712), (0.52, 0.726), (0.62, 0.741), (0.70, 0.755), (0.76, 0.765),
-             (0.800, 0.772)]
-    end = [(0.822, 0.762), (0.832, 0.715), (0.830, 0.655)]
-    lower = [(0.800, 0.622), (0.74, 0.612), (0.66, 0.616), (0.56, 0.628), (0.46, 0.642), (0.37, 0.656)]
-    return K.round_poly(upper + end + lower, [0.006] + [0.0] * 6 + [0.02, 0.02, 0.02, 0.03] + [0.03, 0.0, 0.0, 0.0, 0.0, 0.012], 3)
+    """front view (x, y) of the headlamp opening, x >= 0 (triangulated on r10 / r43: inner tip, outer end, the top edge's
+    highest point, the projector): a long slanted lens under the bonnet's edge, pointed at its low inner tip, ~9 cm tall"""
+    upper = [(0.312, 0.602), (0.37, 0.627), (0.44, 0.644), (0.52, 0.657), (0.60, 0.669), (0.67, 0.682), (0.72, 0.690),
+             (0.752, 0.689)]
+    end = [(0.773, 0.676), (0.780, 0.652), (0.770, 0.621), (0.750, 0.601)]
+    lower = [(0.70, 0.588), (0.62, 0.578), (0.52, 0.570), (0.42, 0.566), (0.35, 0.567), (0.285, 0.579)]
+    return K.round_poly(upper + end + lower, [0.006] + [0.0] * 6 + [0.015, 0.015, 0.015, 0.02, 0.02] + [0.0] * 5 + [0.004], 3)
+
+
+HEAD_UNITS = ((0.559, 0.612), (0.428, 0.608))     # the projector low beam, the high-beam reflector (front view)
 
 
 def fog_pod():
-    """front view: the recess round the fog lamp (outer lower bumper)"""
-    return K.round_poly([(0.470, 0.235), (0.720, 0.245), (0.735, 0.355), (0.500, 0.370)], 0.05, 4)
+    """front view: the oval recess round the fog lamp, the lamp at its inboard end (triangulated on r10 / r43)"""
+    return K.round_poly([(0.455, 0.352), (0.475, 0.405), (0.55, 0.420), (0.650, 0.410), (0.690, 0.362), (0.665, 0.305),
+                         (0.600, 0.292), (0.490, 0.290)], [0.035, 0.03, 0.03, 0.035, 0.03, 0.03, 0.03, 0.035], 4)
+
+
+FOG_LAMP = (0.528, 0.357)               # the round fog lamp's centre (front view, x >= 0), radius ~0.04
+PLATE_F = 0.415                          # the front plate's centre height (it hangs over the mouth's upper half)
 
 
 def intake():
-    """front view: the wide centre opening under the plate (x >= 0 half, mirrored)"""
-    half = [(0.0, 0.225), (0.33, 0.228), (0.395, 0.26), (0.410, 0.33), (0.395, 0.405), (0.36, 0.43), (0.0, 0.43)]
-    half = K.round_poly(half, [0, 0.04, 0.03, 0.0, 0.03, 0.03, 0], 3)
-    return mirror_x(half[1:-1]) if False else mirror_x(half)
+    """front view: the wide shallow mouth under the bonnet's point (x >= 0 half, mirrored): a flat top hidden behind the
+    plate, rounded D-shaped ends, the bottom on the chin's crease (triangulated on r10 / r43)"""
+    half = [(0.0, 0.272), (0.24, 0.272), (0.292, 0.282), (0.326, 0.315), (0.338, 0.362), (0.330, 0.410), (0.305, 0.438),
+            (0.26, 0.449), (0.0, 0.453)]
+    half = K.round_poly(half, [0, 0.03, 0.02, 0.0, 0.02, 0.02, 0.02, 0.02, 0], 3)
+    return mirror_x(half)
 
 
 def plate_front():
-    return K.round_poly([(-0.18, 0.39), (0.18, 0.39), (0.18, 0.56), (-0.18, 0.56)], 0.015, 2)
+    return K.round_poly([(-0.18, 0.33), (0.18, 0.33), (0.18, 0.50), (-0.18, 0.50)], 0.015, 2)
 
 
 def tail_lamp():
-    """rear view (x, y), x >= 0: the S15's wedge; returns (whole lens outline, amber band, reverse section)"""
-    outer = [(0.300, 0.800), (0.335, 0.828), (0.430, 0.892), (0.470, 0.905), (0.760, 0.905), (0.800, 0.898), (0.818, 0.870),
-             (0.818, 0.800), (0.800, 0.783), (0.760, 0.778), (0.360, 0.778), (0.318, 0.784)]
-    outer = K.round_poly(outer, [0.01, 0, 0.02, 0.0, 0.0, 0.02, 0.0, 0.0, 0.02, 0.0, 0.0, 0.01], 3)
-    amber = [(0.395, 0.862), (0.830, 0.862), (0.830, 0.93), (0.395, 0.93)]
-    rev = [(0.25, 0.70), (0.405, 0.70), (0.405, 0.95), (0.25, 0.95)]
-    return outer, amber, rev
+    """rear view (x, y), x >= 0, measured on the rear-on photo r48 (rays onto the fitted body, field undone): the S15's
+    swept wedge, a black bezel round it; returns (outline, amber band above the divider, divider, reverse lamp)"""
+    sweep = [(0.334, 0.731), (0.353, 0.751), (0.377, 0.777), (0.410, 0.810), (0.446, 0.843), (0.487, 0.870), (0.527, 0.885)]
+    top = [(0.580, 0.892), (0.657, 0.893), (0.736, 0.887), (0.790, 0.876)]
+    end = [(0.812, 0.852), (0.823, 0.808), (0.817, 0.769), (0.792, 0.733)]
+    bottom = [(0.746, 0.728), (0.642, 0.727), (0.499, 0.728), (0.387, 0.727)]
+    outer = K.round_poly(sweep + top + end + bottom, [0.006, 0, 0, 0, 0, 0.015, 0.02, 0, 0, 0, 0.02, 0.02, 0, 0, 0.02,
+                                                      0, 0, 0, 0.012], 3)
+    amber = [(0.40, 0.95), (0.40, 0.87), (0.47, 0.852), (0.52, 0.836), (0.65, 0.830), (0.87, 0.827), (0.87, 0.95)]
+    divider = [(0.40, 0.817), (0.65, 0.812), (0.87, 0.806), (0.87, 0.827), (0.65, 0.830), (0.52, 0.836), (0.47, 0.852),
+               (0.40, 0.87)]
+    rev = K.round_poly([(0.370, 0.757), (0.392, 0.786), (0.432, 0.798), (0.474, 0.791), (0.486, 0.770), (0.470, 0.748),
+                        (0.430, 0.741), (0.385, 0.744)], 0.012, 2)
+    return outer, amber, divider, rev, sweep
 
 
 def plate_rear():
-    return K.round_poly([(-0.185, 0.395), (0.185, 0.395), (0.185, 0.585), (-0.185, 0.585)], 0.02, 3)
+    """the recess the rear plate sits in (rear view, r48)"""
+    return K.round_poly([(-0.200, 0.378), (0.200, 0.378), (0.203, 0.585), (-0.203, 0.585)], 0.025, 3)
 
 
 # ---------------------------------------------------------------- sockets (lamp housings, openings)
 
-def socket(bm, faces, direction, depth, shrink=0.0, wall=TRIM, back=TRIM, steps=1):
-    """delete the faces and sink their rim into the body along `direction` (game frame); close the back"""
+def crease(bm, line, proj, side, width, depth, edge, keep=None):
+    """a character line: cut a strip along the line and push one of its edges into the body, so the strip becomes a
+    facet facing down ('low': its lower edge goes in, a shadowed crease under an overhang) or up ('high': a lit step)"""
+    strip = K.groove(bm, line, proj, width, side, keep=keep)
+    vs = {v for f in strip for v in f.verts}
+    if not vs:
+        return strip
+    ys = [K.G(v.co)[1] for v in vs]
+    mid = 0.5 * (min(ys) + max(ys))
+    bm.normal_update()
+    for v in vs:
+        y = K.G(v.co)[1]
+        if (edge == 'low' and y < mid) or (edge == 'high' and y > mid):
+            v.co -= v.normal * depth
+    return strip
+
+
+def socket(bm, faces, direction, depth, shrink=0.0, wall=TRIM, back=TRIM, steps=1, walls=None):
+    """delete the faces and sink their rim into the body along `direction` (game frame); close the back
+    (walls: a material per step, e.g. a body-coloured return before the black)"""
     faces = [f for f in faces if f.is_valid]
     if not faces:
         return None
@@ -158,7 +191,7 @@ def socket(bm, faces, direction, depth, shrink=0.0, wall=TRIM, back=TRIM, steps=
             v.co += d * depth / steps
             v.co += (c - v.co) * shrink / steps
         for f in nf:
-            f.material_index = wall
+            f.material_index = wall if walls is None else walls[k]
             f.smooth = False
         edges = [e for e in ne if len(e.link_faces) == 1]
     fill = bmesh.ops.holes_fill(bm, edges=edges, sides=0)
@@ -245,33 +278,42 @@ def cut_all(bm, log=print):
                 (-0.618, BD.Y10(-0.618) - 0.004)]
         gaps += K.groove(bm, door, 'side', 0.0045, s, keep=lambda f: abs(gc(f)[0]) > 0.6)
         # front bumper / fender seam (behind the lamp, down to the arch)
-        gaps += K.groove(bm, [(1.705, 0.735), (1.67, 0.69), (1.635, 0.63)], 'side', 0.004, s, keep=lambda f: abs(gc(f)[0]) > 0.6)
+        gaps += K.groove(bm, [(1.725, 0.640), (1.685, 0.598), (1.630, 0.555)], 'side', 0.004, s, keep=lambda f: abs(gc(f)[0]) > 0.6)
         # rear bumper top line along the side, behind the arch
-        gaps += K.groove(bm, [(-1.545, 0.62), (-1.62, 0.71), (-1.80, 0.748), (-2.05, 0.754), (-2.20, 0.755)], 'side', 0.004, s,
+        gaps += K.groove(bm, [(-1.545, 0.60), (-1.62, 0.68), (-1.80, 0.713), (-2.05, 0.719), (-2.20, 0.720)], 'side', 0.004, s,
                          keep=lambda f: abs(gc(f)[0]) > 0.55)
     # bonnet: along the fenders and across the cowl
     for s in (1, -1):
-        line = [(s * (BD.X10(z) - 0.060), z) for z in np.linspace(1.03, 1.65, 12)]
+        line = [(s * (BD.X10(z) - 0.060), z) for z in np.linspace(1.03, 1.70, 13)]
         gaps += K.groove(bm, line, 'top', 0.0045, 1, keep=upper)
     gaps += K.groove(bm, [(x, 1.037 - 0.18 * (abs(x) / 0.70) ** 2.2) for x in np.linspace(-0.66, 0.66, 25)], 'top', 0.0045, 1,
                      keep=lambda f: gc(f)[1] > 0.8 and gn(f)[1] > 0.4)
     # bonnet front edge (front view) between the lamps
-    gaps += K.groove(bm, [(x, 0.684 - 0.006 * (1 - (abs(x) / 0.30) ** 2)) for x in np.linspace(-0.30, 0.30, 13)], 'front', 0.0045, 1,
+    gaps += K.groove(bm, [(x, 0.618 - 0.018 * (abs(x) / 0.30) ** 1.5) for x in np.linspace(-0.30, 0.30, 13)], 'front', 0.0045, 1,
                      keep=lambda f: gc(f)[2] > 1.9)
     # boot lid: across the deck at the backlight base, along the deck sides, down the rear face round the garnish
-    gaps += K.groove(bm, [(x, -1.50 - 0.02 * (1 - (abs(x) / 0.66) ** 2)) for x in np.linspace(-0.64, 0.64, 25)], 'top', 0.0045,
+    gaps += K.groove(bm, [(x, -1.708 + 0.57 * x * x) for x in np.linspace(-0.645, 0.645, 25)], 'top', 0.0045,
                      1, keep=lambda f: gc(f)[1] > 0.85 and gn(f)[1] > 0.3)
     for s in (1, -1):
-        gaps += K.groove(bm, [(s * 0.645, -1.50), (s * 0.66, -1.95), (s * 0.645, -2.10), (s * 0.60, -2.19)], 'top', 0.0045, 1,
+        gaps += K.groove(bm, [(s * 0.645, -1.47), (s * 0.66, -1.95), (s * 0.645, -2.10), (s * 0.60, -2.19)], 'top', 0.0045, 1,
                          keep=lambda f: gc(f)[1] > 0.85 and gn(f)[1] > 0.3)
-    # the boot lid's trailing face (the garnish between the lamps) ends on the bumper's top line, just under the lamps
-    for s in (1, -1):
-        gaps += K.groove(bm, [(s * 0.30, 0.80), (s * 0.298, 0.757)], 'rear', 0.0045, -1, keep=lambda f: gc(f)[2] < -2.0)
-    gaps += K.groove(bm, [(x, 0.755) for x in np.linspace(-0.84, 0.84, 30)], 'rear', 0.004, -1, keep=lambda f: gc(f)[2] < -2.0)
+    # the boot lid's trailing face runs between the lamps' swept bezels down to the bumper's top line under the lamps
+    gaps += K.groove(bm, [(x, 0.720) for x in np.linspace(-0.84, 0.84, 30)], 'rear', 0.004, -1, keep=lambda f: gc(f)[2] < -2.0)
     # fuel lid (right side)
-    fuel = K.round_poly([(-1.665, 0.795), (-1.48, 0.795), (-1.48, 0.915), (-1.665, 0.915)], 0.022, 3)
+    fuel = K.round_poly([(-1.683, 0.685), (-1.488, 0.685), (-1.488, 0.815), (-1.683, 0.815)], 0.024, 3)
     gaps += K.groove(bm, fuel + [fuel[0]], 'side', 0.004, -1, keep=lambda f: gc(f)[0] < -0.6)
     setmat([f for f in gaps if f.material_index == PAINT], TRIM)
+    # the side's lower character line between the arches, a lit step (r14), and the amber side markers behind the front
+    # arches (triangulated on r10 / r43)
+    for s in (1, -1):
+        crease(bm, [(z, 0.4325 - 0.0185 * z) for z in np.linspace(-0.91, 0.91, 40)], 'side', s, 0.012, 0.006, 'high',
+               keep=lambda f: abs(gc(f)[0]) > 0.6)
+        mk = K.round_poly([(0.873, 0.533), (0.849, 0.531), (0.836, 0.565), (0.860, 0.567)], 0.006, 2)
+        setmat(K.region(bm, mk, 'side', s, keep=lambda f: abs(gc(f)[0]) > 0.6 and 0.75 < gc(f)[2] < 0.95), AMBER)
+    # the chin's crease beside the mouth, under the fog lamp pods: a lit step
+    for s in (1, -1):
+        crease(bm, [(s * x, 0.268) for x in np.linspace(0.35, 0.80, 16)], 'front', 1, 0.014, 0.010, 'high',
+               keep=lambda f: gc(f)[2] > 1.6)
     log('shut lines')
     # --- lamps and openings: sockets; record the lamp centres for the parts
     from mathutils.bvhtree import BVHTree
@@ -283,8 +325,7 @@ def cut_all(bm, log=print):
 
     info = {'head': [], 'fog': []}
     for s_, poly in zip((1, -1), both(headlamp())):
-        for xx in (0.53, 0.665):
-            yy = 0.5 * (np.interp(xx, [p[0] for p in headlamp()[:8]], [p[1] for p in headlamp()[:8]]) + 0.66 + 0.02 * (xx - 0.4))
+        for xx, yy in HEAD_UNITS:
             p, n = surf(s_ * xx, yy)
             info['head'].append((p, n))
         kp = lambda f, s_=s_: gc(f)[0] * s_ > 0.2 and gc(f)[2] > 1.4
@@ -296,32 +337,43 @@ def cut_all(bm, log=print):
         setmat(inner, HEAD)
         K.sink(bm, list(inner), 0.003)
     for s_, poly in zip((1, -1), both(fog_pod())):
-        p, n = surf(s_ * 0.585, 0.302)
+        p, n = surf(s_ * FOG_LAMP[0], FOG_LAMP[1])
         info['fog'].append((p, n))
         fs = K.region(bm, poly, 'front', 1, keep=lambda f, s_=s_: gc(f)[0] * s_ > 0.3 and gc(f)[2] > 1.7)
-        socket(bm, fs, (0, 0, -1), 0.045, 0.12, wall=TRIM, back=TRIM)
+        socket(bm, fs, (0, 0, -1), 0.04, 0.10, wall=TRIM, back=TRIM)
+    # the plate hangs in front of the mouth's upper half: its depth from the face just above the mouth
+    pf, nf_ = surf(0.0, 0.48)
+    if pf is not None:
+        pf = Vector((0.0, PLATE_F, pf.z))
+    info['plate_f'] = (pf, nf_)
+    # the mouth: a body-coloured return (the chin's shelf shows at its bottom), then black
     fs = K.region(bm, intake(), 'front', 1, keep=lambda f: gc(f)[2] > 1.8 and gc(f)[1] < 0.5)
-    socket(bm, fs, (0, 0.05, -1), 0.09, 0.08, wall=TRIM, back=TRIM, steps=2)
-    info['plate_f'] = surf(0.0, 0.475)
+    socket(bm, fs, (0, 0, -1), 0.11, 0.06, wall=TRIM, back=TRIM, steps=3, walls=[PAINT, TRIM, TRIM])
     holes = info
-    outer, amber, rev = tail_lamp()
+    outer, amber, divider, rev, sweep = tail_lamp()
     for s, poly in zip((1, -1), both(outer)):
-        lens = K.region(bm, poly, 'rear', -1, keep=lambda f, s=s: gc(f)[0] * s > 0.2 and gc(f)[2] < -1.9, min_facing=0.08)
-        rim = K.faces_in(bm, K.offset_poly(poly, -0.006), 'rear', -1, keep=lambda f, s=s: gc(f)[0] * s > 0.2 and gc(f)[2] < -1.9,
-                         min_facing=0.08)
-        K.cut_outline(bm, K.offset_poly(poly, -0.006), 'rear', -1, keep=lambda f, s=s: gc(f)[0] * s > 0.2 and gc(f)[2] < -1.9, min_facing=0.08)
-        lens = K.faces_in(bm, poly, 'rear', -1, keep=lambda f, s=s: gc(f)[0] * s > 0.2 and gc(f)[2] < -1.9, min_facing=0.08)
-        inner = set(K.faces_in(bm, K.offset_poly(poly, -0.006), 'rear', -1, keep=lambda f, s=s: gc(f)[0] * s > 0.2 and gc(f)[2] < -1.9,
-                               min_facing=0.08))
+        kp = lambda f, s=s: gc(f)[0] * s > 0.2 and gc(f)[2] < -1.9
+        lens = K.region(bm, poly, 'rear', -1, keep=kp, min_facing=0.08)
+        K.cut_outline(bm, K.offset_poly(poly, -0.007), 'rear', -1, keep=kp, min_facing=0.08)
+        lens = K.faces_in(bm, poly, 'rear', -1, keep=kp, min_facing=0.08)
+        inner = set(K.faces_in(bm, K.offset_poly(poly, -0.007), 'rear', -1, keep=kp, min_facing=0.08))
         setmat([f for f in lens if f not in inner], TRIM)
         setmat(inner, TAIL)
-        am = amber if s > 0 else [(-u, v) for u, v in reversed(amber)]
-        rv = rev if s > 0 else [(-u, v) for u, v in reversed(rev)]
-        K.cut_outline(bm, am, 'rear', -1, keep=lambda f: f.material_index == TAIL, min_facing=0.08)
-        setmat(K.faces_in(bm, am, 'rear', -1, keep=lambda f: f.material_index == TAIL, min_facing=0.08), AMBER)
-        K.cut_outline(bm, rv, 'rear', -1, keep=lambda f: f.material_index == TAIL, min_facing=0.08)
-        setmat(K.faces_in(bm, rv, 'rear', -1, keep=lambda f: f.material_index == TAIL, min_facing=0.08), CLEAR)
-    loc, n, _, _ = bvh.ray_cast(K.B(0.0, 0.49, -4.0), K.B(0, 0, 1) - K.B(0, 0, 0))
+        mir = (lambda q: q) if s > 0 else (lambda q: [(-u, v) for u, v in reversed(q)])
+        # the bezel is wider along the swept inner edge
+        sw = [(s * u, v) for u, v in sweep]
+        setmat(K.groove(bm, sw, 'rear', 0.016, -1, keep=lambda f: f.material_index == TAIL, min_facing=0.08), TRIM)
+        for q, mat in ((amber, AMBER), (divider, TRIM), (rev, CLEAR)):
+            K.cut_outline(bm, mir(q), 'rear', -1, keep=lambda f: f.material_index == TAIL, min_facing=0.08)
+            setmat(K.faces_in(bm, mir(q), 'rear', -1, keep=lambda f: f.material_index == TAIL, min_facing=0.08), mat)
+    # rear bumper: the roll under the lamps overhangs a shadowed crease; a fine line at the plate's top; the plate recess
+    rear = lambda f: gc(f)[2] < -1.95 and abs(gc(f)[0]) < 0.86
+    crease(bm, [(x, 0.656) for x in np.linspace(-0.86, 0.86, 40)], 'rear', -1, 0.020, 0.015, 'low', keep=rear)
+    crease(bm, [(x, 0.518) for x in np.linspace(-0.86, 0.86, 40)], 'rear', -1, 0.010, 0.005, 'high', keep=rear)
+    pr = K.region(bm, plate_rear(), 'rear', -1, keep=lambda f: gc(f)[2] < -2.0)
+    socket(bm, pr, (0, 0, 1), 0.016, 0.0, wall=PAINT, back=PAINT)
+    bvh = BVHTree.FromBMesh(bm)
+    loc, n, _, _ = bvh.ray_cast(K.B(0.0, 0.485, -4.0), K.B(0, 0, 1) - K.B(0, 0, 0))
     info['plate_r'] = (Vector(K.G(loc)), Vector(K.G(n)))
     log('lamps and openings')
     # merge the flat fragments the cuts left (per material), to save triangles

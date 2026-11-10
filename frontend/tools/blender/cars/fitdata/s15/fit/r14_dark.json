@@ -1,0 +1,22 @@
+{
+ "photo": "r14.jpg",
+ "livery": "white",
+ "vref": 80.0,
+ "width_px": 1273.0,
+ "classes": {
+  "dark": {
+   "iou": 0.141,
+   "mean_pct": 4.2,
+   "p90_pct": 10.45,
+   "model_to_photo_mean_pct": 5.74,
+   "photo_to_model_mean_pct": 1.48
+  },
+  "lamp": {
+   "iou": 0.572,
+   "mean_pct": 1.67,
+   "p90_pct": 1.33,
+   "model_to_photo_mean_pct": 2.58,
+   "photo_to_model_mean_pct": 0.2
+  }
+ }
+}

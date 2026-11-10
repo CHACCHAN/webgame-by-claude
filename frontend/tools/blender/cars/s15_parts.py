@@ -1,6 +1,7 @@
 """
-The S15's separate parts: wheels (17" five-spoke, 215/45R17, discs, calipers), arch liners, lamp internals, plates,
-mirrors, door handles, wipers, rear spoiler, exhaust, and a basic interior. All in the game frame (s15_kit.Part).
+The S15's separate parts: wheels (the spec-R's 16" five-spoke, 205/55R16, discs, calipers), arch liners, lamp internals,
+plates, mirrors, door handles, wipers, badges (drawn as our own shapes), the Aero wing (option), exhaust, and a basic
+interior. All in the game frame (s15_kit.Part).
 """
 import math
 
@@ -33,13 +34,14 @@ class Surface:
 
 # ---------------------------------------------------------------- wheels
 
-TYRE_W = 0.215
-RIM_R = 0.2159          # 17" bead seat
+TYRE_W = 0.205
+RIM_R = 0.2032          # 16" bead seat
+AX = TYRE_W / 0.215     # the profiles below were drawn for a 215 section
 SPOKE_FACE = 0.058      # how far the spoke face sits outboard of the wheel's centre plane
 
 
 def tyre(p, s, seg=48):
-    """215/45R17 tyre about the origin (axis x, s = outward sign); tread blocks on the shoulders"""
+    """205/55R16 tyre about the origin (axis x, s = outward sign); tread blocks on the shoulders"""
     R = BD.TYRE_R
     h = TYRE_W / 2
     prof = [(RIM_R + 0.004, -0.086), (RIM_R + 0.022, -0.100), (R - 0.040, -0.108), (R - 0.016, -0.104), (R - 0.004, -0.092),
@@ -55,21 +57,21 @@ def tyre(p, s, seg=48):
             # shoulder blocks: every other segment's shoulder sits a little lower
             if k in (4, 5, 6, 18, 19, 20) and i % 2:
                 rr -= 0.005
-            row.append((s * a, rr * math.cos(t), rr * math.sin(t)))
+            row.append((s * a * AX, rr * math.cos(t), rr * math.sin(t)))
         rows.append(row)
     rows.append(rows[0])
     p.grid(rows, 'tire', flip=s > 0)
 
 
 def rim(p, s, seg=48):
-    """the rim barrel and lip, five Y-spokes, hub, lug nuts and centre cap"""
+    """the rim barrel and lip, five broad swept spokes, hub, lug nuts and centre cap"""
     # barrel: from the outer lip in to the inner flange (inside faces visible through the spokes)
     prof = [(RIM_R + 0.012, s * 0.098), (RIM_R + 0.012, s * 0.090), (RIM_R - 0.004, s * 0.086), (RIM_R - 0.012, s * 0.078),
             (RIM_R - 0.022, s * 0.060), (RIM_R - 0.024, s * -0.080), (RIM_R - 0.010, s * -0.095)]
     rows = []
     for i in range(seg + 1):
         t = 2 * math.pi * i / seg
-        rows.append([(a, r * math.cos(t), r * math.sin(t)) for r, a in prof])
+        rows.append([(a * AX, r * math.cos(t), r * math.sin(t)) for r, a in prof])
     # faces outboard on the lip, towards the axle inside the barrel (seen through the spokes)
     p.grid(rows, 'rim', out=lambda c: (s * 0.5, -c[1], -c[2]))
     # spokes
@@ -85,13 +87,13 @@ def rim(p, s, seg=48):
 
 
 def _spoke(p, s, base):
-    """one spoke: a wide stem from the hub that splits in two near the rim, dished outward"""
+    """one spoke of the spec-R wheel: broad, widening to the rim, swept round (its edges curve the same way), dished"""
     def depth(r):
         # dish: the face runs from the hub out to the lip
         return SPOKE_FACE + 0.030 * max(0.0, (r - 0.07) / 0.13) ** 1.5
 
     def swirl(r):
-        return 0.0
+        return s * 0.30 * max(0.0, (r - 0.06) / 0.135) ** 1.3
 
     def strip(r0, r1, w0, w1, off0, off1, n=5, th=0.022):
         rows_top, rows_bot = [], []
@@ -119,9 +121,7 @@ def _spoke(p, s, base):
                'rim', flip=s < 0)
         p.grid([[rows_top[j][3], (s * (depth(lerp(r0, r1, j / n)) - th), rows_top[j][3][1], rows_top[j][3][2])] for j in range(n + 1)],
                'rim', flip=s > 0)
-    strip(0.060, 0.140, 0.052, 0.060, 0.0, 0.0)
-    for side in (-1, 1):
-        strip(0.128, 0.208, 0.030, 0.036, side * 0.012, side * 0.034)
+    strip(0.058, RIM_R - 0.006, 0.050, 0.092, 0.0, 0.0, n=8)
 
 
 def disc_and_caliper(p_spin, p_pivot, s, front):
@@ -203,13 +203,13 @@ def head_units(p, info):
         back = pt - d * 0.050
         if projector:
             # projector: a chrome shroud, the lens (glows) in front
-            _axis_cyl(p, 'chrome', back, d, 0.040, 0.030)
-            _axis_cyl(p, 'trim', back + d * 0.030, d, 0.036, 0.004)
-            _axis_cyl(p, 'headlight', back + d * 0.033, d, 0.031, 0.010, uv=True)
+            _axis_cyl(p, 'chrome', back, d, 0.034, 0.030)
+            _axis_cyl(p, 'trim', back + d * 0.030, d, 0.031, 0.004)
+            _axis_cyl(p, 'headlight', back + d * 0.033, d, 0.027, 0.010, uv=True)
         else:
             # high beam: a reflector bowl and its bulb
-            _axis_cyl(p, 'chrome', back, d, 0.036, 0.022, r2=0.022)
-            _axis_cyl(p, 'headlight', back + d * 0.012, d, 0.012, 0.010, uv=True)
+            _axis_cyl(p, 'chrome', back, d, 0.032, 0.022, r2=0.020)
+            _axis_cyl(p, 'headlight', back + d * 0.012, d, 0.011, 0.010, uv=True)
 
 
 def _axis_cyl(p, mat, base, d, r, length, r2=None, seg=20, uv=False):
@@ -231,17 +231,11 @@ def fog_units(p, info):
     for pt, n in info['fog']:
         if pt is None:
             continue
-        base = pt - Vector((0, 0, 0.045))
-        _axis_cyl(p, 'chrome', base, (0, 0, 1), 0.046, 0.016, r2=0.03)
-        _axis_cyl(p, 'lens_clear', base + Vector((0, 0, 0.016)), (0, 0, 1), 0.040, 0.008)
-        _axis_cyl(p, 'trim', base + Vector((0, 0, 0.002)), (0, 0, 1), 0.056, 0.004)
-
-
-def intake_slats(p):
-    for y in (0.27, 0.32, 0.37):
-        p.box('trim', -0.37, 0.37, y - 0.006, y + 0.006, 2.02, 2.05, bevel=0.003)
-    for x in np.linspace(-0.32, 0.32, 7):
-        p.box('trim', x - 0.005, x + 0.005, 0.24, 0.41, 2.025, 2.045)
+        base = pt - Vector((0, 0, 0.040))
+        _axis_cyl(p, 'chrome', base, (0, 0, 1), 0.040, 0.016, r2=0.026)
+        _axis_cyl(p, 'chrome', base + Vector((0, 0, 0.016)), (0, 0, 1), 0.034, 0.006)
+        _axis_cyl(p, 'lens_clear', base + Vector((0, 0, 0.020)), (0, 0, 1), 0.011, 0.004)
+        _axis_cyl(p, 'trim', base + Vector((0, 0, 0.002)), (0, 0, 1), 0.047, 0.004)
 
 
 def plate(p, pt, n, rear):
@@ -262,20 +256,33 @@ def plate(p, pt, n, rear):
 
 # ---------------------------------------------------------------- body fittings
 
+# door mirrors, measured on the photos (r48 rear-on, r43 front, r41 / r10 3/4: back-projected through the solved
+# cameras): the painted housing reaches from x 0.76 to 0.98, y 0.875 to 1.01, centred about z 0.40, on a painted
+# sail at the door's front corner. Built as their own object ('mirrors'): the fitted body field moves them rigidly
+# with the door (s15_ffd, ffd_rigid) instead of squeezing their measured size.
+MIRROR_ANCHOR = (0.43, 0.86)            # (z, y) of the sail's foot on the door skin
+
+
 def mirrors(p, surf):
+    """returns the left anchor (game frame) on the door skin; the right one mirrors it"""
+    anchor = None
     for s in (1, -1):
-        # on the door's front corner, just above the belt, ahead of the side glass
-        hit, n = surf.side(0.43, 0.86, s)
+        hit, n = surf.side(MIRROR_ANCHOR[0], MIRROR_ANCHOR[1], s)
         if hit is None:
             continue
-        base = hit
-        # black sail base on the door corner, the housing on a short arm
-        # small rounded housing on a short black arm (the S15's door mirrors are compact)
-        p.oriented_box('trim', (base.x + s * 0.004, 0.905, 0.43), (0.024, 0.060, 0.10), rot=(0, 0, 0), bevel=0.008)
-        hx = base.x + s * 0.085
-        p.oriented_box('trim', (base.x + s * 0.035, 0.900, 0.40), (0.060, 0.022, 0.040), bevel=0.008)
-        p.oriented_box('paint', (hx, 0.890, 0.37), (0.130, 0.085, 0.075), rot=(0, s * 0.12, 0), bevel=0.034, seg=4)
-        p.oriented_box('chrome', (hx - s * 0.002, 0.890, 0.332), (0.108, 0.064, 0.004), rot=(0, s * 0.12, 0), bevel=0.002)
+        bx = hit.x
+        if s == 1:
+            anchor = (bx, MIRROR_ANCHOR[1], MIRROR_ANCHOR[0])
+        # the sail: a painted wedge on the door's front corner, under the A-pillar foot
+        p.oriented_box('paint', (bx - s * 0.004, 0.925, 0.47), (0.040, 0.115, 0.140), rot=(0.25, 0, 0), bevel=0.012)
+        p.oriented_box('trim', (bx + s * 0.010, 0.900, 0.43), (0.028, 0.050, 0.060), bevel=0.008)
+        # the housing: a rounded box, the glass on its rear face; toed in a little, the outer end swept back
+        hc = (bx + s * 0.135, 0.943, 0.405)
+        rot = (0, s * 0.10, 0)
+        p.oriented_box('paint', hc, (0.215, 0.135, 0.110), rot=rot, bevel=0.048, seg=4)
+        gz = hc[2] - 0.055 + 0.007
+        p.oriented_box('chrome', (hc[0] + s * 0.004, 0.943, gz), (0.188, 0.106, 0.004), rot=rot, bevel=0.003)
+    return anchor
 
 
 def door_handles(p, surf):
@@ -306,6 +313,123 @@ def wipers(p, surf):
         hit, n = surf.top(s * 0.24, 1.13)
         if hit is not None:
             p.oriented_box('trim', tuple(hit + n * 0.004), (0.018, 0.012, 0.028), bevel=0.004)
+
+
+def rear_wiper(p, surf):
+    """the rear wiper along the backlight's base (r48, r30): the pivot just left of the centre, the blade to the left"""
+    pts = []
+    for x in np.linspace(0.06, 0.58, 7):
+        hit, n = surf.top(x, -1.675 + 0.57 * x * x + 0.075)
+        if hit is not None:
+            pts.append(hit + n * 0.012)
+    for a, b in zip(pts[:-1], pts[1:]):
+        _beam(p, 'trim', a, b, 0.012, 0.010)
+    if pts:
+        hit, n = surf.top(0.05, -1.675 + 0.0014 + 0.03)
+        if hit is not None:
+            _beam(p, 'trim', hit + n * 0.010, pts[len(pts) // 2], 0.016, 0.012)
+            p.oriented_box('trim', tuple(hit + n * 0.008), (0.03, 0.02, 0.03), bevel=0.006)
+
+
+def _frame(n):
+    """(ex, ey, ez) for a badge on a surface with outward normal n: ex to the viewer's right, ey up"""
+    ez = Vector(n).normalized()
+    ex = Vector((0, 1, 0)).cross(ez)
+    if ex.length < 1e-6:
+        ex = Vector((1, 0, 0))
+    ex.normalize()
+    ey = ez.cross(ex)
+    return ex, ey, ez
+
+
+def _place(p, bm, mat, c, frame, scale=1.0, lift=0.001):
+    """merge a bmesh drawn in its own (X right, Y up, Z out) frame onto a surface point c"""
+    ex, ey, ez = frame
+    for v in bm.verts:
+        X, Y, Z = v.co
+        q = Vector(c) + ex * (X * scale) + ey * (Y * scale) + ez * (Z * scale + lift)
+        v.co = K.B(*q)
+    p.merge(bm, mat, smooth=False)
+
+
+def text_bm(text, height, extrude=0.0012, shear=0.0):
+    """a text in Blender's built-in font as a bmesh (X along the text, Y up, centred), scaled to the cap height"""
+    import bmesh
+    import bpy
+    cu = bpy.data.curves.new('badge_txt', 'FONT')
+    cu.body = text
+    cu.size = 1.0
+    cu.shear = shear
+    cu.extrude = extrude
+    cu.resolution_u = 2
+    cu.align_x = 'CENTER'
+    cu.align_y = 'CENTER'
+    ob = bpy.data.objects.new('badge_txt', cu)
+    bpy.context.scene.collection.objects.link(ob)
+    dg = bpy.context.evaluated_depsgraph_get()
+    ev = ob.evaluated_get(dg)
+    me = ev.to_mesh()
+    bm = bmesh.new()
+    bm.from_mesh(me)
+    ev.to_mesh_clear()
+    bpy.data.objects.remove(ob)
+    bpy.data.curves.remove(cu)
+    ys = [v.co.y for v in bm.verts]
+    k = height / max(1e-6, max(ys) - min(ys))
+    for v in bm.verts:
+        v.co = Vector((v.co.x * k, v.co.y * k, v.co.z))
+    return bm
+
+
+def badges(p, surf):
+    """the badges, as our own shapes: the maker's ring-and-bar emblem, the model's script and the key cylinder on the
+    boot lid (r48), the "S" mark on the bonnet's point (r43 / r10), "spec R" on the rear quarters (r14)"""
+    import bmesh
+    rear = lambda x, y: surf.hit((x, y, -4.0), (0, 0, 1))
+    hit, n = rear(0.0, 0.833)
+    if hit is not None:
+        fr = _frame(n)
+        # the ring: an annulus, the bar across it
+        bm = bmesh.new()
+        outer = [bm.verts.new((0.026 * math.cos(2 * math.pi * k / 28), 0.026 * math.sin(2 * math.pi * k / 28), 0.003)) for k in range(28)]
+        inner = [bm.verts.new((0.0205 * math.cos(2 * math.pi * k / 28), 0.0205 * math.sin(2 * math.pi * k / 28), 0.003)) for k in range(28)]
+        for k in range(28):
+            k2 = (k + 1) % 28
+            bm.faces.new([outer[k], outer[k2], inner[k2], inner[k]])
+        _place(p, bm, 'chrome', hit, fr)
+        p.oriented_box('chrome', tuple(hit + n * 0.0025), (0.074, 0.015, 0.004), bevel=0.0015)
+        bm = text_bm('NISSAN', 0.0065, extrude=0.0)
+        _place(p, bm, 'trim', hit, fr, lift=0.0047)
+    hit, n = rear(0.0, 0.772)
+    if hit is not None:
+        bm = text_bm('Silvia', 0.034, extrude=0.0012, shear=0.35)
+        _place(p, bm, 'chrome', hit, _frame(n), lift=0.0015)
+    hit, n = rear(-0.232, 0.811)
+    if hit is not None:
+        p.cylinder('chrome', tuple(hit + n * 0.002), 0.017, 0.006, 'z', seg=16)
+        p.oriented_box('trim', tuple(hit + n * 0.0055), (0.004, 0.016, 0.002))
+    # the bonnet's "S" mark: a sharp-cornered bolt on the point of the bonnet
+    hit, n = surf.top(0.0, 1.987)
+    if hit is not None:
+        bolt = [(0.010, 0.024), (-0.011, 0.003), (0.003, 0.003), (-0.010, -0.024), (0.011, -0.003), (-0.003, -0.003)]
+        bm = bmesh.new()
+        top = [bm.verts.new((u, v, 0.003)) for u, v in bolt]
+        bot = [bm.verts.new((u, v, 0.0)) for u, v in bolt]
+        bmesh.ops.triangle_fill(bm, edges=[bm.edges.new((top[i], top[(i + 1) % 6])) for i in range(6)], use_beauty=True)
+        for i in range(6):
+            i2 = (i + 1) % 6
+            bm.faces.new([bot[i], bot[i2], top[i2], top[i]])
+        _place(p, bm, 'chrome', hit, _frame(n))
+    # "spec R" on both rear quarters, ahead of the rear arch
+    for s in (1, -1):
+        hit, n = surf.side(-0.715, 0.496, s)
+        if hit is None:
+            continue
+        fr = _frame(n)
+        bm = text_bm('spec', 0.011, extrude=0.0008, shear=0.3)
+        _place(p, bm, 'chrome', hit - fr[0] * 0.006, fr)
+        bm = text_bm('R', 0.014, extrude=0.0008, shear=0.3)
+        _place(p, bm, 'reflector', hit + fr[0] * 0.026, fr)
 
 
 def _beam(p, mat, a, b, w, h):
@@ -355,12 +479,13 @@ def spoiler(p, surf):
 
 
 def exhaust(p):
-    # two round tips side by side on the left (+x), as on the stock S15
-    for x in (0.505, 0.575):
+    # two round tips side by side on the left (+x), as on the stock S15; measured on the rear-on photo (r48): centres
+    # x 0.36 / 0.445, y 0.275, about 72 mm across (the fitted field lowers them ~17 mm, hence y 0.292 here)
+    for x in (0.362, 0.448):
         # the tips just peek out under the bumper
-        p.revolve('chrome', [(0.031, -2.10), (0.033, -2.205), (0.029, -2.21), (0.026, -2.17)], (x, 0.262, 0), 'z', seg=20)
-        p.cylinder('trim', (x, 0.262, -2.175), 0.026, 0.004, 'z', seg=16)
-    p.box('trim', 0.46, 0.62, 0.23, 0.29, -2.10, -1.90, bevel=0.02)
+        p.revolve('chrome', [(0.033, -2.10), (0.036, -2.205), (0.032, -2.21), (0.028, -2.17)], (x, 0.292, 0), 'z', seg=20)
+        p.cylinder('trim', (x, 0.292, -2.175), 0.028, 0.004, 'z', seg=16)
+    p.box('trim', 0.32, 0.49, 0.25, 0.32, -2.10, -1.90, bevel=0.02)
 
 
 # ---------------------------------------------------------------- interior

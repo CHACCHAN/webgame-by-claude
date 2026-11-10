@@ -1,0 +1,84 @@
+{
+ "photos": [
+  "r14",
+  "r41",
+  "r48",
+  "r43",
+  "r10",
+  "r09",
+  "r30"
+ ],
+ "silfit": {
+  "r14": {
+   "band": 0.04,
+   "livery": "white"
+  },
+  "r41": {
+   "band": 0.04,
+   "livery": "white"
+  },
+  "r48": {
+   "band": 0.04,
+   "livery": "white"
+  },
+  "r43": {
+   "band": 0.04,
+   "livery": "white"
+  },
+  "r10": {
+   "band": 0.04,
+   "livery": "white"
+  },
+  "r09": {
+   "band": 0.04,
+   "livery": "white"
+  },
+  "r30": {
+   "band": 0.04,
+   "livery": "white"
+  }
+ },
+ "masks": "saliency (U2-Net silueta) seeded GrabCut, then the polygons of masks.json (tools/mkmask.py): 255 car, 0 not, 128 ignore",
+ "ffdfit": "ffdfit.py -- fit.json ffd7.json ffd.json cams.json --iters 10 --seg 6,6,16 --ls 2 --l0 0.01 --laml 0.1 --huber 1 --every 3 --sdy 0.02 --spitch 0.005 --length 4.445 --width 1.695 --height 1.285 --bodyanchors",
+ "pins": {
+  "length": 4.445,
+  "width": 1.695,
+  "height": 1.285,
+  "result": {
+   "length": 4.4451,
+   "width": 1.6942,
+   "height": 1.2851
+  }
+ },
+ "lattice": {
+  "lo": [
+   -1,
+   -0.1,
+   -2.45
+  ],
+  "hi": [
+   1,
+   1.45,
+   2.35
+  ],
+  "seg": [
+   6,
+   6,
+   16
+  ],
+  "mirror": true
+ },
+ "overhangs": {
+  "front": {
+   "before": 0.98,
+   "after": 0.9435
+  },
+  "rear": {
+   "before": 1.0175,
+   "after": 0.9775
+  },
+  "wheelbase": 2.525
+ },
+ "loop": "PY=<python with cv2, PIL> blender.sh -t 4 -b --factory-startup --python tools/loop.py -- fit.json <out> --ffd ffd.json --cams cams.json --pose cams.json",
+ "compare": "PYFIT=<dir with PIL> blender.sh -t 4 -b --factory-startup --python tools/compare.py -- fit.json <out> --cams cams.json --ffd ffd.json --samples 32"
+}

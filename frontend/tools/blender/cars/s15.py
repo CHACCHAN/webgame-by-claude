@@ -1,5 +1,6 @@
 """
-Nissan Silvia spec-R (S15, 1999-2002, stock, factory rear spoiler) for TOUGE NOCTURNE, built in Blender with Python.
+Nissan Silvia spec-R (S15, 1999-2002, stock; the plain grade without the Aero wing, --wing adds it) for TOUGE NOCTURNE,
+built in Blender with Python.
 
   ~/.local/bin/blender -t 4 --background --factory-startup --python frontend/tools/blender/cars/s15.py -- \
       --out s15.glb [--render <dir> --views a,b --samples N --size WxH] [--night] [--cam cams.json] [--paint #rrggbb]
@@ -27,6 +28,7 @@ import s15_kit as K  # noqa: E402
 import s15_body as BD  # noqa: E402
 import s15_features as FT  # noqa: E402
 import s15_parts as PT  # noqa: E402
+import s15_ffd as FFD  # noqa: E402
 
 TEX = os.path.join(os.path.dirname(HERE), 'textures', 's15')
 
@@ -34,11 +36,11 @@ TEX = os.path.join(os.path.dirname(HERE), 'textures', 's15')
 def args():
     argv = sys.argv[sys.argv.index('--') + 1:] if '--' in sys.argv else []
     opt = {'out': None, 'render': None, 'views': 'front34,rear34,side,front,rear,top', 'samples': 24, 'size': (1280, 720),
-           'paint': '#9a9ea4', 'night': False, 'cam': None, 'backface': False, 'sil': None, 'silout': None, 'silnames': None, 'silhide': ''}
+           'paint': '#9a9ea4', 'night': False, 'wing': False, 'cam': None, 'backface': False, 'sil': None, 'silout': None, 'silnames': None, 'silhide': ''}
     i = 0
     while i < len(argv):
         k = argv[i].lstrip('-')
-        if k in ('night', 'backface'):
+        if k in ('night', 'backface', 'wing'):
             opt[k] = True
             i += 1
             continue
@@ -54,12 +56,12 @@ def args():
 
 # game frame: eye, target, lens (mm, 36 mm sensor)
 VIEWS = {
-    'front34': ((4.3, 1.30, 5.9), (0.0, 0.58, 0.30), 40),
-    'rear34': ((-4.1, 1.40, -6.0), (0.0, 0.62, -0.30), 40),
-    'side': ((9.5, 0.75, 0.0), (0.0, 0.62, 0.0), 32),
-    'sider': ((-9.5, 0.75, 0.0), (0.0, 0.62, 0.0), 32),
-    'front': ((0.0, 0.85, 9.0), (0.0, 0.62, 0.0), 32),
-    'rear': ((0.0, 0.95, -9.0), (0.0, 0.62, 0.0), 32),
+    'front34': ((4.3, 1.30, 5.9), (0.0, 0.58, 0.30), 48),
+    'rear34': ((-4.1, 1.40, -6.0), (0.0, 0.62, -0.30), 48),
+    'side': ((8.0, 0.75, 0.0), (0.0, 0.62, 0.0), 42),
+    'sider': ((-8.0, 0.75, 0.0), (0.0, 0.62, 0.0), 42),
+    'front': ((0.0, 0.85, 7.0), (0.0, 0.62, 0.0), 56),
+    'rear': ((0.0, 0.95, -7.0), (0.0, 0.62, 0.0), 56),
     'top': ((0.0, 12.0, 0.001), (0.0, 0.0, 0.0), 30),
     'wheel': ((1.75, 0.42, 2.05), (0.80, 0.31, 1.2625), 45),
     'low34': ((3.0, 0.55, 4.6), (0.0, 0.55, 0.6), 30),
@@ -106,7 +108,7 @@ def tail_uv(bm):
             continue
         for lp in f.loops:
             x, y, z = K.G(lp.vert.co)
-            lp[uvl].uv = ((abs(x) - 0.30) / 0.52, (y - 0.778) / 0.127)
+            lp[uvl].uv = ((abs(x) - 0.33) / 0.50, (y - 0.725) / 0.17)
 
 
 def corner_normals(bm, limit=38.0):
@@ -135,7 +137,7 @@ def head_uv(bm):
             continue
         for lp in f.loops:
             x, y, z = K.G(lp.vert.co)
-            lp[uvl].uv = ((abs(x) - 0.30) / 0.525, (y - 0.630) / 0.145)
+            lp[uvl].uv = ((abs(x) - 0.27) / 0.51, (y - 0.565) / 0.125)
 
 
 def night(m, on=True):
@@ -196,6 +198,16 @@ def backface_check():
         nt.links.new(mix.outputs[0], out.inputs['Surface'])
 
 
+def reshade(shell):
+    """the shell's corner normals again (after the displacement field moved it)"""
+    me = shell.data
+    bm = bmesh.new()
+    bm.from_mesh(me)
+    cn = corner_normals(bm)
+    bm.free()
+    me.normals_split_custom_set(cn)
+
+
 def build(o):
     t0 = time.time()
     m = materials(o['paint'])
@@ -224,18 +236,26 @@ def build(o):
     surf = PT.Surface(bvh)
     parts = K.Part('body_parts')
     PT.fog_units(parts, holes)
-    PT.intake_slats(parts)
     PT.plate(parts, *holes['plate_f'], rear=False)
     PT.plate(parts, *holes['plate_r'], rear=True)
-    PT.mirrors(parts, surf)
     PT.door_handles(parts, surf)
     PT.wipers(parts, surf)
+    PT.rear_wiper(parts, surf)
+    PT.badges(parts, surf)
     count['parts'] = parts.tris()
     parts.build(body, m.mats)
-    wing = K.Part('spoiler')
-    PT.spoiler(wing, surf)
-    count['spoiler'] = wing.tris()
-    wing.build(body, m.mats)
+    mir = K.Part('mirrors')
+    anchor = PT.mirrors(mir, surf)
+    count['mirrors'] = mir.tris()
+    mo = mir.build(body, m.mats)
+    if anchor is not None:
+        mo['ffd_rigid'] = list(anchor)         # moved as a whole with the door by the fitted field (s15_ffd)
+        print('MIRROR anchor', [round(v, 3) for v in anchor])
+    if o.get('wing'):           # the Aero grades' boot-lid wing (the plain spec-R has none)
+        wing = K.Part('spoiler')
+        PT.spoiler(wing, surf)
+        count['spoiler'] = wing.tris()
+        wing.build(body, m.mats)
     ex = K.Part('exhaust')
     PT.exhaust(ex)
     count['exhaust'] = ex.tris()
@@ -247,6 +267,12 @@ def build(o):
     count['interior'] = cab.tris()
     cab.build(body, m.mats)
     PT.wheels(root, m.mats, count)
+    if o.get('ffd', True) is not False:
+        # the fitted displacement field (fitdata/s15/ffd.json, from the photo silhouettes) on every body mesh
+        L = FFD.apply_to_body(body, None if o.get('ffd', True) is True else o['ffd'])
+        if L is not None:
+            reshade(shell)
+            print('FFD', L.seg.tolist(), 'max', round(float(abs(L.c).max()), 4))
     for k, v in count.items():
         print(f'TRIS {k} {v}')
     print('TRIS total', sum(count.values()))
@@ -340,4 +366,5 @@ def main():
             K.render(VIEWS[v], os.path.join(o['render'], f'{v}.png'), size=o['size'], samples=o['samples'])
 
 
-main()
+if __name__ == '__main__':
+    main()

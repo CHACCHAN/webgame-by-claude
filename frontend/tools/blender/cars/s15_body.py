@@ -270,6 +270,13 @@ def build_cage():
             e = bm.edges.get([V[j][i], V[j + 1][i]])
             if e is not None:
                 e[cl] = c
+    # the boot lid's trailing edge: the deck meets the rear face on a crisp edge (the tail ring's top arm); the bonnet's
+    # leading edge over the lamps and the bumper (the nose ring's top arm) a little softer
+    for j, c in ((0, 0.9), (-1, 0.7)):
+        for i in range(20, 30):
+            e = bm.edges.get([V[j][i], V[j][i + 1]])
+            if e is not None:
+                e[cl] = c
     for front, idx in ((True, -1), (False, 0)):
         ring = rings[idx]
         Vr = V[idx]
@@ -336,7 +343,21 @@ def shell(subdiv=1, arches=True):
     if arches:
         bpy.data.objects.remove(cutter)
     bmesh.ops.recalc_face_normals(out, faces=out.faces)
+    lid_lip(out)
     return out
+
+
+def lid_lip(bm):
+    """the boot lid's ducktail: the rear face just under the lid's trailing edge is drawn in (~1 cm), so the edge
+    overhangs the lamp panel with a shadowed band under it (r48, r30)"""
+    bm.normal_update()
+    for v in bm.verts:
+        x, y, z = K.G(v.co)
+        n = K.G(v.normal)
+        if z > -2.0 or n[2] > -0.5 or n[1] > 0.35 or not 0.78 < y < 0.90:
+            continue
+        w = smoothstep(0.78, 0.855, y) * smoothstep(0.86, 0.70, abs(x))
+        v.co = K.B(x, y, z + 0.010 * w)
 
 
 def _arch_cutter():

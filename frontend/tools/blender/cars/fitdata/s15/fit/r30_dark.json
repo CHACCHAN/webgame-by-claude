@@ -1,0 +1,22 @@
+{
+ "photo": "r30.jpg",
+ "livery": "white",
+ "vref": 110.0,
+ "width_px": 945.0,
+ "classes": {
+  "dark": {
+   "iou": 0.043,
+   "mean_pct": 5.87,
+   "p90_pct": 13.27,
+   "model_to_photo_mean_pct": 6.99,
+   "photo_to_model_mean_pct": 1.75
+  },
+  "lamp": {
+   "iou": 0.525,
+   "mean_pct": 0.57,
+   "p90_pct": 1.35,
+   "model_to_photo_mean_pct": 0.64,
+   "photo_to_model_mean_pct": 0.51
+  }
+ }
+}

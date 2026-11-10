@@ -1,0 +1,42 @@
+{
+ "photo": "r09.jpg",
+ "render": "r09_sil.png",
+ "iou": 0.9722,
+ "render_to_photo_mean_pct": 0.3,
+ "render_to_photo_p95_pct": 0.97,
+ "photo_to_render_mean_pct": 0.31,
+ "photo_to_render_p95_pct": 0.94,
+ "max_pct": 2.35,
+ "band_px": 47,
+ "car_bbox_px": [
+  1171,
+  479
+ ],
+ "zones": {
+  "top-left": {
+   "mean_signed_pct": -0.15,
+   "p90_abs_pct": 0.51
+  },
+  "bottom-left": {
+   "mean_signed_pct": -0.12,
+   "p90_abs_pct": 0.55
+  },
+  "top-middle": {
+   "mean_signed_pct": 0.0,
+   "p90_abs_pct": 0.17
+  },
+  "bottom-middle": {
+   "mean_signed_pct": 0.57,
+   "p90_abs_pct": 1.83
+  },
+  "top-right": {
+   "mean_signed_pct": 0.31,
+   "p90_abs_pct": 0.85
+  },
+  "bottom-right": {
+   "mean_signed_pct": 0.12,
+   "p90_abs_pct": 0.43
+  }
+ },
+ "note": "pct = % of the car bbox width in the image; signed + = model outline outside the photo outline"
+}

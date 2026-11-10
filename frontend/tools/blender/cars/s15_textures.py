@@ -5,7 +5,7 @@ Textures for the Silvia S15 model (deterministic, PIL on the host; Noto Sans CJK
 - plate.png: a white Japanese number plate with fictional text (朧 300 / さ 12-34);
 - taillight.png: the red tail/stop lens (u across the lamp from its inner tip to the outer end, v up); the bright
   parts are what glows at night (the game uses the map as the emissive pattern);
-- headlight.png: the headlamp's face (front view): housing, projector, high beam, clear corner; bright = glows.
+- headlight.png: the headlamp's face (front view): the black housing, high beam, projector, turn lamp; bright = glows.
 """
 import math
 import os
@@ -44,76 +44,88 @@ def plate():
 
 
 def taillight():
-    """u: 0 at the lamp's inner tip → 1 at the outer end; v: 0 bottom → 1 top (only the red part is used)"""
-    W, H = 512, 128
-    im = Image.new('RGB', (W, H), (70, 4, 6))
+    """u = (|x| - 0.33) / 0.50 across the lamp from its inner tip to the outer end, v = (y - 0.725) / 0.17 up (only the
+    red part below the divider uses it, v < 0.5): the plain lit chamber towards the outer end, the grid of small square
+    cells in the middle (beside the reverse lamp), fine horizontal ribs"""
+    W, H = 512, 256
+
+    def P(x, y):
+        return ((x - 0.33) / 0.50 * W, (1 - (y - 0.725) / 0.17) * H)
+
+    im = Image.new('RGB', (W, H), (60, 3, 5))
     d = ImageDraw.Draw(im)
-    # the lit chamber: most of the red band, brighter towards the outer end
-    for x in range(W):
-        u = x / (W - 1)
-        g = 0.55 + 0.45 * min(1.0, max(0.0, (u - 0.18) / 0.5))
-        col = (int(150 + 100 * g), int(14 + 22 * g), int(12 + 14 * g))
-        d.line([(x, 8), (x, H - 9)], fill=col)
-    # horizontal optic ribs
-    for y in range(10, H - 8, 6):
-        d.line([(0, y), (W, y)], fill=(120, 8, 8))
-    # two round lens elements (the S15 lamp's tail/stop optics), with their bright centres
-    for cx, r in ((300, 40), (420, 44)):
-        for k in range(r, 0, -1):
-            t = k / r
-            c = (int(255 - 70 * t * t), int(60 - 40 * t), int(40 - 28 * t))
-            d.ellipse((cx - k * 1.25, H * 0.48 - k, cx + k * 1.25, H * 0.48 + k), fill=c)
-        d.ellipse((cx - r * 1.25, H * 0.48 - r, cx + r * 1.25, H * 0.48 + r), outline=(140, 10, 10), width=3)
-    # dark frame along the edges
-    d.rectangle((0, 0, W - 1, 6), fill=(40, 2, 4))
-    d.rectangle((0, H - 7, W - 1, H - 1), fill=(40, 2, 4))
+    for xx in range(W):
+        x = 0.33 + xx / W * 0.50
+        g = 0.55 + 0.45 * min(1.0, max(0.0, (x - 0.62) / 0.12))
+        col = (int(150 + 95 * g), int(12 + 20 * g), int(12 + 12 * g))
+        d.line([(xx, 0), (xx, H)], fill=col)
+    for y in [0.725 + k * 0.006 for k in range(16)]:
+        a_, b_ = P(0.33, y)
+        d.line([(0, b_), (W, b_)], fill=(132, 8, 9))
+    # the cell grid: 3 rows between y 0.737 and 0.800, columns from x 0.495 to 0.655
+    nx, ny = 8, 3
+    x0, x1, y0, y1 = 0.495, 0.655, 0.737, 0.800
+    cw, ch = (x1 - x0) / nx, (y1 - y0) / ny
+    for i in range(nx):
+        for j in range(ny):
+            a = P(x0 + i * cw + 0.0015, y0 + (j + 1) * ch - 0.0015)
+            b = P(x0 + (i + 1) * cw - 0.0015, y0 + j * ch + 0.0015)
+            d.rectangle((a[0], a[1], b[0], b[1]), fill=(120, 6, 8))
+            a = P(x0 + i * cw + 0.004, y0 + (j + 1) * ch - 0.004)
+            b = P(x0 + (i + 1) * cw - 0.004, y0 + j * ch + 0.004)
+            d.rectangle((a[0], a[1], b[0], b[1]), fill=(236, 46, 40))
+            c = P(x0 + (i + 0.5) * cw, y0 + (j + 0.5) * ch)
+            d.ellipse((c[0] - 4, c[1] - 4, c[0] + 4, c[1] + 4), fill=(255, 120, 100))
     im = im.filter(ImageFilter.GaussianBlur(0.8))
     im.save(os.path.join(OUT, 'taillight.png'))
 
 
 def headlight():
-    """the headlamp's face in front view (u = (|x| - 0.30) / 0.525, v = (y - 0.63) / 0.145): chrome housing, the
-    projector low beam (inner), the high-beam reflector (outer) and the clear corner; bright = glows at night"""
-    W, H = 512, 144
-    su, sv = W / 0.525, H / 0.145
+    """the headlamp's face in front view (u = (|x| - 0.27) / 0.51, v = (y - 0.565) / 0.125): the spec-R's black inner
+    housing, the high-beam reflector (inner), the projector low beam in its chrome ring (middle), the turn lamp's bowl
+    with its amber bulb (outer end); bright = glows at night"""
+    W, H = 512, 128
+    su, sv = W / 0.51, H / 0.125
 
     def P(x, y):
-        return ((x - 0.30) * su, (1 - (y - 0.63) / 0.145) * H)
+        return ((x - 0.27) * su, (1 - (y - 0.565) / 0.125) * H)
 
     im = Image.new('RGB', (W, H))
     px = im.load()
     for yy in range(H):
         for xx in range(W):
-            v = 0.66 + 0.10 * (1 - yy / H) + 0.03 * math.sin(xx * 0.9)
-            px[xx, yy] = (int(236 * v), int(234 * v), int(226 * v))
+            v = 0.19 + 0.06 * (1 - yy / H) + 0.015 * math.sin(xx * 0.9)
+            px[xx, yy] = (int(255 * v), int(255 * v), int(258 * v))
     d = ImageDraw.Draw(im)
 
-    def disc(x, y, r, col):
+    def disc(x, y, r, col, outline=None):
         cx, cy = P(x, y)
-        d.ellipse((cx - r * su, cy - r * sv, cx + r * su, cy + r * sv), fill=col)
+        d.ellipse((cx - r * su, cy - r * sv, cx + r * su, cy + r * sv), fill=col, outline=outline, width=2)
 
-    # clear corner: the position lamp's ribbed lens
-    for k in range(12):
-        x0 = 0.735 + k * 0.008
-        a, _ = P(x0, 0.7)
-        d.rectangle((a, 0, a + 3, H), fill=(236, 238, 240))
-    # projector low beam: dark shroud, chrome ring, bright lens with a highlight
-    disc(0.56, 0.680, 0.040, (110, 112, 116))
-    disc(0.56, 0.680, 0.035, (196, 198, 202))
-    disc(0.56, 0.680, 0.029, (226, 228, 230))
-    disc(0.552, 0.688, 0.008, (255, 255, 255))
-    # high beam: faceted reflector bowl round a bulb
-    cx, cy = P(0.69, 0.700)
-    for r in range(int(0.036 * su), 0, -1):
-        c = 170 + int(60 * (1 - r / (0.036 * su)) ** 0.5) + (10 if r % 6 < 3 else 0)
-        c = min(255, c)
-        d.ellipse((cx - r, cy - r * sv / su, cx + r, cy + r * sv / su), fill=(c, c, min(255, c + 4)))
-    disc(0.69, 0.700, 0.007, (255, 255, 250))
-    # inner tip: a chrome blade
-    for k in range(4):
-        y0 = 0.655 + k * 0.012
-        a = P(0.30, y0); b = P(0.43, y0 + 0.010)
-        d.line((a, b), fill=(230, 232, 236), width=2)
+    def bowl(x, y, rx, ry, lo, hi):
+        cx, cy = P(x, y)
+        R = int(rx * su)
+        for r in range(R, 0, -1):
+            c = lo + int((hi - lo) * (1 - r / R) ** 0.6) + (10 if r % 6 < 3 else 0)
+            d.ellipse((cx - r, cy - r * ry / rx * sv / su, cx + r, cy + r * ry / rx * sv / su), fill=(c, c, min(255, c + 4)))
+        d.ellipse((cx - R, cy - R * ry / rx * sv / su, cx + R, cy + R * ry / rx * sv / su), outline=(104, 106, 110), width=2)
+
+    # high beam: a long dark-chrome reflector round a bright bulb
+    bowl(0.428, 0.608, 0.060, 0.030, 46, 92)
+    disc(0.428, 0.608, 0.006, (190, 190, 186))
+    # projector low beam: chrome ring, the lens, its highlight
+    disc(0.559, 0.612, 0.036, (168, 170, 174))
+    disc(0.559, 0.612, 0.031, (58, 60, 64))
+    disc(0.559, 0.612, 0.026, (140, 142, 146))
+    disc(0.552, 0.619, 0.006, (240, 240, 240))
+    # turn lamp at the outer end: a chrome bowl, the amber bulb
+    bowl(0.689, 0.628, 0.032, 0.030, 48, 96)
+    disc(0.689, 0.628, 0.006, (176, 106, 34))
+    # a chrome blade along the inner tip
+    for k in range(2):
+        y0 = 0.585 + k * 0.012
+        a = P(0.29, y0); b = P(0.36, y0 + 0.012)
+        d.line((a, b), fill=(150, 152, 156), width=2)
     im = im.filter(ImageFilter.GaussianBlur(0.7))
     im.save(os.path.join(OUT, 'headlight.png'))
 

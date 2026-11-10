@@ -1,0 +1,20 @@
+{
+ "photo": "r41.jpg",
+ "livery": "white",
+ "vref": 145.0,
+ "width_px": 1162.0,
+ "classes": {
+  "dark": {
+   "iou": 0.111,
+   "mean_pct": 3.73,
+   "p90_pct": 9.55,
+   "model_to_photo_mean_pct": 5.03,
+   "photo_to_model_mean_pct": 1.08
+  },
+  "lamp": {
+   "iou": 0.0,
+   "mean_pct": 99.0,
+   "p90_pct": 99.0
+  }
+ }
+}
