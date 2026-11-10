@@ -731,9 +731,11 @@ F_BUMPER_PROFILE = [(-0.062, 0.625), (-0.050, 0.680), (-0.030, 0.694), (-0.002, 
 # the bar is its own volume (r04, r09, n44): a narrow top, a dark gap behind it to the grille band (its back face trim)
 F_BUMPER_MATS = ['trim'] + ['paint'] * 8 + ['trim'] + ['accent'] * 7 + ['interior']
 # n44 / c13 / n08 (the owner's choice): the bar is black across the front; the corners are body colour from the bar's
-# top down to the turn lamps' upper edge (profile point F_WHITE_TO, y 0.57), from just outboard of the turn lamps
+# top down to its groove (profile point F_WHITE_TO, y 0.59), from F_WHITE_X outwards. Lamp review 2026-11-10: the
+# late combination lamps sit right under the groove (r03, n06: a thin dark line between the bar and the lenses), so
+# the colour no longer runs down the face to 0.57 (it would cut into the clear lamps' tops)
 F_WHITE_X = 0.588
-F_WHITE_TO = 11
+F_WHITE_TO = 9
 
 
 def _front_bumper_mat(path):
@@ -750,10 +752,14 @@ R_BUMPER_PROFILE = [(-0.070, 0.488), (-0.030, 0.494), (-0.008, 0.489), (0.005, 0
 R_BUMPER_MATS = ['paint'] * 6 + ['trim'] + ['accent'] * 6 + ['interior']
 
 
+F_PLAN_HALF, F_PLAN_R = 0.800, 0.085     # front bumper in plan: half width, corner radius
+F_PLAN_CORNER = F_PLAN_HALF - F_PLAN_R   # where the face turns into the corner
+
+
 def bumper_paths():
     zf_end = ZF + ARCH_R + 0.035
     zr_end = ZR - ARCH_R - 0.035
-    front = _plan(True, Z_FBUMP, zf_end, 0.800, 0.085, 0.030, x_knots=(F_WHITE_X,))
+    front = _plan(True, Z_FBUMP, zf_end, F_PLAN_HALF, F_PLAN_R, 0.030, x_knots=(F_WHITE_X,))
     rear = _plan(False, Z_RBUMP, zr_end, 0.820, 0.130, 0.025)
     return front, rear
 

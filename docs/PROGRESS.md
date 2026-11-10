@@ -52,6 +52,18 @@ deployed yet: the owner sees each sheet first).
   `__importCar` / `__previewCar` hooks) and so is the procedural export (`export-cars.cjs`, `assets:cars`,
   `__exportCar`). Checked in Chrome: garage at dawn and night, a night race start. Deployed (bundle `index-Y1K8yz12.js`, the GLB
   served hash-equal).
+- **Lamp review of the four earlier own cars** (owner: 「ライト部分の目の形が参考とはかなり違うかも」; approved 「はい」 to ship
+  them together). Each lamp traced on the photos and scored (IoU, p95 / max px; `fitdata/<id>/lamps.json` + tools),
+  insides redrawn, metal parts metallic 1 (rims, discs, reflectors, clear lens housings), check scenes with reflection
+  panels. Impreza: head lamps 0.61–0.82 → 0.76–0.92, tail 0.60–0.68 → 0.78–0.85 (lamp patches welded: the cover's
+  reflections no longer break into blocks). RX-7: rear band 0.68 → 0.88, bumper reflector bars 0.63–0.65 → 0.86–0.89,
+  front combination lamps redrawn inside. S15: head lamps 0.55 → 0.84 / 0.63 → 0.71 (blunt rounded inner end), reverse
+  lamps 0.69–0.71 → 0.84–0.89 (a wedge), tail cells redrawn. AE86: tail rows and cells redrawn (the photos disagree
+  by 2–3 cm); the late front bumper lamp is now amber + clear (fluted lens, chrome reflector; the clear cell uses the
+  `headlight` material and glows as a parking lamp), 8.8 cm tall; the solved cameras are 22–28 px off at the car's
+  face (checked against the bumper's own edges), so the lamps were scored registered by that offset (whole lamp
+  0.28–0.38 → 0.66–0.67). Silhouettes unchanged. Checked in Chrome: garage (night / dawn) for all four, a night race
+  start behind the AE86 (pop-ups up and lit at night, closed at dawn).
 
 ## Session 7 (2026-11-03 – 11-04) — every model our own (Blender); the owner's train lineup; a livery per line
 

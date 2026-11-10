@@ -3,7 +3,7 @@ Toyota Sprinter Trueno AE86 (3-door GT-APEX, late model 1985-87) for TOUGE NOCTU
 numbers and our own painted textures (no outside model, no photo pixels). Run with Blender 5.x:
 
   blender -t 4 --background --factory-startup --python tools/blender/cars/hayate.py -- --out <file.glb>
-      [--render <dir> --views front34,rear34,... --samples N --size WxH] [--night] [--closed] [--silver]
+      [--render <dir> --views front34,rear34,... --samples N --size WxH] [--night] [--closed] [--silver] [--hazard]
 
 Modules: hayate_kit (mesh helpers, export), hayate_body (hull, glasshouse, bumpers), hayate_parts (pop-ups, lamps,
 wheels, interior, details), hayate_tex (painted textures), hayate_stage (the check scene).
@@ -61,7 +61,7 @@ def main():
     if RENDER:
         import hayate_stage as S
         S.scene(night=NIGHT)
-        P.lamps_on(mats, NIGHT)
+        P.lamps_on(mats, NIGHT, hazard='--hazard' in argv)
         if '--silver' in argv:
             P.silver(mats)
         if '--transparent' in argv:
@@ -84,7 +84,7 @@ def main():
             sc.display.render_aa = '8'
         os.makedirs(RENDER, exist_ok=True)
         for v in VIEWS.split(','):
-            S.render(v, os.path.join(RENDER, f'{v}{"_night" if NIGHT else ""}{"_closed" if CLOSED else ""}.png'), size=SIZE, samples=SAMPLES, transparent='--transparent' in argv)
+            S.render(v, os.path.join(RENDER, f'{v}{"_night" if NIGHT else ""}{"_closed" if CLOSED else ""}{"_hazard" if "--hazard" in argv else ""}.png'), size=SIZE, samples=SAMPLES, transparent='--transparent' in argv)
 
 
 main()

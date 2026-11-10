@@ -200,7 +200,9 @@ def head_units(p, info):
             continue
         s = 1 if pt.x > 0 else -1
         projector = i % 2 == 0
-        back = pt - d * 0.050
+        # set back so nothing pokes through the (opaque) lens: the lens texture draws the units (lamp review
+        # 2026-11-10: the shroud's rim showed as a bold white ring)
+        back = pt - d * 0.062
         if projector:
             # projector: a chrome shroud, the lens (glows) in front
             _axis_cyl(p, 'chrome', back, d, 0.034, 0.030)

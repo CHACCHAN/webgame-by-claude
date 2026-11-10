@@ -53,39 +53,50 @@ def _srgb(h):
 
 
 def tail_lamp():
-    """u: inboard (garnish side) → outboard round the corner; v: bottom → top"""
+    """u: inboard (garnish side) → outboard; v: bottom → top. As on the photos (r08, q02, n32; lamp review 2026-11-10):
+    unlit, the upper row is a lighter, pinkish red (the clear-ish red lens over a white reflector), the lower row a deep
+    red with each cell's reflector glowing in its middle, a fine grid of lens prisms over both, a smoked lower edge;
+    the cells split at u 0.447 / 0.693 (the reverse lamp is the lower middle cell, a separate part)"""
     c = Canvas(512, 128)
-    c.fill(_srgb('#560a0d'))                                     # lower lens (red, a little deeper than the top)
     U, V = c.U, c.V
-    # upper red band
-    top = c.box(-1, 2, 0.50, 1.2)
-    c.paint(top, _srgb('#a4121a'))
-    # a middle red line across the lower part and vertical flutes
-    c.paint(c.box(-1, 2, 0.22, 0.27) * 0.8, _srgb('#9a0e12'))
-    flutes = (np.sin(U * 2 * np.pi * 60) > 0.7) * (1 - top)
-    c.paint(flutes * 0.25, _srgb('#7a1014'))
-    # the middle cell (over the reverse lamp, x 0.43-0.51 of 0.285-0.614: u 0.447-0.693) is a brighter red
-    c.paint(c.box(0.447, 0.693, 0.50, 1.2) * 0.85, _srgb('#d8221e'))
-    # r06: horizontal ribs across both halves (a dark groove with a lit edge above it), 6 per half
-    f = np.mod(V * 12.5, 1.0)
-    c.paint((f < 0.13) * 0.55, _srgb('#2a0507'))
-    c.paint(((f >= 0.13) & (f < 0.26)) * 0.30, _srgb('#ff5a48'))
-    # cell dividers, the split between the halves and the housing edge
+    c.fill(_srgb('#6e0a10'))                                     # lower row: deep red
+    top = c.box(-1, 2, 0.65, 1.2, soft=0.02)        # the rows split at 65 % (hayate_details.TAIL_SPLIT)
+    c.paint(top, _srgb('#a8303a'))                               # upper row: lighter, pinkish red
+    # each lower cell's reflector glows in its middle (brighter red), the upper row a little lighter in the middle too
+    for u0, u1 in ((0.0, 0.447), (0.447, 0.693), (0.693, 1.0)):
+        cu = (u0 + u1) / 2
+        r = np.sqrt(((U - cu) / ((u1 - u0) * 0.42)) ** 2 + ((V - 0.36) / 0.28) ** 2)
+        c.paint(np.clip(1 - r, 0, 1) * 0.75 * (1 - top), _srgb('#c8161e'))
+        r = np.sqrt(((U - cu) / ((u1 - u0) * 0.5)) ** 2 + ((V - 0.82) / 0.16) ** 2)
+        c.paint(np.clip(1 - r, 0, 1) * 0.35 * top, _srgb('#cc5058'))
+    # the lens prisms: a fine grid (darker lines), slightly lit edges
+    fu = np.mod(U * 96, 1.0)
+    fv = np.mod(V * 18, 1.0)
+    c.paint(((fu < 0.16) | (fv < 0.14)) * 0.30, _srgb('#3a0508'))
+    c.paint(((fv >= 0.14) & (fv < 0.24)) * 0.12, _srgb('#ff6a5a'))
+    # cell dividers (dark), the soft step between the rows, the smoked lower edge and the lens rim
     for u in (0.447, 0.693):
-        c.paint(c.box(u - 0.004, u + 0.004, -1, 2) * 0.8, _srgb('#1a0a0a'))
-    c.paint(c.box(-1, 2, 0.47, 0.50), _srgb('#1a1a1c'))
-    edge = np.maximum(c.box(-1, 2, 0.0, 0.04), c.box(-1, 2, 0.96, 1.01))
-    c.paint(edge, _srgb('#121214'))
+        c.paint(c.box(u - 0.005, u + 0.005, -1, 2) * 0.85, _srgb('#14080a'))
+    c.paint(c.box(-1, 2, 0.635, 0.665) * 0.6, _srgb('#3a0a0e'))
+    c.paint(c.box(-1, 2, -1, 0.08, soft=0.04) * 0.8, _srgb('#22060a'))
+    c.paint(c.box(-1, 2, 0.965, 2), _srgb('#121214'))
     return c.image('tex_taillight', None)
 
 
 def amber_lamp():
-    """corner lamp strip: smoked front (u < 0.52), amber side; u 0.6..1 is also used by the bumper / rear turn lamps"""
+    """corner lamp strip: smoked front (u < 0.52), amber side; u 0.6..1 is also used by the bumper / rear turn lamps.
+    Unlit amber as on the photos (n24, r08): a deep orange-amber, darker low down (the reflector's shadow), a fine
+    prism grid, not a bright flat orange"""
     c = Canvas(256, 64)
     U, V = c.U, c.V
-    c.fill(_srgb('#d8740c'))
-    ribs = (np.sin(U * 2 * np.pi * 40) > 0.5)
-    c.paint(ribs * 0.35, _srgb('#ffb24a'))
+    c.fill(_srgb('#a8560c'))
+    c.paint(c.box(-1, 2, 0.55, 2, soft=0.25) * 0.6, _srgb('#cc7418'))
+    c.paint(c.box(-1, 2, -1, 0.35, soft=0.2) * 0.5, _srgb('#6e3208'))
+    r = np.sqrt(((np.mod(U * 4, 1.0) - 0.5) / 0.45) ** 2 + ((V - 0.5) / 0.45) ** 2)
+    c.paint(np.clip(1 - r, 0, 1) * 0.35, _srgb('#e08a2a'))
+    fu = np.mod(U * 64, 1.0)
+    fv = np.mod(V * 12, 1.0)
+    c.paint(((fu < 0.18) | (fv < 0.16)) * 0.28, _srgb('#4a2006'))
     smoke = c.box(-1, 0.52, -1, 2, soft=0.02)
     c.paint(smoke * 0.92, _srgb('#14110f'))
     c.paint(smoke * c.box(0.08, 0.46, 0.25, 0.75) * 0.25, _srgb('#a85808'))
@@ -95,13 +106,24 @@ def amber_lamp():
 
 
 def clear_lamp():
-    """bumper clear lamps: a prismatic grid over a silver reflector"""
-    c = Canvas(128, 64)
+    """the front combination lamp's clear part (the clearance lamp; u inboard → outboard, v up), as on r03 / n06: fine
+    vertical flutes over a chrome reflector (a bright band along its top, a second, softer one low down), the bulb's
+    dark round socket near the inboard end, a light-grey housing rim round the lens"""
+    c = Canvas(256, 64)
     U, V = c.U, c.V
-    c.fill(_srgb('#cfd6dc'))
-    grid = ((np.sin(U * 2 * np.pi * 10) > 0.75) | (np.sin(V * 2 * np.pi * 5) > 0.8))
-    c.paint(grid * 0.5, _srgb('#8e979e'))
-    c.paint(np.maximum(c.box(-1, 2, -1, 0.06), c.box(-1, 2, 0.94, 2)), _srgb('#2a2c2e'))
+    c.fill(_srgb('#aeb5bb'))
+    c.paint(c.box(-1, 2, 0.58, 0.86, soft=0.14) * 0.75, _srgb('#eef2f5'))
+    c.paint(c.box(0.25, 0.95, 0.16, 0.38, soft=0.12) * 0.55, _srgb('#e2e7eb'))
+    c.paint(c.box(-1, 2, 0.40, 0.56, soft=0.10) * 0.35, _srgb('#7d858c'))
+    flutes = 0.5 + 0.5 * np.sin(U * 2 * np.pi * 46)
+    c.paint(flutes * 0.22, _srgb('#6f777e'))
+    c.paint((np.mod(V * 6, 1.0) < 0.08) * 0.18, _srgb('#ffffff'))
+    r = np.sqrt(((U - 0.075) / 0.050) ** 2 + ((V - 0.50) / 0.22) ** 2)
+    c.paint(np.clip((1.0 - r) / 0.12, 0, 1), _srgb('#2e3236'))
+    c.paint(np.clip((0.55 - r) / 0.12, 0, 1), _srgb('#14171a'))
+    rim = np.maximum(np.maximum(c.box(-1, 0.018, -1, 2), c.box(0.982, 2, -1, 2)),
+                     np.maximum(c.box(-1, 2, -1, 0.07), c.box(-1, 2, 0.93, 2)))
+    c.paint(rim, _srgb('#8a8f94'))
     return c.image('tex_headlight', None)
 
 

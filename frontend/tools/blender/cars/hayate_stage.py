@@ -73,6 +73,24 @@ def _asphalt():
     return m
 
 
+
+def reflect_panels(sc, energy=500.0):
+    """three bright softboxes round the car (area lights, unseen by the camera): chrome, the alloys and the lamps'
+    reflectors mirror them, as metal mirrors a bright sky on the photos (on a dull uniform world metal reads as grey
+    plastic)"""
+    for name, pos, size in (('panel_l', (6.0, 3.4, 1.5), (6.0, 1.8)), ('panel_r', (-6.0, 3.8, -1.0), (6.0, 1.8)),
+                            ('panel_top', (0.5, 6.5, 0.0), (5.0, 2.4))):
+        L = bpy.data.lights.new(name, 'AREA')
+        L.shape = 'RECTANGLE'
+        L.size, L.size_y = size
+        L.energy = energy
+        o = bpy.data.objects.new(name, L)
+        sc.collection.objects.link(o)
+        o.location = K.B(*pos)
+        o.rotation_euler = (K.B(0.0, 0.6, 0.0) - o.location).to_track_quat('-Z', 'Y').to_euler()
+        o.visible_camera = False
+
+
 def scene(night=False):
     sc = bpy.context.scene
     world = sc.world or bpy.data.worlds.new('sky')
@@ -108,6 +126,7 @@ def scene(night=False):
         sun.data.angle = math.radians(1.0)
         sun.rotation_euler = (math.radians(50), 0, 0)
         sc.collection.objects.link(sun)
+        reflect_panels(sc)
     # ground
     bm = bmesh.new()
     bmesh.ops.create_grid(bm, x_segments=1, y_segments=1, size=60)

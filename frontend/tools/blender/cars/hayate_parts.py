@@ -45,16 +45,16 @@ def materials():
     M['glass'] = _principled('glass', '#10161d', metallic=0.1, roughness=0.04)
     M['trim'] = _principled('trim', '#111214', roughness=0.65)
     M['chrome'] = _principled('chrome', '#d8dade', metallic=1.0, roughness=0.12)
-    M['headlight'] = _principled('headlight', '#dfe6ee', metallic=0.4, roughness=0.1, emissive='#fff4e0')
+    M['headlight'] = _principled('headlight', '#dfe6ee', metallic=0.8, roughness=0.12, emissive='#fff4e0')
     M['taillight'] = _principled('taillight', '#6a0808', roughness=0.25, emissive='#ff1a10')
     M['tire'] = _principled('tire', '#181818', roughness=0.92)
-    M['rim'] = _principled('rim', '#a7aaae', metallic=0.75, roughness=0.42)
-    M['brake'] = _principled('brake', '#3a3b3e', metallic=0.4, roughness=0.5)
-    M['popup_lens'] = _principled('popup_lens', '#dfe6ee', metallic=0.3, roughness=0.12, emissive='#fff4e0')
+    M['rim'] = _principled('rim', '#a7aaae', metallic=1.0, roughness=0.34)
+    M['brake'] = _principled('brake', '#55575b', metallic=1.0, roughness=0.55)   # bare cast-iron calipers
+    M['popup_lens'] = _principled('popup_lens', '#dfe6ee', metallic=0.8, roughness=0.15, emissive='#fff4e0')   # fluted glass over the chrome reflector
     M['interior'] = _principled('interior', '#2a2a2d', roughness=0.85)
     M['amber'] = _principled('amber', '#e07a10', roughness=0.2, emissive='#ff8a10')
-    M['reverse'] = _principled('reverse', '#b9bec3', metallic=0.35, roughness=0.08)   # clear lens over a reflector
-    M['disc'] = _principled('disc', '#77787b', metallic=0.85, roughness=0.45)
+    M['reverse'] = _principled('reverse', '#b9bec3', metallic=1.0, roughness=0.14)   # clear lens over a chrome reflector
+    M['disc'] = _principled('disc', '#77787b', metallic=1.0, roughness=0.40)
     M['plate'] = _principled('plate', '#ffffff', roughness=0.5)
     # painted textures: the lenses glow through their own pattern (as in the game: emissiveMap = map)
     for name, paint in (('taillight', TX.tail_lamp), ('headlight', TX.clear_lamp), ('popup_lens', TX.popup_lens),
@@ -69,10 +69,15 @@ def materials():
     return M, {}
 
 
-def lamps_on(M, night):
-    for name, s in (('headlight', 8.0), ('popup_lens', 30.0), ('taillight', 3.0 if night else 0.12), ('amber', 0.0)):
+def lamps_on(M, night, hazard=False):
+    """check renders: the lamps lit (at night the pop-ups, the bumper's clearance lamps and the tail lamps; `hazard`:
+    the turn lamps too, as the indicators light them, parked: the pop-ups' lenses off)"""
+    for name, s in (('headlight', 3.0), ('popup_lens', 0.0 if hazard else 30.0), ('taillight', 3.0 if night else 0.12),
+                    ('amber', 0.0)):
         p = M[name].node_tree.nodes['Principled BSDF']
         p.inputs['Emission Strength'].default_value = s if night or name == 'taillight' else 0.0
+    if hazard:
+        M['amber'].node_tree.nodes['Principled BSDF'].inputs['Emission Strength'].default_value = 6.0 if night else 2.5
 
 
 def silver(M):

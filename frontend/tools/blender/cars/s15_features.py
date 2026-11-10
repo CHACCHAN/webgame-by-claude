@@ -14,8 +14,8 @@ import s15_body as BD
 from s15_kit import lerp
 
 # material slots of the shell
-MATS = ['paint', 'trim', 'glass', 'chrome', 'amber', 'lens_clear', 'taillight', 'interior', 'headlight']
-PAINT, TRIM, GLASS, CHROME, AMBER, CLEAR, TAIL, INTERIOR, HEAD = range(len(MATS))
+MATS = ['paint', 'trim', 'glass', 'chrome', 'amber', 'lens_clear', 'taillight', 'interior', 'headlight', 'lens_inner']
+PAINT, TRIM, GLASS, CHROME, AMBER, CLEAR, TAIL, INTERIOR, HEAD, CLEAR_IN = range(len(MATS))
 
 
 def mirror_x(poly):
@@ -89,16 +89,21 @@ def backlight():
 
 
 def headlamp():
-    """front view (x, y) of the headlamp opening, x >= 0 (triangulated on r10 / r43: inner tip, outer end, the top edge's
-    highest point, the projector): a long slanted lens under the bonnet's edge, pointed at its low inner tip, ~9 cm tall"""
-    upper = [(0.312, 0.602), (0.37, 0.627), (0.44, 0.644), (0.52, 0.657), (0.60, 0.669), (0.67, 0.682), (0.72, 0.690),
-             (0.752, 0.689)]
-    end = [(0.773, 0.676), (0.780, 0.652), (0.770, 0.621), (0.750, 0.601)]
-    lower = [(0.70, 0.588), (0.62, 0.578), (0.52, 0.570), (0.42, 0.566), (0.35, 0.567), (0.285, 0.579)]
-    return K.round_poly(upper + end + lower, [0.006] + [0.0] * 6 + [0.015, 0.015, 0.015, 0.02, 0.02] + [0.0] * 5 + [0.004], 3)
+    """front view (x, y) of the headlamp opening, x >= 0: a long lens under the bonnet's edge, its top edge nearly
+    level, ~10 cm tall, a blunt rounded inner end beside the grille and a rounder, taller outer end.
+    Lamp review 2026-11-10: the lens outlines traced on r43 (right lamp) and r10 (left lamp), carried back onto the
+    fitted body through the solved cameras and averaged here. The old lens ran out to a low pointed tip at x 0.285 and
+    its top edge fell 3-4 cm too low over the inner half; on both photos the inner end is blunt at x ~0.34, as tall as
+    the middle"""
+    upper = [(0.345, 0.636), (0.372, 0.656), (0.42, 0.672), (0.47, 0.678), (0.52, 0.681), (0.60, 0.687), (0.67, 0.694),
+             (0.72, 0.698), (0.752, 0.694)]
+    end = [(0.775, 0.680), (0.785, 0.652), (0.780, 0.622), (0.764, 0.603)]
+    lower = [(0.70, 0.590), (0.62, 0.586), (0.52, 0.587), (0.42, 0.590), (0.375, 0.594), (0.350, 0.604), (0.340, 0.620)]
+    return K.round_poly(upper + end + lower, [0.010] + [0.0] * 7 + [0.015, 0.015, 0.015, 0.02, 0.02] + [0.0] * 4
+                        + [0.008, 0.010, 0.010], 3)
 
 
-HEAD_UNITS = ((0.559, 0.612), (0.428, 0.608))     # the projector low beam, the high-beam reflector (front view)
+HEAD_UNITS = ((0.559, 0.629), (0.428, 0.634))     # the projector low beam, the high-beam reflector (front view)
 
 
 def fog_pod():
@@ -136,8 +141,11 @@ def tail_lamp():
     amber = [(0.40, 0.95), (0.40, 0.87), (0.47, 0.852), (0.52, 0.836), (0.65, 0.830), (0.87, 0.827), (0.87, 0.95)]
     divider = [(0.40, 0.817), (0.65, 0.812), (0.87, 0.806), (0.87, 0.827), (0.65, 0.830), (0.52, 0.836), (0.47, 0.852),
                (0.40, 0.87)]
-    rev = K.round_poly([(0.370, 0.757), (0.392, 0.786), (0.432, 0.798), (0.474, 0.791), (0.486, 0.770), (0.470, 0.748),
-                        (0.430, 0.741), (0.385, 0.744)], 0.012, 2)
+    # the reverse lamp (lamp review 2026-11-10: both lamps traced on r48, carried back onto the body and averaged): a
+    # wedge, its inner edge parallel to the lens's sweep, a sharp tip at the inner bottom, the outer end round
+    rev = K.round_poly([(0.383, 0.752), (0.395, 0.745), (0.420, 0.745), (0.448, 0.748), (0.466, 0.753), (0.476, 0.766),
+                        (0.478, 0.780), (0.474, 0.791), (0.458, 0.794), (0.439, 0.792), (0.421, 0.784), (0.403, 0.772)],
+                       [0.004, 0.004, 0, 0, 0.008, 0.004, 0, 0.007, 0.004, 0, 0, 0.004], 3)
     return outer, amber, divider, rev, sweep
 
 
@@ -289,7 +297,8 @@ def cut_all(bm, log=print):
     gaps += K.groove(bm, [(x, 1.037 - 0.18 * (abs(x) / 0.70) ** 2.2) for x in np.linspace(-0.66, 0.66, 25)], 'top', 0.0045, 1,
                      keep=lambda f: gc(f)[1] > 0.8 and gn(f)[1] > 0.4)
     # bonnet front edge (front view) between the lamps
-    gaps += K.groove(bm, [(x, 0.618 - 0.018 * (abs(x) / 0.30) ** 1.5) for x in np.linspace(-0.30, 0.30, 13)], 'front', 0.0045, 1,
+    # (out to the lamps' blunt inner ends at x ±0.34, lamp review 2026-11-10)
+    gaps += K.groove(bm, [(x, 0.618 - 0.018 * (abs(x) / 0.30) ** 1.5) for x in np.linspace(-0.34, 0.34, 15)], 'front', 0.0045, 1,
                      keep=lambda f: gc(f)[2] > 1.9)
     # boot lid: across the deck at the backlight base, along the deck sides, down the rear face round the garnish
     gaps += K.groove(bm, [(x, -1.708 + 0.57 * x * x) for x in np.linspace(-0.645, 0.645, 25)], 'top', 0.0045,
@@ -366,6 +375,10 @@ def cut_all(bm, log=print):
         for q, mat in ((amber, AMBER), (divider, TRIM), (rev, CLEAR)):
             K.cut_outline(bm, mir(q), 'rear', -1, keep=lambda f: f.material_index == TAIL, min_facing=0.08)
             setmat(K.faces_in(bm, mir(q), 'rear', -1, keep=lambda f: f.material_index == TAIL, min_facing=0.08), mat)
+        # inside the reverse lamp's bright clear rim: the grey, fluted reflector (r48)
+        ri = K.offset_poly(mir(rev), -0.005)
+        K.cut_outline(bm, ri, 'rear', -1, keep=lambda f: f.material_index == CLEAR, min_facing=0.08)
+        setmat(K.faces_in(bm, ri, 'rear', -1, keep=lambda f: f.material_index == CLEAR, min_facing=0.08), CLEAR_IN)
     # rear bumper: the roll under the lamps overhangs a shadowed crease; a fine line at the plate's top; the plate recess
     rear = lambda f: gc(f)[2] < -1.95 and abs(gc(f)[0]) < 0.86
     crease(bm, [(x, 0.656) for x in np.linspace(-0.86, 0.86, 40)], 'rear', -1, 0.020, 0.015, 'low', keep=rear)

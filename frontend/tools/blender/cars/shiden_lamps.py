@@ -260,22 +260,32 @@ def combo_outline(s):
 
 
 # the rear lamp band: one smoked strip across the tail (x from −X_END to X_END), lamps outboard of ±X_LAMP
-X_END, X_LAMP = 0.765, 0.430
+# (lamp review 2026-11-10: s14 and r19 traced and carried back onto the body, the two views averaged — r19 sits
+# ~2 cm lower than s14 throughout. The band was 2-3 cm too shallow at the bottom, its lower edge in the middle sags
+# towards the lamps instead of rising, and the ends wrap round the corners to x ±0.825 instead of stopping at ±0.765)
+X_END, X_LAMP = 0.825, 0.430
+X_ROUND, END_Y, END_R = 0.700, 0.668, 0.028
 
 
 def band_edges(x):
-    """bottom and top of the rear band at x (photo s14 back-projected: a thin dark strip high up in the middle,
-    y 0.78-0.83; the lamp sections deeper, down to y 0.64 from x 0.48 outwards); the outer ends are rounded"""
-    t = abs(x) / 0.82
-    top = 0.828 - 0.070 * t * t
-    lamp = _smooth(0.33, 0.50, abs(x))
-    bot = 0.781 - 0.135 * lamp + 0.010 * t * t
-    x0 = 0.69
-    if abs(x) > x0:
-        f = math.sqrt(max(0.0, 1 - ((abs(x) - x0) / (X_END - x0)) ** 2))
-        mid = (top + bot) / 2 + 0.008 * (1 - f)
-        top = mid + (top - mid) * f
-        bot = mid - (mid - bot) * f
+    """bottom and top of the rear band at x: a dark strip high up in the middle (y 0.76-0.83, its lower edge sagging
+    outwards), the lamp sections deeper, down to y 0.625 from x 0.46 outwards; at the ends the top comes down in a
+    wide round to END_Y and the bottom turns up in a small one"""
+    ax = abs(x)
+
+    def top_at(a):
+        return 0.828 - 0.070 * (a / 0.82) ** 2
+    top = top_at(ax)
+    lamp = _smooth(0.355, 0.465, ax)
+    mid_bot = 0.758 - 0.25 * ax * ax
+    lamp_bot = 0.625 + 0.10 * max(0.0, 0.58 - ax)
+    bot = mid_bot + (lamp_bot - mid_bot) * lamp
+    if ax > X_ROUND:
+        f = math.sqrt(max(0.0, 1 - ((ax - X_ROUND) / (X_END - X_ROUND)) ** 2))
+        top = END_Y + (top_at(X_ROUND) - END_Y) * f
+    if ax > X_END - END_R:
+        dx = ax - (X_END - END_R)
+        bot = max(bot, lamp_bot + END_R - math.sqrt(max(0.0, END_R * END_R - dx * dx)))
     return bot, top
 
 
@@ -392,11 +402,13 @@ def build(body, shell, mats, counts):
         well(m, shell, s)
         # front combination lamp: a recessed unit — dark housing, round projector in a chrome ring, a chrome
         # reflector outboard and a small amber segment at the tip
-        back = pocket(m, shell, combo_outline(s), 0.035, 'gloss_black', 'gloss_black')
-        disc(m, back, s * 0.537, 0.466, 0.034, 0.034, 'chrome', 0.004)
-        disc(m, back, s * 0.537, 0.466, 0.025, 0.025, 'headlight', 0.008, uv=True)
-        disc(m, back, s * 0.648, 0.474, 0.034, 0.031, 'chrome', 0.003)
-        disc(m, back, s * 0.648, 0.474, 0.027, 0.025, 'amber', 0.006)
+        # (lamp review 2026-11-10, s08 / s11: behind the clear lens the housing is silver chrome, not black)
+        # (s08: the projector's chrome bezel ~10 cm across and the amber bulb's round ~8 cm fill the lens' height)
+        back = pocket(m, shell, combo_outline(s), 0.035, 'lens_clear', 'lens_clear')
+        disc(m, back, s * 0.537, 0.467, 0.045, 0.041, 'chrome', 0.004)
+        disc(m, back, s * 0.537, 0.467, 0.029, 0.027, 'headlight', 0.008, uv=True)
+        disc(m, back, s * 0.649, 0.474, 0.040, 0.037, 'chrome', 0.003)
+        disc(m, back, s * 0.649, 0.474, 0.035, 0.032, 'amber', 0.006)
         # fog lamp at the inner end of its corner opening
         # (a chrome-ringed reflector bowl behind clear glass; two dark slats across the opening's outer part)
         back = pocket(m, shell, fog_outline(s), 0.06, 'trim', 'trim')
@@ -415,14 +427,20 @@ def build(body, shell, mats, counts):
         patch(m, shell, marker, 'x', s, 'amber', lift=0.002, rings=2)
         patch(m, shell, ellipse(-1.697, 0.445, 0.030, 0.008), 'x', s, 'reflector', lift=0.002, rings=2)
         # bumper: red reflector / rear fog bar with the clear reverse lamp at its inner end
-        # (photo s14: 0.50-0.765 across, y 0.40-0.455; the clear reverse lamp is the inner 40 %)
-        bar = [(s * x, y) for x, y in smooth_outline([(0.500, 0.432), (0.512, 0.457), (0.740, 0.440),
-                                                      (0.766, 0.418), (0.748, 0.400), (0.515, 0.405)], 3)]
+        # (lamp review 2026-11-10, s14 traced and carried back onto the body: 0.49-0.765 across; the top level at
+        # y 0.445, the bottom rising outwards from 0.383 to 0.42, so the inner end is the tall one and the outer
+        # end runs out to a point at the top)
+        bar = [(s * x, y) for x, y in smooth_outline([(0.495, 0.395), (0.492, 0.420), (0.505, 0.440), (0.540, 0.446),
+                                                      (0.640, 0.446), (0.740, 0.445), (0.763, 0.440), (0.760, 0.421),
+                                                      (0.735, 0.404), (0.690, 0.392), (0.620, 0.385), (0.540, 0.384),
+                                                      (0.508, 0.387)], 3)]
         patch(m, shell, bar, 'z', -1, 'gloss_black', lift=0.002, rings=2)
-        # (s14: a long red oval, the clear lamp an inset at its inner end with red all round it)
         patch(m, shell, shrink(bar, 0.004), 'z', -1, 'reflector', lift=0.004, rings=2)
-        rev = clip(shrink(bar, 0.009), 0.600, False, s)
-        patch(m, shell, rev, 'z', -1, 'lens_clear', lift=0.006, rings=2)
+        # (s14: the clear reverse lamp is a rounded inset with red all round it, x 0.516-0.608, a chrome rim)
+        rev = smooth_outline([(0.516, 0.398), (0.516, 0.419), (0.526, 0.425), (0.598, 0.425), (0.608, 0.419),
+                              (0.608, 0.398), (0.598, 0.392), (0.526, 0.392)], 3)
+        patch(m, shell, [(s * x, y) for x, y in shrink(rev, -0.002)], 'z', -1, 'chrome', lift=0.005, rings=2)
+        patch(m, shell, [(s * x, y) for x, y in rev], 'z', -1, 'lens_clear', lift=0.006, rings=2)
     tail_band(m, shell)
     counts['lamps'] = m.tris()
     m.build(body, mats, weld=1e-6)

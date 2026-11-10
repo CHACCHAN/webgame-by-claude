@@ -107,6 +107,55 @@ def nose(mesh, bvh):
     K.lay_strip(mesh, bvh, path, w, 'amber', lift=0.0055, u_scale=1.4, u0=0.6)
 
 
+# front combination lamp (late model): inner end, amber / clear junction (x on the bumper's face), how far the clear
+# lens runs round the corner (degrees of the corner's arc); top, the amber's and the clear's bottom (before
+# BD.front_drop)
+LAMP_X = (0.390, 0.565)
+LAMP_WRAP = 45.0
+LAMP_Y = (0.580, 0.492, 0.501)
+
+
+def _bumper_frame(fpath):
+    """the front bumper's plan path by arc length: s(x) on the face, and at(s) -> (point (x, z), outward normal), the
+    normal blended between the path's vertices as the bumper's sweep makes it"""
+    P = [tuple(p) for p in fpath]
+    n = len(P)
+    S = [0.0]
+    for a, b in zip(P[:-1], P[1:]):
+        S.append(S[-1] + math.hypot(b[0] - a[0], b[1] - a[1]))
+    N = []
+    for i in range(n):
+        a, b = P[max(0, i - 1)], P[min(n - 1, i + 1)]
+        tx, tz = b[0] - a[0], b[1] - a[1]
+        l = math.hypot(tx, tz)
+        N.append((-tz / l, tx / l))
+
+    def at(s):
+        i = max(0, min(n - 2, next((k for k in range(n - 1) if S[k + 1] >= s), n - 2)))
+        t = (s - S[i]) / max(1e-9, S[i + 1] - S[i])
+        p = (K.lerp(P[i][0], P[i + 1][0], t), K.lerp(P[i][1], P[i + 1][1], t))
+        nx, nz = K.lerp(N[i][0], N[i + 1][0], t), K.lerp(N[i][1], N[i + 1][1], t)
+        l = math.hypot(nx, nz)
+        return p, (nx / l, nz / l)
+
+    def s_of_x(x):
+        for k in range(n - 1):
+            if P[k][0] <= x <= P[k + 1][0]:
+                return K.lerp(S[k], S[k + 1], (x - P[k][0]) / max(1e-9, P[k + 1][0] - P[k][0]))
+        return S[-1]
+    return at, s_of_x
+
+
+def _face_out(y):
+    """the bumper face's offset from the plan path at height y (BD.F_BUMPER_PROFILE, the black face below the groove)"""
+    prof = [(o, h) for o, h in BD.F_BUMPER_PROFILE if 0.30 <= h <= 0.590]
+    prof.sort(key=lambda q: q[1])
+    for (o0, h0), (o1, h1) in zip(prof[:-1], prof[1:]):
+        if h0 <= y <= h1:
+            return K.lerp(o0, o1, (y - h0) / (h1 - h0))
+    return prof[0][0] if y < prof[0][1] else prof[-1][0]
+
+
 def bumper_front(mesh, bvh):
     """lamps and grille on the black face of the front bumper, the plate (right of centre on the real car)"""
     fpath, _ = BD.bumper_paths()
@@ -118,22 +167,45 @@ def bumper_front(mesh, bvh):
                 t = (x - a[0]) / max(1e-9, b[0] - a[0])
                 return K.lerp(a[1], b[1], t) + out
         return fpath[-1][1] + out
-    # turn lamps flush in the black face, split into cells so they follow its curve; n44: amber x 0.40-0.57 m, the
-    # body-colour corner (BD.F_WHITE_X) right outboard of them (no clear lamp on this bumper)
-    for x0, x1, mat in ((0.400, 0.572, 'amber'),):
-        y0, y1 = 0.497, 0.577
-        n = 5
-        for c in range(n):
-            xa, xb = K.lerp(x0, x1, c / n), K.lerp(x0, x1, (c + 1) / n)
-            za, zb = face_z(xa, -0.003), face_z(xb, -0.003)
-            ua, ub = c / n, (c + 1) / n
-            if mat == 'amber':
-                ua, ub = 0.6 + 0.4 * ua, 0.6 + 0.4 * ub
-            mesh.face([(xa, y0, za), (xb, y0, zb), (xb, y1, zb), (xa, y1, za)], mat,
-                      uvs=[(ua, 0), (ub, 0), (ub, 1), (ua, 1)], out=(0, 0, 1))
-    # central grille: a recessed slot with four horizontal slats (x 0…0.385)
+    # the late (1985-87) combination lamps, one unit from the grille's end round the corner just under the bar: the
+    # amber turn lamp inboard, the clear clearance lamp outboard (a fluted clear lens over a chrome reflector, the bulb
+    # socket at its inboard end), in a black bezel. Lamp review (2026-11-10, r03 + n06, both late cars; n44 / n24 show
+    # the early amber-only bumper). Measured within the bumper, not by rays: rays from the solved cameras land on the
+    # face 3-4 cm low and 10-15 cm towards the right in its middle (the TRUENO letters, the bar's groove and the far
+    # lamp land off the same way as the lamp, while the wheels and the silhouette fit). The cross-ratio of both lamps' inner ends and junctions gives inner end / junction 0.69 on both photos; the
+    # scale from the plate on n06 (inner ends 0.42 apart from the centre) and from the clear lens reaching the corner
+    # on r03 (0.38): 0.39, the grille's old width. The clear lens runs round the corner (n06: to ~45 degrees); the
+    # lamp's top ~1 cm under the bar's groove (r03), 8.8 cm tall (the old 5.5 cm lens's height on both photos as the
+    # ruler), the clear part 7.9 cm, its bottom rising round the corner (its top stays level: the bar's groove does).
+    at, s_of_x = _bumper_frame(fpath)
+    s_a, s_j = s_of_x(LAMP_X[0]), s_of_x(LAMP_X[1])
+    s_c = s_of_x(BD.F_PLAN_CORNER) + BD.F_PLAN_R * math.radians(LAMP_WRAP)
+    top, bot_a, bot_c = LAMP_Y
+
+    def edges(s, mat, grow=0.0):
+        if mat == 'amber' or (mat == 'trim' and s < s_j):
+            return bot_a - grow, top + grow
+        k = K.smoothstep(s_c - 0.050, s_c, s)
+        return bot_c - grow + 0.012 * k * k, top + grow
+
+    def lens(s0, s1, n, mat, lift, grow=0.0, uv=None):
+        cols = []
+        for c in range(n + 1):
+            s = K.lerp(s0, s1, c / n)
+            (px, pz), (nx, nz) = at(s)
+            ys = edges(s, mat, grow)
+            cols.append([(px + nx * (_face_out(y) + lift), y, pz + nz * (_face_out(y) + lift)) for y in ys])
+        rows = [[col[j] for col in cols] for j in (0, 1)]
+        uvs = [[(uv[0] + (uv[1] - uv[0]) * c / n, j) for c in range(n + 1)] for j in (0, 1)] if uv else None
+        mesh.grid(rows, mat, uvs=uvs)
+    lens(s_a, s_j - 0.0015, 6, 'amber', 0.005, uv=(0.6, 1.0))
+    lens(s_j + 0.0015, s_c, 14, 'headlight', 0.005, uv=(0.0, 1.0))
+    # the bezel round both lenses (and the slit between them): black, whatever the bumper's colour
+    lens(s_a - 0.003, s_j, 6, 'trim', 0.0035, grow=0.003)
+    lens(s_j, s_c + 0.003, 14, 'trim', 0.0035, grow=0.003)
+    # central grille: a recessed slot with four horizontal slats, out to the lamps' bezel
     y0, y1 = 0.492, 0.570
-    xg = 0.392
+    xg = LAMP_X[0] - 0.009
     zc = face_z(0.0)
     mesh.face([(0.0, y0, zc - 0.03), (xg, y0, zc - 0.03), (xg, y1, zc - 0.03), (0.0, y1, zc - 0.03)], 'interior', out=(0, 0, 1))
     for (a, b) in (((0, y0), (xg, y0)), ((xg, y0), (xg, y1)), ((xg, y1), (0, y1))):
@@ -183,7 +255,12 @@ def plates(mesh, bvh):
 # cells at x 0.43 / 0.51 (the clear reverse lamp in the lower part of the middle cell, a brighter red one above it);
 # the outer cell from x 0.614 round the corner amber above, smoked below; the black garnish between the lamps carries
 # TOYOTA (0.706 m) and the plate (centre 0.594 m).
-TAIL_Y = (0.592, 0.718)
+# Lamp review 2026-11-10 (r08 / q02 traced and carried back onto the body, near and far lamps averaged: the two
+# cameras' roll errors cancel): the lenses reach 3 cm lower, 0.562-0.716 (only a thin black edge between them and the
+# bumper on the photos), and the split between the rows is at 65 % of the height (the upper, lettered row is the
+# narrower one); the reverse lamp sits inside the lower row's middle cell with red round it.
+TAIL_Y = (0.562, 0.716)
+TAIL_SPLIT = 0.65
 TAIL_XIN = 0.285
 TAIL_XAMBER = 0.614
 TAIL_REV = (0.432, 0.513)
@@ -225,17 +302,15 @@ def tail(mesh, bvh):
           lift=0.006, uv=False)
     # lens surround: a raised black frame just outside the lenses
     K.lay_strip(mesh, bvh, _tail_path(ym, TAIL_XIN - 0.006, 1.0, 62), y1 - y0 + 0.024, 'trim', lift=0.004)
-    # red lens (inboard; the texture's u runs 0 → 1 across it), the outer cell wrapping the corner: amber above,
-    # smoked red below
-    ys = (y0 + y1) / 2
+    # red lens (inboard; the texture's u runs 0 → 1 across it); the outer cell wrapping the corner is the turn lamp:
+    # amber over its full height (lamp review 2026-11-10: r08, q02, n32 all show it amber top to bottom)
+    ys = y0 + TAIL_SPLIT * (y1 - y0)
     K.lay_strip(mesh, bvh, _tail_path(ym, TAIL_XIN, TAIL_XAMBER, 0), y1 - y0, 'taillight', lift=0.007, uv_v=(1.0, 0.0),
                 u_scale=1.0 / (TAIL_XAMBER - TAIL_XIN))
-    K.lay_strip(mesh, bvh, _tail_path((ys + y1) / 2, TAIL_XAMBER + 0.004, 1.0, 58), y1 - ys, 'amber', lift=0.007,
+    K.lay_strip(mesh, bvh, _tail_path(ym, TAIL_XAMBER + 0.004, 1.0, 58), y1 - y0, 'amber', lift=0.007,
                 uv_v=(1.0, 0.0), u_scale=1.6, u0=0.6)
-    K.lay_strip(mesh, bvh, _tail_path((y0 + ys) / 2, TAIL_XAMBER + 0.004, 1.0, 58), ys - y0, 'taillight', lift=0.007,
-                uv_v=(0.46, 0.04), u_scale=1.2, u0=0.05)
     # reverse lamp: the lower part of the middle cell
-    patch(mesh, bvh, 'reverse', TAIL_REV, (y0 + 0.004, ys - 0.004), 'z', side=-1, nu=3, nv=1, lift=0.0095, uv=False)
+    patch(mesh, bvh, 'reverse', TAIL_REV, (y0 + 0.027, ys - 0.012), 'z', side=-1, nu=3, nv=1, lift=0.0095, uv=False)
     # r06: the lenses sit in a black frame: proud black bars between the halves and between the cells
     K.lay_strip(mesh, bvh, _tail_path(ys, TAIL_XIN, 1.0, 58), 0.006, 'trim', lift=0.010)
     for x in (TAIL_REV[0] - 0.003, TAIL_REV[1] + 0.003, TAIL_XAMBER + 0.002):

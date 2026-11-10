@@ -77,6 +77,7 @@ def patch(part, surf, frame, outline, mat, box=None, rings=5, lift=0.004, dome=0
             return (0.5, 0.5)
         return ((w - box[0]) / (box[1] - box[0]), (v - box[2]) / (box[3] - box[2]))
 
+    faces = []
     for k in range(rings):
         for i in range(n):
             j = (i + 1) % n
@@ -90,7 +91,10 @@ def patch(part, surf, frame, outline, mat, box=None, rings=5, lift=0.004, dome=0
             uvs = [uv(rows[a][b][0], rows[a][b][1]) for a, b in q]
             if not frame.ccw_out:
                 ps, uvs = ps[::-1], uvs[::-1]
-            part.face(ps, mat, uvs=uvs)
+            faces.append(part.face(ps, mat, uvs=uvs))
+    # one welded surface (the details part is built unwelded): smooth normals over the lens, else every quad shades
+    # flat and the cover's reflections break up into blocks
+    bmesh.ops.remove_doubles(part.bm, verts=list({v for f in faces for v in f.verts}), dist=1e-6)
 
 
 def strip(part, surf, frame, poly, width, mat, lift=0.0015, closed=False):

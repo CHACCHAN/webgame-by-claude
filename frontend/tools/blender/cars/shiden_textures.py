@@ -81,14 +81,16 @@ def taillight():
     red = (110, 8, 8)
     im = Image.new('RGB', (W, H), (22, 9, 10))
     d = ImageDraw.Draw(im)
-    # u from the inboard end (x 0.43 → 0.765 across the tail): two red lamps, the amber indicator outboard on the
-    # corner (photo s14: centres x 0.49, 0.61, 0.73, about 100 mm across, crisp-edged behind the smoked lens);
-    # v: the band's bottom (row 128) to top
-    for cx, rx, lens, ring in ((92, 79, (150, 16, 14), (178, 34, 28)), (278, 79, (150, 16, 14), (178, 34, 28)),
-                               (448, 56, (196, 104, 28), (222, 136, 52))):
-        cy, ry = 70, 50
+    # u from the inboard end (x 0.43 → 0.825 across the tail, round the corner): two red lamps, the amber indicator
+    # outboard on the corner; v: the band's bottom (row 128) to top
+    # (lamp review 2026-11-10, s14 / r19 carried back onto the body: centres x 0.50, 0.63, 0.74, the reds ~100 mm
+    # across, the amber ~80 mm; they fill only the lower half of the band, the smoked cover black above them. Unlit
+    # behind the smoked cover they read deep red and a brownish amber)
+    for cx, rx, ry, lens, ring in ((91, 64, 34, (116, 14, 16), (144, 26, 26)), (259, 64, 34, (116, 14, 16), (144, 26, 26)),
+                                   (402, 51, 31, (150, 72, 24), (176, 96, 40))):
+        cy = 64
         d.ellipse((cx - rx - 6, cy - ry - 6, cx + rx + 6, cy + ry + 6), fill=(12, 4, 5))
-        d.ellipse((cx - rx - 2, cy - ry - 2, cx + rx + 2, cy + ry + 2), fill=(92, 72, 72))
+        d.ellipse((cx - rx - 2, cy - ry - 2, cx + rx + 2, cy + ry + 2), fill=(62, 52, 54))
         d.ellipse((cx - rx, cy - ry, cx + rx, cy + ry), fill=lens)
         # the lens optics: concentric steps, a brighter middle round the bulb
         for k, col in ((0.82, ring), (0.62, lens), (0.45, ring), (0.22, tuple(min(255, c + 40) for c in ring))):

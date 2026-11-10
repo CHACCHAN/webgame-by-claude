@@ -20,19 +20,22 @@ MATS = {
     'glass': ('#10161c', 0.0, 0.05),
     'trim': ('#0d0d0e', 0.0, 0.65),
     'chrome': ('#d8d8d8', 1.0, 0.12),
-    'headlight': ('#e8e8e2', 0.0, 0.1),
+    'headlight': ('#e8e8e2', 1.0, 0.2),
     'taillight': ('#8a0a0a', 0.0, 0.18),
     'tire': ('#1a1a1a', 0.0, 0.85),
-    'rim': ('#c4c6c8', 0.8, 0.38),
-    'brake': ('#5c5d60', 0.7, 0.45),
-    'popup_lens': ('#dcdcd6', 0.0, 0.1),
+    'rim': ('#c4c6c8', 1.0, 0.34),
+    'brake': ('#5c5d60', 1.0, 0.45),
+    'popup_lens': ('#dcdcd6', 0.8, 0.15),
     'interior': ('#1e1e20', 0.0, 0.8),
-    'amber': ('#d06a00', 0.0, 0.2),
-    'lens_clear': ('#cfd2d4', 0.0, 0.08),
+    'amber': ('#c86400', 0.7, 0.25),
+    'lens_clear': ('#9a9ea4', 1.0, 0.28),
     'plate': ('#f2f2ee', 0.0, 0.4),
     'gloss_black': ('#08080a', 0.0, 0.12),
     'reflector': ('#9a0c0a', 0.0, 0.25),
 }
+# metal is metal (lamp review 2026-11-10): chrome, the alloys, discs and calipers, and the lamps' reflectors (the
+# combination lamps' housing and bowls, the reverse lamps, the pop-up lamps' reflectors behind the fluted glass) are
+# metallic
 
 
 def srgb(h):
@@ -61,6 +64,7 @@ def materials(night=False):
         if name == 'paint':
             p.inputs['Coat Weight'].default_value = 0.6
             p.inputs['Coat Roughness'].default_value = 0.05
+
         mats[name] = m
     return mats
 

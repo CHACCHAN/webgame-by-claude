@@ -86,15 +86,18 @@ def materials(paint):
     m.add('trim', '#0d0e10', roughness=0.6)
     m.add('glass', '#0b1016', metallic=0.1, roughness=0.04)
     m.add('chrome', '#d8dade', metallic=1.0, roughness=0.12)
-    m.add('amber', '#e8780e', roughness=0.2, metallic=0.1)
-    m.add('lens_clear', '#dfe2e6', roughness=0.08, metallic=0.4)
+    m.add('amber', '#d66a12', roughness=0.18)
+    # metal is metal (lamp review 2026-11-10): the reverse lamps' and the turn lamps' chrome reflectors behind clear
+    # lenses, the alloys, discs and the bare calipers are metallic 1
+    m.add('lens_clear', '#b4b8bd', roughness=0.2, metallic=1.0)
+    m.add('lens_inner', '#868a90', roughness=0.42, metallic=1.0)   # the reverse lamps' fluted reflector inside the rim
     m.add('taillight', '#ffffff', roughness=0.25, image=image('taillight.png'))
     m.add('interior', '#2a2b2e', roughness=0.85)
-    m.add('headlight', '#ffffff', roughness=0.1, metallic=0.4, image=image('headlight.png'))
+    m.add('headlight', '#ffffff', roughness=0.25, metallic=0.5, image=image('headlight.png'))   # black housing, chrome bowls
     m.add('tire', '#151515', roughness=0.92)
-    m.add('rim', '#c3c6cb', metallic=0.55, roughness=0.38)   # painted light-silver alloy
-    m.add('brake', '#3a3b3e', roughness=0.5, metallic=0.4)
-    m.add('disc', '#7b7c80', metallic=0.9, roughness=0.45)
+    m.add('rim', '#c3c6cb', metallic=1.0, roughness=0.34)   # light-silver alloy
+    m.add('brake', '#55575b', roughness=0.55, metallic=1.0)   # bare cast-iron calipers
+    m.add('disc', '#7b7c80', metallic=1.0, roughness=0.40)
     m.add('plate', '#ffffff', roughness=0.4, image=image('plate.png'))
     m.add('reflector', '#9a0c0a', roughness=0.25)
     return m
@@ -137,7 +140,7 @@ def head_uv(bm):
             continue
         for lp in f.loops:
             x, y, z = K.G(lp.vert.co)
-            lp[uvl].uv = ((abs(x) - 0.27) / 0.51, (y - 0.565) / 0.125)
+            lp[uvl].uv = ((abs(x) - 0.33) / 0.46, (y - 0.580) / 0.125)
 
 
 def night(m, on=True):

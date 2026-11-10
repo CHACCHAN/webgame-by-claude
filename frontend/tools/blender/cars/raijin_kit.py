@@ -132,8 +132,9 @@ class Materials:
         self.mats[name] = m
         return m
 
-    def textured(self, name, img, roughness=0.4, metallic=0.0, emissive_map=False):
-        """a material whose base colour is an image (and optionally glows by it for the night renders)"""
+    def textured(self, name, img, roughness=0.4, metallic=0.0, emissive_map=False, coat=0.0):
+        """a material whose base colour is an image (and optionally glows by it for the night renders); coat: a clear
+        cover over it (lamps: chrome reflectors behind the lens)"""
         m = bpy.data.materials.new(name)
         m.use_nodes = True
         nt = m.node_tree
@@ -147,6 +148,10 @@ class Materials:
             p.inputs['Emission Strength'].default_value = 0.0
         p.inputs['Roughness'].default_value = roughness
         p.inputs['Metallic'].default_value = metallic
+        if coat:
+            # a soft gloss: the lamp patches are coarse meshes, a mirror-sharp coat shows their facets
+            p.inputs['Coat Weight'].default_value = coat
+            p.inputs['Coat Roughness'].default_value = 0.15
         self.mats[name] = m
         return m
 
