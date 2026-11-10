@@ -158,6 +158,7 @@ logos (JR mark, KEIKYU logotype, the Hayabusa and H5 logos) are drawn by our scr
 | 京急新1000形 (`keikyu1000`) | 京急本線 (`keikyu1000.glb`) |
 | 東武30000系 (`tobu30000`) | 東上線 (`tobu30000.glb`), 伊勢崎線 1996–2011 (`tobu30000-isesaki.glb`: 3-colour LED of that era) |
 | E5系 はやぶさ (`e5`) | 東北新幹線 (`e5.glb`: 26.5 m end cars, `TrainInfo.consist`), 北海道新幹線 H5系 (`e5-h5.glb`) |
+| L0系 超電導リニア (`l0`) | JR東海 (`l0.glb`: 28 m end cars and a 24.3 m middle car on shared bogies, `TrainInfo.consist`; fitted to Commons photos listed in `tools/blender/fitdata/l0/ref/list.json`) |
 
 Train performance figures (vehicle/trains.ts) are from Japanese Wikipedia; masses marked as estimates in the game
 where no per-car figure is published.

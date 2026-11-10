@@ -307,6 +307,9 @@ export const TRAIN_INFO: Record<TrainId, TrainInfo & { name: string; tagline: st
     // 24.3 m, the bogies under the joints shared by two cars
     consist: [{ length: 28, bogies: 14.5, front: 13.5 }, { length: 24.3, bogies: 24.3, front: 0 }, { length: 28, bogies: 14.5, front: 0 }],
     liveries: [{ name: 'JR東海', body: '#f3f4f5', band: '#1f4fa3' }],
+    // two round units per side low on the nose (Ø0.072 lenses at x ±0.407 and ±0.543), the tail lamp in the inner one;
+    // the small side windows 1.75–2.10 (measured on head-on renders of the Blender model, tools/blender/l0.py)
+    lamps: { head: { x: 0.407, y: 0.8, w: 0.072, h: 0.072, round: true, n: 2, gap: 0.136 }, tail: { x: 0.407, y: 0.8, w: 0.072, h: 0.072, round: true }, windows: [1.75, 2.1], windowLum: 0.03 },
     // the guideway: no rail joints (the tyres roll on concrete), a pressure-tight body; the wind is all there is to hear
     // above the lift-off
     running: { rail: 'welded', sealed: true, wind: 0.4 },

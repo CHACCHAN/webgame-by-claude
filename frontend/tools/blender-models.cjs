@@ -104,7 +104,11 @@ async function optimise(raw, out) {
   const io = new NodeIO().registerExtensions(ALL_EXTENSIONS).registerDependencies({ 'meshopt.encoder': MeshoptEncoder });
   const doc = await io.read(raw);
   sortByMaterial(doc);
-  const steps = [F.dedup()];
+  // no accessor dedup before quantisation: two parts of identical geometry (a train's two end cars) would become one
+  // mesh shared by both nodes, and join + quantize then distort it (the L0's end cars came out squashed). meshopt's
+  // own cleanup still shares identical buffers once they are quantised.
+  const { PropertyType } = require('@gltf-transform/core');
+  const steps = [F.dedup({ propertyTypes: [PropertyType.MESH, PropertyType.TEXTURE, PropertyType.MATERIAL, PropertyType.SKIN] })];
   if (kind.resample) steps.push(F.resample());
   if (kind.palette) steps.push(F.palette({ min: 5 }));
   steps.push(F.join({ keepNamed: !kind.joinNamed }), F.weld(), F.prune(), F.sparse());

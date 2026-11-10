@@ -64,6 +64,20 @@ deployed yet: the owner sees each sheet first).
   face (checked against the bumper's own edges), so the lamps were scored registered by that offset (whole lamp
   0.28–0.38 → 0.66–0.67). Silhouettes unchanged. Checked in Chrome: garage (night / dawn) for all four, a night race
   start behind the AE86 (pop-ups up and lit at night, closed at dawn).
+- **L0: our own model in the game** (owner: 「リニア新幹線優先で実装までお願いできる？」, i.e. through to the game once
+  the final sheet is sent). `tools/blender/l0.py` + `parts/l0_*.py` + `l0_textures.py`, fitted to Commons photos
+  (`fitdata/l0/`: cameras, masks, lamps, scoring tools; silhouette IoU 0.94–0.96 on three solved cameras, lamps
+  0.82–0.94). 60 k tris, 0.24 MB. The consist stays at the published 28 m end cars (the model's tip is 0.17 m short of
+  `trainNoseZ`). `TrainInfo.lamps`: two round units per side low on the nose, the tail lamp in the inner one, the
+  small side windows lit at night.
+- **Optimiser fix** (`tools/blender-models.cjs`): the first `dedup` merged the L0's two identical end cars into one
+  mesh shared by both nodes, and `join` + `quantize` then squashed it (reproduced on the L0 with identical end cars:
+  2.90×2.75 m came out 2.80×3.15). The first dedup now leaves the vertex accessors alone (meshopt's own cleanup still
+  shares identical buffers after quantising); l0.py's 1 m offset workaround is gone (0.26 → 0.24 MB). Rebuilding the
+  Cybertruck with the fix gives a byte-identical GLB.
+- Checked in Chrome (software rendering): garage at night and dawn (side windows glow at night; the four head lamps
+  lit and lighting the road, seen head-on), a night race start in the cab view and the chase views; no page errors.
+  The float above 150 km/h was not reached in the browser (the sim and the earlier stand-in cover it).
 
 ## Session 7 (2026-11-03 – 11-04) — every model our own (Blender); the owner's train lineup; a livery per line
 
