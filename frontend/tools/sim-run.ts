@@ -10,7 +10,8 @@ import { RacingLine } from '../src/game/ai/RacingLine';
 
 await initRapier();
 const course = COURSES[(process.env.COURSE ?? 'oboro-downhill') as CourseId];
-const track = new Track(course.design);
+// AI_TOP=<m/s> overrides the course's AI speed cap (e.g. to see what an uncapped run takes)
+const track = new Track(process.env.AI_TOP ? { ...course.design, aiTopSpeed: Number(process.env.AI_TOP) } : course.design);
 console.log('course', course.id, 'length', track.length.toFixed(0));
 const line = new RacingLine(track);
 const pairs = process.argv[2] === 'rivals'
@@ -28,7 +29,8 @@ for (const [car, level] of pairs) {
     const ai = new AIDriver(track, line, AI_PROFILES[level]);
     ai.calibrate(v);
     const input = emptyInput();
-    let t = 0, impacts = 0, maxSpeed = 0, flips = 0, respawns = 0, maxSlip = 0;
+    let t = 0, impacts = 0, maxSpeed = 0, flips = 0, respawns = 0, maxSlip = 0, lastLog = -1;
+    const prevVel = v.velocity.clone();
     let started = -1;
     const splits: number[] = [];
     while (t < 420) {
@@ -39,6 +41,16 @@ for (const [car, level] of pairs) {
       v.postStep(PHYSICS_DT);
       t += PHYSICS_DT;
       if (v.impact > 0.05) impacts++;
+      const prevVelNext = v.velocity.clone();
+      // DEBUG=1: where it goes wrong (hard impacts, big slides, a tipped body)
+      if (process.env.DEBUG && (v.impact > 0.3 || Math.abs(v.slipAngle) > 1 || v.up.y < 0.7) && t - lastLog > 0.25) {
+        lastLog = t;
+        const d = v.velocity.clone().sub(prevVel).divideScalar(PHYSICS_DT);
+        const fwd = d.dot(v.forward), up = d.dot(v.up);
+        const pj = track.project(v.position.x, v.position.y, v.position.z);
+        console.log(`  t ${t.toFixed(2)} s ${ai.s.toFixed(0)} lat ${pj.lateral.toFixed(2)}/${(track.widthAt(pj.s) / 2).toFixed(2)} ${(v.speed * 3.6).toFixed(0)} km/h impact ${v.impact.toFixed(2)} slip ${(v.slipAngle * 57.3).toFixed(0)}° up.y ${v.up.y.toFixed(2)} grounded ${v.wheels.filter((w) => w.grounded).length} steer ${input.steer.toFixed(2)} thr ${input.throttle.toFixed(2)} brake ${input.brake.toFixed(2)} acc fwd ${fwd.toFixed(0)} up ${up.toFixed(0)} side ${Math.sqrt(Math.max(0, d.lengthSq() - fwd * fwd - up * up)).toFixed(0)} comp ${v.wheels.map((w) => w.compression.toFixed(2)).join('/')}`);
+      }
+      prevVel.copy(prevVelNext);
       maxSpeed = Math.max(maxSpeed, v.speed);
       maxSlip = Math.max(maxSlip, Math.abs(v.slipAngle));
       if (started < 0 && ai.s >= track.startS) started = t;

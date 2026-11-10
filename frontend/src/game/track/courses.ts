@@ -213,15 +213,17 @@ export const TRAIN_MEDALS: Record<CourseId, Record<TrainId, { gold: number; silv
 
 /**
  * Medal times of the cockroach (joke entry) per course: gold = the legend AI's time with it (tools/sim-run.ts,
- * 2026-11-03), silver +7 %, bronze +16 %. On the mountain passes the AI keeps to its 223 km/h cap on the straights: a
- * player can beat gold. The autobahn lifts the cap (`CourseDesign.aiTopSpeed`).
+ * 2026-11-10, after its grip, pull and brakes were doubled and its top speed set to Mach 1), silver +7 %, bronze +16 %.
+ * On the mountain passes the AI keeps to its 223 km/h cap on the straights and brushes the walls (on 霧降 it rolls once):
+ * a player can beat gold by far. The autobahn's cap lets it run (989 km/h: the AI's corner speeds leave out the
+ * downforce; a player can hold Mach 1 for ~5 km there).
  */
 export const ROACH_MEDALS: Record<CourseId, { gold: number; silver: number; bronze: number }> = {
-  'oboro-downhill': { gold: 76_000, silver: 81_500, bronze: 88_000 },
-  'kirifuri-lakeside': { gold: 63_000, silver: 67_500, bronze: 73_000 },
-  'tenrou-skyline': { gold: 55_500, silver: 59_500, bronze: 64_500 },
-  // the autobahn: from a standing start (as TRAIN_MEDALS); with no corners and no cap the AI runs at ~420 km/h
-  autobahn: { gold: 72_500, silver: 78_000, bronze: 84_500 },
+  'oboro-downhill': { gold: 58_500, silver: 62_500, bronze: 68_000 },
+  'kirifuri-lakeside': { gold: 50_000, silver: 53_500, bronze: 58_000 },
+  'tenrou-skyline': { gold: 44_000, silver: 47_000, bronze: 51_000 },
+  // the autobahn: from a standing start (as TRAIN_MEDALS)
+  autobahn: { gold: 35_500, silver: 38_000, bronze: 41_000 },
 };
 
 /**

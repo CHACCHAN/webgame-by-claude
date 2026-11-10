@@ -261,6 +261,7 @@ kbd {
 .speedo { position: absolute; right: 52px; bottom: 30px; text-align: right; }
 .speedo .gear { position: absolute; right: 62px; bottom: 114px; font-size: 40px; font-weight: 700; color: var(--accent); }
 .speedo .speed { font-size: 64px; font-weight: 700; line-height: 0.9; font-variant-numeric: tabular-nums; }
+.speedo .speed.wide { font-size: 50px; }
 .speedo .unit { font-size: 13px; letter-spacing: 0.2em; color: var(--muted); font-weight: 700; }
 .boost { margin-top: 4px; width: 90px; margin-left: auto; }
 .boost small { font-size: 9px; letter-spacing: 0.2em; color: var(--muted); font-weight: 700; }
@@ -669,6 +670,7 @@ kbd {
   .hud-tr { top: 8px; right: 14px; }
   .minimap { width: 130px; height: 84px; }
   .speedo .speed { font-size: 42px; }
+  .speedo .speed.wide { font-size: 34px; }
   .corner-note { top: 70px; }
   .start-guide { font-size: 11px; padding: 6px 10px; gap: 3px; }
 }

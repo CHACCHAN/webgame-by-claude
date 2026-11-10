@@ -166,12 +166,12 @@ class GameApiTest extends TestCase
         $token = $this->register();
         $autobahn = ['track_id' => 'autobahn', 'car_id' => 'roach'];
 
-        // the cockroach flat out (~71 s): faster than any mountain pass's floor allows elsewhere, fine here
-        $this->withToken($token)->postJson('/api/runs', $this->runPayload(71_000, $autobahn))->assertCreated();
-        // an average beyond ~485 km/h is not
-        $this->withToken($token)->postJson('/api/runs', $this->runPayload(57_000, $autobahn))->assertUnprocessable();
+        // the cockroach near Mach 1 (its limit is ~27.5 s): faster than any mountain pass's floor allows elsewhere, fine here
+        $this->withToken($token)->postJson('/api/runs', $this->runPayload(28_000, $autobahn))->assertCreated();
+        // an average beyond Mach 1 (8.6 km in 22 s: ~1400 km/h) is not
+        $this->withToken($token)->postJson('/api/runs', $this->runPayload(22_000, $autobahn))->assertUnprocessable();
         // a commuter train at 120 km/h takes over four minutes
         $this->withToken($token)->postJson('/api/runs', $this->runPayload(259_000, ['track_id' => 'autobahn', 'car_id' => 'e231']))->assertCreated();
-        $this->assertSame([71_000], array_column($this->getJson('/api/tracks/autobahn/leaderboard?car_id=roach')->json('entries'), 'time_ms'));
+        $this->assertSame([28_000], array_column($this->getJson('/api/tracks/autobahn/leaderboard?car_id=roach')->json('entries'), 'time_ms'));
     }
 }

@@ -9,36 +9,38 @@ return [
     'version' => env('GAME_VERSION', '1.0.0'),
 
     'tracks' => [
-        // min_time_ms: anything faster is physically impossible on the course (with the cockroach, the fastest
-        // vehicle: its AI lap is ~1.4× these and a player can go faster on the straights)
+        // min_time_ms: anything faster is physically impossible on the course. With the cockroach, the fastest vehicle
+        // (twice the grip since 2026-11-10, Mach 1 at the top), a lap on the racing line at its full limits (downforce
+        // grip included, no speed cap; frontend tools/sim-run.ts and the course's racing line) takes 37.5 / 30.5 / 27.6 s
+        // on the passes and 27.5 s on the autobahn: the floors are ~85 % of those
         'oboro-downhill' => [
             'name' => '朧峠 ダウンヒル',
             'name_en' => 'Oboro Pass Downhill',
             'sectors' => 4,
-            'min_time_ms' => 50_000,
+            'min_time_ms' => 32_000,
             'max_time_ms' => 30 * 60_000,
         ],
         'kirifuri-lakeside' => [
             'name' => '霧降湖 レイクサイド',
             'name_en' => 'Kirifuri Lakeside',
             'sectors' => 4,
-            'min_time_ms' => 42_000,
+            'min_time_ms' => 26_000,
             'max_time_ms' => 30 * 60_000,
         ],
         'tenrou-skyline' => [
             'name' => '天狼スカイライン',
             'name_en' => 'Tenrou Skyline',
             'sectors' => 4,
-            'min_time_ms' => 38_000,
+            'min_time_ms' => 23_500,
             'max_time_ms' => 30 * 60_000,
         ],
-        // 8.6 km of motorway: the fastest, the Yangwang U9 Xtreme's AI, runs it in ~64 s from a standing start (503 km/h
-        // top), the cockroach in ~71 s: the floor is an average of ~530 km/h, beyond any vehicle
+        // 8.6 km of motorway from a standing start: the U9 Xtreme's AI ~64 s (503 km/h), the cockroach's AI 35.5 s; the
+        // cockroach at its limits (Mach 1 for ~5 km) 27.5 s
         'autobahn' => [
             'name' => 'アウトバーン',
             'name_en' => 'Autobahn',
             'sectors' => 4,
-            'min_time_ms' => 58_000,
+            'min_time_ms' => 23_000,
             'max_time_ms' => 30 * 60_000,
         ],
     ],

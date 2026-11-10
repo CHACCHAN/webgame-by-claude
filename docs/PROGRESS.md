@@ -93,6 +93,30 @@ deployed yet: the owner sees each sheet first).
   Deployed (`c68aaa3`, bundle `index-GpzDFAQv.js`; e5, e5-h5 and the three bike GLBs served hash-equal; leaderboard
   API 200). E2E not run.
 
+- **The cockroach: twice the performance, Mach 1 at the top** (owner: 「ゴキブリがチート枠の威厳失ってきてるから性能2倍に
+  してほしい、最大速度はマッハ1」). Grip 1.75 → 3.5, brakes 15 → 30 kN, pull 3600 N·m flat to the legs' limit at
+  29,540 rpm = 340.3 m/s, drag 0.25 → 0.2 (else it stalled ~15 km/h short). Measured (`tools/train-accel.ts roach 0`):
+  0–100 km/h 1.56 → 0.88 s (the tyres' limit, ~1.8×), 0 → Mach 1 in 15.5 s / 3.4 km, top 1226 km/h; from 100 km/h it
+  stops in < 13 m. Doubling the grip doubled the cornering stiffness (side force = μ · load · curve(slip)), so every
+  steering input turned it twice as hard and the AI weaved into the walls (flips, 90° slides): half the steering lock
+  (40° → 22°) restores the response. Side effects handled:
+  - `VehicleSim.impact` counted any > 3 g as an impact: the cockroach's own cornering and braking would thud and shake
+    all the time. Now the threshold is 3 g or 1.25× what the tyres can give (downforce included); other cars unchanged.
+  - The chase camera trailed by speed / 14 (24 m at Mach 1): the lag is held to 10 m and the speed pull-back stops at
+    500 km/h (no other vehicle reaches either).
+  - The HUD's speed takes four digits in a smaller face (`.speed.wide`).
+  - The autobahn's AI cap 140 → 345 m/s (only the cockroach goes faster than 140).
+  - Medals from the legend AI (2026-11-10): 朧 58.5 s, 霧降 50.0 s (rolls once after a wall hit at 227 km/h), 天狼
+    44.0 s, autobahn 35.5 s (989 km/h: the AI's corner speeds leave out the downforce). The AI still brushes the walls
+    at the pass speed cap (it did before, less often): only the medal runs use it.
+  - Backend floors: a lap on the racing line at the cockroach's full limits takes 37.5 / 30.5 / 27.6 s on the passes
+    and 27.5 s on the autobahn (Mach 1 for 5.2 km); floors 32 / 26 / 23.5 / 23 s (were 50 / 42 / 38 / 58). Container
+    tests 17/17 (the autobahn floor test now at Mach 1).
+  - `tools/sim-run.ts` gained `DEBUG=1` (hard impacts, slides, tilts with the lateral offset) and `AI_TOP=<m/s>`.
+  Checked in Chrome (software rendering): the garage card (0.9 s, 1225 km/h), the autobahn race with the speed pushed
+  to 340 m/s (HUD "1201" in the small face, the cockroach in view in both chase views); no page errors. tsc, vitest
+  64/64, handling-feel (corners 4–16° of slip, wall hits keep their speed).
+
 ## Session 7 (2026-11-03 – 11-04) — every model our own (Blender); the owner's train lineup; a livery per line
 
 Owner: "E231 (Musashino), E235 (Yamanote), Keikyu 1000, Tobu 30000 and the Hayabusa: build them all and put them in

@@ -191,7 +191,8 @@ export const AUTOBAHN: CourseDesign = {
   smoothing: { curvature: 160, grade: 220 },
   // median + opposite carriageway on the left, verge (and the interchange's slip road) on the right
   formation: { left: 30, right: 22 },
-  aiTopSpeed: 140,
+  // no vehicle but the cockroach goes faster than 140 m/s (the U9 Xtreme's 503 km/h): the cap lets it run to Mach 1
+  aiTopSpeed: 345,
   segs: [
     // the plateau: start straight, then a long left through the forest
     S(420, -0.004, 'start'),

@@ -679,8 +679,13 @@ export class VehicleSim {
     this.softenWallHit(dt);
     this.syncState();
     const dv = _v.copy(this.velocity).sub(this.lastVel).length() / dt;
-    // anything well above braking/cornering accelerations is an impact
-    this.impact = dv > 30 ? Math.min(1, (dv - 30) / 120) : 0;
+    // anything well above braking/cornering accelerations is an impact: 3 g, or a quarter past what the tyres can give
+    // (the cockroach corners and brakes beyond 3 g: on its own grip that would thud and shake all the time)
+    const spec = this.spec;
+    const v2 = Math.min(this.velocity.lengthSq(), (spec.downforceTopSpeed ?? Infinity) ** 2);
+    const tyres = Math.max(spec.gripFront, spec.gripRear) * this.gripScale * (9.81 + (spec.downforce * v2) / spec.mass);
+    const hard = Math.max(30, tyres * 1.25);
+    this.impact = dv > hard ? Math.min(1, (dv - hard) / 120) : 0;
     this.lastVel.copy(this.velocity);
   }
 

@@ -165,7 +165,11 @@ export function Hud() {
       const h = game.hud;
       const r = refs;
       if (r.time.current) r.time.current.textContent = formatTime(h.raceTime * 1000);
-      if (r.speed.current) r.speed.current.textContent = String(Math.round(h.speedKmh));
+      if (r.speed.current) {
+        r.speed.current.textContent = String(Math.round(h.speedKmh));
+        // four digits (the cockroach at Mach 1) in a smaller face
+        r.speed.current.classList.toggle('wide', h.speedKmh >= 999.5);
+      }
       if (r.gear.current) r.gear.current.textContent = h.gear === -1 ? 'R' : h.gear === 0 ? 'N' : String(h.gear);
       const rpmFrac = Math.min(1, h.rpm / (h.redline + 500));
       const ang = TACH_START + rpmFrac * TACH_SWEEP;

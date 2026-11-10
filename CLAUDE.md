@@ -144,7 +144,8 @@ pending. `docs/PLAN.md` holds the design.
   rider-view camera rolls with it (`BIKE_CAMERA`). Medals: `BIKE_MEDALS`. Check with `npx tsx tools/handling-feel.ts
   nsr250r,ninjah2,hayabusa` (the vehicle test bounds the bikes' corner slip).
 - The cockroach (joke entry, `vehicle/roach.ts`, id `roach`, last in `VEHICLE_ORDER`): a car-like sim on one fixed
-  ratio (`singleRatio` → no AT/MT) with ~1.3× a sports car's grip, ~410 km/h; drawn by `render/RoachModel.ts` from a
+  ratio (`singleRatio` → no AT/MT) with ~2.6× a sports car's grip (half the steering lock, else it turns twice as hard),
+  Mach 1 at the top (the chase camera's lag is capped for it); drawn by `render/RoachModel.ts` from a
   skinned GLB (`public/models/roach/roach.glb`; legs run with the distance covered, eyes are the headlights; colours
   via `CreatureInfo.liveries`), heard through `audio/BugSound.ts`; medals in `ROACH_MEDALS`. The backend's
   `min_time_ms` per course leaves room for it.

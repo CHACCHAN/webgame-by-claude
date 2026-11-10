@@ -41,6 +41,8 @@ export const TRAIN_CAMERA: CameraProfile = {
   front: { ahead: 2.5, up: 2.55 },
 };
 
+/** the most the chase camera trails its damped target (m): what ~500 km/h gives */
+const MAX_LAG = 10;
 const _fwd = new THREE.Vector3(), _desired = new THREE.Vector3(), _look = new THREE.Vector3(), _up = new THREE.Vector3();
 const _left = new THREE.Vector3(), _worldUp = new THREE.Vector3(0, 1, 0);
 
@@ -108,7 +110,8 @@ export class ChaseCamera {
       cam.up.set(0, 1, 0);
     } else {
       const view = this.mode === 'chase' ? this.profile.chase : this.profile.near;
-      const dist = view.dist + kmh * view.perKmh;
+      // the camera falls back with speed, up to 500 km/h (beyond, at the cockroach's Mach 1, it would be a speck)
+      const dist = view.dist + Math.min(kmh, 500) * view.perKmh;
       const height = view.height;
       const dir = new THREE.Vector3(Math.sin(this.yaw), 0, Math.cos(this.yaw));
       _desired.copy(s.position).addScaledVector(dir, -dist);
@@ -117,6 +120,13 @@ export class ChaseCamera {
       // stiffer horizontally, softer vertically for a floaty feel over crests
       this.pos.x = damp(this.pos.x, _desired.x, 14, dt);
       this.pos.z = damp(this.pos.z, _desired.z, 14, dt);
+      // the damping trails the target by speed / 14 (8 m at 410 km/h): held to MAX_LAG so Mach 1 keeps it in view
+      const lagX = this.pos.x - _desired.x, lagZ = this.pos.z - _desired.z;
+      const lag = Math.hypot(lagX, lagZ);
+      if (lag > MAX_LAG) {
+        this.pos.x = _desired.x + (lagX * MAX_LAG) / lag;
+        this.pos.z = _desired.z + (lagZ * MAX_LAG) / lag;
+      }
       this.pos.y = damp(this.pos.y, _desired.y, 7, dt);
       const ground = this.groundAt(this.pos.x, this.pos.z) + 0.9;
       if (this.pos.y < ground) this.pos.y = ground;

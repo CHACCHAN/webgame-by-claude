@@ -148,7 +148,7 @@ describe('VehicleSim', () => {
     expect(corner('s15', 70, (t, i) => { i.brake = t < 0.3 ? 0.8 : 0; i.steer = 0.8; i.throttle = t > 0.3 ? 0.9 : 0; })).toBeGreaterThan(30);
   });
 
-  it('the cockroach (joke entry) out-accelerates, outruns and outbrakes every other vehicle (but the record EV\'s top speed)', () => {
+  it('the cockroach (joke entry) out-accelerates, outruns and outbrakes every other vehicle, up to Mach 1', () => {
     const perf = (car: CarId) => {
       let t100 = Infinity, vmax = 0;
       drive(car, 60, (t, v, i) => {
@@ -166,14 +166,15 @@ describe('VehicleSim', () => {
       return { t100, vmax, stop };
     };
     const roach = perf('roach');
-    expect(roach.t100).toBeLessThan(2);
-    expect(roach.vmax).toBeGreaterThan(380);
-    expect(roach.stop).toBeLessThan(25);
+    // twice the grip, pull and brakes it had (0-100 km/h in 1.56 s, 21 m from 100 km/h), the top speed Mach 1 (1225 km/h)
+    expect(roach.t100).toBeLessThan(0.95);
+    expect(roach.vmax).toBeGreaterThan(1215);
+    expect(roach.vmax).toBeLessThan(1240);
+    expect(roach.stop).toBeLessThan(13);
     for (const car of [...CAR_ORDER, ...BIKE_ORDER, 'e5'] as CarId[]) {
       const p = perf(car);
       expect(roach.t100).toBeLessThan(p.t100);
-      // the U9 Xtreme holds the production-car speed record (503 km/h): that one it keeps
-      if (car !== 'u9') expect(roach.vmax).toBeGreaterThan(p.vmax);
+      expect(roach.vmax).toBeGreaterThan(p.vmax);
       expect(roach.stop).toBeLessThan(p.stop);
     }
   });

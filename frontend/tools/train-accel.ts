@@ -45,7 +45,7 @@ else console.log(`${spec.name}: ${spec.mass} kg, ${spec.gears.length} gear(s)`);
 const level = run(t ? 900 : 240, 0);
 const at = (kmh: number) => level.find((s) => s[1] >= kmh);
 console.log('level: time and distance to reach');
-for (const k of t ? [30, 100, 150, 200, 250, 270, 300, 320, 400, 500] : [96.6, 100, 160.9, 200, 300, 400, 500]) {
+for (const k of t ? [30, 100, 150, 200, 250, 270, 300, 320, 400, 500] : [96.6, 100, 160.9, 200, 300, 400, 500, 800, 1000, 1200, 1225]) {
   const s = at(k);
   console.log(`  ${String(k).padStart(3)} km/h  ${s ? `${s[0].toFixed(1).padStart(6)} s  ${(s[2] / 1000).toFixed(2).padStart(6)} km` : 'not reached'}`);
 }
