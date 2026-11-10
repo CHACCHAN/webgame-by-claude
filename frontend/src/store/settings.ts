@@ -8,9 +8,18 @@ import { isTouchDevice } from '../ui/touch';
 
 export type QualityLevel = 'low' | 'medium' | 'high' | 'ultra';
 
+/** how much smaller than the output the scene is drawn, per axis (`native`: full size, temporal anti-aliasing only) */
+export type UpscaleMode = 'native' | 'ultra' | 'quality' | 'balanced' | 'performance';
+export const UPSCALE_SCALE: Record<UpscaleMode, number> = { native: 1, ultra: 0.77, quality: 0.67, balanced: 0.59, performance: 0.5 };
+
 export interface Settings {
   quality: QualityLevel;
   resolutionScale: number;
+  /** the scene drawn smaller and upscaled (WebGPU: over time, which is also the anti-aliasing; WebGL 2: FSR 1) */
+  upscale: boolean;
+  upscaleMode: UpscaleMode;
+  /** sharpening after the upscale, 0 … 1 */
+  sharpness: number;
   timeOfDay: TimeOfDay;
   masterVolume: number;
   sfxVolume: number;
@@ -31,6 +40,9 @@ export const useSettings = create<Settings>()(
       // phones and tablets start light (changeable in the settings)
       quality: isTouchDevice() ? 'low' : 'high',
       resolutionScale: 1,
+      upscale: false,
+      upscaleMode: 'quality',
+      sharpness: 0.5,
       timeOfDay: 'night',
       masterVolume: 0.8,
       sfxVolume: 1,

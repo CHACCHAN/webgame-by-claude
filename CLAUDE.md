@@ -25,9 +25,11 @@ pending. `docs/PLAN.md` holds the design.
 - Handling numbers (wall hits: bounce / spin / thrown out; drift entries: time held, peak angle): `npx tsx tools/handling-feel.ts [cars]`
 - E2E: `docker compose --profile test run --rm e2e` (stack must be up)
 - Real-GPU performance (needs a host GPU + Google Chrome; `vite preview` on :4173): `cd frontend && node tools/perf-frame.cjs`
-  (frame cost, any backend; compare builds with `URL=before@http://…:4174/,after@http://…:4173/`, see the file header).
+  (frame cost, any backend; compare builds with `URL=before@http://…:4174/,after@http://…:4173/`, settings with
+  `VARIANTS='{"native":{},"quality":{"upscale":true}}'`, see the file header).
   `tools/perf-gpu.cjs` (GPU time per pass) only works on builds with the old WebGLRenderer.
 - The look, on fixed viewpoints (every course × time of day, contact sheets): `node tools/shots.cjs <label>` → `~/.local/opt/quality/<label>`.
+  `SET='<settings JSON>'` changes the stored settings, `MOVING=<km/h>` takes each picture on the move.
 
 ## Environment notes (cloud sessions)
 - dockerd is not running by default: `nohup dockerd > /tmp/dockerd.log 2>&1 &`.
@@ -75,6 +77,16 @@ pending. `docs/PLAN.md` holds the design.
   material, `CarVisual` lets only shell / glass / wheels throw shadows, only the followed car's headlights throw
   any); a `DynamicDrawUsage` attribute is uploaded every frame, changed or not. A material's nodes (`materialColor`…)
   read the material being drawn, which in a shadow map is the shadow material: name the texture itself there.
+- Upscaler (settings アップスケーリング, off by default; `RenderHost` + `render/TemporalUpscaler.ts`): WebGPU draws the
+  scene at 50–100 % with a jittered camera into three targets (colour, `velocity`, `reactive`) and gathers the frames
+  at the output's size (three.js' `TAAUNode` with our resolve; SMAA off, RCAS after); the WebGL 2 backend uses FSR 1.
+  What new scene content must respect: a see-through material without depth (`transparent && !depthWrite`) writes no
+  motion vector and marks the reactive mask by its opacity or light (`userData.reactive = 0` for wide soft layers);
+  a material with its own `positionNode` on opaque geometry must also assign `positionPrevious` (`instancedMaterial`
+  does), or its motion vectors lie and it smears; shaders are precompiled only through `RenderHost.precompile`
+  (the scene pass' targets, and the unjittered projection for the motion vectors). Check a change with
+  `SET='{"upscale":true,"upscaleMode":"quality"}' MOVING=200 node tools/shots.cjs <label>` next to a native run, and
+  `~/.local/opt/quality/flicker.cjs` (a still scene must hold still).
 - Own 3D models (no third-party assets): Blender Python scripts built by `BLENDER=<bin> node tools/blender-models.cjs
   <trains|cars|props|creatures> [ids] [--render [dir]]` (Blender 5.2 headless → GLB → glTF-Transform: meshopt, WebP;
   trains also palette textures). Scenery: `tools/blender/props/<id>.py` → `public/models/props/<id>.glb`; size,

@@ -8,7 +8,9 @@
 // index.json (renderer, backend, viewpoints, page errors).
 // Env: URL (default http://localhost:4173/), CHROME, W / H / DPR (1920×1080 at 1), QUALITY (ultra), CAR (r34),
 // COURSES / TOD (comma lists), CAMERA (chase | near | bumper), WEBGPU=1 (adds the WebGPU launch flags),
-// PW_MODULE. Serve with `API_PROXY=http://127.0.0.1:9 npx vite preview`; /api is also aborted in the browser.
+// SET (JSON merged into the stored settings, e.g. '{"upscale":true,"upscaleMode":"quality"}'), MOVING (km/h: the
+// car is driven by the AI from that speed and the picture is the 90th frame on the move, each a 1/60 s step, for
+// what only shows in motion: trails behind the car, flicker; without it the frame is a still one), PW_MODULE. Serve with `API_PROXY=http://127.0.0.1:9 npx vite preview`; /api is also aborted in the browser.
 const { chromium } = require(process.env.PW_MODULE || 'playwright');
 const fs = require('fs');
 const path = require('path');
@@ -26,6 +28,8 @@ const W = +(process.env.W || 1920), H = +(process.env.H || 1080), DPR = +(proces
 const QUALITY = process.env.QUALITY || 'ultra';
 const CAR = process.env.CAR || 'r34';
 const CAMERA = process.env.CAMERA || 'chase';
+const SET = process.env.SET ? JSON.parse(process.env.SET) : {};
+const MOVING = +(process.env.MOVING || 0);
 const list = (v, all) => (v ? v.split(',') : all);
 const COURSES = list(process.env.COURSES, ['oboro-downhill', 'kirifuri-lakeside', 'tenrou-skyline', 'autobahn']);
 const TODS = list(process.env.TOD, ['night', 'rain', 'dawn']);
@@ -72,7 +76,7 @@ async function main() {
         if (/net::ERR_FAILED|Failed to load resource/.test(t)) return;
         consoleMsgs.set(t, (consoleMsgs.get(t) || 0) + 1);
       });
-      const settings = { quality: QUALITY, resolutionScale: 1, timeOfDay: tod, masterVolume: 0, sfxVolume: 0, musicVolume: 0, assist: 1, autoShift: true, showGhost: false, cornerGuide: false, controlsGuide: false, showFps: false, courseId };
+      const settings = { quality: QUALITY, resolutionScale: 1, timeOfDay: tod, masterVolume: 0, sfxVolume: 0, musicVolume: 0, assist: 1, autoShift: true, showGhost: false, cornerGuide: false, controlsGuide: false, showFps: false, courseId, ...SET };
       await page.addInitScript((s) => localStorage.setItem('touge-settings', JSON.stringify({ state: s, version: 1 })), settings);
       await page.goto(URL_);
       await page.waitForFunction(() => window.__game && window.__game.phase === 'attract', null, { timeout: 180000 });
@@ -105,7 +109,34 @@ async function main() {
       const shots = [];
       for (let i = 0; i < points.length; i++) {
         const [name, s] = points[i];
-        await page.evaluate((at) => {
+        if (MOVING) await page.evaluate(([at, v]) => {
+          const g = window.__game;
+          const step = Object.getPrototypeOf(g).update.bind(g);
+          g.update = () => {};
+          g.setPaused(false);
+          g.autoDrive = true;
+          const lat = Math.max(-2, Math.min(2, g.line.offsetAt(at)));
+          g.player.sim.reset(g.track.pointAt(at, lat), g.track.headingAt(at), v);
+          g.player.proj.index = -1;
+          g.chase.reset();
+          for (let k = 0; k < 30; k++) step(1 / 60);
+          // ninety frames on the move (an upscaler's history has settled by then), each one step of the game and one picture; the loop stops on the last one, so
+          // the screenshot is a frame in motion (a still scene would go on gathering samples and hide the trails)
+          const loop = g.renderer.getAnimationLoop();
+          window.__loop = loop;
+          return new Promise((res) => {
+            let i = 0;
+            g.renderer.setAnimationLoop((ms) => {
+              step(1 / 60);
+              loop(ms);
+              if (++i >= 90) {
+                g.renderer.setAnimationLoop(null);
+                res();
+              }
+            });
+          });
+        }, [s, MOVING / 3.6]);
+        else await page.evaluate((at) => {
           const g = window.__game;
           // the frame loop's own updates are swallowed and the game is stepped by hand at a fixed 1/60 s: the same
           // frame whatever the frame rate (a slow build used to roll further before its picture)
@@ -122,9 +153,10 @@ async function main() {
           for (let k = 0; k < 4; k++) step(1 / 60);
         }, s);
         // the frozen frame is drawn over and over: time for the tree LODs, the lamp pool and late pipelines
-        await frames(page, 30);
+        if (!MOVING) await frames(page, 30);
         const file = path.join(dir, `${String(i).padStart(2, '0')}-${name}.jpg`);
         await page.screenshot({ path: file, type: 'jpeg', quality: 92 });
+        if (MOVING) await page.evaluate(() => window.__game.renderer.setAnimationLoop(window.__loop));
         shots.push({ name, s: Math.round(s), file: path.relative(OUT, file) });
       }
       const consoleList = [...consoleMsgs].map(([text, count]) => ({ text, count }));

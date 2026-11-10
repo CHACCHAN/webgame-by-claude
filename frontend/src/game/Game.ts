@@ -218,6 +218,8 @@ export class Game {
   private rideHeights = new Map<CarId, number>();
   /** stand-in for the post-processing buffer when compiling shaders (see precompile) */
   private compileTarget: THREE.RenderTarget | null = null;
+  /** compiles the scene's shaders for the buffers it is really drawn into (the render host's scene pass), when given */
+  compileScene: ((hold: boolean) => Promise<unknown>) | null = null;
   private cornerIdx = 0;
   private warnedCorner = -1;
   /** debug/testing: let an AI drive the player car and speed up simulated time */
@@ -312,7 +314,7 @@ export class Game {
     this.applyTimeOfDay(this.timeOfDay);
     this.chase.reset();
     await this.yieldFrame(0.92, 'シェーダーを準備中');
-    await this.precompile();
+    await this.precompile(true);
     await this.yieldFrame(1, '準備完了');
   }
 
@@ -1437,7 +1439,8 @@ export class Game {
    * drawn into the post-processing chain's offscreen buffer (half-float colour, depth): pipelines are compiled per
    * target format, so against a stand-in target of that format, or the work is wasted.
    */
-  private precompile() {
+  private precompile(loading = false) {
+    if (this.compileScene) return this.compileScene(loading).catch(() => undefined);
     const r = this.renderer, prev = r.getRenderTarget();
     this.compileTarget ??= new THREE.RenderTarget(1, 1, { type: THREE.HalfFloatType, depthTexture: new THREE.DepthTexture(1, 1) });
     r.setRenderTarget(this.compileTarget);

@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { MeshStandardNodeMaterial } from 'three/webgpu';
-import { Fn, attribute, mat4, materialColor, normalLocal, positionLocal, texture, transformNormal, uv, vec4 } from 'three/tsl';
+import { Fn, attribute, mat4, materialColor, normalLocal, positionLocal, positionPrevious, texture, transformNormal, uv, vec4 } from 'three/tsl';
 import type { Vec3, Vec4 } from './tslNoise';
 
 /**
@@ -51,6 +51,8 @@ export function instancedMaterial(src: THREE.MeshStandardMaterial): MeshStandard
   const matrix = mat4(col(0), col(1), col(2), col(3));
   mat.positionNode = Fn(() => {
     normalLocal.assign(transformNormal(normalLocal, matrix));
+    // (the motion vectors' side: where the vertex was a frame ago, which for fixed instances is where it is)
+    positionPrevious.assign(matrix.mul(vec4(positionPrevious, 1)).xyz);
     return matrix.mul(vec4(positionLocal, 1)).xyz;
   })();
   // (the map is part of the material's colour; the vertex colours are multiplied in by the material itself)

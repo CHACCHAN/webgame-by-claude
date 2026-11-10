@@ -50,6 +50,52 @@ Plan: `docs/FABLE_PLAN.md`. Commits `2074c02` (renderer), `0c79c61` + merge `a4c
   the AT/MT screen 30 s after the choice (the race had not started yet), on the retry it passed. That wait is 90 s
   now, like the other waits for a race. Not known: whether the start of a ghost battle got slower with the new
   renderer on a real GPU (to measure with the load time).
+- **Deployed** (`7dd1ebc`, bundle `index-B7_3Wkth.js`; migration `add_loaded_to_room_players` ran, health and
+  leaderboard API 200, `max_players` 5). The live site itself was not opened in a browser after the deploy.
+
+### B2: upscaler (plan B2, owner decision D4)
+- **What**: settings アップスケーリング (off by default) / 描画解像度 (ネイティブ 100 %, ウルトラ品質 77 %, 品質 67 %,
+  バランス 59 %, パフォーマンス 50 %) / シャープネス. WebGPU: the scene is drawn smaller with a jittered camera and
+  motion vectors, `render/TemporalUpscaler.ts` gathers the frames at the output's size (it is also the anti-aliasing:
+  SMAA is off with it), then RCAS sharpening. WebGL 2 backend: FSR 1 (EASU + RCAS) after SMAA, as planned.
+- **The upscaler is three.js' `TAAUNode` with our own resolve.** What had to change, each found by a measurement:
+  - three's node never saves its second output (the lock), so nothing carried over there. What a pixel's history
+    knows is kept in the history's alpha now: a frame counts by how near its sample fell to the pixel (a running
+    average), a newly uncovered pixel takes its first frames whole, and the sum is capped by the pixel's speed.
+  - history read with Catmull-Rom (five taps); the thin-feature lock only where the picture holds still (on the
+    move it left ghosts of the guard-rail posts).
+  - reactive mask (a third target): rain, smoke, sparks, lamps leave their share of the pixel and the current frame
+    counts for that much more. Without it the rain was averaged away. `userData.reactive = 0` on the cloud sea.
+  - motion vectors: fragments without depth leave the surface's vector as it is (the velocity target blends by a
+    weight); `instancedMaterial` (the trees) gives its previous position.
+  - texture LOD bias log2(scale) for the scene's materials (three has no switch: `TextureNode.setup` is wrapped).
+  - a shader built outside a frame took the jittered projection for its motion vectors: `steadyVelocity`.
+- **Precompile** (`RenderHost.precompile`, used by `Game`): for the scene pass' real targets, one at a time, the
+  target set again after every frame while it runs; at load no frame is drawn meanwhile. A pipeline error
+  (a 2-target pipeline with a 1-output shader) came from two overlapping compiles. **Load time to the title:
+  12.5 s → 7.0–7.8 s** (the old precompile aimed at a stand-in target and its work was thrown away).
+- **Speed** (RX 5700 XT, 朧峠 night, ultra, rival race, uncapped; `perf-up-1440.json`, `perf-up-4k.json`):
+  | output | native | 品質 67 % | パフォーマンス 50 % |
+  |---|---|---|---|
+  | 2560×1440 | 102 fps | 119 fps (×1.17) | 125 fps (×1.22) |
+  | 3840×2160 | 60 fps | 75 fps (×1.26) | 94 fps (×1.57) |
+  **The plan's target (1440p 品質 ≥ ×1.4) is not met on this machine**: at 1440p the frame is bound by the main
+  thread (draw calls; ~130 fps is the ceiling at any resolution), not by pixels. The gain grows where the GPU is
+  the limit (4K here; weaker GPUs, not measured).
+- **Look**, verified on the GPU:
+  - 93 fixed viewpoints (4 courses × 3 times) with 品質: no errors or warnings; mean luminance within ±5 % of native.
+  - a still scene, six pictures 150 ms apart (`~/.local/opt/quality/flicker.cjs`): 0.1 % of pixels change by more
+    than 8/255 between pictures (native: 0; before the fixes: 5–10 %). Fences, rails and far lamps hold still.
+  - 200 km/h, the 90th frame on the move (`tools/shots.cjs` `MOVING=200`), native next to 品質: no trail behind the
+    car, no ghosts of posts; the picture is a little softer than native (rock and asphalt texture, far trees), the
+    nearest wall can show the scene's pixels. Rain about as dense as native, streaks a little coarser.
+  - settings switched live on both backends (`uptoggle.cjs`): on/off, the five modes, sharpness; no errors.
+  - WebGL 2 backend with FSR 1: 30 viewpoints without errors, same look as its native picture.
+- Not verified: thin-line flicker on the move by video (only stills of moving frames); phones; the speed gain on a
+  weaker GPU; the WebGL 2 path's speed; non-car vehicles (the trains' cars are moved every frame: their motion
+  vectors were not looked at). Tests: tsc, vitest 70, build; E2E on the isolated stack, four specs only (boot, time
+  attack, rival battle, phone: 4 passed; the upscaler itself is off there, they cover the new precompile).
+- Tools: `tools/shots.cjs` takes `SET` (settings JSON) and `MOVING` (km/h); `tools/perf-frame.cjs` takes `VARIANTS`.
 
 ## Session 8 (2026-11-10) — new vehicles: Cybertruck, Yangwang U9 Xtreme, three motorcycles, the L0 maglev
 

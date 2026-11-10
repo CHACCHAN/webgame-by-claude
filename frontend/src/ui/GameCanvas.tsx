@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Game } from '../game/Game';
 import { RenderHost, type RenderOptions } from '../game/render/RenderHost';
 import type { CarId } from '../game/vehicle/carSpecs';
-import { currentCourseId, qualityProfile, useSettings } from '../store/settings';
+import { UPSCALE_SCALE, currentCourseId, qualityProfile, useSettings, type Settings } from '../store/settings';
 import { useApp } from '../store/app';
 
 /** The single game instance (the 3D world is expensive to build). */
@@ -23,6 +23,7 @@ function startGame(host: RenderHost) {
     const s = useSettings.getState();
     const profile = qualityProfile(s.quality, s.resolutionScale);
     const game = new Game(host.renderer, host.scene, host.camera, profile);
+    game.compileScene = (hold) => host.precompile(hold);
     const params = new URLSearchParams(location.search);
     game.assist = s.assist;
     game.autoShift = s.autoShift;
@@ -80,14 +81,20 @@ function startGame(host: RenderHost) {
   host.start((dt) => gameHolder.game?.update(dt));
 }
 
-const renderOptions = (quality: Parameters<typeof qualityProfile>[0], scale: number): RenderOptions => {
-  const p = qualityProfile(quality, scale);
-  return { pixelRatio: p.pixelRatio, shadows: p.shadows, bloom: p.bloom, smaa: p.smaa, extraFx: p.extraFx };
+const renderOptions = (s: Pick<Settings, 'quality' | 'resolutionScale' | 'upscale' | 'upscaleMode' | 'sharpness'>): RenderOptions => {
+  const p = qualityProfile(s.quality, s.resolutionScale);
+  return {
+    pixelRatio: p.pixelRatio, shadows: p.shadows, bloom: p.bloom, smaa: p.smaa, extraFx: p.extraFx,
+    upscale: s.upscale ?? false, renderScale: UPSCALE_SCALE[s.upscaleMode] ?? 1, sharpness: s.sharpness ?? 0,
+  };
 };
 
 export function GameCanvas() {
   const quality = useSettings((s) => s.quality);
-  const scale = useSettings((s) => s.resolutionScale);
+  const resolutionScale = useSettings((s) => s.resolutionScale);
+  const upscale = useSettings((s) => s.upscale);
+  const upscaleMode = useSettings((s) => s.upscaleMode);
+  const sharpness = useSettings((s) => s.sharpness);
   const canvas = useRef<HTMLCanvasElement>(null);
   const [failed, setFailed] = useState(false);
   useEffect(() => {
@@ -95,7 +102,7 @@ export function GameCanvas() {
     const s = useSettings.getState();
     // ?webgl=1: the WebGL 2 backend even where WebGPU works (comparisons, troubleshooting)
     const forceWebGL = new URLSearchParams(location.search).get('webgl') === '1';
-    hostHolder.starting = RenderHost.create(canvas.current, renderOptions(s.quality, s.resolutionScale), forceWebGL);
+    hostHolder.starting = RenderHost.create(canvas.current, renderOptions(s), forceWebGL);
     hostHolder.starting.then(
       (host) => {
         hostHolder.host = host;
@@ -108,8 +115,8 @@ export function GameCanvas() {
     );
   }, []);
   useEffect(() => {
-    hostHolder.host?.configure(renderOptions(quality, scale));
-  }, [quality, scale]);
+    hostHolder.host?.configure(renderOptions({ quality, resolutionScale, upscale, upscaleMode, sharpness }));
+  }, [quality, resolutionScale, upscale, upscaleMode, sharpness]);
   return (
     <div className="game-canvas">
       <canvas ref={canvas} />

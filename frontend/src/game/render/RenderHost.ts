@@ -1,8 +1,11 @@
 import * as THREE from 'three';
-import { RenderPipeline, WebGPURenderer, type Node } from 'three/webgpu';
-import { Fn, convertToTexture, dot, float, fract, pass, renderOutput, sRGBTransferEOTF, sRGBTransferOETF, screenUV, sin, smoothstep, time, uniform, vec2, vec3, vec4 } from 'three/tsl';
+import { BlendMode, RenderPipeline, WebGPURenderer, type Node, type NodeBuilder } from 'three/webgpu';
+import { Fn, convertToTexture, dot, float, fract, luminance, mrt, output, pass, renderOutput, sRGBTransferEOTF, sRGBTransferOETF, screenUV, sin, smoothstep, time, uniform, vec2, vec3, vec4, velocity } from 'three/tsl';
 import { bloom } from 'three/addons/tsl/display/BloomNode.js';
+import { fsr1 } from 'three/addons/tsl/display/FSR1Node.js';
+import { sharpen } from 'three/addons/tsl/display/SharpenNode.js';
 import { smaa } from 'three/addons/tsl/display/SMAANode.js';
+import { TemporalUpscaler, biasSceneTextures, sceneTextureBias, temporalUpscale } from './TemporalUpscaler';
 
 /** The renderer every engine module draws with (WebGPU, or its WebGL 2 backend where the browser has no WebGPU). */
 export type GameRenderer = WebGPURenderer;
@@ -15,7 +18,52 @@ export interface RenderOptions {
   smaa: boolean;
   /** chromatic aberration and film grain */
   extraFx: boolean;
+  /**
+   * The scene drawn at `renderScale` of the output and brought up to it: over time from jittered frames (WebGPU: the
+   * temporal upscaler, which is also the anti-aliasing) or within the frame (the WebGL 2 backend: FSR 1).
+   */
+  upscale: boolean;
+  /** the scene's resolution as a fraction of the output's, per axis (0.5 … 1; 1 = temporal anti-aliasing only) */
+  renderScale: number;
+  /** sharpening after the upscale, 0 (none) … 1 */
+  sharpness: number;
 }
+
+/** RCAS takes its strength in stops of attenuation: 0 = the most it does, 2 = next to none */
+const rcasStops = (sharpness: number) => 2 * (1 - Math.min(1, Math.max(0, sharpness)));
+
+/**
+ * The motion vector a material leaves in the velocity target, with the weight it is blended in by: a surface that
+ * writes depth leaves its own; smoke, lamps, rain and beams (see-through, no depth) leave the surface behind them
+ * as it is, since the upscaler follows the depth buffer's surface.
+ */
+const surfaceVelocity = Fn((builder: NodeBuilder) => {
+  const m = builder.material;
+  return m && m.transparent && !m.depthWrite ? vec4(0) : vec4(velocity as unknown as Node<'vec2'>, 0, 1);
+});
+
+/** the velocity target's blending: by the weight `surfaceVelocity` gives (the picture's own blending is the material's) */
+const VELOCITY_BLEND = new BlendMode(THREE.NormalBlending);
+
+/**
+ * How much of a pixel is something the motion vectors do not describe: rain, smoke, sparks, lamps and beams are
+ * drawn over the surface whose motion the pixel carries, and the upscaler, following that surface, would average
+ * them away (a rain streak is somewhere else every frame) or drag them along it. Each such fragment leaves its
+ * share here (its opacity; for an additive one its light, a streak in the night being all of the pixel long before
+ * it is white), and the upscaler takes that much more of the current frame there. `userData.reactive` on a material
+ * scales it (0 for wide soft layers like the cloud sea, which gain nothing and would lose the anti-aliasing of
+ * every silhouette in front of them).
+ */
+const surfaceReactive = Fn((builder: NodeBuilder) => {
+  const m = builder.material;
+  if (!m || !m.transparent || m.depthWrite) return vec4(0);
+  const scale = typeof m.userData.reactive === 'number' ? m.userData.reactive : 1;
+  if (scale <= 0) return vec4(0);
+  const share = m.blending === THREE.AdditiveBlending ? luminance(output.rgb).mul(output.a).mul(ADDITIVE_REACTIVE) : output.a;
+  return vec4(1, 1, 1, share.mul(scale).saturate());
+});
+/** an additive fragment's light (linear) × this = its share of the pixel */
+const ADDITIVE_REACTIVE = 6;
 
 /** the bloom: what is brighter than `threshold` (… + `smooth`: fully) glows, summed over five blur levels */
 const BLOOM = { strength: 0.3, radius: 0.6, threshold: 0.85, smooth: 0.25 };
@@ -32,12 +80,21 @@ export class RenderHost {
   readonly scene = new THREE.Scene();
   readonly camera = new THREE.PerspectiveCamera(60, 1, 0.25, 16000);
   private pipeline!: RenderPipeline;
+  private scenePass!: ReturnType<typeof pass>;
+  private upscaler: TemporalUpscaler | null = null;
   private observer: ResizeObserver | null = null;
   private last = 0;
   private options: RenderOptions;
+  private readonly sharpness = uniform(0);
+  /** a `precompile` is running (see there) */
+  private compiling = false;
+  /** … and nothing is drawn meanwhile (behind the loading screen: the compile is then not paced by the frames) */
+  private holding = false;
+  private compileQueue: Promise<void> = Promise.resolve();
 
   private constructor(readonly renderer: GameRenderer, readonly canvas: HTMLCanvasElement, options: RenderOptions) {
     this.options = options;
+    this.sharpness.value = rcasStops(options.sharpness);
   }
 
   /** Creates the renderer on `canvas` (sized by its parent element). Rejects when neither WebGPU nor WebGL 2 works. */
@@ -66,9 +123,12 @@ export class RenderHost {
 
   /** Changes the drawing resolution and the effects (the settings screen). */
   configure(options: RenderOptions) {
-    const rebuild = options.bloom !== this.options.bloom || options.smaa !== this.options.smaa || options.extraFx !== this.options.extraFx;
+    const was = this.options;
+    const rebuild = options.bloom !== was.bloom || options.smaa !== was.smaa || options.extraFx !== was.extraFx
+      || options.upscale !== was.upscale || options.renderScale !== was.renderScale || (options.sharpness > 0) !== (was.sharpness > 0);
     this.options = options;
     this.renderer.shadowMap.enabled = options.shadows;
+    this.sharpness.value = rcasStops(options.sharpness);
     if (rebuild) this.buildPipeline();
     this.resize();
   }
@@ -80,7 +140,26 @@ export class RenderHost {
     // tone mapping happens inside the chain (SMAA and the lens effects work on the displayed colours)
     pipeline.outputColorTransform = false;
     const scenePass = pass(this.scene, this.camera);
-    const hdr = scenePass.getTextureNode('output');
+    this.scenePass = scenePass;
+    this.upscaler = null;
+    // over time where the backend has the motion vectors' own blending (WebGPU), else within the frame
+    const temporal = o.upscale && this.backend === 'webgpu';
+    const spatial = o.upscale && !temporal && o.renderScale < 1;
+    if (temporal || spatial) scenePass.setResolutionScale(o.renderScale);
+    const colour = scenePass.getTextureNode('output');
+    let hdr: Node<'vec4'> = colour;
+    if (temporal) {
+      const targets = mrt({ output, velocity: surfaceVelocity(), reactive: surfaceReactive() });
+      targets.setBlendMode('velocity', VELOCITY_BLEND);
+      targets.setBlendMode('reactive', VELOCITY_BLEND);
+      scenePass.setMRT(targets);
+      biasSceneTextures();
+      sceneTextureBias.value = Math.log2(o.renderScale);
+      // jitters the camera, gathers the frames at the output's resolution: everything after it works at full size
+      this.upscaler = temporalUpscale(colour, scenePass.getTextureNode('depth'), scenePass.getTextureNode('velocity'), scenePass.getTextureNode('reactive'), this.camera);
+      // (its alpha is the upscaler's own bookkeeping)
+      hdr = vec4((this.upscaler as unknown as Node<'vec4'>).rgb, 1);
+    }
     let lit: Node<'vec4'> = hdr;
     if (o.bloom) {
       const glow = bloom(hdr, BLOOM.strength, BLOOM.radius, BLOOM.threshold);
@@ -88,10 +167,48 @@ export class RenderHost {
       lit = hdr.add(glow);
     }
     let out: Node<'vec4'> = renderOutput(lit);
-    if (o.smaa) out = smaa(out) as unknown as Node<'vec4'>;
+    // (the temporal upscaler is the anti-aliasing; FSR 1 wants an anti-aliased picture)
+    if (o.smaa && !temporal) out = smaa(out) as unknown as Node<'vec4'>;
+    if (spatial) out = fsr1(out, this.sharpness) as unknown as Node<'vec4'>;
+    else if (temporal && o.sharpness > 0) out = sharpen(out, this.sharpness) as unknown as Node<'vec4'>;
     if (o.bloom) out = lens(out, o.extraFx);
     pipeline.outputNode = out;
     this.pipeline = pipeline;
+  }
+
+  /**
+   * Compiles the shaders of everything in the scene, for the buffers the scene pass draws into (their formats and,
+   * with the upscaler, the motion vectors' target are part of each pipeline): ahead of the first frame that shows
+   * a thing, not as a hitch in it. `hold`: no frame is drawn until it is done (the loading screen is up).
+   */
+  precompile(hold = false): Promise<void> {
+    // The renderer builds each shader for the target (and motion-vector outputs) it has *when that shader's turn
+    // comes*, and that is spread over many frames: the scene pass' target stays set between the frames while a
+    // compile runs (`aim`), the frame loop draws to the canvas and sets it again. One compile at a time, or the
+    // second would hand back the first one's state.
+    const run = async () => {
+      this.compiling = true;
+      this.holding = hold;
+      this.aim();
+      try {
+        await this.renderer.compileAsync(this.scene, this.camera);
+      } finally {
+        this.compiling = false;
+        this.holding = false;
+        this.renderer.setRenderTarget(null);
+        this.renderer.setMRT(null);
+        this.upscaler?.steadyVelocity(false);
+      }
+    };
+    this.compileQueue = this.compileQueue.then(run, run);
+    return this.compileQueue;
+  }
+
+  /** the renderer's target and outputs as the scene pass has them when it draws */
+  private aim() {
+    this.renderer.setRenderTarget(this.scenePass.renderTarget);
+    this.renderer.setMRT(this.scenePass.getMRT());
+    this.upscaler?.steadyVelocity(true);
   }
 
   private resize() {
@@ -109,8 +226,13 @@ export class RenderHost {
     void this.renderer.setAnimationLoop((ms: number) => {
       const dt = this.last ? Math.min((ms - this.last) / 1000, 0.25) : 1 / 60;
       this.last = ms;
+      if (this.compiling) {
+        this.renderer.setRenderTarget(null);
+        this.renderer.setMRT(null);
+      }
       frame(dt);
-      this.pipeline.render();
+      if (!this.holding) this.pipeline.render();
+      if (this.compiling) this.aim();
     });
   }
 

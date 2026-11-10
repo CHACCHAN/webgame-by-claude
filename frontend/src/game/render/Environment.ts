@@ -276,6 +276,8 @@ export function buildEnvironment(terrain: TerrainData): EnvironmentRig {
     uHeightBox: uniform(new THREE.Vector3(hx0, hz0, hSpan)), uLayer: uniform(lf.cloudLevel),
   };
   const cloudMat = new MeshBasicNodeMaterial({ transparent: true, depthWrite: false, fog: true });
+  // a wide soft layer: nothing in it for the upscaler to keep from the current frame (RenderHost `surfaceReactive`)
+  cloudMat.userData.reactive = 0;
   {
     const wp = positionWorld;
     const cuv = wp.xz.div(900).add(vec2(cloudU.uTime.mul(0.003), cloudU.uTime.mul(0.0015)));

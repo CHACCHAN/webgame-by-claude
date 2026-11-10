@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useApp } from '../../store/app';
-import { useSettings, type QualityLevel } from '../../store/settings';
+import { UPSCALE_SCALE, useSettings, type QualityLevel, type UpscaleMode } from '../../store/settings';
 import { useMenuInput, hoverSelect } from '../useMenuInput';
 import { gameHolder } from '../GameCanvas';
 import { Hint } from './Menus';
@@ -22,6 +22,8 @@ export function SettingsScreen() {
   const [needsReload, setNeedsReload] = useState(false);
   const qualities: QualityLevel[] = ['low', 'medium', 'high', 'ultra'];
   const qLabel: Record<QualityLevel, string> = { low: '低', medium: '中', high: '高', ultra: '最高' };
+  const upscaleModes: UpscaleMode[] = ['native', 'ultra', 'quality', 'balanced', 'performance'];
+  const upscaleLabel: Record<UpscaleMode, string> = { native: 'ネイティブ', ultra: 'ウルトラ品質', quality: '品質', balanced: 'バランス', performance: 'パフォーマンス' };
   const cycle = <T,>(list: T[], cur: T, dir: number) => list[(list.indexOf(cur) + dir + list.length) % list.length];
   const pct = (v: number) => `${Math.round(v * 100)}%`;
   const step = (v: number, dir: number, st = 0.1, lo = 0, hi = 1) => Math.round(Math.min(hi, Math.max(lo, v + dir * st)) * 100) / 100;
@@ -30,6 +32,13 @@ export function SettingsScreen() {
   const rows: Row[] = [
     { label: 'グラフィック品質', value: qLabel[s.quality], note: '影・木の密度・ポストエフェクト', change: (d) => { s.set({ quality: cycle(qualities, s.quality, d) }); setNeedsReload(true); } },
     { label: '解像度スケール', value: pct(s.resolutionScale), change: (d) => s.set({ resolutionScale: step(s.resolutionScale, d, 0.1, 0.5, 1) }) },
+    { label: 'アップスケーリング', value: s.upscale ? 'オン' : 'オフ', note: '低い解像度で描いて拡大し、負荷を下げます', change: () => s.set({ upscale: !s.upscale }) },
+    ...(s.upscale
+      ? [
+          { label: '描画解像度', value: `${upscaleLabel[s.upscaleMode]} ${pct(UPSCALE_SCALE[s.upscaleMode])}`, note: '低いほど軽く、細部は甘くなります', change: (d: number) => s.set({ upscaleMode: cycle(upscaleModes, s.upscaleMode, d) }) },
+          { label: 'シャープネス', value: pct(s.sharpness), change: (d: number) => s.set({ sharpness: step(s.sharpness, d) }) },
+        ]
+      : []),
     { label: '運転アシスト', value: ['オフ', '標準', '強'][s.assist], note: 'カウンターステア補助・スピン防止', change: (d) => { const v = ((s.assist + d + 3) % 3) as 0 | 1 | 2; s.set({ assist: v }); if (game) game.assist = v; } },
     { label: 'ゴースト表示（タイムアタック）', value: s.showGhost ? 'オン' : 'オフ', change: () => { s.set({ showGhost: !s.showGhost }); if (game) game.showGhost = !s.showGhost; } },
     { label: '操作ガイド（スタート時）', value: s.controlsGuide !== false ? 'オン' : 'オフ', note: 'レース開始時に操作方法をしばらく表示します', change: () => s.set({ controlsGuide: s.controlsGuide === false }) },

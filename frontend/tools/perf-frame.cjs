@@ -5,8 +5,9 @@
 //   node tools/perf-frame.cjs [out.json]
 // Env: URL (default http://localhost:4173/; `before@http://…:4174/,after@http://…:4173/` runs every case once per
 // build and round, alternating: the GPU picks its own clock, so only paired runs compare), ROUNDS (2), DURATION (30 s),
-// COURSES / TOD / QUALITY (comma lists; default oboro-downhill, night, high), W / H / DPR (1920×1080 at 1), CHROME,
-// PW_MODULE. Serve with `API_PROXY=http://127.0.0.1:9 npx vite preview`; /api is also aborted in the browser.
+// COURSES / TOD / QUALITY (comma lists; default oboro-downhill, night, high), W / H / DPR (1920×1080 at 1),
+// VARIANTS (JSON, name → settings merged into the stored ones: every build is run once per variant, e.g.
+// '{"native":{},"quality":{"upscale":true,"upscaleMode":"quality"}}'), CHROME, PW_MODULE. Serve with `API_PROXY=http://127.0.0.1:9 npx vite preview`; /api is also aborted in the browser.
 const { chromium } = require(process.env.PW_MODULE || 'playwright');
 const fs = require('fs');
 
@@ -14,6 +15,11 @@ const TARGETS = (process.env.URL || 'http://localhost:4173/').split(',').map((t)
   const at = t.indexOf('@');
   return at > 0 ? { name: t.slice(0, at), url: t.slice(at + 1) } : { name: 'build', url: t };
 });
+const VARIANTS = process.env.VARIANTS ? JSON.parse(process.env.VARIANTS) : null;
+if (VARIANTS) {
+  const builds = TARGETS.splice(0);
+  for (const b of builds) for (const [name, set] of Object.entries(VARIANTS)) TARGETS.push({ name: builds.length > 1 ? `${b.name}/${name}` : name, url: b.url, set });
+}
 const W = +(process.env.W || 1920), H = +(process.env.H || 1080), DPR = +(process.env.DPR || 1);
 const list = (v, all) => (v ? v.split(',') : all);
 const COURSES = list(process.env.COURSES, ['oboro-downhill']);
@@ -71,7 +77,7 @@ async function run(browser, target, c) {
   const page = await ctx.newPage();
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
-  const settings = { quality: c.quality, resolutionScale: 1, timeOfDay: c.tod, masterVolume: 0, sfxVolume: 0, musicVolume: 0, assist: 1, autoShift: true, showGhost: true, cornerGuide: true, controlsGuide: false, showFps: false, courseId: c.courseId };
+  const settings = { quality: c.quality, resolutionScale: 1, timeOfDay: c.tod, masterVolume: 0, sfxVolume: 0, musicVolume: 0, assist: 1, autoShift: true, showGhost: true, cornerGuide: true, controlsGuide: false, showFps: false, courseId: c.courseId, ...(target.set || {}) };
   await page.addInitScript(instrument, settings);
   const t0 = Date.now();
   await page.goto(target.url);
@@ -125,7 +131,7 @@ async function run(browser, target, c) {
         const row = await run(browser, target, { courseId, tod, quality });
         rows.push(row);
         console.log(
-          `${target.name.padEnd(8)} ${courseId} ${tod} ${quality} #${round + 1}: ${row.backend}, ${row.fps} fps | frame p50 ${row.frameMs.p50} p95 ${row.frameMs.p95} p99 ${row.frameMs.p99} max ${row.frameMs.max} ms | cpu p50 ${row.cpuMs.p50} p95 ${row.cpuMs.p95} ms | ${row.gpuMHz ?? '?'} MHz | load ${row.loadMs} ms, ${row.distance} m${row.errors.length ? ` | PAGE ERRORS ${row.errors[0]}` : ''}`,
+          `${target.name.padEnd(11)} ${courseId} ${tod} ${quality} #${round + 1}: ${row.backend}, ${row.fps} fps | frame p50 ${row.frameMs.p50} p95 ${row.frameMs.p95} p99 ${row.frameMs.p99} max ${row.frameMs.max} ms | cpu p50 ${row.cpuMs.p50} p95 ${row.cpuMs.p95} ms | ${row.gpuMHz ?? '?'} MHz | load ${row.loadMs} ms, ${row.distance} m${row.errors.length ? ` | PAGE ERRORS ${row.errors[0]}` : ''}`,
         );
       }
     }
