@@ -127,7 +127,8 @@ test('ghost battle against a CPU ghost', async ({ page }) => {
   await row.locator('button', { hasText: '挑戦' }).click();
   await page.locator('.cta', { hasText: 'この車に決定' }).click();
   await page.locator('.choice-card', { hasText: 'オートマチック' }).click();
-  await expect(page.locator('.ghost-tag')).toContainText('朧');
+  // (the race starts once the ghost is fetched and its car built: over 30 s on the software renderer at times)
+  await expect(page.locator('.ghost-tag')).toContainText('朧', { timeout: 90_000 });
   await page.waitForFunction(() => (window as any).__game.phase === 'racing', null, { timeout: 120_000 });
   await page.waitForFunction(() => (window as any).__game.hud.ghostProgress > 0.05, null, { timeout: 120_000 });
 });

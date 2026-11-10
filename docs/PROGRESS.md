@@ -2,6 +2,55 @@
 
 Newest first. "Verified" means actually executed in this environment; anything else is marked as unverified.
 
+## Session 9 (2026-11-10) — Fable phase: WebGPU renderer (plan B1), online ready button and five players (F1, F5)
+
+Plan: `docs/FABLE_PLAN.md`. Commits `2074c02` (renderer), `0c79c61` + merge `a4c2fde` (online).
+
+### Phase A (measurement)
+- The GPU works again after the owner's VM maintenance; `dev` joined the `render` and `video` groups (owner: 「許可します」).
+  A shell older than that login has no GPU access: `~/.local/opt/quality/gpurun.sh` (CLAUDE.md).
+- `tools/shots.cjs`: fixed viewpoints on every course × time of day (93 pictures, contact sheets). The game is stepped
+  by hand at 1/60 s, so a slow build gives the same frame. `tools/perf-frame.cjs`: frame cost on any backend, paired
+  builds. The pictures and numbers are in `~/.local/opt/quality/` (outside the repo): `base-e` (old renderer),
+  `gpu-e` / `gpu-f` (WebGPU), `gl2-e` (WebGL 2 backend), `perf-1.json`, `perf-2.json`.
+
+### Phase B1 (WebGPU): done, verified on the RX 5700 XT in headless Chrome
+- `render/RenderHost.ts` replaces react-three-fiber + postprocessing (both removed from package.json). Every custom
+  shader is TSL (list in the commit message). `?webgl=1` forces the WebGL 2 backend.
+- **Look**: side by side with the old build on the 93 viewpoints: the same picture (mean luminance within 1 % on three of
+  the four pairs measured, +7 % on a rain picture with more streaks in it; after two fixes: the vignette now works on
+  linear values, the bloom takes a soft threshold).
+  Known differences: tree shadows are a little more solid; the rain is denser in a race's first seconds (the old
+  shader gathered the drops into a band there: fixed, not a regression).
+- **Speed** (1920×1080, rival race on 朧峠 at night, uncapped, `perf-2.json`): old renderer 231 fps (frame p50 4.2 ms,
+  p99 8 ms); WebGPU 133 fps (7.3 ms, p99 11–12 ms) at high and ultra. Both are far above 60 fps on this machine; the
+  WebGPU build spends 1.75× the main-thread time (6.9 ms against 3.9 ms). The first WebGPU build ran at 34 fps with
+  100 ms hitches; what fixed it:
+  - three.js builds a shader for every `InstancedMesh` → trees went from 632 instanced meshes to 2 meshes
+    (`render/instancing.ts`, `ChunkedLods`): no shader is built during a race any more (was ~7 a second).
+  - `alphaTest` on a shadow caster made every caster recompute its cache key each frame (3 ms) → mask nodes (`cutout`).
+  - a draw call costs ~30 µs of main thread → car models merged per material (`render/mergeParts.ts`: the R34 is 34
+    meshes now, 14 of them the body; a car was ~50), only shell / glass / wheels throw shadows, a rival's headlights throw none: 580 → 285 draws a frame.
+  - a `DynamicDrawUsage` buffer is uploaded every frame whether it changed or not.
+- **Load time** to the title: 10–12 s against 4.7 s (shader pipelines). Not yet worked on.
+- **WebGL 2 backend** (`?webgl=1`): 30 viewpoints on 朧峠 and the autobahn drawn without errors, same look. Its speed
+  is not measured yet.
+- Not verified: phones; a browser without WebGPU other than through `?webgl=1`; the garage and menus by eye; the
+  train / bike / jet / tank / roach models under the new renderer (only cars were looked at); sound is untouched.
+
+### F1 / F5 (online): ready button, five players, grid in rows
+- Guests press 準備完了; the host can start only when everybody is loaded and every guest is ready. Rooms take five;
+  the grid stands in rows of up to three (trains at the back). Details in the commit `0c79c61` and CLAUDE.md.
+- Verified by the agent that wrote it, on its branch: backend 20 passed, frontend tsc / vitest (70) / build, the
+  online E2E spec 2 passed. After the merge: tsc, vitest 70 passed, build.
+
+### E2E on the merged code (`a4c2fde`)
+- The whole suite on an isolated stack (project `touge-e2e`, port 8090; SwiftShader, so the renderer's WebGL 2
+  backend): 10 passed, 1 flaky, 31 min. The flaky one is the ghost battle: on its first try the game was still on
+  the AT/MT screen 30 s after the choice (the race had not started yet), on the retry it passed. That wait is 90 s
+  now, like the other waits for a race. Not known: whether the start of a ghost battle got slower with the new
+  renderer on a real GPU (to measure with the load time).
+
 ## Session 8 (2026-11-10) — new vehicles: Cybertruck, Yangwang U9 Xtreme, three motorcycles, the L0 maglev
 
 Owner: 「テスラのサイバートラック、バイクを3台、リニアモータ新幹線を実装してください」 (bikes chosen: Honda NSR250R,

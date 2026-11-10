@@ -68,6 +68,13 @@ pending. `docs/PLAN.md` holds the design.
   (WebGPU points are 1 px: particles and lamps are instanced `Sprite`s, `fx/SpritePool.ts`). Plain three.js materials
   (GLB, `MeshStandardMaterial`) still work: the renderer makes their node twins. An `InstancedMesh` with no instances
   must not reach the scene (WebGPU refuses its empty buffer; `Game` drops them from the scenery).
+  What costs main-thread time in this renderer (each found with a CPU profile, 34 → 133 fps):
+  a shader is built per `InstancedMesh` (never one per chunk: `render/instancing.ts`, `ChunkedLods` = two meshes for
+  all trees, instance data as geometry attributes); `alphaTest` on anything that throws a shadow (use `cutout()`, a
+  mask node); every draw call (~30 µs, and once more per shadow map: `render/mergeParts.ts` merges a car model per
+  material, `CarVisual` lets only shell / glass / wheels throw shadows, only the followed car's headlights throw
+  any); a `DynamicDrawUsage` attribute is uploaded every frame, changed or not. A material's nodes (`materialColor`…)
+  read the material being drawn, which in a shadow map is the shadow material: name the texture itself there.
 - Own 3D models (no third-party assets): Blender Python scripts built by `BLENDER=<bin> node tools/blender-models.cjs
   <trains|cars|props|creatures> [ids] [--render [dir]]` (Blender 5.2 headless → GLB → glTF-Transform: meshopt, WebP;
   trains also palette textures). Scenery: `tools/blender/props/<id>.py` → `public/models/props/<id>.glb`; size,
