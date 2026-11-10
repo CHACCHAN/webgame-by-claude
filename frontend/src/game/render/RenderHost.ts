@@ -7,6 +7,7 @@ import { sharpen } from 'three/addons/tsl/display/SharpenNode.js';
 import { smaa } from 'three/addons/tsl/display/SMAANode.js';
 import { ambientOcclusion } from './ambientOcclusion';
 import { graded } from './grade';
+import { beamCones, updateVolume, volumetricLights } from './volumetricLights';
 import { TemporalUpscaler, biasSceneTextures, sceneTextureBias, temporalUpscale } from './TemporalUpscaler';
 
 /** The renderer every engine module draws with (WebGPU, or its WebGL 2 backend where the browser has no WebGPU). */
@@ -22,6 +23,8 @@ export interface RenderOptions {
   extraFx: boolean;
   /** ambient occlusion: creases, the underside of cars, where things meet the ground */
   ao: boolean;
+  /** the lights' glow in the haze */
+  volumetric: boolean;
   /**
    * The scene drawn at `renderScale` of the output and brought up to it: over time from jittered frames (WebGPU: the
    * temporal upscaler, which is also the anti-aliasing) or within the frame (the WebGL 2 backend: FSR 1).
@@ -77,6 +80,9 @@ const BLOOM = { strength: 0.3, radius: 0.6, threshold: 0.85, smooth: 0.25 };
  * left alone: the occlusion is laid over the finished picture, and a lamp or a lit pool of road is not ambient light.
  */
 const AO = { scale: 0.5, radius: 1.4, maxScreen: 0.25, samples: 8, strength: 1.6, keepAbove: [1.2, 3.5] as const };
+
+/** the size of the lights' glow in the haze (`volumetricLights`), as a fraction of the output's per axis */
+const VOLUME_SCALE = 0.4;
 
 /** which backend the renderer ended up with */
 export type RenderBackend = 'webgpu' | 'webgl2';
@@ -135,7 +141,7 @@ export class RenderHost {
   /** Changes the drawing resolution and the effects (the settings screen). */
   configure(options: RenderOptions) {
     const was = this.options;
-    const rebuild = options.bloom !== was.bloom || options.smaa !== was.smaa || options.extraFx !== was.extraFx || options.ao !== was.ao
+    const rebuild = options.bloom !== was.bloom || options.smaa !== was.smaa || options.extraFx !== was.extraFx || options.ao !== was.ao || options.volumetric !== was.volumetric
       || options.upscale !== was.upscale || options.renderScale !== was.renderScale || (options.sharpness > 0) !== (was.sharpness > 0);
     this.options = options;
     this.renderer.shadowMap.enabled = options.shadows;
@@ -147,6 +153,7 @@ export class RenderHost {
   private buildPipeline() {
     const o = this.options;
     this.pipeline?.dispose();
+    beamCones.value = o.volumetric ? 0 : 1;
     const pipeline = new RenderPipeline(this.renderer);
     // tone mapping happens inside the chain (SMAA and the lens effects work on the displayed colours)
     pipeline.outputColorTransform = false;
@@ -174,6 +181,8 @@ export class RenderHost {
     let lit: Node<'vec4'> = hdr;
     // (the occlusion goes in where the picture is put together, not in a pass of its own: a full-size pass less)
     if (o.ao) lit = this.occluded(hdr, scenePass.getTextureNode('depth'));
+    // (the lights' glow in the haze lies over the scene, occluded or not)
+    if (o.volumetric) lit = lit.add(vec4(volumetricLights(scenePass.getTextureNode('depth'), this.camera, VOLUME_SCALE).sample(screenUV).rgb, 0));
     if (o.bloom) {
       const glow = bloom(hdr, BLOOM.strength, BLOOM.radius, BLOOM.threshold);
       glow.smoothWidth.value = BLOOM.smooth;
@@ -254,6 +263,7 @@ export class RenderHost {
         this.renderer.setMRT(null);
       }
       frame(dt);
+      if (this.options.volumetric) updateVolume(this.camera);
       if (!this.holding) this.pipeline.render();
       if (this.compiling) this.aim();
     });

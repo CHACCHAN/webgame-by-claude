@@ -66,7 +66,8 @@ pending. `docs/PLAN.md` holds the design.
 
 ## Gotchas
 - Rendering (`render/RenderHost.ts`, created by `ui/GameCanvas.tsx`; no react-three-fiber): `WebGPURenderer` + a TSL
-  `RenderPipeline` (scene → ambient occlusion → bloom → tone mapping (AgX) + the time of day's grade → SMAA → lens). `?webgl=1` forces the WebGL 2 backend. Custom
+  `RenderPipeline` (scene → ambient occlusion → the lights' glow in the haze → bloom → tone mapping (AgX) + the time of
+  day's grade → SMAA → lens). `?webgl=1` forces the WebGL 2 backend. Custom
   shaders are TSL node materials only: no `ShaderMaterial`, no `onBeforeCompile`, no `THREE.Points` with a size
   (WebGPU points are 1 px: particles and lamps are instanced `Sprite`s, `fx/SpritePool.ts`). Plain three.js materials
   (GLB, `MeshStandardMaterial`) still work: the renderer makes their node twins. An `InstancedMesh` with no instances
@@ -74,6 +75,10 @@ pending. `docs/PLAN.md` holds the design.
   A post pass at less than full size is `rtt(node, null, null, { resolutionScale })` (`convertToTexture` is always full
   size). three's `GTAONode` cost 3.2 ms at 4K whatever its settings: the occlusion is our own (`render/ambientOcclusion.ts`).
   Measure a new pass with `tools/perf-pass.cjs` before keeping it.
+  Passes that work from the depth buffer share `render/screenSpace.ts` (view position from the depth, sized targets,
+  the surface-keeping blur that cancels a five-pixel tap pattern). The glow in the haze (`render/volumetricLights.ts`)
+  takes its lights from `volume` (the course's lamps, the cars' cones via `CarVisual.beamInto`) and its amount from the
+  preset's `haze`: a new kind of light source that should glow is added there.
   What costs main-thread time in this renderer (each found with a CPU profile, 34 → 133 fps):
   a shader is built per `InstancedMesh` (never one per chunk: `render/instancing.ts`, `ChunkedLods` = two meshes for
   all trees, instance data as geometry attributes); `alphaTest` on anything that throws a shadow (use `cutout()`, a

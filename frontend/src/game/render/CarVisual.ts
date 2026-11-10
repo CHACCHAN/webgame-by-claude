@@ -7,6 +7,7 @@ import { traitsOf } from '../vehicle/kinds';
 import type { VehicleSim } from '../vehicle/VehicleSim';
 import { buildCar, paintFinish, type CarRig } from './CarModel';
 import { clamp, damp } from '../util/math';
+import { beamCones, type VolumeSpot } from './volumetricLights';
 
 const _q = new THREE.Quaternion(), _p = new THREE.Vector3();
 const AXIS_Y = new THREE.Vector3(0, 1, 0), AXIS_X = new THREE.Vector3(1, 0, 0);
@@ -109,7 +110,8 @@ export class CarVisual {
         // leaves v a hair below 0 at the rim, pow() of a negative base is NaN, and one NaN pixel spread by the bloom
         // blur blacked out the whole frame
         const edge = pow(abs(dot(normalView, positionViewDirection)), 1.5);
-        const a = pow(clampNode(uv().y, 0, 1), 2.2).mul(edge).mul(this.beamLevel);
+        // (with the lights' glow in the haze on, that pass draws the beams: render/volumetricLights.ts)
+        const a = pow(clampNode(uv().y, 0, 1), 2.2).mul(edge).mul(this.beamLevel).mul(beamCones);
         beamMat.colorNode = vec4(vec3(1, 0.93, 0.8).mul(a), 1);
       }
       // the beams come out of the raised pods on pop-up cars
@@ -147,6 +149,19 @@ export class CarVisual {
       this.rig.jet?.setLights(on >= LIGHTS_ON ? 1 : 0);
     }
     this.setBrakeLights(false);
+  }
+
+  /** The headlights' cone, for the glow in the haze (render/volumetricLights.ts): false when the car has none or they are off. */
+  beamInto(out: VolumeSpot): boolean {
+    const spot = this.headlights[0];
+    if (!spot || !(spot.intensity > 0) || !this.root.visible) return false;
+    spot.getWorldPosition(out.position);
+    spot.target.getWorldPosition(out.direction).sub(out.position).normalize();
+    out.color.copy(spot.color);
+    out.intensity = spot.intensity;
+    out.angle = spot.angle;
+    out.penumbra = spot.penumbra;
+    return true;
   }
 
   private applyBeams(level: number) {

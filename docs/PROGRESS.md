@@ -132,6 +132,30 @@ Plan: `docs/FABLE_PLAN.md`. Commits `2074c02` (renderer), `0c79c61` + merge `a4c
   environment taken away both give 56 / 41 / 31. WebGL 2 pictures taken before this fix (`c1-gl`) are dark.
 - **Deployed** (`26841c0`, bundle `index-SYHO0olc.js`, the same hash as the local build; leaderboard API 200). The
   live site itself was not opened in a browser.
+  The WebGL 2 fix after it: `ac8c2e1`, bundle `index-UOm_3OHj.js`, API 200.
+
+### C2: the lights' glow in the haze (plan C5, first part)
+- `render/volumetricLights.ts`, on high / ultra (`QualityProfile.volumetric`): what the air scatters towards the eye
+  from the 16 street lamps nearest the camera and from up to four cars' headlights, per pixel from the depth
+  buffer at 0.4 of the output's size, two surface-keeping blurs (`render/screenSpace.ts`, shared with the
+  occlusion), added to the picture before the bloom. A lamp shines down (cos^1.5) within 15 m: the light gathered
+  along the view ray is a closed form (∫ 1/d² − 1/R²), no steps; a headlight cone takes six steps at equal angles
+  from the lamp, turned in the five-pixel pattern the blur cancels. The scene cuts the ray, so a glow ends at the
+  wall behind it. No shadows in the air (a tree cuts no shaft). The amount is `haze` per time of day in the
+  `Environment` presets (night 0.005, rain 0.008, dawn 0.003 per metre). The cars' old see-through beam cones
+  show only where the pass is off (`beamCones`).
+- Got there in four rounds of pictures: first the lamps were dark (a reversed smoothstep), then the whole sky
+  glowed (1/d² without an end, sixteen lamps adding up), then a hard edge at lamp height (half-space emitter).
+- Look: a cone of lit air under each lamp, clearest in rain; a faint dome on a clear night; a soft glow ahead of the
+  car's lamps; nothing by day. Same picture natively, with the upscaler and on the WebGL 2 backend (same
+  viewpoint, rain: mean RGB 112.0 / 74.5 / 49.4, 112.6 / 75.3 / 50.5, 111.2 / 73.7 / 48.8).
+- GPU time (`tools/perf-pass.cjs`, 4K ultra): 0.84 ms + 0.24 ms of blur (scene 10.9 ms, occlusion 0.89 ms).
+- Checked: 96 viewpoints at ultra without page errors (at 0.5 scale, before the last tuning), then 32 of the final
+  build, 8 with the upscaler, 8 on WebGL 2; a still scene in rain: 0.04 % of pixels changing natively, 0.16–0.28 %
+  with the upscaler (rain and grain included); tsc, vitest 70, build.
+- **Not verified**: frame rate paired (agents still using every core); online peers' beams (wired through
+  `RemoteRacers.forEachExhaust`, not run with a second player); trains' and bikes' lamps in the haze; the
+  autobahn's oncoming traffic has no beams in the air; phones (the pass is off below high).
 
 ## Session 8 (2026-11-10) — new vehicles: Cybertruck, Yangwang U9 Xtreme, three motorcycles, the L0 maglev
 

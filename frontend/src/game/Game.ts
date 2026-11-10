@@ -10,6 +10,7 @@ import { AIDriver, AI_PROFILES, type AILevel } from './ai/AIDriver';
 import { buildScenery, type SceneryResult } from './render/TrackScenery';
 import { buildEnvironment, PRESETS, type EnvironmentRig, type TimeOfDay } from './render/Environment';
 import { CarVisual } from './render/CarVisual';
+import { volume, volumeSpot } from './render/volumetricLights';
 import { loadCarTemplates } from './render/carAssets';
 import { loadTrafficModels } from './render/trafficModels';
 import { loadSurfaceTextures } from './render/surfaceTextures';
@@ -351,6 +352,10 @@ export class Game {
     const envMap = this.env.buildEnvMap(this.renderer);
     this.scene.environment = envMap;
     this.scene.background = null;
+    // the lights' glow in the haze: the course's lamps, as bright as the pooled lights
+    volume.lamps = this.scenery.lamps;
+    volume.lampIntensity = 170 * this.env.preset.lampsOn;
+    volume.density = this.env.preset.haze;
     const lamps = this.env.preset.lampsOn;
     for (const m of this.scenery.lightmapMats) {
       m.userData.baseLightMap ??= m.lightMapIntensity;
@@ -656,6 +661,20 @@ export class Game {
     this.rain.update(this.time, this.camera.position, this.player?.sim.velocity ?? _zero);
     this.scenery.update(this.time, this.camera.position);
     this.updateLampLights(dt);
+    this.updateBeams();
+  }
+
+  private beamPool = Array.from({ length: 4 }, volumeSpot);
+  /** The headlight cones that glow in the haze: the cars on the road, the player's first. */
+  private updateBeams() {
+    const spots = volume.spots;
+    spots.length = 0;
+    const add = (visual: CarVisual | null | undefined) => {
+      if (visual && spots.length < this.beamPool.length && visual.beamInto(this.beamPool[spots.length])) spots.push(this.beamPool[spots.length]);
+    };
+    add(this.phase === 'garage' ? this.garageCar : this.player?.visual);
+    add(this.rival?.visual);
+    this.remotes?.forEachExhaust((visual) => add(visual));
   }
 
   private racers(): Racer[] {

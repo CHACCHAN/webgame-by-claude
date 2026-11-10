@@ -20,6 +20,8 @@ interface Preset {
   cityGlow: number;
   fog: string;
   fogDensity: number;
+  /** how much the air scatters the lamps' and headlights' light towards the eye, per metre (render/volumetricLights.ts) */
+  haze: number;
   keyColor: string;
   keyIntensity: number;
   keyDir: THREE.Vector3;
@@ -51,6 +53,7 @@ export const PRESETS: Record<TimeOfDay, Preset> = {
     cityGlow: 0.55,
     fog: '#101d33',
     fogDensity: 0.00038,
+    haze: 0.005,
     keyColor: '#a9bfff',
     keyIntensity: 1.5,
     keyDir: new THREE.Vector3(0.38, 0.5, 0.78).normalize(),
@@ -77,6 +80,7 @@ export const PRESETS: Record<TimeOfDay, Preset> = {
     cityGlow: 0.85,
     fog: '#121a26',
     fogDensity: 0.0011,
+    haze: 0.008,
     keyColor: '#8fa3c8',
     keyIntensity: 0.5,
     keyDir: new THREE.Vector3(0.38, 0.5, 0.78).normalize(),
@@ -103,6 +107,7 @@ export const PRESETS: Record<TimeOfDay, Preset> = {
     cityGlow: 0.0,
     fog: '#b7a7a6',
     fogDensity: 0.00032,
+    haze: 0.003,
     keyColor: '#ffbf80',
     keyIntensity: 2.6,
     keyDir: new THREE.Vector3(0.82, 0.16, 0.55).normalize(),
