@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import type { CarSpec } from '../vehicle/carSpecs';
 import { trainNoseZ } from '../vehicle/trains';
+import { traitsOf } from '../vehicle/kinds';
 import type { VehicleSim } from '../vehicle/VehicleSim';
 import { buildCar, type CarRig } from './CarModel';
 import { clamp, damp } from '../util/math';
@@ -51,6 +52,8 @@ export class CarVisual {
   private lightLevel = 0;
   /** tail lamp glow when not braking (position lamps at night) */
   private tailBase = 0.9;
+  /** the live sim this visual follows (a bike's wheelie / stoppie), if any */
+  private live: VehicleSim | null = null;
 
   constructor(spec: CarSpec, opts: { headlights: boolean; shadows: boolean; ghost?: boolean; bodyColor?: string; rideHeight: number }) {
     this.spec = spec;
@@ -76,7 +79,7 @@ export class CarVisual {
       // a train's lamps can sit back on a long nose: its light starts at the tip, clear of the body's shadow
       const front = spec.train ? trainNoseZ(spec.train) + 0.2 : (this.rig.anchors.headlights[0]?.z ?? 2);
       const spot = new THREE.SpotLight('#fff1dc', 260, 140, 0.48, 0.55, 1.4);
-      spot.position.set(0, spec.train ? 1.1 : 0.75, front + 0.1);
+      spot.position.set(0, traitsOf(spec).lampHeight, front + 0.1);
       spot.target.position.set(0, -0.4, front + 30);
       spot.castShadow = opts.shadows;
       spot.shadow.mapSize.set(1024, 1024);
@@ -233,8 +236,9 @@ export class CarVisual {
 
   /** Per-frame animation (pop-up lamps take ~0.6 s; a train's cars follow the leading bogie; a creature's legs run). */
   private tick(dt: number) {
-    this.rig.train?.update(this.rig.root);
+    this.rig.train?.update(this.rig.root, dt);
     this.rig.creature?.update(this.root, dt);
+    this.rig.bike?.update(this.root, dt, this.live ?? undefined);
     if (!this.pods.length || this.podOpen === this.podTarget) return;
     const step = dt / 0.6;
     this.podOpen = this.podTarget > this.podOpen ? Math.min(this.podTarget, this.podOpen + step) : Math.max(this.podTarget, this.podOpen - step);
@@ -289,11 +293,18 @@ export class CarVisual {
       wv.spin.rotation.x = w.rotation;
     });
     this.setBrakeLights(braking || sim.input.handbrake);
+    this.live = sim;
     this.tick(dt);
+  }
+
+  /** a bike's lean (rad, + = left; 0 for anything else): the rider's view rolls with it */
+  get lean() {
+    return this.rig.bike?.lean ?? 0;
   }
 
   /** Update from a ghost pose. */
   syncFromPose(p: CarPose, dt: number) {
+    this.live = null;
     this.root.position.copy(p.position);
     this.root.quaternion.copy(p.quaternion);
     if (p.wheelRotations) this.rig.wheels.forEach((w, i) => (w.spin.rotation.x = p.wheelRotations![i]));

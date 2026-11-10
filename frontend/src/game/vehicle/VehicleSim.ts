@@ -2,6 +2,7 @@ import { Quaternion, Vector3 } from 'three';
 import { clamp, damp, lerp, smoothstep } from '../util/math';
 import { type CarSpec, torqueAt } from './carSpecs';
 import { TRACTION_RISE } from './vvvf';
+import { bikeLimits } from './bikes';
 import { GROUP_CAR, GROUP_GROUND, GROUP_PROXY, GROUP_WALL, PhysicsWorld, RAPIER, groups } from './PhysicsWorld';
 
 export interface VehicleInput {
@@ -93,6 +94,12 @@ export class VehicleSim {
   private brakeTime = 0;
   /** touching a wall (and a moment after): bounce taken back, yaw rate capped */
   private wallTimer = 0;
+  /** a bike at its wheelie / stoppie limit (0…1, for the model's pitch) */
+  wheelie = 0;
+  stoppie = 0;
+  /** forward acceleration (m/s², smoothed): a bike's load transfer */
+  private longAcc = 0;
+  private lastFwd = 0;
 
   // derived state (read by HUD/audio/fx/camera)
   speed = 0;
@@ -138,10 +145,13 @@ export class VehicleSim {
         .setCanSleep(false),
     );
     const m = spec.mass;
+    // a bike's light, narrow box rolled and pitched over at the first kick from the road (200 km/h through a
+    // crest): it sits on four times the pitch and roll inertia (the yaw, its quick turning, unchanged)
+    const steady = spec.bike ? 4 : 1;
     const inertia = {
-      x: (m / 12) * (height * height + length * length) * 0.9,
+      x: (m / 12) * (height * height + length * length) * 0.9 * steady,
       y: (m / 12) * (width * width + length * length) * 0.95,
-      z: (m / 12) * (width * width + height * height) * 1.2,
+      z: (m / 12) * (width * width + height * height) * 1.2 * steady,
     };
     const comY = spec.comHeight - this.rideHeight;
     this.collider = physics.world.createCollider(
@@ -305,7 +315,9 @@ export class VehicleSim {
     drivenRot /= Math.max(1, drivenCount);
     const wheelRpm = (Math.abs(drivenRot) * Math.abs(ratio) * 60) / (Math.PI * 2);
     // a clutch slips at launch (revs up); an electric motor gives full torque from standstill
-    const launch = spec.engine.electric ? 0 : spec.engine.idleRpm + throttle * 3800 * (1 - smoothstep(4, 14, Math.abs(fwdSpeed)));
+    // (a bike's clutch is slipped higher, to the middle of its rev range)
+    const launchRpm = spec.bike ? spec.engine.redline * 0.55 - spec.engine.idleRpm : 3800;
+    const launch = spec.engine.electric ? 0 : spec.engine.idleRpm + throttle * launchRpm * (1 - smoothstep(4, 14, Math.abs(fwdSpeed)));
     let targetRpm = Math.max(wheelRpm * (1 + this.wheelSpin * 0.6), launch, spec.engine.idleRpm);
     const freeRevving = this.gear === 0 || !!inp.hold;
     if (freeRevving) targetRpm = spec.engine.idleRpm + throttle * (spec.engine.redline - spec.engine.idleRpm);
@@ -321,7 +333,18 @@ export class VehicleSim {
     if (spec.engine.turbo) engineTorque *= 0.72 + 0.28 * this.boost;
     // engine braking
     engineTorque -= (1 - throttle) * (this.rpm / spec.engine.redline) * 38 * smoothstep(1, 5, Math.abs(fwdSpeed));
-    const driveForceTotal = freeRevving ? 0 : (engineTorque * ratio * 0.86) / spec.wheelRadius;
+    let driveForceTotal = freeRevving ? 0 : (engineTorque * ratio * 0.86) / spec.wheelRadius;
+    if (spec.bike) {
+      // a bike's front lifts once the drive passes its weight × (centre of mass ahead of the rear axle) / its height:
+      // the drive is held at that limit (anti-wheelie) and the model shows the front going light; the brakes stop
+      // short of the stoppie limit (CarSpec.brakeForce)
+      const lim = bikeLimits(spec);
+      const cap = spec.mass * lim.wheelie;
+      const near = driveForceTotal > 0 && fwdSpeed > 0.5 && this.gear > 0 ? driveForceTotal / cap : 0;
+      this.wheelie = damp(this.wheelie, smoothstep(0.85, 1.1, near), near > 0.85 ? 4 : 6, dt);
+      this.stoppie = damp(this.stoppie, fwdSpeed > 4 && this.gear !== -1 ? smoothstep(0.75, 1, brake) : 0, 5, dt);
+      driveForceTotal = Math.min(driveForceTotal, cap * 0.98);
+    }
 
     // ---------------- steering
     const steerTarget = clamp(inp.steer, -1, 1);
@@ -331,6 +354,12 @@ export class VehicleSim {
     this.steerSmoothed += ds;
     const speedFactor = lerp(1, 0.32, smoothstep(6, 46, planarSpeed));
     let maxSteer = ((spec.maxSteerDeg * Math.PI) / 180) * speedFactor;
+    // a rider leans only as far as the tyres hold: the bars turn at most to the angle whose corner takes all the grip
+    // (plus the front tyre's slip at its peak), so a full stab of the key at speed is a limit corner, not a spin (a bike's yaw is quick)
+    if (spec.bike && planarSpeed > 3) {
+      const mu = Math.min(spec.gripFront, spec.gripRear) * this.gripScale;
+      maxSteer = Math.min(maxSteer, Math.atan((spec.wheelbase * mu * 9.81 * 1.1) / (planarSpeed * planarSpeed)) + 0.06);
+    }
     // counter-steering during a slide may use the full lock
     // (sliding with the tail out to the left means steering right is counter-steer)
     const isCounter = this.steerSmoothed * this.slipAngle > 0;
@@ -366,13 +395,16 @@ export class VehicleSim {
     // Taking a bend flat out at full lock, or braking into it, stays a grip corner (it used to slide every keyboard
     // corner).
     const powerTrigger = throttle > 0.85 && this.sinceLift < 0.35 && steerAbs > 0.6 && this.gear > 0 && this.gear <= 3 && spec.driftiness > 0.35 && planarSpeed > 11;
-    const trigger = this.gripDriver
+    // the AI and a bike grip-drive: no drift tricks (on a bike the handbrake is just the rear brake)
+    const noTricks = this.gripDriver || !!spec.bike;
+    const trigger = noTricks
       ? Math.abs(this.slipAngle) > 0.3
       : (inp.handbrake && steerAbs > 0.2) || feint || powerTrigger || Math.abs(this.slipAngle) > 0.28;
     if (fast && trigger) this.driftHold = 0.3;
     else this.driftHold = Math.max(0, this.driftHold - dt);
     // the drift lasts while it is driven (throttle) and the tail is out; once the car straightens to ~7° it grips
-    const sustain = fast && (this.driftHold > 0 || (this.driftState > 0.3 && Math.abs(this.slipAngle) > 0.12 && throttle > 0.2));
+    // (a bike never enters the drift state: its rear would lose grip to it)
+    const sustain = fast && !spec.bike && (this.driftHold > 0 || (this.driftState > 0.3 && Math.abs(this.slipAngle) > 0.12 && throttle > 0.2));
     this.driftState = damp(this.driftState, sustain ? 1 : 0, sustain ? 7 : 2.5, dt);
     this.driftAge = this.driftState > 0.3 ? this.driftAge + dt : 0;
     // throttle widens the angle, lifting tightens it
@@ -382,7 +414,7 @@ export class VehicleSim {
     // holdable angle instead of swinging out to 75° and spinning
     if (!this.gripDriver) rearGripDrift = lerp(rearGripDrift, 1.05, smoothstep(0.55, 0.87, Math.abs(this.slipAngle)));
     // a pull on the handbrake with steering starts the rotation (the rear alone barely turned the car)
-    if (inp.handbrake && !this.lastHandbrake && fast && steerAbs > 0.2 && !this.gripDriver) {
+    if (inp.handbrake && !this.lastHandbrake && fast && steerAbs > 0.2 && !noTricks) {
       const iy = (spec.mass / 12) * (spec.size.width ** 2 + spec.size.length ** 2);
       body.applyTorqueImpulse(_imp.copy(this.up).multiplyScalar(-Math.sign(this.steerSmoothed) * iy * 0.9), true);
     }
@@ -450,6 +482,14 @@ export class VehicleSim {
     }
 
     const handbrake = inp.handbrake;
+    // a bike's load moves between its wheels with the real centre of mass (the sim's is kept low, so it never tips):
+    // under power the rear tyre carries it all at the wheelie limit, under braking the front at the stoppie limit
+    this.longAcc = damp(this.longAcc, (fwdSpeed - this.lastFwd) / dt, 12, dt);
+    this.lastFwd = fwdSpeed;
+    // (each tyre keeps a quarter of its static load: with none the rear lost all side grip under braking and the bike
+    // spun round at every corner entry, the front all steering under power)
+    const pitchShift = spec.bike ? (spec.mass * this.longAcc * spec.bike.com.height) / spec.wheelbase / 2 : 0;
+    const bikeG = spec.bike ? spec.mass * 9.81 : 0;
     for (const w of this.wheels) {
       if (!w.grounded) continue;
       const n = w.contactNormal;
@@ -463,9 +503,11 @@ export class VehicleSim {
       _v.crossVectors(angv, _r).add(lin);
       const vF = _v.dot(_f);
       const vL = _v.dot(_lat);
-      const load = w.load;
+      const load = pitchShift ? Math.max(w.load * 0.25, w.load + (w.front ? -pitchShift : pitchShift)) : w.load;
 
-      // --- lateral
+      // --- lateral (a bike corners on its lean, by the static load: the pitch shift only moves the drive and brake
+      // limits; with it the rear's side grip vanished under braking and every corner entry spun the bike round)
+      const sideLoad = spec.bike ? w.load : load;
       let mu = (w.front ? spec.gripFront : spec.gripRear) * this.gripScale;
       if (!w.front) {
         mu *= rearGripDrift;
@@ -478,7 +520,7 @@ export class VehicleSim {
       const peak = w.front ? 0.16 : 0.13;
       const slideFrac = w.front ? 0.82 : lerp(0.86, 0.72, spec.driftiness);
       const curve = a < peak ? Math.sin((a / peak) * Math.PI * 0.5) : lerp(1, slideFrac, smoothstep(peak, peak * 4.5, a));
-      let fy = -Math.sign(alpha) * mu * load * curve;
+      let fy = -Math.sign(alpha) * mu * sideLoad * curve;
       // never push harder than needed to cancel the lateral velocity (stability at low speed)
       const stopLat = (Math.abs(vL) * wheelMass) / dt;
       if (Math.abs(fy) > stopLat) fy = Math.sign(fy) * stopLat;
@@ -487,19 +529,28 @@ export class VehicleSim {
       let fx = 0;
       if (w.driven && this.gear !== 0) {
         const share = spec.drive === 'AWD' ? (w.front ? spec.frontTorqueSplit : 1 - spec.frontTorqueSplit) / 2 : 0.5;
-        fx += driveForceTotal * share;
+        // (a bike's slipper clutch: engine braking never more than a third of what the rear tyre holds)
+        fx += bikeG && driveForceTotal < 0 ? Math.max(driveForceTotal * share, -mu * load * 0.3) : driveForceTotal * share;
       }
-      const brakeShare = w.front ? 0.6 : 0.4;
+      // a rider brakes each wheel by what it carries (hard on the front as the load comes onto it), a car 60:40
+      const brakeShare = bikeG ? (load / bikeG) * 2 : w.front ? 0.6 : 0.4;
       let brakeF = brake * spec.brakeForce * brakeShare * 0.5;
+      // a bike's handbrake key is its rear brake, worked to the tyre's limit without locking it
+      if (bikeG && handbrake && !w.front) brakeF = Math.max(brakeF, mu * load * 0.9);
       const stopLong = (Math.abs(vF) * wheelMass) / dt;
       fx -= Math.sign(vF) * Math.min(brakeF, stopLong);
       // rolling resistance (roughly constant, ~1.5% of load for tyres)
       fx -= Math.sign(vF) * Math.min(Math.abs(vF) * 40, load * (spec.rolling ?? 0.015));
-      const locked = handbrake && !w.front && Math.abs(vF) > 1;
+      const locked = handbrake && !w.front && !bikeG && Math.abs(vF) > 1;
 
       // --- friction circle (lateral keeps a share of grip even when spinning)
       const maxF = mu * load * 1.05;
-      if (gripAssist && w.driven && fx > 0 && maxF > 1) {
+      if (bikeG && w.driven && fx > 0 && maxF > 1) {
+        // a rider (and the H2's traction control) feeds the throttle to what the rear tyre has left beside the
+        // cornering force: a spinning rear on a bike is a crash, not a drift
+        const u = clamp(Math.abs(fy) / (mu * sideLoad * 1.05 + 1), 0, 1);
+        fx = Math.min(fx, maxF * Math.max(Math.sqrt(1 - u * u), 0.2) * 0.95);
+      } else if (gripAssist && w.driven && fx > 0 && maxF > 1) {
         // only while cornering hard (a third of the grip and up): straight-line launches and pushes are unchanged
         const u = clamp((Math.abs(fy) / maxF - 0.3) / 0.7, 0, 1);
         fx = Math.min(fx, maxF * Math.max(Math.sqrt(1 - u * u), 0.25));
@@ -511,7 +562,7 @@ export class VehicleSim {
       }
       const usage = clamp(Math.abs(fx) / Math.max(maxF, 1), 0, 1);
       const keep = 0.55 + (1 - spec.driftiness) * 0.25;
-      const latCap = maxF * Math.sqrt(Math.max(0, 1 - usage * usage * (1 - keep * keep)));
+      const latCap = (spec.bike ? mu * sideLoad * 1.05 : maxF) * Math.sqrt(Math.max(0, 1 - usage * usage * (1 - keep * keep)));
       if (Math.abs(fy) > latCap) fy = Math.sign(fy) * latCap;
       if (locked) {
         // a locked wheel just slides: friction opposes the contact patch velocity
@@ -528,7 +579,7 @@ export class VehicleSim {
       body.applyImpulseAtPoint(_imp, _p, true);
 
       // wheel rotation (visual + rpm source)
-      const lockedRear = handbrake && !w.front;
+      const lockedRear = handbrake && !w.front && !bikeG;
       let omega = vF / r;
       if (w.driven && this.gear > 0) omega *= 1 + this.wheelSpin;
       if (lockedRear) omega = 0;

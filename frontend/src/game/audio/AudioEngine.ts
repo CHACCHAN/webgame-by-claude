@@ -2,6 +2,8 @@ import { clamp } from '../util/math';
 import type { CarSpec } from '../vehicle/carSpecs';
 import { TrainSound } from './TrainSound';
 import { BugSound } from './BugSound';
+import { EvSound } from './EvSound';
+import { kindOf } from '../vehicle/kinds';
 import type { TrainVvvf } from '../vehicle/vvvf';
 import type { VvvfData } from './vvvf/data';
 import { oversampleFor } from './vvvf/engine';
@@ -58,11 +60,26 @@ export class EngineSound {
   private intakeFilter: BiquadFilterNode;
   private whistle: OscillatorNode | null = null;
   private whistleGain: GainNode | null = null;
+  /** a supercharger's whine: geared to the crank, so it follows the revs at once */
+  private whine: OscillatorNode | null = null;
+  private whineGain: GainNode | null = null;
   private lastThrottle = 0;
   private lastBoost = 0;
+  private lastRpm = 0;
+  /** firings per turn of the crank per cylinder: ½ for a four-stroke, 1 for a two-stroke */
+  private perTurn: number;
 
-  constructor(ctx: BaseAudioContext, private cylinders: number, turbo: boolean, noise: AudioBuffer, destination: AudioNode) {
+  constructor(
+    ctx: BaseAudioContext,
+    private cylinders: number,
+    turbo: boolean,
+    noise: AudioBuffer,
+    destination: AudioNode,
+    extra: { strokes?: 2 | 4; supercharger?: boolean } = {},
+  ) {
     this.ctx = ctx;
+    const two = extra.strokes === 2;
+    this.perTurn = two ? 1 : 0.5;
     this.out = ctx.createGain();
     this.out.gain.value = 0;
     this.out.connect(destination);
@@ -70,12 +87,14 @@ export class EngineSound {
     this.filter.type = 'lowpass';
     this.filter.Q.value = 2.5;
     this.shaper = ctx.createWaveShaper();
-    this.shaper.curve = makeDistortion(cylinders >= 6 ? 6 : 12);
+    // a two-stroke: harder clipped, buzzy and raspy (strong upper harmonics, hardly any half order)
+    this.shaper.curve = makeDistortion(two ? 22 : cylinders >= 6 ? 6 : 12);
+    if (two) this.filter.Q.value = 4;
     this.shaper.connect(this.filter);
     this.filter.connect(this.out);
     // harmonics: half order (lumpy rumble), firing order, 2x, 3x
-    const mix = [0.35, 0.55, 0.28, 0.12];
-    const types: OscillatorType[] = ['sawtooth', 'sawtooth', 'square', 'sawtooth'];
+    const mix = two ? [0.06, 0.6, 0.4, 0.26] : [0.35, 0.55, 0.28, 0.12];
+    const types: OscillatorType[] = two ? ['sawtooth', 'square', 'sawtooth', 'square'] : ['sawtooth', 'sawtooth', 'square', 'sawtooth'];
     for (let i = 0; i < 4; i++) {
       const o = ctx.createOscillator();
       o.type = types[i];
@@ -104,11 +123,19 @@ export class EngineSound {
       this.whistle.connect(this.whistleGain).connect(destination);
       this.whistle.start();
     }
+    if (extra.supercharger) {
+      this.whine = ctx.createOscillator();
+      this.whine.type = 'triangle';
+      this.whineGain = ctx.createGain();
+      this.whineGain.gain.value = 0;
+      this.whine.connect(this.whineGain).connect(destination);
+      this.whine.start();
+    }
   }
 
   update(rpm: number, throttle: number, boost: number, volume: number, redline: number, _brake = 0) {
     const t = this.ctx.currentTime;
-    const fire = (rpm / 60) * (this.cylinders / 2);
+    const fire = (rpm / 60) * this.cylinders * this.perTurn;
     const ratios = [0.5, 1, 2, 3];
     this.oscs.forEach((o, i) => o.frequency.setTargetAtTime(fire * ratios[i] * (1 + i * 0.003), t, 0.015));
     const load = 0.35 + throttle * 0.65;
@@ -121,12 +148,19 @@ export class EngineSound {
       this.whistle.frequency.setTargetAtTime(1800 + boost * 3600 + rn * 400, t, 0.05);
       this.whistleGain.gain.setTargetAtTime(volume * boost * throttle * 0.035, t, 0.08);
     }
+    if (this.whine && this.whineGain) {
+      // the impeller turns ~9× the crank: its whine climbs with the revs to ~5 kHz at the redline
+      this.whine.frequency.setTargetAtTime(400 + rpm * 0.34, t, 0.02);
+      this.whineGain.gain.setTargetAtTime(volume * rn * rn * (0.012 + 0.03 * throttle), t, 0.04);
+    }
     this.lastThrottle = throttle;
     this.lastBoost = boost;
+    this.lastRpm = rpm / redline;
   }
 
-  /** True when a blow-off "pssh" should play (throttle lifted on boost). */
+  /** True when a blow-off "pssh" should play (throttle lifted on boost; a supercharger's chirp high in the revs). */
   blowOff(throttle: number, boost: number) {
+    if (this.whine) return this.lastThrottle > 0.6 && throttle < 0.2 && this.lastRpm > 0.55;
     return !!this.whistle && this.lastThrottle > 0.6 && throttle < 0.2 && this.lastBoost > 0.6 && boost > 0.5;
   }
 
@@ -134,6 +168,7 @@ export class EngineSound {
     this.oscs.forEach((o) => o.stop());
     this.intake.stop();
     this.whistle?.stop();
+    this.whine?.stop();
     this.out.disconnect();
   }
 }
@@ -157,7 +192,7 @@ export class AudioEngine {
   private noise: AudioBuffer;
   private squeal: { src: AudioBufferSourceNode; gain: GainNode; filter: BiquadFilterNode };
   private wind: { gain: GainNode; filter: BiquadFilterNode };
-  private engines = new Map<string, (EngineSound | TrainSound | BugSound) & { kind: string }>();
+  private engines = new Map<string, (EngineSound | TrainSound | BugSound | EvSound) & { kind: string }>();
   private musicNodes: AudioNode[] = [];
 
   constructor(offline?: OfflineAudioContext) {
@@ -223,20 +258,25 @@ export class AudioEngine {
     this.music.gain.value = music;
   }
 
-  /** The running sound of a vehicle: a synthesised engine, a train's traction equipment or a creature's legs. */
-  engine(id: string, spec: CarSpec): EngineSound | TrainSound | BugSound {
+  /** The running sound of a vehicle: a synthesised engine or electric drive, a train's traction equipment or a creature's legs. */
+  engine(id: string, spec: CarSpec): EngineSound | TrainSound | BugSound | EvSound {
     const e = this.engines.get(id);
     // (a train on another line may run another inverter: a sound of its own)
     const kind = spec.train?.vvvf ? `${spec.id}|${spec.train.vvvf.pattern}` : spec.id;
     if (e && e.kind === kind) return e;
     if (e) this.removeEngine(id);
-    const sound = spec.train
-      ? this.trainSound(spec)
-      : spec.creature
-        ? new BugSound(this.ctx, this.noise, this.sfx)
-        : new EngineSound(this.ctx, spec.engine.cylinders, spec.engine.turbo, this.noise, this.sfx);
+    const sound = this.newSound(spec);
     this.engines.set(id, Object.assign(sound, { kind }));
     return sound;
+  }
+
+  private newSound(spec: CarSpec) {
+    const kind = kindOf(spec);
+    if (kind === 'train') return this.trainSound(spec);
+    if (kind === 'creature') return new BugSound(this.ctx, this.noise, this.sfx);
+    if (spec.engine.electric) return new EvSound(this.ctx, this.noise, this.sfx);
+    const e = spec.engine;
+    return new EngineSound(this.ctx, e.cylinders, e.turbo, this.noise, this.sfx, { strokes: e.strokes, supercharger: e.supercharger });
   }
 
   /** A train's traction sound; its VVVF calculation (if any) and the synthesised running noise join once loaded. */

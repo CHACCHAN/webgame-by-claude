@@ -2,6 +2,33 @@
 
 Newest first. "Verified" means actually executed in this environment; anything else is marked as unverified.
 
+## Session 8 (2026-11-10) — new vehicles: Cybertruck, Yangwang U9 Xtreme, three motorcycles, the L0 maglev
+
+Owner: 「テスラのサイバートラック、バイクを3台、リニアモータ新幹線を実装してください」 (bikes chosen: Honda NSR250R,
+Kawasaki Ninja H2, Suzuki GSX1300R 隼), then 「サイバートラック以外の電気自動車で現状最速の車両も入れてほしい」 → the
+Yangwang U9 Xtreme (503.17 km/h, 2026-11-01, production-car record). Code is in; the own models are being built (not
+deployed yet: the owner sees each sheet first).
+
+- **Kinds** (`vehicle/kinds.ts`): `kindOf` / `KIND_TRAITS` / `hasExhaust` replace the per-call-site checks for the
+  garage framing, badge, lamp height and exhaust (the "base + extension" design the owner asked for, first step).
+- **Cybertruck (Cyberbeast)** and **U9 Xtreme**: single-ratio electric cars (`EvSound`). Measured (`tools/train-accel.ts
+  <id>`): Cybertruck 0–96.6 km/h 2.9 s, top 209.5 km/h; U9 0–96.6 2.0 s, top 502.8 km/h. The U9 out-runs the cockroach
+  at the top (the roach test exempts it).
+- **Bikes** (`vehicle/bikes.ts`, `render/BikeModel.ts`, `BIKE_CAMERA`): see CLAUDE.md. Measured: NSR 0–100 6.0 s, top
+  186 km/h; H2 3.0 s, 329 km/h; 隼 3.1 s, 313 km/h. The first AI runs spun and flipped (maxSlip 90°, a DNF on 朧峠): the
+  rear lost its side grip under the virtual load transfer and the drift state took more. Fixed (brakes by load, side
+  grip on the static load, traction control, slipper clutch, no drift state, steering cap, wider/lower virtual track,
+  more pitch/roll inertia); now every legend lap is clean (0 impacts, 0 respawns on all four courses) and the feel tool
+  keeps ordinary corners at 4–15° (NSR braked in at 90 km/h: 20°). Vehicle test added.
+- **L0** (`TrainInfo.maglev`, `'lsm'`): 0–500 km/h in 191 s / 13.6 km (published ~13.4 km; test bound 180–200 s);
+  floats 10 cm above 150 km/h; running noise at 500 km/h −13 dBFS (E5 at 320: −17), floating at 160 km/h −40 dBFS
+  (on its tyres at 140: −32). Procedural stand-in body until its model is done.
+- **Medals** from legend-AI sims (2026-11-10): cars scaled by the R34's gold/sim ratio per course, bikes and L0 the
+  legend time +7 % / +16 %. Backend: 18 vehicles in `game.cars` (container tests 17/17); the autobahn floor comment
+  updated (U9 ~64 s).
+- Verified: tsc, vitest (all pass), backend tests (container, `--build`), handling-feel, sims. **Not yet**: Chrome
+  check of the garage / race / sounds (Blender agents running; no Chrome alongside), E2E.
+
 ## Session 7 (2026-11-03 – 11-04) — every model our own (Blender); the owner's train lineup; a livery per line
 
 Owner: "E231 (Musashino), E235 (Yamanote), Keikyu 1000, Tobu 30000 and the Hayabusa: build them all and put them in

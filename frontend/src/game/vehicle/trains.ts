@@ -7,10 +7,10 @@ import { E231_KINKOU_HITACHI, E231_MITSUBISHI, E231_MUSASHINO_MITSUBISHI, E235_M
  * design top speed, emergency brake rate, gear ratio, wheel size); only the front bogie is simulated (a short heavy
  * vehicle), the three cars follow its path like rails (render/TrainModel.ts).
  */
-export type TrainId = 'e231' | 'e235' | 'keikyu1000' | 'tobu30000' | 'e5';
+export type TrainId = 'e231' | 'e235' | 'keikyu1000' | 'tobu30000' | 'e5' | 'l0';
 
 /** Sound of the traction equipment (audio/TrainSound.ts). */
-export type MotorKind = 'sic' | 'igbt3' | 'igbt' | 'gto' | 'chopper' | 'resistor';
+export type MotorKind = 'sic' | 'igbt3' | 'igbt' | 'gto' | 'chopper' | 'resistor' | 'lsm';
 
 /**
  * One paint scheme, usually a line the train runs on: its colours, the model variant painted and signed for that line,
@@ -114,6 +114,12 @@ export interface TrainInfo {
   running?: TrainRunning;
   /** VVVF inverter: VVVF-Simulator's calculation on a control pattern */
   vvvf?: TrainVvvf;
+  /**
+   * Superconducting maglev (no motors on board: the guideway's coils pull it, `sound: 'lsm'`): on rubber tyres up to
+   * `lift` km/h, then floating `height` m higher (the model rises, the tyre roar and the brakes' grind stop, the
+   * guideway's field hums; audio/running.ts, render/TrainModel.ts).
+   */
+  maglev?: { lift: number; height: number };
 }
 
 /**
@@ -285,9 +291,31 @@ export const TRAIN_INFO: Record<TrainId, TrainInfo & { name: string; tagline: st
     running: { rail: 'welded', axle: 2.5, sealed: true, wind: 0.8 },
     model: { title: '新幹線E5系', author: 'TOUGE NOCTURNE', url: '', license: '自作', own: true },
   },
+  l0: {
+    name: 'L0系', series: 'L0系（超電導リニア）', operator: 'JR東海', tagline: '超電導リニア・営業最高速度500km/h',
+    description: 'リニア中央新幹線のためのJR東海の超電導リニア。時速150kmを超えると車輪をしまって約10cm浮き上がり、地上のコイルに引っ張られて時速500kmで走る（2015年に有人走行で時速603kmの世界記録）。浮いてしまえば音は風だけ。峠の下りで500km/hから止まれるかは別の話。',
+    // 500 km/h (commercial; the 2015 record 603); the published run-up is 0 → 500 km/h in about 13.4 km (an average of
+    // ~2.6 km/h/s): the guideway's LSM pulls with a near-constant thrust, the drag (∝ v²) takes a little off at the top
+    traction: [480, 510], drag: 0.02, damping: 0.0002,
+    // no brake rates published (it brakes with the LSM, then disc brakes on the tyres and aerodynamic brakes): estimated
+    accel: 2.82, vmax: 500, brake: [3.0, 4.0],
+    // no car masses published: three cars of about 25 t (estimated)
+    mass: 75, massEstimated: true, motor: '地上一次・リニア同期モーター（LSM）＋超電導磁石', control: '地上変電所の電力変換器（き電区間ごとの周波数制御）', sound: 'lsm',
+    // no gears: the "wheel" is the rubber support tyre (diameter estimated)
+    gearRatio: 1, wheel: 0.9, body: 'painted', width: 2.9, carLength: 24.3, bogies: 24.3, front: 'e231',
+    // articulated: the end cars 28 m (a 15 m nose; the leading bogie estimated 13.5 m behind the tip), the middle car
+    // 24.3 m, the bogies under the joints shared by two cars
+    consist: [{ length: 28, bogies: 14.5, front: 13.5 }, { length: 24.3, bogies: 24.3, front: 0 }, { length: 28, bogies: 14.5, front: 0 }],
+    liveries: [{ name: 'JR東海', body: '#f3f4f5', band: '#1f4fa3' }],
+    // the guideway: no rail joints (the tyres roll on concrete), a pressure-tight body; the wind is all there is to hear
+    // above the lift-off
+    running: { rail: 'welded', sealed: true, wind: 0.4 },
+    maglev: { lift: 150, height: 0.1 },
+    model: { title: 'L0系', author: 'TOUGE NOCTURNE', url: '', license: '自作', own: true },
+  },
 };
 
-export const TRAIN_ORDER: TrainId[] = ['e231', 'e235', 'keikyu1000', 'tobu30000', 'e5'];
+export const TRAIN_ORDER: TrainId[] = ['e231', 'e235', 'keikyu1000', 'tobu30000', 'e5', 'l0'];
 
 /** Simulated mass of the front bogie vehicle (kg): forces are scaled to give the real accelerations. */
 const PHYS_MASS = 4200;

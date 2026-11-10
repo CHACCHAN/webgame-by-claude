@@ -3,6 +3,7 @@ import { gameHolder } from '../GameCanvas';
 import { useApp } from '../../store/app';
 import { useMenuInput } from '../useMenuInput';
 import { CAR_SPECS, VEHICLE_ORDER, singleRatio, type CarId } from '../../game/vehicle/carSpecs';
+import { traitsOf } from '../../game/vehicle/kinds';
 import { COURSES, COURSE_ORDER, type CourseId } from '../../game/track/courses';
 import { currentCourseId, useSettings } from '../../store/settings';
 import { loadPlayer } from '../../api/client';
@@ -37,7 +38,7 @@ function GearboxPicker({ carId, disabled }: { carId: CarId; disabled?: boolean }
     if (gameHolder.game) gameHolder.game.autoShift = auto;
   };
   if (singleRatio(CAR_SPECS[carId])) {
-    return <div className="ol-gearbox-none">{CAR_SPECS[carId].train ? '電車' : 'この乗り物'}は変速なし（AT/MT の選択はありません）</div>;
+    return <div className="ol-gearbox-none">{traitsOf(CAR_SPECS[carId]).noun}は変速なし（AT/MT の選択はありません）</div>;
   }
   return (
     <div className="ol-cars ol-gearbox">

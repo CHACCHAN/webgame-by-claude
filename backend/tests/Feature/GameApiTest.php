@@ -38,8 +38,8 @@ class GameApiTest extends TestCase
             ->assertJsonPath('tracks.0.id', 'oboro-downhill')
             ->assertJsonCount(4, 'tracks')
             ->assertJsonPath('tracks.3.id', 'autobahn')
-            // 6 cars, the 5 trains and the cockroach (joke entries)
-            ->assertJsonCount(12, 'cars');
+            // 8 cars, 3 motorcycles, the 6 trains and the cockroach (joke entries)
+            ->assertJsonCount(18, 'cars');
     }
 
     public function test_player_registration_and_profile(): void

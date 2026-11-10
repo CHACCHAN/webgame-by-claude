@@ -3,6 +3,7 @@ import type { CarId, RoadCarId } from '../vehicle/carSpecs';
 import { AUTOBAHN, KIRIFURI_LAKESIDE, OBORO_DOWNHILL, TENROU_SKYLINE, type CourseDesign } from './courseDesign';
 import { BAY, CALDERA, PLATEAU, RIDGE, type Landform } from './landforms';
 import type { TrainId } from '../vehicle/trains';
+import type { BikeId } from '../vehicle/bikes';
 
 export type CourseId = 'oboro-downhill' | 'kirifuri-lakeside' | 'tenrou-skyline' | 'autobahn';
 
@@ -63,6 +64,8 @@ export const COURSES: Record<CourseId, CourseInfo> = {
       shiden: { gold: 97_000, silver: 104_000, bronze: 115_000 },
       supra: { gold: 98_500, silver: 105_000, bronze: 115_500 },
       r34: { gold: 95_000, silver: 101_500, bronze: 111_500 },
+      cybertruck: { gold: 97_500, silver: 104_500, bronze: 114_000 },
+      u9: { gold: 79_500, silver: 85_000, bronze: 93_000 },
       s15: { gold: 101_500, silver: 109_000, bronze: 119_500 },
     },
     music: 'bgm_race',
@@ -90,6 +93,8 @@ export const COURSES: Record<CourseId, CourseInfo> = {
       shiden: { gold: 85_000, silver: 91_500, bronze: 100_500 },
       supra: { gold: 82_500, silver: 88_500, bronze: 97_500 },
       r34: { gold: 80_000, silver: 86_000, bronze: 94_500 },
+      cybertruck: { gold: 83_000, silver: 89_000, bronze: 97_000 },
+      u9: { gold: 68_500, silver: 73_500, bronze: 80_000 },
       s15: { gold: 86_500, silver: 93_000, bronze: 102_000 },
     },
     music: 'bgm_race_kirifuri',
@@ -117,6 +122,8 @@ export const COURSES: Record<CourseId, CourseInfo> = {
       shiden: { gold: 75_500, silver: 81_500, bronze: 89_500 },
       supra: { gold: 73_500, silver: 79_000, bronze: 87_000 },
       r34: { gold: 71_500, silver: 77_000, bronze: 85_000 },
+      cybertruck: { gold: 73_000, silver: 78_000, bronze: 85_500 },
+      u9: { gold: 60_500, silver: 64_500, bronze: 71_000 },
       s15: { gold: 76_500, silver: 82_500, bronze: 90_500 },
     },
     music: 'bgm_race_tenrou',
@@ -147,6 +154,8 @@ export const COURSES: Record<CourseId, CourseInfo> = {
       shiden: { gold: 130_500, silver: 140_000, bronze: 153_000 },
       supra: { gold: 134_500, silver: 144_000, bronze: 157_500 },
       r34: { gold: 132_500, silver: 142_000, bronze: 155_500 },
+      cybertruck: { gold: 142_500, silver: 152_500, bronze: 166_500 },
+      u9: { gold: 65_500, silver: 70_000, bronze: 76_500 },
       s15: { gold: 145_000, silver: 155_500, bronze: 170_000 },
     },
     music: 'bgm_race_tenrou',
@@ -162,7 +171,7 @@ export const DEFAULT_COURSE: CourseId = 'oboro-downhill';
  * (tools/sim-run.ts, with the course's road grip), silver +7 %, bronze +16 %. Re-run on 2026-11-03 after the trains'
  * tractive effort got its jerk-limited build-up (`TRACTION_RISE`): the clean laps moved by −2…+3 %, the AI's own
  * spread. The E231 keeps its earlier medals (its runs respawned then). E235, Tobu 30000 and E5 from 2026-11-04 runs,
- * all clean.
+ * all clean; the L0 from 2026-11-10 runs (no respawn; it floats from 150 km/h, which the passes hardly reach).
  */
 export const TRAIN_MEDALS: Record<CourseId, Record<TrainId, { gold: number; silver: number; bronze: number }>> = {
   'oboro-downhill': {
@@ -171,6 +180,7 @@ export const TRAIN_MEDALS: Record<CourseId, Record<TrainId, { gold: number; silv
     keikyu1000: { gold: 145_500, silver: 155_500, bronze: 169_000 },
     tobu30000: { gold: 152_500, silver: 163_000, bronze: 177_000 },
     e5: { gold: 158_500, silver: 169_500, bronze: 184_000 },
+    l0: { gold: 148_000, silver: 158_500, bronze: 171_500 },
   },
   'kirifuri-lakeside': {
     e231: { gold: 126_500, silver: 135_500, bronze: 146_500 },
@@ -178,6 +188,7 @@ export const TRAIN_MEDALS: Record<CourseId, Record<TrainId, { gold: number; silv
     keikyu1000: { gold: 121_000, silver: 129_500, bronze: 140_500 },
     tobu30000: { gold: 123_500, silver: 132_000, bronze: 143_500 },
     e5: { gold: 129_000, silver: 138_000, bronze: 149_500 },
+    l0: { gold: 121_000, silver: 129_500, bronze: 140_500 },
   },
   'tenrou-skyline': {
     e231: { gold: 127_000, silver: 136_000, bronze: 147_500 },
@@ -185,6 +196,7 @@ export const TRAIN_MEDALS: Record<CourseId, Record<TrainId, { gold: number; silv
     keikyu1000: { gold: 118_500, silver: 127_000, bronze: 137_500 },
     tobu30000: { gold: 117_500, silver: 125_500, bronze: 136_500 },
     e5: { gold: 128_500, silver: 137_500, bronze: 149_000 },
+    l0: { gold: 114_500, silver: 122_500, bronze: 133_000 },
   },
   // the autobahn (2026-11-06): the legend AI's time from a standing start at GO, as a race times it (the trains' slow
   // getaway is a share of the time here; the AI drives the course flat out without a fault, so a flying lap would
@@ -195,6 +207,7 @@ export const TRAIN_MEDALS: Record<CourseId, Record<TrainId, { gold: number; silv
     keikyu1000: { gold: 240_000, silver: 257_000, bronze: 278_500 },
     tobu30000: { gold: 255_000, silver: 273_000, bronze: 296_000 },
     e5: { gold: 174_000, silver: 186_500, bronze: 202_000 },
+    l0: { gold: 130_000, silver: 139_000, bronze: 151_000 },
   },
 };
 
@@ -209,4 +222,32 @@ export const ROACH_MEDALS: Record<CourseId, { gold: number; silver: number; bron
   'tenrou-skyline': { gold: 55_500, silver: 59_500, bronze: 64_500 },
   // the autobahn: from a standing start (as TRAIN_MEDALS); with no corners and no cap the AI runs at ~420 km/h
   autobahn: { gold: 72_500, silver: 78_000, bronze: 84_500 },
+};
+
+/**
+ * Medal times of the motorcycles per course: gold = the legend AI's time with the bike (tools/sim-run.ts, 2026-11-10,
+ * all clean: no wall touched), silver +7 %, bronze +16 % (as the cockroach's). On the passes the AI keeps to its
+ * 223 km/h cap like every vehicle; the autobahn from a standing start.
+ */
+export const BIKE_MEDALS: Record<CourseId, Record<BikeId, { gold: number; silver: number; bronze: number }>> = {
+  'oboro-downhill': {
+    nsr250r: { gold: 97_500, silver: 104_500, bronze: 113_000 },
+    ninjah2: { gold: 84_500, silver: 90_500, bronze: 98_000 },
+    hayabusa: { gold: 87_000, silver: 93_000, bronze: 101_000 },
+  },
+  'kirifuri-lakeside': {
+    nsr250r: { gold: 82_500, silver: 88_500, bronze: 95_500 },
+    ninjah2: { gold: 72_500, silver: 77_500, bronze: 84_000 },
+    hayabusa: { gold: 74_500, silver: 79_500, bronze: 86_500 },
+  },
+  'tenrou-skyline': {
+    nsr250r: { gold: 71_500, silver: 76_500, bronze: 83_000 },
+    ninjah2: { gold: 60_500, silver: 64_500, bronze: 70_000 },
+    hayabusa: { gold: 62_000, silver: 66_500, bronze: 72_000 },
+  },
+  autobahn: {
+    nsr250r: { gold: 154_000, silver: 165_000, bronze: 178_500 },
+    ninjah2: { gold: 90_500, silver: 97_000, bronze: 105_000 },
+    hayabusa: { gold: 95_500, silver: 102_000, bronze: 111_000 },
+  },
 };

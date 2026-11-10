@@ -59,8 +59,11 @@ export async function loadTrainVariants(ids: TrainId[]) {
 export const trainModelReady = (id: string, l?: Livery) => models.has(trainModelKey(id, l));
 
 export interface TrainRig {
-  /** place the cars behind the anchor (the leading bogie, at road level) along its driven path */
-  update(anchor: THREE.Object3D): void;
+  /**
+   * place the cars behind the anchor (the leading bogie, at road level) along its driven path; `dt` (s) since the
+   * last frame lets a maglev see its speed and float (0: a re-placement, it stays as it was)
+   */
+  update(anchor: THREE.Object3D, dt?: number): void;
   setLivery(color: string): void;
   /** interior lights behind the side windows (0 = off, 1 = night) */
   setInterior(level: number): void;
@@ -450,11 +453,24 @@ export function buildTrain(spec: CarSpec, opts: { bodyColor?: string } = {}): Ca
 
   const path = new TrainPath();
   const bogiePath = trainBogiePath(t);
+  // a maglev: its speed seen from the anchor's motion, and how high it floats (m; it rises and settles in ~1.5 s)
+  const lastHead = new THREE.Vector3();
+  let kmh = 0, hover = 0, seen = false;
   const train: TrainRig = {
-    update(anchor) {
+    update(anchor, dt = 0) {
       anchor.updateWorldMatrix(true, false);
       _c.setFromMatrixPosition(anchor.matrixWorld);
       _f.set(0, 0, 1).transformDirection(anchor.matrixWorld);
+      if (t.maglev && dt > 0) {
+        const moved = seen ? lastHead.distanceTo(_c) : 0;
+        // (a respawn or a new race jumps: no speed)
+        kmh = moved > 30 ? 0 : kmh + ((moved / dt) * 3.6 - kmh) * Math.min(1, dt * 4);
+        const up = hover > 0 ? kmh > t.maglev.lift - 6 : kmh > t.maglev.lift;
+        const step = (dt * t.maglev.height) / 1.5;
+        hover = up ? Math.min(t.maglev.height, hover + step) : Math.max(0, hover - step);
+        lastHead.copy(_c);
+        seen = true;
+      }
       path.advance(_c, _f);
       consist.matrix.copy(anchor.matrixWorld).invert();
       consist.matrixWorldNeedsUpdate = true;
@@ -464,7 +480,7 @@ export function buildTrain(spec: CarSpec, opts: { bodyColor?: string } = {}): Ca
         _z.subVectors(front, rear).normalize();
         _x.crossVectors(UP, _z).normalize();
         _y.crossVectors(_z, _x);
-        _m.makeBasis(_x, _y, _z).setPosition(_e.addVectors(front, rear).multiplyScalar(0.5));
+        _m.makeBasis(_x, _y, _z).setPosition(_e.addVectors(front, rear).multiplyScalar(0.5).addScaledVector(_y, hover));
         car.matrix.copy(_m);
         car.matrixWorldNeedsUpdate = true;
       });

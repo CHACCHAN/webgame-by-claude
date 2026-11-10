@@ -4,6 +4,7 @@ import { RAPIER, initRapier, groups, GROUP_GROUND, GROUP_CAR, GROUP_WALL, PHYSIC
 import { VehicleSim, emptyInput, type VehicleInput } from '../vehicle/VehicleSim';
 import { CAR_ORDER, CAR_SPECS, type CarId } from '../vehicle/carSpecs';
 import { TRAIN_INFO, TRAIN_ORDER } from '../vehicle/trains';
+import { BIKE_ORDER } from '../vehicle/bikes';
 import { Track } from '../track/Track';
 import { OBORO_DOWNHILL } from '../track/courseDesign';
 import { RacingLine } from '../ai/RacingLine';
@@ -136,11 +137,18 @@ describe('VehicleSim', () => {
       // braking into the bend with the wheel turned (before: 25–47° at 90 km/h)
       expect(corner(car, 90, (t, i) => { i.brake = t < 0.6 ? 0.7 : 0; i.steer = 0.8; i.throttle = t > 0.6 ? 0.6 : 0; })).toBeLessThan(15);
     }
+    // a bike grips through the same inputs: no drift state, side grip on its lean, the throttle and engine braking
+    // held to what the rear tyre has left (before: spun round at every braked corner entry)
+    for (const bike of BIKE_ORDER) {
+      expect(corner(bike, 60, (t, i) => { i.throttle = 1; i.steer = t > 0.5 ? 1 : 0; })).toBeLessThan(15);
+      expect(corner(bike, 90, (t, i) => { i.brake = t < 0.6 ? 0.7 : 0; i.steer = 0.8; i.throttle = t > 0.6 ? 0.6 : 0; })).toBeLessThan(22);
+      expect(corner(bike, 70, (t, i) => { i.handbrake = t < 0.35; i.steer = 0.8; i.throttle = t > 0.35 ? 0.8 : 0; })).toBeLessThan(15);
+    }
     // a short tap of the brake with a big steer is still a feint into a drift
     expect(corner('s15', 70, (t, i) => { i.brake = t < 0.3 ? 0.8 : 0; i.steer = 0.8; i.throttle = t > 0.3 ? 0.9 : 0; })).toBeGreaterThan(30);
   });
 
-  it('the cockroach (joke entry) out-accelerates, outruns and outbrakes every other vehicle', () => {
+  it('the cockroach (joke entry) out-accelerates, outruns and outbrakes every other vehicle (but the record EV\'s top speed)', () => {
     const perf = (car: CarId) => {
       let t100 = Infinity, vmax = 0;
       drive(car, 60, (t, v, i) => {
@@ -161,10 +169,11 @@ describe('VehicleSim', () => {
     expect(roach.t100).toBeLessThan(2);
     expect(roach.vmax).toBeGreaterThan(380);
     expect(roach.stop).toBeLessThan(25);
-    for (const car of [...CAR_ORDER, 'e5'] as CarId[]) {
+    for (const car of [...CAR_ORDER, ...BIKE_ORDER, 'e5'] as CarId[]) {
       const p = perf(car);
       expect(roach.t100).toBeLessThan(p.t100);
-      expect(roach.vmax).toBeGreaterThan(p.vmax);
+      // the U9 Xtreme holds the production-car speed record (503 km/h): that one it keeps
+      if (car !== 'u9') expect(roach.vmax).toBeGreaterThan(p.vmax);
       expect(roach.stop).toBeLessThan(p.stop);
     }
   });
@@ -205,11 +214,12 @@ describe('trains (joke entries) perform like the real ones on level ground', () 
     expect(30 / t30).toBeLessThan(t.accel * 1.15);
     // flat out it settles around the design top speed (the motor runs out of revs there)
     // (a Shinkansen needs minutes to get there: the peak speed counts)
-    let peak = 0, t300 = 0;
+    let peak = 0, t300 = 0, t500 = 0;
     drive(id, t.vmax > 200 ? 300 : 150, (time, car, i) => {
       i.throttle = 1;
       peak = Math.max(peak, car.forwardSpeed * 3.6);
       if (!t300 && peak >= 300) t300 = time;
+      if (!t500 && peak >= 499) t500 = time;
     });
     expect(peak).toBeGreaterThan(t.vmax * 0.85);
     expect(peak).toBeLessThan(t.vmax * 1.08);
@@ -218,6 +228,11 @@ describe('trains (joke entries) perform like the real ones on level ground', () 
       // (1.71 km/h/s, 32 × 300 kW, balancing speed 360 km/h on +3 ‰; empty to full; tools/train-accel.ts)
       expect(t300).toBeGreaterThan(265);
       expect(t300).toBeLessThan(300);
+    }
+    if (id === 'l0') {
+      // 0 → 500 km/h in about 13.4 km (JR Central): ~190 s at the guideway's near-constant thrust
+      expect(t500).toBeGreaterThan(180);
+      expect(t500).toBeLessThan(200);
     }
     // full brake from 80 km/h: the emergency rate (km/h/s)
     let tStop = 0;

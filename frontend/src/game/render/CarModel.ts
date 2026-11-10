@@ -1,5 +1,6 @@
 import { buildTrain, type TrainRig } from './TrainModel';
 import { buildRoach, type CreatureRig } from './RoachModel';
+import { buildBike, type BikeRig } from './BikeModel';
 import * as THREE from 'three';
 import type { CarId, CarSpec, RoadCarId } from '../vehicle/carSpecs';
 
@@ -71,6 +72,22 @@ const STYLES: Record<RoadCarId, BodyStyle> = {
   supra: { ...BASE_STYLES.shiden, front: 2.15, rear: -2.35, halfWidth: 0.9, headlights: 'slim' },
   r34: { ...BASE_STYLES.raijin },
   s15: { ...BASE_STYLES.shiden, headlights: 'slim' },
+  // flat stainless panels: sharp edges, one roof peak, the sail running down to the tail over the bed
+  cybertruck: {
+    front: 2.84, rear: -2.84, halfWidth: 1.0, bottom: 0.42, shoulder: 1.15,
+    noseTop: 1.12, cowlTop: 1.3, deckTop: 1.36, tailTop: 1.32, roof: 1.79,
+    windshieldBase: 1.25, roofFront: 0.15, roofRear: -0.2, rearGlassBase: -1.1,
+    tumblehome: 0.86, softness: 0, cornerRound: 0.08, archGap: 0.09, flare: 0.03,
+    wing: 'none', headlights: 'slim', twoTone: false,
+  },
+  // a low, wide mid-engined-looking hypercar
+  u9: {
+    front: 2.42, rear: -2.5, halfWidth: 1.0, bottom: 0.14, shoulder: 0.68,
+    noseTop: 0.55, cowlTop: 0.84, deckTop: 0.9, tailTop: 0.88, roof: 1.33,
+    windshieldBase: 0.95, roofFront: 0.05, roofRear: -0.75, rearGlassBase: -1.75,
+    tumblehome: 0.72, softness: 0.7, cornerRound: 0.45, archGap: 0.04, flare: 0.06,
+    wing: 'high', headlights: 'slim', twoTone: false,
+  },
 };
 
 const smooth = (e0: number, e1: number, x: number) => {
@@ -153,7 +170,46 @@ function withoutTransmission(mat: THREE.Material) {
 export function rigFromTemplate(template: THREE.Object3D, spec: CarSpec, opts: { bodyColor?: string } = {}): CarRig {
   const root = template.clone(true) as THREE.Group;
   root.name = `car-${spec.id}`;
-  const fresh = createCarMaterials(spec, opts.bodyColor);
+  const fresh = adoptMaterials(root, spec, opts.bodyColor);
+  const body = (root.getObjectByName('body') as THREE.Group) ?? root;
+  const wheels = WHEEL_NAMES.map((n) => {
+    const pivot = root.getObjectByName(n) as THREE.Group;
+    const spin = (pivot?.getObjectByName(n.replace('wheel', 'spin')) as THREE.Group) ?? pivot;
+    return { pivot, spin };
+  });
+  const anchors = modelAnchors(root, fresh, spec);
+  const target = root.getObjectByName('headlight_target') ?? new THREE.Object3D();
+  if (!target.parent) {
+    target.position.set(0, 0.3, 30);
+    root.add(target);
+  }
+  return { root, body, wheels, materials: fresh, headlightTargets: [target], anchors, fromModel: true, popUps: modelPopUps(root) };
+}
+
+/**
+ * Lamp and tailpipe anchors of a model: its anchor empties if any, else derived from the geometry (CarSpec.exhaust
+ * overrides the tailpipe).
+ */
+export function modelAnchors(root: THREE.Object3D, mats: CarMaterials, spec: CarSpec): CarRig['anchors'] {
+  const anchors = { exhaust: new THREE.Vector3(), headlights: [] as THREE.Vector3[], taillights: [] as THREE.Vector3[] };
+  root.updateMatrixWorld(true);
+  root.traverse((o) => {
+    if (o.name.startsWith('anchor_headlight')) anchors.headlights.push(o.position.clone());
+    if (o.name.startsWith('anchor_taillight')) anchors.taillights.push(o.position.clone());
+    if (o.name === 'anchor_exhaust') anchors.exhaust.copy(o.position);
+  });
+  deriveAnchors(root, mats, anchors);
+  if (spec.exhaust) anchors.exhaust.set(...spec.exhaust);
+  return anchors;
+}
+
+/**
+ * Give a cloned GLB scene the game's materials: those named after the CarMaterials keys become the shared, tweakable
+ * ones (paint colour, glass, the lamps' glow; on our own models only these live ones), every other one is cloned
+ * (and loses any transmission).
+ */
+export function adoptMaterials(root: THREE.Object3D, spec: CarSpec, bodyColor?: string): CarMaterials {
+  const fresh = createCarMaterials(spec, bodyColor);
   const byName = fresh as unknown as Record<string, THREE.Material>;
   const cloned = new Map<THREE.Material, THREE.Material>();
   // our own models (tools/blender/cars) are painted as the real car: only the materials the game changes at run time
@@ -182,27 +238,7 @@ export function rigFromTemplate(template: THREE.Object3D, spec: CarSpec, opts: {
     };
     m.material = Array.isArray(m.material) ? m.material.map(swap) : swap(m.material);
   });
-  const body = (root.getObjectByName('body') as THREE.Group) ?? root;
-  const wheels = WHEEL_NAMES.map((n) => {
-    const pivot = root.getObjectByName(n) as THREE.Group;
-    const spin = (pivot?.getObjectByName(n.replace('wheel', 'spin')) as THREE.Group) ?? pivot;
-    return { pivot, spin };
-  });
-  const anchors = { exhaust: new THREE.Vector3(), headlights: [] as THREE.Vector3[], taillights: [] as THREE.Vector3[] };
-  root.updateMatrixWorld(true);
-  root.traverse((o) => {
-    if (o.name.startsWith('anchor_headlight')) anchors.headlights.push(o.position.clone());
-    if (o.name.startsWith('anchor_taillight')) anchors.taillights.push(o.position.clone());
-    if (o.name === 'anchor_exhaust') anchors.exhaust.copy(o.position);
-  });
-  deriveAnchors(root, fresh, anchors);
-  if (spec.exhaust) anchors.exhaust.set(...spec.exhaust);
-  const target = root.getObjectByName('headlight_target') ?? new THREE.Object3D();
-  if (!target.parent) {
-    target.position.set(0, 0.3, 30);
-    root.add(target);
-  }
-  return { root, body, wheels, materials: fresh, headlightTargets: [target], anchors, fromModel: true, popUps: modelPopUps(root) };
+  return fresh;
 }
 
 /** Hinged pop-up lamp nodes written by the importer (CarImportConfig.popUps), if any. */
@@ -393,11 +429,14 @@ export interface CarRig {
   lampParent?: THREE.Object3D;
   /** a creature: its legs run with the distance covered (render/RoachModel.ts) */
   creature?: CreatureRig;
+  /** a motorcycle: it leans with the lateral acceleration (render/BikeModel.ts) */
+  bike?: BikeRig;
 }
 
 export function buildCar(spec: CarSpec, opts: { bodyColor?: string; procedural?: boolean } = {}): CarRig {
   if (spec.train) return buildTrain(spec, opts);
   if (spec.creature) return buildRoach(spec, opts);
+  if (spec.bike) return buildBike(spec, opts);
   const tpl = opts.procedural ? null : carTemplate(spec.id);
   if (tpl) return rigFromTemplate(tpl, spec, opts);
   return buildProceduralCar(spec, opts);

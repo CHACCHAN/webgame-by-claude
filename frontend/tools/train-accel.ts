@@ -1,5 +1,5 @@
-// A train's acceleration over its whole speed range, as the game simulates it (level track, and a balancing run up a
-// gradient): npx tsx tools/train-accel.ts [trainId=e5] [gradient‰=3]
+// A vehicle's acceleration over its whole speed range, as the game simulates it (level track, and a balancing run up a
+// gradient): npx tsx tools/train-accel.ts [id=e5] [gradient‰=3]. Any vehicle id works (cars, bikes: automatic gearbox).
 import { Vector3 } from 'three';
 import { RAPIER, initRapier, groups, GROUP_GROUND, GROUP_CAR, PHYSICS_DT, type PhysicsWorld } from '../src/game/vehicle/PhysicsWorld';
 import { VehicleSim, emptyInput } from '../src/game/vehicle/VehicleSim';
@@ -30,7 +30,7 @@ function run(seconds: number, slope: number) {
     v.postStep(PHYSICS_DT);
     if (t >= next) {
       out.push([t, v.forwardSpeed * 3.6, v.position.z - z0]);
-      next += 0.5;
+      next += 0.1;
     }
     if (v.position.z > 59000) break;
   }
@@ -38,17 +38,19 @@ function run(seconds: number, slope: number) {
   return out;
 }
 
-const t = TRAIN_INFO[id];
-console.log(`${t.name}: accel ${t.accel} km/h/s, vmax ${t.vmax} km/h, traction ${t.traction ?? [40, 80]}`);
-const level = run(900, 0);
+const t = TRAIN_INFO[id] as (typeof TRAIN_INFO)[TrainId] | undefined;
+const spec = CAR_SPECS[id as CarId];
+if (t) console.log(`${t.name}: accel ${t.accel} km/h/s, vmax ${t.vmax} km/h, traction ${t.traction ?? [40, 80]}`);
+else console.log(`${spec.name}: ${spec.mass} kg, ${spec.gears.length} gear(s)`);
+const level = run(t ? 900 : 240, 0);
 const at = (kmh: number) => level.find((s) => s[1] >= kmh);
 console.log('level: time and distance to reach');
-for (const k of [30, 100, 150, 200, 250, 270, 300, 320]) {
+for (const k of t ? [30, 100, 150, 200, 250, 270, 300, 320, 400, 500] : [96.6, 100, 160.9, 200, 300, 400, 500]) {
   const s = at(k);
   console.log(`  ${String(k).padStart(3)} km/h  ${s ? `${s[0].toFixed(1).padStart(6)} s  ${(s[2] / 1000).toFixed(2).padStart(6)} km` : 'not reached'}`);
 }
 console.log('level: acceleration (km/h/s) around');
-for (const k of [20, 100, 150, 200, 250, 280, 300, 320]) {
+for (const k of [20, 100, 150, 200, 250, 280, 300, 320, 400, 450, 500]) {
   const i = level.findIndex((s) => s[1] >= k);
   if (i < 2 || i + 2 >= level.length) {
     console.log(`  ${String(k).padStart(3)} km/h  -`);
@@ -58,5 +60,5 @@ for (const k of [20, 100, 150, 200, 250, 280, 300, 320]) {
   console.log(`  ${String(k).padStart(3)} km/h  ${a.toFixed(3)}`);
 }
 console.log(`level: top ${Math.max(...level.map((s) => s[1])).toFixed(1)} km/h after ${level[level.length - 1][0].toFixed(0)} s`);
-const up = run(900, grade);
+const up = run(t ? 900 : 240, grade);
 console.log(`+${grade * 1000}‰: top ${Math.max(...up.map((s) => s[1])).toFixed(1)} km/h`);

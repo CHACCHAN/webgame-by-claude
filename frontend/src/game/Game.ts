@@ -19,7 +19,8 @@ import { RemoteRacers, SLOT_COLORS, type NetState, type Peer } from './net/Remot
 
 /** lateral grid positions of the (up to three) online racers, by slot */
 const ONLINE_LANES = [-2.7, 2.7, 0];
-import { CAR_CAMERA, ChaseCamera, TRAIN_CAMERA } from './camera/ChaseCamera';
+import { BIKE_CAMERA, CAR_CAMERA, ChaseCamera, TRAIN_CAMERA } from './camera/ChaseCamera';
+import { hasExhaust, traitsOf } from './vehicle/kinds';
 import { InputManager } from './input/Input';
 import { TireSmoke, SkidMarks } from './fx/TireEffects';
 import { ExhaustFX, newExhaustState, type ExhaustState } from './fx/Exhaust';
@@ -30,6 +31,8 @@ import { clamp, damp, lerp, smoothstep } from './util/math';
 import type { TrackProjection } from './track/Track';
 import { loadTrainModel, loadTrainModels, loadTrainVariants, trainModelReady, trainNose } from './render/TrainModel';
 import { loadRoachModel } from './render/RoachModel';
+import { loadBikeModels } from './render/BikeModel';
+import { BIKE_ORDER } from './vehicle/bikes';
 import { specForLivery, trainLivery, trainModelKey, TRAIN_ORDER } from './vehicle/trains';
 
 export type GamePhase = 'loading' | 'attract' | 'garage' | 'countdown' | 'racing' | 'finished' | 'replay';
@@ -250,7 +253,7 @@ export class Game {
     await this.yieldFrame(0.05, '物理エンジンを初期化中');
     await initRapier();
     await this.yieldFrame(0.08, '車両モデルを読み込み中');
-    await Promise.all([loadCarTemplates(CAR_ORDER), loadTrainModels(TRAIN_ORDER), loadRoachModel(), loadSurfaceTextures(), loadProps()]);
+    await Promise.all([loadCarTemplates(CAR_ORDER), loadBikeModels(BIKE_ORDER), loadTrainModels(TRAIN_ORDER), loadRoachModel(), loadSurfaceTextures(), loadProps()]);
     // the trains' other lines (liveries with their own model) follow in the background
     void loadTrainVariants(TRAIN_ORDER);
     this.root.add(this.smoke.points, this.skids.mesh, this.rain.mesh, this.exhaust.group);
@@ -497,19 +500,19 @@ export class Game {
     const s = this.track.startS - 14;
     const p = this.track.pointAt(s, 0.6);
     this.garageCar.root.position.copy(p);
-    // a train stands straight along the road (its cars trail behind the root)
-    this.garageCar.root.rotation.y = this.track.headingAt(s) + (spec.train ? 0 : 0.35);
+    // the view per kind of vehicle (a train stands straight along the road, its cars trailing behind the root, and is
+    // framed on its leading car)
+    const view = traitsOf(spec).garage;
+    this.garageCar.root.rotation.y = this.track.headingAt(s) + view.yaw;
     this.root.add(this.garageCar.root);
     this.garageCar.refresh();
-    this.garageScale = spec.train ? 2.6 : 1;
-    // a train is framed on its leading car (the root is its front bogie)
-    this.garageFocus.copy(p).addScaledVector(_f.set(Math.sin(this.track.headingAt(s)), 0, Math.cos(this.track.headingAt(s))), spec.train ? -7 : 0);
+    this.garageScale = view.scale;
+    this.garageFocus.copy(p).addScaledVector(_f.set(Math.sin(this.track.headingAt(s)), 0, Math.cos(this.track.headingAt(s))), -view.focusBack);
     void ride;
     // showroom key light above and in front of the car
-    // (higher over a train: right above its roof it burnt a white patch into it)
-    this.garageLight.position.copy(p).add(new THREE.Vector3(0, spec.train ? 16 : 7, 0));
+    this.garageLight.position.copy(p).add(new THREE.Vector3(0, view.lightHeight, 0));
     this.garageLight.target.position.copy(p);
-    this.garageLight.intensity = spec.train ? 120 : 70;
+    this.garageLight.intensity = view.light;
     this.garageLight.castShadow = this.quality.shadows;
     if (!this.garageLight.parent) this.root.add(this.garageLight, this.garageLight.target);
     // put the camera on the uphill side so the background is the valley, not the cutting
@@ -553,7 +556,7 @@ export class Game {
     const train = !!CAR_SPECS[cfg.carId].train;
     const t = CAR_SPECS[cfg.carId].train;
     // the cab view sits just behind the nose of the leading car
-    this.chase.profile = t ? { ...TRAIN_CAMERA, front: { ...TRAIN_CAMERA.front, ahead: trainNose(t) - 0.35 } } : CAR_CAMERA;
+    this.chase.profile = t ? { ...TRAIN_CAMERA, front: { ...TRAIN_CAMERA.front, ahead: trainNose(t) - 0.35 } } : CAR_SPECS[cfg.carId].bike ? BIKE_CAMERA : CAR_CAMERA;
     if (train !== this.cameraForTrain) this.chase.mode = train ? 'bumper' : 'chase';
     this.cameraForTrain = train;
     if (cfg.online) {
@@ -1097,6 +1100,7 @@ export class Game {
         speed: sim.speed,
         slipAngle: sim.slipAngle,
         impact: Math.max(sim.impact, this.contactShake),
+        lean: this.player.visual.lean,
       });
     }
 
@@ -1158,7 +1162,7 @@ export class Game {
 
   /** Puffs and backfires from a car's tailpipe (with a pop when the camera is close). */
   private puff(visual: CarVisual, state: ExhaustState, velocity: THREE.Vector3, throttle: number, rpm: number, dt: number) {
-    if (visual.spec.train || visual.spec.creature) return;
+    if (!hasExhaust(visual.spec)) return;
     const rig = visual.rig, root = visual.root;
     // tailpipe in world space from the car's pose (the model only sits lower by the ride height)
     _tip.copy(rig.anchors.exhaust).add(rig.root.position).applyQuaternion(root.quaternion).add(root.position);

@@ -102,6 +102,8 @@ export class TrainSound {
       case 'chopper':
         return 660;
       case 'resistor':
+      case 'lsm':
+        // (a maglev's inverters stand by the guideway)
         return 0;
     }
     for (const [upTo, pulses] of [[0.25, 27], [0.34, 15], [0.43, 9], [0.52, 5], [0.6, 3]] as const) if (speed < upTo) return fOut * pulses;
@@ -193,7 +195,7 @@ export class TrainSound {
     const dc = this.kind === 'resistor' || this.kind === 'chopper';
     this.motor.frequency.setTargetAtTime(Math.max(20, dc ? fOut * 2 : fOut), t, 0.02);
     this.motorFilter.frequency.setTargetAtTime(300 + speed * (dc ? 1800 : 900), t, 0.05);
-    this.motorGain.gain.setTargetAtTime(calculated ? 0 : lv * (dc ? 0.12 : 0.06), t, 0.05);
+    this.motorGain.gain.setTargetAtTime(calculated || this.kind === 'lsm' ? 0 : lv * (dc ? 0.12 : 0.06), t, 0.05);
     const f = this.carrier(speed, fOut);
     if (f > 0) {
       this.inv.frequency.setTargetAtTime(f, t, 0.008);

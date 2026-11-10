@@ -15,6 +15,9 @@
  *   first car). A click: a resonant thump (~110 Hz) and a short filtered clack; strength per joint and per hit
  *   varied a little at random. Welded rail and slab track: a weak one every `WELDED_SPACING` m only.
  * - Curve squeal: a light tone when cornering hard (radius under ~300 m) at low speed. Brake: a soft hiss and grind.
+ * - Maglev (`RunningParams.maglev`): on rubber tyres (the roar, no joints, no squeal) up to the lift-off speed, then
+ *   only the wind and the hum of the guideway's travelling field (its 6th harmonic: v / pole pitch × 3); the tyres
+ *   leave and touch down with a thump.
  * Levels in dBFS as mixed into TrainSound's output. The two bodies' spectra, the hum and the joint clicks were fitted
  * to measurements of two in-train recordings the game used to loop (a 223 series coasting at ~110 km/h, a 700 series
  * Shinkansen at ~203 km/h, at the half level the game played them; the numbers are in tools/train-run-wav.ts, which
@@ -49,7 +52,14 @@ export interface RunningParams {
   wheel: number;
   gearRatio: number;
   pinion: number;
+  /** a maglev's lift-off speed (km/h; 0 = it runs on its wheels) */
+  maglev: number;
 }
+
+/** pole pitch of the L0's guideway propulsion coils (m) */
+const LSM_POLE = 1.35;
+/** lift-off hysteresis (km/h): it touches down this much below the lift-off speed */
+const LIFT_HYST = 6;
 
 /** rail length of Japanese conventional lines (m) */
 export const RAIL_LENGTH = 25;
@@ -58,7 +68,7 @@ export const WELDED_SPACING = 400;
 const WELDED_GAIN = 0.35;
 const CARS = 3;
 
-export function runningParams(t: Pick<TrainInfo, 'carLength' | 'bogies' | 'wheel' | 'gearRatio' | 'running' | 'vvvf'>): RunningParams {
+export function runningParams(t: Pick<TrainInfo, 'carLength' | 'bogies' | 'wheel' | 'gearRatio' | 'running' | 'vvvf' | 'maglev'>): RunningParams {
   const r = t.running ?? {};
   const welded = r.rail === 'welded';
   return {
@@ -72,6 +82,7 @@ export function runningParams(t: Pick<TrainInfo, 'carLength' | 'bogies' | 'wheel
     wheel: t.wheel,
     gearRatio: t.gearRatio,
     pinion: t.vvvf?.gear[0] ?? 15,
+    maglev: t.maglev?.lift ?? 0,
   };
 }
 
@@ -206,6 +217,9 @@ export class RunningNoise {
   private gSq = 0;
   private brakeLevel = 0;
   private gBr = 0;
+  /** a maglev on its tyres (1) or floating (0), eased; and whether it is airborne now */
+  private ground = 1;
+  private airborne = false;
   /** low-pass on the roar and the joints (b1 = 2 b0, b2 = b0): the top end follows the speed */
   private lp = { b0: 0, a1: 0, a2: 0, x1: 0, x2: 0, y1: 0, y2: 0 };
   private hiss = { b0: 0, a1: 0, a2: 0, x1: 0, x2: 0, y1: 0, y2: 0 };
@@ -273,6 +287,16 @@ export class RunningNoise {
     this.v += (target - this.v) * (1 - Math.exp(-dt / 0.04));
     const v = this.v, kmh = v * 3.6;
     const body = BODY[p.sealed ? 1 : 0];
+    // a maglev lifts off its tyres (and touches down again a little slower): a thump each time, the wheel's own noises
+    // fade over ~0.6 s
+    let touch = 0;
+    if (p.maglev) {
+      const up = this.airborne ? kmh > p.maglev - LIFT_HYST : kmh > p.maglev;
+      if (up !== this.airborne) touch = up ? 0.5 : 1.3;
+      this.airborne = up;
+      this.ground += ((up ? 0 : 1) - this.ground) * (1 - Math.exp(-dt / 0.6));
+    }
+    const ground = this.ground;
 
     // ---- the roar's band gains (ramped across the block)
     const k = Math.max(kmh, 0.01) / body.kmh;
@@ -287,7 +311,7 @@ export class RunningNoise {
     for (let i = 0; i < this.bands.length; i++) {
       const b = this.bands[i];
       const dbv = atFreq(body.roll, BANDS[i] * shift);
-      const m = BANDS[i] <= 125 ? modLow : mod;
+      const m = (BANDS[i] <= 125 ? modLow : mod) * ground;
       b.g = kmh < 0.05 ? 0 : db(dbv) * roll * Math.sqrt(m * m + wind2) * b.norm;
     }
     const live = this.bands.map((b, i) => Math.max(b.g, bandOld[i]) > 3e-5 * b.norm);
@@ -295,21 +319,22 @@ export class RunningNoise {
     // ---- the roar's top end follows the speed
     lowpass(this.lp, Math.min(rate * 0.4, TOP_HZ / shift), rate);
 
-    // ---- hum: rotor revolutions and gear mesh
-    const rotorHz = (v / (Math.PI * p.wheel)) * p.gearRatio;
-    const hl = k ** 1.5;
+    // ---- hum: rotor revolutions and gear mesh (a maglev: the guideway's travelling field, faint and steady)
+    const rotorHz = p.maglev ? (v / LSM_POLE) * 3 : (v / (Math.PI * p.wheel)) * p.gearRatio;
+    const hl = p.maglev ? Math.min(1, kmh / 120) * 0.03 : k ** 1.5;
     // a rotor below ~25 Hz is felt more than heard
     const audible = smoothstep(12, 30, rotorHz);
     const gR0 = this.gRotor, gR20 = this.gRotor2, gM0 = this.gMesh;
     this.gRotor = db(body.rotor) * Math.SQRT2 * hl * audible * (1 + 0.15 * sw);
     this.gRotor2 = db(body.rotor2) * Math.SQRT2 * hl * audible;
     const meshHz = rotorHz * p.pinion;
-    this.gMesh = meshHz < rate * 0.45 ? db(body.mesh) * Math.SQRT2 * hl : 0;
+    this.gMesh = !p.maglev && meshHz < rate * 0.45 ? db(body.mesh) * Math.SQRT2 * hl : 0;
 
     // ---- joints in this block
     const s0 = this.s, s1 = s0 + v * dt;
-    if (v > 0.05) {
-      const amp0 = p.jointGain * Math.min(1.6, kmh / 110);
+    if (touch) exc[0] += touch;
+    if (v > 0.05 && ground > 0.02) {
+      const amp0 = p.jointGain * Math.min(1.6, kmh / 110) * ground;
       for (const [s, a, j] of jointCrossings(s0, s1, this.axleAt, p.jointSpacing)) {
         const i = Math.min(N - 1, Math.max(0, Math.floor(((s - s0) / v) * rate)));
         const amp = amp0 * this.axleGain[a] * this.jointStrength(j) * (0.85 + 0.3 * this.random());
@@ -321,7 +346,8 @@ export class RunningNoise {
 
     // ---- squeal: hard cornering (curvature from the lateral acceleration) at low speed
     const curv = Math.abs(this.lateral) / Math.max(v * v, 1);
-    const sq = smoothstep(1 / 300, 1 / 80, curv) * smoothstep(4, 12, kmh) * (1 - smoothstep(45, 75, kmh));
+    // (rubber tyres and a guideway: no flanges)
+    const sq = p.maglev ? 0 : smoothstep(1 / 300, 1 / 80, curv) * smoothstep(4, 12, kmh) * (1 - smoothstep(45, 75, kmh));
     if (sq > 0.02 && this.squealLevel < 0.01) this.squealHz = [2150, 2900, 3550, 4300][Math.floor(this.random() * 4)] * (0.97 + 0.06 * this.random());
     this.squealLevel += (sq - this.squealLevel) * (1 - Math.exp(-dt / (sq > this.squealLevel ? 0.25 : 0.4)));
     const flutter = this.swayStep(2, 7, dt);
@@ -330,7 +356,8 @@ export class RunningNoise {
     const sqHz = this.squealHz * (1 + 0.003 * flutter);
 
     // ---- brake: shoes and discs, more as the air brake takes over near the stop
-    const br = this.brake * smoothstep(1, 6, kmh) * (0.5 + 0.5 * Math.min(1, kmh / 50)) * (1 + (1 - smoothstep(4, 20, kmh)));
+    // (a floating maglev brakes with its motors and air brakes: the discs on its tyres only once it is down)
+    const br = this.brake * smoothstep(1, 6, kmh) * (0.5 + 0.5 * Math.min(1, kmh / 50)) * (1 + (1 - smoothstep(4, 20, kmh))) * ground;
     this.brakeLevel += (br - this.brakeLevel) * (1 - Math.exp(-dt / 0.15));
     const rough = this.swayStep(3, 30, dt);
     const gBr0 = this.gBr;

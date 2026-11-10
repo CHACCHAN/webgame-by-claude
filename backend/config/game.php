@@ -32,8 +32,8 @@ return [
             'min_time_ms' => 38_000,
             'max_time_ms' => 30 * 60_000,
         ],
-        // 7.8 km of motorway: the cockroach's AI runs it flat out at its top speed (~71 s, ~420 km/h downhill),
-        // so the floor is an average of ~485 km/h, beyond any vehicle
+        // 8.6 km of motorway: the fastest, the Yangwang U9 Xtreme's AI, runs it in ~64 s from a standing start (503 km/h
+        // top), the cockroach in ~71 s: the floor is an average of ~530 km/h, beyond any vehicle
         'autobahn' => [
             'name' => 'アウトバーン',
             'name_en' => 'Autobahn',
@@ -54,13 +54,21 @@ return [
         'supra' => ['name' => 'SUPRA RZ (JZA80)'],
         'raijin' => ['name' => 'IMPREZA WRX STI'],
         'r34' => ['name' => 'SKYLINE GT-R (BNR34)'],
+        // electric: the Cybertruck (Cyberbeast) and the fastest production EV (frontend vehicle/carSpecs.ts)
+        'cybertruck' => ['name' => 'CYBERTRUCK'],
+        'u9' => ['name' => 'YANGWANG U9 Xtreme'],
+        // motorcycles (frontend vehicle/bikes.ts)
+        'nsr250r' => ['name' => 'NSR250R'],
+        'ninjah2' => ['name' => 'Ninja H2'],
+        'hayabusa' => ['name' => 'GSX1300R 隼'],
         // joke entries: three-car trains (frontend vehicle/trains.ts)
         'e231' => ['name' => 'E231系'],
         'e235' => ['name' => 'E235系'],
         'keikyu1000' => ['name' => '京急新1000形'],
         'tobu30000' => ['name' => '東武30000系'],
         'e5' => ['name' => '新幹線E5系'],
-        // joke entry: the giant cockroach (frontend vehicle/roach.ts), the fastest vehicle
+        'l0' => ['name' => 'L0系'],
+        // joke entry: the giant cockroach (frontend vehicle/roach.ts), the quickest on the mountain passes
         'roach' => ['name' => 'ゴキブリ'],
     ],
 

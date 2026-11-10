@@ -2,10 +2,11 @@
 // names of the real cars whose models replace them (see docs/ASSETS.md).
 import { TRAIN_ORDER, trainSpec, type TrainId, type TrainInfo } from './trains';
 import { ROACH_SPEC, type CreatureInfo } from './roach';
+import { BIKE_ORDER, BIKE_SPECS, type BikeId, type BikeInfo } from './bikes';
 
-export type CarId = 'hayate' | 'raijin' | 'shiden' | 'supra' | 'r34' | 's15' | TrainId | 'roach';
+export type CarId = 'hayate' | 'raijin' | 'shiden' | 'supra' | 'r34' | 's15' | 'cybertruck' | 'u9' | BikeId | TrainId | 'roach';
 /** the real cars (AI, bots, medals per course, procedural fallback bodies) */
-export type RoadCarId = Exclude<CarId, TrainId | 'roach'>;
+export type RoadCarId = Exclude<CarId, TrainId | BikeId | 'roach'>;
 
 export interface CarSpec {
   id: CarId;
@@ -37,6 +38,10 @@ export interface CarSpec {
     turbo: boolean;
     /** electric traction: full torque from standstill, no clutch slip at launch */
     electric?: boolean;
+    /** a two-stroke fires every turn (default 4) */
+    strokes?: 2 | 4;
+    /** a supercharger's whine follows the revs (sound only: the torque curve has the boost in it) */
+    supercharger?: boolean;
   };
   gears: number[];
   finalDrive: number;
@@ -73,6 +78,8 @@ export interface CarSpec {
   train?: TrainInfo;
   /** a creature (joke entry, vehicle/roach.ts): legs instead of wheels, no exhaust */
   creature?: CreatureInfo;
+  /** a motorcycle (vehicle/bikes.ts): two wheels, leans, wheelie and stoppie limits, a rider */
+  bike?: BikeInfo;
 }
 
 const CARS: Record<RoadCarId, CarSpec> = {
@@ -302,20 +309,111 @@ const CARS: Record<RoadCarId, CarSpec> = {
     // our own model (tools/blender/cars/s15*.py, fitted to photos; stock spec-R without the wing, `s15.py --wing` adds it)
     model: { title: 'シルビア S15 spec-R', author: 'TOUGE NOCTURNE', url: '', license: '自作', own: true },
   },
+  cybertruck: {
+    id: 'cybertruck',
+    name: 'CYBERTRUCK',
+    tagline: '3モーターの電動ピックアップ',
+    description: 'ステンレスの平らな板で組んだテスラの電動ピックアップ（サイバービースト）。3トンを超える巨体が3つのモーターで0→100km/hを2.7秒で駆け抜ける。重さと背の高さはコーナーで正直に出る。',
+    drive: 'AWD',
+    engineName: '3モーター（前1・後2）電動 AWD',
+    frontTorqueSplit: 0.4,
+    // Cyberbeast: 6843 lb at the kerb
+    mass: 3104,
+    size: { width: 2.03, height: 1.1, length: 5.68 },
+    // 143.1 in
+    wheelbase: 3.635,
+    track: 1.76,
+    comForward: 0,
+    // the battery sits low; higher than this the 3 t truck rolled over in hairpins at its grip
+    comHeight: 0.62,
+    // 35-inch tyres (LT285/65R20)
+    wheelRadius: 0.452,
+    suspension: { rest: 0.36, stiffness: 95000, damping: 9000, antiRoll: 30000 },
+    engine: {
+      idleRpm: 0,
+      // the reduction gear reaches the 209 km/h limit (130 mph) at the motors' top speed
+      redline: 11100,
+      // ~630 kW (845 hp) together: full pull to ~2800 rpm (the tyres' limit at 1.2 g), then constant power
+      torque: [[0, 2124], [2830, 2124], [4500, 1337], [6500, 925], [9000, 668], [11100, 542]],
+      cylinders: 0,
+      turbo: false,
+      electric: true,
+    },
+    gears: [1],
+    finalDrive: 9.04,
+    // all-terrain tyres under 3 t
+    gripFront: 1.16,
+    gripRear: 1.14,
+    maxSteerDeg: 32,
+    brakeForce: 28000,
+    // a big flat front: Cd ~0.34 × 3 m²
+    dragCoef: 0.62,
+    downforce: 0.05,
+    driftiness: 0.3,
+    stats: { power: 10, grip: 5, drift: 3, weight: 1 },
+    colors: { body: '#b9bdc0', accent: '#1b1c1f' },
+    model: { title: 'Cybertruck（Cyberbeast）', author: 'TOUGE NOCTURNE', url: '', license: '自作', own: true },
+  },
+  u9: {
+    id: 'u9',
+    name: 'YANGWANG U9 Xtreme',
+    tagline: '最高速503km/hの電動ハイパーカー',
+    description: 'BYDの高級ブランド仰望（ヤンワン）が1200Vの4モーターで3000馬力を絞り出したハイパーカー。2026年11月、量産車の最高速度503.17km/hをギネスとFIAが認定した。峠ではその力を路面に伝えきれるかが勝負。',
+    drive: 'AWD',
+    engineName: '4モーター（各555kW）電動 AWD・1200V',
+    frontTorqueSplit: 0.45,
+    mass: 2480,
+    size: { width: 2.03, height: 0.66, length: 4.99 },
+    wheelbase: 2.9,
+    track: 1.72,
+    comForward: -0.05,
+    comHeight: 0.4,
+    wheelRadius: 0.36,
+    suspension: { rest: 0.3, stiffness: 82000, damping: 7200, antiRoll: 26000 },
+    engine: {
+      idleRpm: 0,
+      // the motors spin to 30,000 rpm: 503 km/h at that speed on the reduction gear
+      redline: 30000,
+      // 2,220 kW together: full pull (the semi-slicks' limit, ~1.5 g) to ~10,600 rpm (~180 km/h), then constant power
+      torque: [[0, 2000], [10600, 2000], [16000, 1325], [20000, 1060], [25000, 848], [30000, 707]],
+      cylinders: 0,
+      turbo: false,
+      electric: true,
+    },
+    gears: [1],
+    finalDrive: 8.09,
+    // semi-slick tyres
+    gripFront: 1.56,
+    gripRear: 1.54,
+    maxSteerDeg: 33,
+    brakeForce: 30000,
+    // tuned so the record's 503 km/h is its flat-out top speed on the level
+    dragCoef: 0.6,
+    downforce: 0.55,
+    // as the cockroach: beyond ~290 km/h the springs would sink under the downforce
+    downforceTopSpeed: 80,
+    // the cars' body damping would cap it far below its top speed (as the cockroach's)
+    damping: 0.004,
+    driftiness: 0.3,
+    stats: { power: 10, grip: 9, drift: 4, weight: 4 },
+    colors: { body: '#1b1d22', accent: '#c9d400' },
+    model: { title: '仰望 U9 Xtreme', author: 'TOUGE NOCTURNE', url: '', license: '自作', own: true },
+  },
 };
 
 export const CAR_SPECS: Record<CarId, CarSpec> = {
   ...CARS,
+  ...BIKE_SPECS,
   ...(Object.fromEntries(TRAIN_ORDER.map((id) => [id, trainSpec(id)])) as Record<TrainId, CarSpec>),
   roach: ROACH_SPEC,
 };
 
 /** the cars (AI rivals, bot ghosts and models use these) */
-export const CAR_ORDER: CarId[] = ['hayate', 's15', 'shiden', 'supra', 'raijin', 'r34'];
-/** everything a player can drive: the cars, the trains, then the cockroach */
-export const VEHICLE_ORDER: CarId[] = [...CAR_ORDER, ...TRAIN_ORDER, 'roach'];
+export const CAR_ORDER: CarId[] = ['hayate', 's15', 'shiden', 'supra', 'raijin', 'r34', 'cybertruck', 'u9'];
+/** everything a player can drive: the cars, the motorcycles, the trains, then the cockroach */
+export const VEHICLE_ORDER: CarId[] = [...CAR_ORDER, ...BIKE_ORDER, ...TRAIN_ORDER, 'roach'];
 
-/** one fixed ratio (trains, the cockroach): no AT/MT choice */
+/** one fixed ratio (trains, the cockroach, electric cars): no AT/MT choice */
 export const singleRatio = (spec: CarSpec) => spec.gears.length === 1;
 
 export function torqueAt(spec: CarSpec, rpm: number): number {

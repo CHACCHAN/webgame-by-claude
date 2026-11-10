@@ -6,7 +6,9 @@ import { CAR_SPECS, VEHICLE_ORDER, type CarId, type CarSpec } from '../../game/v
 import { Hint } from './Menus';
 import { liverySwatch, specForLivery, TRAIN_INFO, TRAIN_ORDER, trainLivery, type TrainId } from '../../game/vehicle/trains';
 import { ROACH_INFO } from '../../game/vehicle/roach';
+import { BIKE_ORDER, BIKE_SPECS, type BikeId } from '../../game/vehicle/bikes';
 import { sfx } from '../sfx';
+import { traitsOf } from '../../game/vehicle/kinds';
 
 /** Body colours offered for each car (first = default). */
 export const COLORS: Record<CarId, string[]> = {
@@ -18,6 +20,11 @@ export const COLORS: Record<CarId, string[]> = {
   supra: ['#eeeeee', '#d8481c', '#c40d1e', '#121214', '#1f5fb5'],
   r34: ['#2f4fa6', '#e9e9ea', '#121214', '#8a8f96', '#4a2a63'],
   s15: ['#f5cf30', '#e9e9ea', '#121214', '#b3121c', '#2f6db5'],
+  // bare stainless, then wraps
+  cybertruck: ['#b9bdc0', '#232427', '#e6e6e4', '#4b5a3a', '#7d1d1d'],
+  u9: ['#1b1d22', '#e8e9ea', '#1f5bd6', '#c9d400', '#8c1c22'],
+  // motorcycles: one swatch per factory colour
+  ...(Object.fromEntries(BIKE_ORDER.map((id) => [id, BIKE_SPECS[id].bike!.liveries.map((l) => l.swatch)])) as Record<BikeId, string[]>),
   // the cockroach: one swatch per species colouring
   roach: ROACH_INFO.liveries.map((l) => l.swatch),
 };
@@ -27,6 +34,7 @@ export function liveryName(id: CarId, color: string): string | null {
   const spec = CAR_SPECS[id];
   if (spec.train) return trainLivery(spec.train, color).name;
   if (spec.creature) return spec.creature.liveries.find((l) => l.swatch === color)?.name ?? null;
+  if (spec.bike) return spec.bike.liveries.find((l) => l.swatch === color)?.name ?? null;
   return null;
 }
 
@@ -84,10 +92,14 @@ function TrainFigures({ spec, full }: { spec: CarSpec; full: boolean }) {
       <dt>起動加速度</dt><dd>{rate(t.accel)} km/h/s</dd>
       <dt>設計最高速度</dt><dd>{t.vmax} km/h</dd>
       <dt>減速度（常用／非常）</dt><dd>{rate(t.brake[0])} ／ {rate(t.brake[1])} km/h/s</dd>
-      <dt>編成重量</dt><dd>{t.mass} t</dd>
-      <dt>主電動機</dt><dd>{t.motor}</dd>
+      <dt>編成重量</dt><dd>{t.mass} t{t.massEstimated ? '（推定）' : ''}</dd>
+      <dt>{t.maglev ? '推進方式' : '主電動機'}</dt><dd>{t.motor}</dd>
       <dt>制御方式</dt><dd>{t.control}</dd>
-      <dt>歯車比</dt><dd>{t.gearRatio}</dd>
+      {t.maglev ? (
+        <><dt>浮上</dt><dd>約{t.maglev.lift} km/hで車輪を格納、約{Math.round(t.maglev.height * 100)} cm浮上</dd></>
+      ) : (
+        <><dt>歯車比</dt><dd>{t.gearRatio}</dd></>
+      )}
       <dt>車体幅</dt><dd>{t.width.toFixed(2)} m</dd>
     </dl>
   );
@@ -119,6 +131,34 @@ function CreatureFigures({ spec, full }: { spec: CarSpec; full: boolean }) {
   );
 }
 
+/** A motorcycle's figures: the maker's (vehicle/bikes.ts). */
+function BikeFigures({ spec, full }: { spec: CarSpec; full: boolean }) {
+  const b = spec.bike!;
+  const f = b.figures;
+  if (!full) {
+    return (
+      <div className="specs-row">
+        <div><small>MAX POWER</small><b>{f.power.split(' / ')[0]}</b></div>
+        <div><small>WEIGHT</small><b>{f.weight.replace(/^\S+ /, '')}</b></div>
+        <div><small>TOP SPEED</small><b>{f.topSpeed} km/h</b></div>
+      </div>
+    );
+  }
+  return (
+    <dl className="spec-table">
+      <dt>形式</dt><dd>{b.maker} {spec.name} {b.type}</dd>
+      <dt>エンジン</dt><dd>{f.engine}</dd>
+      <dt>最高出力</dt><dd>{f.power}</dd>
+      <dt>最大トルク</dt><dd>{f.torque}</dd>
+      <dt>重量</dt><dd>{f.weight}（走行はライダー込み {spec.mass} kg）</dd>
+      <dt>最高速度</dt><dd>約 {f.topSpeed} km/h</dd>
+      <dt>変速機</dt><dd>{spec.gears.length}速</dd>
+      <dt>ホイールベース</dt><dd>{spec.wheelbase.toFixed(3)} m</dd>
+      <dt>シート高</dt><dd>{f.seat.toFixed(3)} m</dd>
+    </dl>
+  );
+}
+
 /** Name, character and figures of a car: `full` adds the whole specification table (car list). */
 export function CarSheet({ spec: base, index, full = false, color }: { spec: CarSpec; index: number; full?: boolean; color?: string }) {
   // a train's figures as fitted for the line picked
@@ -129,11 +169,10 @@ export function CarSheet({ spec: base, index, full = false, color }: { spec: Car
     <>
       <div className="car-index">
         {two(index + 1)} / {two(VEHICLE_ORDER.length)}
-        {spec.train && <span className="train-badge">TRAIN ・ ネタ枠</span>}
-        {spec.creature && <span className="train-badge">CREATURE ・ ネタ枠</span>}
+        {traitsOf(spec).badge && <span className="train-badge">{traitsOf(spec).badge}</span>}
       </div>
       <h2 className="car-name">{spec.name}</h2>
-      <div className="car-tag">{spec.tagline} ・ {spec.train ? spec.train.operator : spec.creature ? `${spec.creature.figures.legs}本脚` : spec.drive}</div>
+      <div className="car-tag">{spec.tagline} ・ {spec.train ? spec.train.operator : spec.creature ? `${spec.creature.figures.legs}本脚` : spec.bike ? spec.bike.maker : spec.engine.electric ? `EV・${spec.drive}` : spec.drive}</div>
       <p className="car-desc">{spec.description}</p>
       <div className="stats">
         <Stat label="POWER" v={spec.stats.power} />
@@ -145,16 +184,18 @@ export function CarSheet({ spec: base, index, full = false, color }: { spec: Car
         <TrainFigures spec={spec} full={full} />
       ) : spec.creature ? (
         <CreatureFigures spec={spec} full={full} />
+      ) : spec.bike ? (
+        <BikeFigures spec={spec} full={full} />
       ) : full ? (
         <dl className="spec-table">
-          <dt>エンジン</dt><dd>{spec.engineName}</dd>
-          <dt>最高出力</dt><dd>{power.ps} PS / {power.rpm} rpm</dd>
-          <dt>最大トルク</dt><dd>{trq} Nm / {trqRpm} rpm</dd>
-          <dt>レッドゾーン</dt><dd>{spec.engine.redline} rpm</dd>
+          <dt>{spec.engine.electric ? 'モーター' : 'エンジン'}</dt><dd>{spec.engineName}</dd>
+          <dt>最高出力</dt><dd>{power.ps} PS{spec.engine.electric ? ` (${power.kw} kW)` : ` / ${power.rpm} rpm`}</dd>
+          <dt>最大トルク</dt><dd>{trq} Nm{spec.engine.electric ? '（モーター軸・合計）' : ` / ${trqRpm} rpm`}</dd>
+          <dt>{spec.engine.electric ? 'モーター最高回転' : 'レッドゾーン'}</dt><dd>{spec.engine.redline} rpm</dd>
           <dt>車両重量</dt><dd>{spec.mass} kg</dd>
           <dt>パワーウェイトレシオ</dt><dd>{(spec.mass / power.ps).toFixed(2)} kg/PS</dd>
           <dt>駆動方式</dt><dd>{spec.drive === 'AWD' ? '4WD' : 'FR'}</dd>
-          <dt>変速機</dt><dd>{spec.gears.length}速</dd>
+          <dt>変速機</dt><dd>{spec.engine.electric ? `なし（減速比 ${spec.finalDrive}）` : `${spec.gears.length}速`}</dd>
           <dt>全長 × 全幅</dt><dd>{spec.size.length.toFixed(2)} × {spec.size.width.toFixed(2)} m</dd>
           <dt>ホイールベース</dt><dd>{spec.wheelbase.toFixed(2)} m</dd>
         </dl>

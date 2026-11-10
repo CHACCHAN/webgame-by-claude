@@ -11,19 +11,28 @@ export interface CameraSubject {
   speed: number;
   slipAngle: number;
   impact: number;
+  /** a bike's lean (rad, + = left): the rider's view rolls with it, the chase view a little */
+  lean?: number;
 }
 
 /** Camera placement per vehicle: distances and heights of the chase views, the eye point of the bumper/cab view. */
 export interface CameraProfile {
   chase: { dist: number; perKmh: number; height: number };
   near: { dist: number; perKmh: number; height: number };
-  /** forward and up offsets of the bumper view (a train: the driver's cab) */
-  front: { ahead: number; up: number };
+  /** forward and up offsets of the bumper view (a train: the driver's cab; a bike: the rider's eyes, `height` above
+   * the ground, which swing in and down as the bike leans) */
+  front: { ahead: number; up: number; height?: number };
 }
 export const CAR_CAMERA: CameraProfile = {
   chase: { dist: 6.4, perKmh: 0.008, height: 2.15 },
   near: { dist: 4.6, perKmh: 0.005, height: 1.55 },
   front: { ahead: 0.6, up: 0.75 },
+};
+/** a bike: a closer, lower chase; the front view from the rider's helmet, tucked behind the screen */
+export const BIKE_CAMERA: CameraProfile = {
+  chase: { dist: 4.7, perKmh: 0.006, height: 1.75 },
+  near: { dist: 3.3, perKmh: 0.004, height: 1.4 },
+  front: { ahead: 0.05, up: 0.55, height: 1.16 },
 };
 /** a 60 m train: chase from high above the leading car, the front view from the cab (2.85 m ahead of the bogie) */
 export const TRAIN_CAMERA: CameraProfile = {
@@ -33,6 +42,7 @@ export const TRAIN_CAMERA: CameraProfile = {
 };
 
 const _fwd = new THREE.Vector3(), _desired = new THREE.Vector3(), _look = new THREE.Vector3(), _up = new THREE.Vector3();
+const _left = new THREE.Vector3(), _worldUp = new THREE.Vector3(0, 1, 0);
 
 /**
  * Third-person chase camera. During slides it swings towards the direction
@@ -78,13 +88,22 @@ export class ChaseCamera {
     this.impactShake = Math.max(this.impactShake * Math.exp(-dt * 6), s.impact);
     this.shakeT += dt * (8 + kmh * 0.12);
 
+    const lean = s.lean ?? 0;
     if (this.mode === 'bumper') {
       _up.set(0, 1, 0).applyQuaternion(s.quaternion);
-      _desired.copy(s.position).addScaledVector(_fwd, this.profile.front.ahead).addScaledVector(_up, this.profile.front.up);
+      const front = this.profile.front;
+      _desired.copy(s.position).addScaledVector(_fwd, front.ahead).addScaledVector(_up, front.up);
+      if (front.height && lean) {
+        // the rider's head swings in towards the bend (+X is the bike's left) and down
+        _left.set(1, 0, 0).applyQuaternion(s.quaternion);
+        _desired.addScaledVector(_left, front.height * Math.sin(lean)).addScaledVector(_up, -front.height * (1 - Math.cos(lean)));
+      }
       this.pos.copy(_desired);
       _look.copy(_desired).addScaledVector(_fwd, 20);
       cam.position.copy(this.pos);
-      cam.up.copy(_up).lerp(new THREE.Vector3(0, 1, 0), 0.6);
+      cam.up.copy(_up).lerp(_worldUp, 0.6);
+      // and the horizon tilts with the bike (most of its lean: a rider keeps the head a little more upright)
+      if (lean) cam.up.applyAxisAngle(_fwd, -lean * 0.8);
       cam.lookAt(_look);
       cam.up.set(0, 1, 0);
     } else {
@@ -107,6 +126,7 @@ export class ChaseCamera {
       _look.copy(s.position).addScaledVector(dir, 3 + kmh * 0.012);
       _look.y += this.lookHeight;
       cam.lookAt(_look);
+      if (lean) cam.rotateZ(lean * 0.12);
     }
 
     // shake

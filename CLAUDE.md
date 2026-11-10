@@ -132,7 +132,22 @@ pending. `docs/PLAN.md` holds the design.
   offline). A train's acceleration over its whole range (level, and up a gradient): `npx tsx tools/train-accel.ts <id> [‰]`
   (the E5 matches the published figures; the train test bounds its 0→300 km/h time). Medals: `TRAIN_MEDALS` in courses.ts (re-run tools/sim-run.ts
   with the train ids after physics or course changes). `CAR_ORDER` = cars only (AI, bots, GLBs), `VEHICLE_ORDER` =
-  cars + trains (player-facing lists); the backend's `game.cars` lists both.
+  cars + bikes + trains + the cockroach (player-facing lists); the backend's `game.cars` lists them all.
+  The L0 maglev (`TrainInfo.maglev`, `sound: 'lsm'`): on its tyres up to `lift` km/h, then the model floats `height` m
+  higher (`TrainRig.update(anchor, dt)` sees the speed) and `running.ts` drops the tyre roar, joints, squeal and brake
+  grind for the wind and the guideway's field hum; articulated bogies are a `consist` with `front: 0` cars.
+- Kinds of vehicle (`vehicle/kinds.ts`): `kindOf(spec)` → car / bike / train / creature; what differs in shared code
+  (badge, garage framing, lamp height, exhaust) is a `KIND_TRAITS` entry, not a branch per call site. Electric cars
+  (`engine.electric`, `gears: [1]`: Cybertruck, Yangwang U9) sound through `audio/EvSound.ts` and have no exhaust;
+  `engine.strokes: 2` / `supercharger` change EngineSound's timbre (NSR, H2).
+- Motorcycles (`vehicle/bikes.ts`, `BikeInfo`): VehicleSim on a virtual 0.7 m track with a 0.1 m centre of mass (never
+  tips; ×4 pitch/roll inertia). The real centre of mass (`com`) sets the wheelie cap on the drive and the stoppie limit
+  of the brakes, and a virtual pitch load transfer moves the drive/brake limits only (side grip stays on the static
+  load). Brakes by load, rear brake for the handbrake, traction control, slipper clutch, no drift state, a steering cap
+  at the grip limit: without these the bikes spun at every braked corner entry. The model leans by the root's motion
+  (`render/BikeModel.ts`: GLB nodes `steer`/`spin_f`/`spin_r` in `public/models/bikes/<id>.glb`, else procedural), the
+  rider-view camera rolls with it (`BIKE_CAMERA`). Medals: `BIKE_MEDALS`. Check with `npx tsx tools/handling-feel.ts
+  nsr250r,ninjah2,hayabusa` (the vehicle test bounds the bikes' corner slip).
 - The cockroach (joke entry, `vehicle/roach.ts`, id `roach`, last in `VEHICLE_ORDER`): a car-like sim on one fixed
   ratio (`singleRatio` → no AT/MT) with ~1.3× a sports car's grip, ~410 km/h; drawn by `render/RoachModel.ts` from a
   skinned GLB (`public/models/roach/roach.glb`; legs run with the distance covered, eyes are the headlights; colours
