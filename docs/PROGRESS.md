@@ -74,6 +74,51 @@ Blender processes) and checked against photos (photos only to measure) before th
     the stored token only on a name change, so a token the server no longer knew (e.g. after the 2026-11-04 reset of
     the players) failed every submission. It now checks the token every time and registers again on 401
     (`src/api/__tests__/client.test.ts`). No 422 or 5xx on run submissions in the log since 2026-11-04.
+- **Autobahn: the oncoming traffic is the game's own cars** (owner, 2026-11-10: 「アウトバーンの反対車線にある自動車たちは
+  実装済みの自動車を走らせてください」).
+  - `render/trafficModels.ts` builds a light copy of each of the six cars from the same GLB the player drives (or its
+    procedural fallback) when the autobahn loads.
+    - Four merged parts: paint (coloured per instance), glossy (glass, chrome, rims), matte and lamps (always lit).
+      Each material's colour, or its texture's mean, is baked into the vertices.
+    - Each material is welded and simplified to 1.2 cm (meshoptimizer's simplifier, a 38 kB gzip chunk loaded only
+      for the autobahn; `meshoptimizer` is now a runtime dependency). Result: 3–12 k triangles per car instead of
+      42–82 k.
+  - `AutobahnTraffic`:
+    - All 64 oncoming vehicles are game cars (no lorries on that side any more). A car is drawn as a model within
+      1000 m of the camera (500 m on low quality); beyond that, only its lamps show.
+    - The light sprites sit on each model's own lamps.
+    - The paint is the car's own colour or an everyday one, picked again each time a car comes round.
+    - The cars follow the road's grade and normal.
+  - Lorries remain only far ahead in our direction, as before.
+  - Cost during a race start (high): 25 instanced draws, ~22 cars, ~78 k triangles. A touge course draws ~440 calls
+    and 3.9 M triangles.
+  - The halo of the traffic's lamp sprites now fades out at its rim; up close its square edge had shown.
+  - Checked in Chrome (vite preview, API cut off), all six cars up close at night and dawn, plus a driver's-eye view.
+    Not GPU-timed: the host's GPU was not available that day (`/dev/dri` missing, Chrome fell back to llvmpipe).
+- **E5 acceleration checked against the real train** (owner: 「新幹線の加速度は現実と同じものか確かめてください」).
+  - Published figures:
+    - starting acceleration 1.71 km/h/s;
+    - 32 × 300 kW;
+    - balancing speed 360 km/h on a +3 ‰ climb;
+    - service maximum 320 km/h.
+  - No speed-by-speed curve is published. A reference was worked out from those figures: load-compensated 1.71, full
+    power, running resistance A + Cv² fitted to the 360 km/h balance, empty 453.5 t to full ~500 t.
+  - Game vs reference:
+    - start 1.69 vs 1.71 km/h/s;
+    - at 200 km/h 1.08 vs 0.96–1.08;
+    - at 300 km/h 0.48 vs 0.38–0.47;
+    - 0→300 km/h 275 s / 14.1 km vs 269–298 s;
+    - 0→320 km/h 338 s / 19.6 km vs 317–359 s;
+    - on +3 ‰ it still reaches 320 (the real train balances at 360).
+  - The game matches, at the light-load end of the range; no change. New tool `tools/train-accel.ts`. The train test
+    now also bounds the E5's 0→300 km/h time (265–300 s).
+- **S15 (`s15`): our own model in the game** (owner: 「入れて」 after the final sheet).
+  - Replaces Mona x Supercars' Sketchfab model.
+  - Built by `tools/blender/cars/s15*.py` (stock spec-R without the wing; `s15.py --wing` adds it) and fitted to 7
+    photos with a body lattice (`s15_ffd.py`). Silhouette IoU 0.972–0.979 (mean 0.975).
+  - 48 k triangles, 15 materials, 0.29 MB (was 1.9 MB). The taillights no longer need `tailLampGain`.
+  - Physics unchanged.
+  - Checked in Chrome: the garage at night, and a night race (taillights and twin exhaust).
 - **RX-7 (`shiden`): our own model in the game** (owner approved the sheet, 2026-11-08; deployed). Replaces Lexyc16's
   Sketchfab model.
   - Fitted to 10 photos (5 Type RS, 5 Spirit R in a showroom). Mean silhouette IoU 0.968, mean p95 1.50 %;

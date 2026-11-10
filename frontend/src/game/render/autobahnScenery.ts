@@ -951,6 +951,8 @@ export function buildAutobahnScenery(track: Track, terrain: TerrainData, quality
     track,
     lanes.map((u) => -(E + MEDIAN) - u),
     lanes.map((u) => -E + u),
+    undefined,
+    low ? 500 : 1000,
   );
   group.add(traffic.group);
 

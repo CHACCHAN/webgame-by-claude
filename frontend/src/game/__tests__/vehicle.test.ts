@@ -205,13 +205,20 @@ describe('trains (joke entries) perform like the real ones on level ground', () 
     expect(30 / t30).toBeLessThan(t.accel * 1.15);
     // flat out it settles around the design top speed (the motor runs out of revs there)
     // (a Shinkansen needs minutes to get there: the peak speed counts)
-    let peak = 0;
-    drive(id, t.vmax > 200 ? 300 : 150, (_t, car, i) => {
+    let peak = 0, t300 = 0;
+    drive(id, t.vmax > 200 ? 300 : 150, (time, car, i) => {
       i.throttle = 1;
       peak = Math.max(peak, car.forwardSpeed * 3.6);
+      if (!t300 && peak >= 300) t300 = time;
     });
     expect(peak).toBeGreaterThan(t.vmax * 0.85);
     expect(peak).toBeLessThan(t.vmax * 1.08);
+    if (id === 'e5') {
+      // the whole run up, not only the start: 0 → 300 km/h in 269–298 s, worked out from the published figures
+      // (1.71 km/h/s, 32 × 300 kW, balancing speed 360 km/h on +3 ‰; empty to full; tools/train-accel.ts)
+      expect(t300).toBeGreaterThan(265);
+      expect(t300).toBeLessThan(300);
+    }
     // full brake from 80 km/h: the emergency rate (km/h/s)
     let tStop = 0;
     drive(id, 30, (time, car, i) => {

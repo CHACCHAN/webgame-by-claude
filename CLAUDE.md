@@ -79,6 +79,9 @@ pending. `docs/PLAN.md` holds the design.
   After changing a course design, regenerate the CPU ghosts (`npm run seed:bots`) and re-check medals with the sim.
   `CourseInfo.style`: `'touge'` (the three passes) or `'autobahn'` (motorway scenery in `render/autobahn*.ts`, no touge
   dressing). The AI's speed cap is `CourseDesign.aiTopSpeed` (default 62 m/s); sims take the course with `COURSE=<id>`.
+  The autobahn's oncoming traffic is the game's cars: `render/trafficModels.ts` flattens each car's model into four
+  instanced parts (paint / gloss / matte / lamps), simplified with meshoptimizer at load; a new car GLB shows up there
+  without further work.
 - Online battle (≤3 players): lobby/start/results via `RoomController`; car states are presence-channel client events
   (`client-state`, ~12 Hz) relayed by Reverb, which runs inside the `app` container (entrypoint, `START_REVERB`), proxied by
   nginx at `/app/`. Reverb key/secret are generated per container; never commit them. Client: `store/online.ts`,
@@ -120,7 +123,8 @@ pending. `docs/PLAN.md` holds the design.
   Shinkansen). Check a change by rendering, not by ear only: `tools/train-run-wav.ts` (Node: running noise at fixed
   speeds, a run-up, a curve; band levels against the old recordings' numbers), `tools/vvvf-train-wav.ts` (Node,
   inverter only, levels per speed band) and `tools/vvvf-game-wav.ts` (Chrome + vite preview: the game's whole chain,
-  offline). Medals: `TRAIN_MEDALS` in courses.ts (re-run tools/sim-run.ts
+  offline). A train's acceleration over its whole range (level, and up a gradient): `npx tsx tools/train-accel.ts <id> [‰]`
+  (the E5 matches the published figures; the train test bounds its 0→300 km/h time). Medals: `TRAIN_MEDALS` in courses.ts (re-run tools/sim-run.ts
   with the train ids after physics or course changes). `CAR_ORDER` = cars only (AI, bots, GLBs), `VEHICLE_ORDER` =
   cars + trains (player-facing lists); the backend's `game.cars` lists both.
 - The cockroach (joke entry, `vehicle/roach.ts`, id `roach`, last in `VEHICLE_ORDER`): a car-like sim on one fixed

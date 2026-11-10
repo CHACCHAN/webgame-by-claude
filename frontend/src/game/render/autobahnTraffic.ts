@@ -2,12 +2,15 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { Track } from '../track/Track';
 import { clamp, rng, smoothstep } from '../util/math';
+import { CAR_ORDER, CAR_SPECS } from '../vehicle/carSpecs';
+import { TRAFFIC_PARTS, trafficModel, type TrafficModel } from './trafficModels';
 
 /**
- * The autobahn's background traffic (no physics, nobody to hit): oncoming cars and lorries on the opposite
- * carriageway, and tail lights far ahead in our direction that keep their distance (they fade out before the
- * player catches up with them). Each vehicle is a few light sprites in one Points draw plus a dark body in one
- * instanced mesh per kind, all moved on the CPU every frame (~100 vehicles).
+ * The autobahn's background traffic (no physics, nobody to hit): the game's own cars coming the other way on the
+ * opposite carriageway, and tail lights far ahead in our direction that keep their distance (they fade out before
+ * the player catches up with them). Each vehicle is a few light sprites in one Points draw; within `modelRange` a
+ * car is drawn as a light copy of its model (render/trafficModels.ts: four instanced meshes per car, paint
+ * coloured per instance), the lorries ahead as a dark box. All moved on the CPU every frame (~100 vehicles).
  */
 
 /** light sprites per vehicle (a car uses four) */
@@ -20,6 +23,9 @@ interface Vehicle {
   lat: number;
   speed: number;
   truck: boolean;
+  /** which car (index into CAR_ORDER) */
+  kind: number;
+  color: THREE.Color;
 }
 
 interface LightDef {
@@ -47,6 +53,20 @@ function carLights(xenon: boolean): LightDef[] {
     { f: -2.32, r: -0.66, h: 0.86, color: TAIL, size: 0.4, facing: -1 },
   ];
 }
+
+/** the lamps where the car's model has them (pop-ups: warm halogen) */
+function modelLights(model: TrafficModel | undefined, xenon: boolean): LightDef[] {
+  if (!model || model.headlights.length < 2 || model.taillights.length < 2) return carLights(xenon);
+  const head = xenon && !model.popUps ? XENON : HEAD;
+  // just outside the lens: a sprite inside the body would be hidden by it
+  return [
+    ...model.headlights.slice(0, 2).map((a) => ({ f: a.z + 0.2, r: -a.x, h: a.y, color: head, size: 0.55, facing: 1 })),
+    ...model.taillights.slice(0, 2).map((a) => ({ f: a.z - 0.18, r: -a.x, h: a.y, color: TAIL, size: 0.4, facing: -1 })),
+  ];
+}
+
+/** everyday paint for the traffic (a car also comes in its own colour) */
+const PAINTS = ['#e9e9ea', '#121214', '#8a8f96', '#4f545b', '#c9ccd1', '#1f3f7a', '#8f1218', '#2b2d31'];
 
 function truckLights(): LightDef[] {
   return [
@@ -76,12 +96,20 @@ function bodyGeometry(truck: boolean) {
   return mergeGeometries([new THREE.BoxGeometry(1.8, 0.7, 4.5).translate(0, 0.62, 0), new THREE.BoxGeometry(1.5, 0.5, 2.3).translate(0, 1.2, -0.3)]);
 }
 
+interface CarKind {
+  /** one instanced mesh per model part (the paint first, coloured per instance) */
+  meshes: THREE.InstancedMesh[];
+  paint: THREE.InstancedMesh | null;
+  used: number;
+}
+
 export class AutobahnTraffic {
   readonly group = new THREE.Group();
   private readonly vehicles: Vehicle[] = [];
   private readonly lights: LightDef[][] = [];
   private readonly points: THREE.Points;
-  private readonly bodies: { car: THREE.InstancedMesh; truck: THREE.InstancedMesh };
+  private readonly trucks: THREE.InstancedMesh;
+  private readonly kinds: CarKind[] = [];
   private readonly pos: Float32Array;
   private readonly facing: Float32Array;
   private readonly gain: Float32Array;
@@ -99,14 +127,17 @@ export class AutobahnTraffic {
     private readonly oncomingLanes: number[],
     private readonly ourLanes: number[],
     counts = { oncoming: 64, ahead: 22 },
+    /** how far ahead a car is drawn as a model (beyond: its lamps only) */
+    private readonly modelRange = 1000,
   ) {
     this.group.name = 'traffic';
+    const models = CAR_ORDER.map((id) => trafficModel(id));
     for (let k = 0; k < counts.oncoming + counts.ahead; k++) {
       const dir: 1 | -1 = k < counts.oncoming ? -1 : 1;
-      const v: Vehicle = { s: 0, dir, lat: 0, speed: 0, truck: false };
+      const v: Vehicle = { s: 0, dir, lat: 0, speed: 0, truck: false, kind: Math.floor(this.r() * CAR_ORDER.length), color: new THREE.Color() };
       this.respawn(v, dir < 0 ? -400 + this.r() * 3600 : 400 + this.r() * 3000, true);
       this.vehicles.push(v);
-      this.lights.push(v.truck ? truckLights() : carLights(this.r() < 0.4));
+      this.lights.push(v.truck ? truckLights() : modelLights(models[v.kind], this.r() < 0.4));
     }
     const n = this.vehicles.length * LIGHTS;
     this.pos = new Float32Array(n * 3);
@@ -156,7 +187,8 @@ export class AutobahnTraffic {
         void main() {
           vec2 d = gl_PointCoord - 0.5;
           float r2 = dot(d, d) * 4.0;
-          float a = exp(-r2 * 7.0) + 0.35 * exp(-r2 * 2.2);
+          // the halo fades to nothing at the sprite's rim (close up its square edge showed)
+          float a = (exp(-r2 * 7.0) + 0.35 * exp(-r2 * 2.2)) * clamp(1.0 - r2, 0.0, 1.0);
           gl_FragColor = vec4(vColor * a, 1.0);
           #include <colorspace_fragment>
         }`,
@@ -165,29 +197,46 @@ export class AutobahnTraffic {
     this.points.frustumCulled = false;
     this.points.name = 'traffic-lights';
     const bodyMat = new THREE.MeshStandardMaterial({ color: '#16181b', roughness: 0.45, metalness: 0.4 });
-    const nCar = this.vehicles.filter((v) => !v.truck).length;
-    this.bodies = {
-      car: new THREE.InstancedMesh(bodyGeometry(false), bodyMat, Math.max(1, nCar)),
-      truck: new THREE.InstancedMesh(bodyGeometry(true), bodyMat, Math.max(1, this.vehicles.length - nCar)),
+    const side = THREE.DoubleSide;
+    const mats = {
+      paint: new THREE.MeshStandardMaterial({ vertexColors: true, metalness: 0.5, roughness: 0.3, envMapIntensity: 1.2, side }),
+      gloss: new THREE.MeshStandardMaterial({ vertexColors: true, metalness: 0.6, roughness: 0.26, side }),
+      matte: new THREE.MeshStandardMaterial({ vertexColors: true, metalness: 0.1, roughness: 0.65, side }),
+      lamp: new THREE.MeshBasicMaterial({ vertexColors: true, side }),
     };
-    for (const b of Object.values(this.bodies)) {
-      b.frustumCulled = false;
-      b.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-      b.name = 'traffic-bodies';
-      this.group.add(b);
-    }
+    const instanced = (geo: THREE.BufferGeometry, mat: THREE.Material, n: number, name: string) => {
+      const mesh = new THREE.InstancedMesh(geo, mat, Math.max(1, n));
+      mesh.frustumCulled = false;
+      mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+      mesh.name = name;
+      this.group.add(mesh);
+      return mesh;
+    };
+    CAR_ORDER.forEach((id, kind) => {
+      const n = this.vehicles.filter((v) => !v.truck && v.kind === kind).length;
+      const model = models[kind];
+      const meshes = model
+        ? TRAFFIC_PARTS.flatMap((p) => (model.parts[p] ? [instanced(model.parts[p], mats[p], n, `traffic-${id}-${p}`)] : []))
+        : [instanced(bodyGeometry(false), mats.paint, n, `traffic-${id}-box`)];
+      const paint = model ? meshes.find((m) => m.material === mats.paint) ?? null : meshes[0];
+      if (paint) paint.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(Math.max(1, n) * 3), 3).setUsage(THREE.DynamicDrawUsage);
+      this.kinds.push({ meshes, paint, used: 0 });
+    });
+    this.trucks = instanced(bodyGeometry(true), bodyMat, this.vehicles.filter((v) => v.truck).length, 'traffic-lorries');
     this.group.add(this.points);
   }
 
   /** a vehicle's lane, speed and kind; at `s` relative to the camera's track distance `base` */
   private respawn(v: Vehicle, s: number, first = false) {
     const r = this.r;
+    // a new paint job each time it comes round again
+    const id = CAR_ORDER[v.kind];
+    v.color.set(r() < 0.3 ? CAR_SPECS[id].colors.body : PAINTS[Math.floor(r() * PAINTS.length)]);
     if (v.dir < 0) {
-      // the opposite carriageway: fast lane next to the median, lorries keep right
-      if (first) v.truck = r() < 0.25;
-      const lane = v.truck ? this.oncomingLanes.length - 1 : Math.min(this.oncomingLanes.length - 1, Math.floor(r() * r() * 3));
+      // the opposite carriageway: the game's cars only, the fast lane next to the median
+      const lane = Math.min(this.oncomingLanes.length - 1, Math.floor(r() * r() * 3));
       v.lat = this.oncomingLanes[lane];
-      v.speed = v.truck ? 22 + r() * 2.5 : [41, 34, 28][lane] + r() * 8;
+      v.speed = [41, 34, 28][lane] + r() * 8;
     } else {
       if (first) v.truck = r() < 0.2;
       const lane = v.truck ? this.ourLanes.length - 1 : Math.floor(r() * this.ourLanes.length);
@@ -204,9 +253,10 @@ export class AutobahnTraffic {
     const pr = track.project(camera.x, camera.y, camera.z, this.hint);
     this.hint = pr.index;
     const cs = pr.s, end = track.count - 1;
-    const p = new THREE.Vector3(), f = new THREE.Vector3(), rt = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0);
-    const m = new THREE.Matrix4(), q = new THREE.Quaternion(), one = new THREE.Vector3(1, 1, 1), zero = new THREE.Vector3();
-    let iCar = 0, iTruck = 0;
+    const p = new THREE.Vector3(), f = new THREE.Vector3(), lt = new THREE.Vector3(), up = new THREE.Vector3();
+    const m = new THREE.Matrix4(), zero = new THREE.Matrix4().makeScale(0, 0, 0);
+    let iTruck = 0;
+    for (const k of this.kinds) k.used = 0;
     this.vehicles.forEach((v, n) => {
       v.s += v.dir * v.speed * dt;
       const d = v.s - cs;
@@ -222,8 +272,11 @@ export class AutobahnTraffic {
       const s = clamp(v.s, 0, end);
       track.pointAt(s, v.lat, p);
       const i = Math.min(end - 1, Math.floor(s));
-      f.set(track.fwd[i * 3], 0, track.fwd[i * 3 + 2]).normalize().multiplyScalar(v.dir);
-      rt.set(-f.z, 0, f.x);
+      // the vehicle's frame on the road: forward (with the grade), up (the road's normal), left
+      f.fromArray(track.fwd, i * 3).multiplyScalar(v.dir);
+      up.fromArray(track.up, i * 3);
+      lt.crossVectors(up, f).normalize();
+      up.crossVectors(f, lt);
       const lights = this.lights[n];
       for (let k = 0; k < LIGHTS; k++) {
         const o = (n * LIGHTS + k) * 3;
@@ -232,22 +285,34 @@ export class AutobahnTraffic {
           this.gain[n * LIGHTS + k] = 0;
           continue;
         }
-        this.pos[o] = p.x + f.x * l.f + rt.x * l.r;
-        this.pos[o + 1] = p.y + l.h;
-        this.pos[o + 2] = p.z + f.z * l.f + rt.z * l.r;
+        this.pos[o] = p.x + f.x * l.f - lt.x * l.r + up.x * l.h;
+        this.pos[o + 1] = p.y + f.y * l.f - lt.y * l.r + up.y * l.h;
+        this.pos[o + 2] = p.z + f.z * l.f - lt.z * l.r + up.z * l.h;
         this.facing[o] = f.x * l.facing;
         this.facing[o + 1] = 0;
         this.facing[o + 2] = f.z * l.facing;
         this.gain[n * LIGHTS + k] = g;
       }
-      q.setFromAxisAngle(up, Math.atan2(f.x, f.z));
-      m.compose(p, q, g > 0.05 ? one : zero);
-      if (v.truck) this.bodies.truck.setMatrixAt(iTruck++, m);
-      else this.bodies.car.setMatrixAt(iCar++, m);
+      m.makeBasis(lt, up, f).setPosition(p);
+      if (v.truck) this.trucks.setMatrixAt(iTruck++, g > 0.05 ? m : zero);
+      else if (g > 0.05 && dd > -250 && dd < this.modelRange) {
+        const kind = this.kinds[v.kind];
+        const slot = kind.used++;
+        for (const mesh of kind.meshes) mesh.setMatrixAt(slot, m);
+        kind.paint?.setColorAt(slot, v.color);
+      }
     });
     const geo = this.points.geometry;
     for (const name of ['position', 'facing', 'gain']) geo.getAttribute(name).needsUpdate = true;
-    this.bodies.car.instanceMatrix.needsUpdate = true;
-    this.bodies.truck.instanceMatrix.needsUpdate = true;
+    this.trucks.instanceMatrix.needsUpdate = true;
+    for (const k of this.kinds) {
+      for (const mesh of k.meshes) {
+        mesh.count = k.used;
+        // no draw call for a model with no car in range
+        mesh.visible = k.used > 0;
+        mesh.instanceMatrix.needsUpdate = true;
+      }
+      if (k.paint?.instanceColor) k.paint.instanceColor.needsUpdate = true;
+    }
   }
 }

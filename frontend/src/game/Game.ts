@@ -11,6 +11,7 @@ import { buildScenery, type SceneryResult } from './render/TrackScenery';
 import { buildEnvironment, PRESETS, type EnvironmentRig, type TimeOfDay } from './render/Environment';
 import { CarVisual } from './render/CarVisual';
 import { loadCarTemplates } from './render/carAssets';
+import { loadTrafficModels } from './render/trafficModels';
 import { loadSurfaceTextures } from './render/surfaceTextures';
 import { loadProps } from './render/props';
 import { findCorners, type Corner, type CornerKind } from './track/corners';
@@ -288,6 +289,8 @@ export class Game {
     this.terrain = buildTerrain(this.track, course.landform);
     await this.yieldFrame(0.5, '道路と森を配置中');
     this.physics = new PhysicsWorld(this.track);
+    // the autobahn's oncoming traffic is the game's own cars (light copies of their models)
+    if (course.style === 'autobahn') await loadTrafficModels(CAR_ORDER);
     this.scenery = buildScenery(this.track, this.terrain, { treeDensity: this.quality.treeDensity, shadows: this.quality.shadows, photoTextures: this.quality.photoTextures, treeLod: this.quality.treeLod, style: course.style });
     this.root.add(this.scenery.group);
     this.rain.setCovers(this.scenery.covers);
