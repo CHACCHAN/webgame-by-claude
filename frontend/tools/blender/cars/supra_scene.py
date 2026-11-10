@@ -1,6 +1,9 @@
 """
 The check scene for the Supra (not part of the game): asphalt, sky and sun (Cycles, Khronos PBR Neutral), cameras like
 the reference photos, a night variant with the lamps lit, and a flat silhouette pass for overlays on the photos.
+By day the metal has something to mirror (owner, 2026-11-10: on a flat sky chrome reads as grey plastic): a tree line
+round the horizon and two large bright panels, out of the camera's sight, set for each view above / beside the camera
+(light_from), so chrome, wheels and the lamps' reflectors catch highlights.
 """
 import math
 
@@ -27,6 +30,7 @@ VIEWS = {
     'cowl': ((1.6, 1.5, 1.6), (0.5, 1.0, 0.35), 40),
     'roofc': ((1.2, 1.8, 0.9), (0.5, 1.15, -0.05), 40),
     'under': ((3.5, 0.15, 2.5), (0.0, 0.25, 0.0), 35),
+    'metal': ((2.3, 0.85, 3.5), (0.62, 0.48, 1.55), 38),        # the front wheel, a head lamp, the indicator close
 }
 
 
@@ -60,8 +64,55 @@ def _asphalt():
     return m
 
 
+ENV = ('env_panel_top', 'env_panel_side', 'env_treeline')
+
+
+def _panel(name, strength):
+    """a 1 x 1 m emitting plane (scaled per view in light_from), seen only in reflections"""
+    sc = bpy.context.scene
+    bm = bmesh.new()
+    bmesh.ops.create_grid(bm, x_segments=1, y_segments=1, size=0.5)
+    me = bpy.data.meshes.new(name)
+    bm.to_mesh(me)
+    bm.free()
+    ob = bpy.data.objects.new(name, me)
+    sc.collection.objects.link(ob)
+    m = bpy.data.materials.new(name)
+    m.use_nodes = True
+    nt = m.node_tree
+    for n in list(nt.nodes):
+        nt.nodes.remove(n)
+    em = nt.nodes.new('ShaderNodeEmission')
+    em.inputs['Strength'].default_value = strength
+    out = nt.nodes.new('ShaderNodeOutputMaterial')
+    nt.links.new(em.outputs['Emission'], out.inputs['Surface'])
+    me.materials.append(m)
+    ob.visible_camera = False
+    ob.visible_shadow = False
+    return ob
+
+
+def _treeline():
+    """a dark ring round the horizon (a distant tree line): the line between sky and ground in every reflection"""
+    sc = bpy.context.scene
+    bm = bmesh.new()
+    bmesh.ops.create_cone(bm, cap_ends=False, cap_tris=False, segments=96, radius1=58.0, radius2=58.0, depth=4.0)
+    bmesh.ops.translate(bm, verts=bm.verts, vec=(0.0, 0.0, 1.0))
+    me = bpy.data.meshes.new('env_treeline')
+    bm.to_mesh(me)
+    bm.free()
+    ob = bpy.data.objects.new('env_treeline', me)
+    sc.collection.objects.link(ob)
+    me.materials.append(_mat('env_treeline', '#3a463a', rough=1.0))
+    return ob
+
+
 def scene(night=False, sun_elevation=40.0):
     sc = bpy.context.scene
+    for name in ENV + ('sun', 'ground', 'cam', 'moon', 'streetlamp'):
+        ob = bpy.data.objects.get(name)
+        if ob is not None:
+            bpy.data.objects.remove(ob)
     world = bpy.data.worlds.new('sky')
     sc.world = world
     world.use_nodes = True
@@ -104,6 +155,9 @@ def scene(night=False, sun_elevation=40.0):
         sun.data.energy = 4.0
         sun.data.angle = math.radians(1.0)
         sc.collection.objects.link(sun)
+        _panel('env_panel_top', 2.2)
+        _panel('env_panel_side', 2.2)
+        _treeline()
     bm = bmesh.new()
     bmesh.ops.create_grid(bm, x_segments=1, y_segments=1, size=60)
     me = bpy.data.meshes.new('ground')
@@ -139,6 +193,21 @@ def light_from(eye, target, offset=40.0, elevation=40.0):
     sky = bpy.context.scene.world.node_tree.nodes.get('Sky Texture')
     if sky is not None:
         sky.sun_rotation = theta + math.pi / 2
+    # the reflection panels: one overhead between the camera and the car (mirrored in bonnet, roof, deck, the lamps'
+    # reflectors), one standing beside the camera, away from the sun (mirrored in the flanks and the wheels)
+    t = Vector(target)
+    h = Vector((dx, 0.0, dz))
+    h = h.normalized() if h.length > 1e-6 else Vector((0.0, 0.0, 1.0))
+    a = math.radians(-60.0)
+    hs = Vector((h.x * math.cos(a) + h.z * math.sin(a), 0.0, -h.x * math.sin(a) + h.z * math.cos(a)))
+    for name, pos, size in (('env_panel_top', t + h * 2.5 + Vector((0.0, 5.5, 0.0)), (8.0, 5.0)),
+                            ('env_panel_side', t + hs * 7.5 + Vector((0.0, 1.6, 0.0)), (7.0, 3.0))):
+        ob = bpy.data.objects.get(name)
+        if ob is None:
+            continue
+        ob.location = K.B(*pos)
+        ob.rotation_euler = (K.B(*t) - K.B(*pos)).to_track_quat('Z', 'Y').to_euler()
+        ob.scale = (size[0], size[1], 1.0)
 
 
 def camera(eye, target, lens, shift=(0.0, 0.0)):

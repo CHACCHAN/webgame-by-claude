@@ -1,7 +1,7 @@
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
-import { buildProceduralCar, registerCarTemplate } from './CarModel';
-import { CAR_SPECS, type CarId } from '../vehicle/carSpecs';
+import { registerCarTemplate } from './CarModel';
+import type { CarId } from '../vehicle/carSpecs';
 
 /**
  * Loads the car GLBs from /models/cars/<id>.glb. Missing or broken files are
@@ -27,13 +27,4 @@ export async function loadCarTemplates(ids: CarId[]) {
     }),
   );
   return loaded;
-}
-
-/** Export a procedural car as GLB (used by tools/export-cars to build the assets). */
-export async function exportCarGLB(id: CarId): Promise<ArrayBuffer> {
-  const { GLTFExporter } = await import('three/examples/jsm/exporters/GLTFExporter.js');
-  const rig = buildProceduralCar(CAR_SPECS[id]);
-  return new Promise((resolve, reject) =>
-    new GLTFExporter().parse(rig.root, (r) => resolve(r as ArrayBuffer), reject, { binary: true }),
-  );
 }

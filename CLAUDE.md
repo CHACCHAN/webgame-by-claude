@@ -64,23 +64,18 @@ pending. `docs/PLAN.md` holds the design.
   falls back to the procedural shape when it fails to load. The cockroach: `tools/blender/creatures/roach.py` (skinned,
   scuttle cycle resampled at export). A train's line variants (`KINDS.trains.variants`) are the same script with
   `--variant <name>` → `<id>-<name>.glb`.
-- Car models with pop-up lamps modelled raised: `popUps` in `car-import.json` (box around the pods, lens pattern,
-  folding angle); modelled closed instead: `CarSpec.popUpLamps` (runtime pods). Exhaust guess wrong: `CarSpec.exhaust`.
+- Cars are all our own Blender models (`tools/blender/cars/<id>.py` + `<id>_*.py`, fitted to photos with the files in
+  `fitdata/<id>/`) built by `BLENDER=<bin> node tools/blender-models.cjs cars [ids]` → `public/models/cars/<id>.glb`,
+  loaded at runtime; a missing GLB falls back to the procedural builder. Contract: node `body`, wheel pivots
+  `wheel_*` with `spin_*` children, swap materials by name (paint, glass, headlight, taillight, …; docs/ASSETS.md).
+  Pop-up lamps modelled raised: nodes `popup_l` / `popup_r` + material `popup_lens`; modelled closed instead:
+  `CarSpec.popUpLamps` (runtime pods in `CarVisual`). The optimiser prunes empty nodes, so `CarModel.deriveAnchors`
+  rebuilds lamp and exhaust anchors from the geometry (a part named `exhaust` gives the tailpipe; else
+  `CarSpec.exhaust`). Lamp materials only on lamp parts (check: only at the car's ends). Dark lens textures:
+  `tailLampGain`. Unpainted metal swatches (the Cybertruck's stainless): `CarSpec.bareMetal`. A new model goes in
+  only after the owner has seen its sheet; never label a third-party model 自作.
 - Never leave a transmissive (refractive) material in the scene: three.js then renders every opaque object a second
-  time per frame. Imported car materials are flattened by `CarModel.withoutTransmission`.
-- Cars load from `frontend/public/models/cars/*.glb` at runtime. All six are imported third-party models now:
-  do not run `npm run assets:cars` (it exports the procedural bodies of hayate/raijin/shiden over their GLBs).
-  Deleting a GLB falls back to the procedural builder.
-- Third-party car models: unpack each glTF zip into a folder, describe it in `frontend/tools/car-import.json`
-  (patterns for wheels / calipers / paint / glass / lamps / drop), then with `vite preview` on :4173:
-  `node tools/import-cars.cjs preview <srcRoot> <outDir> <ids>` (orientation renders) and
-  `node tools/import-cars.cjs import <srcRoot> <ids>` → `public/models/cars/<id>.glb`. Attribution: CarSpec.model + docs/ASSETS.md.
-  Patterns match `"<mesh name> <material name>"` (three.js strips `.` from node names, keeps material names). Optional
-  `restyle` (recolour / un-glow parts) and `reduce` (error-bounded decimation of dense untextured parts, e.g. tyres).
-  Rebuild (`npx vite build`) after an import before checking in `vite preview` — it serves `dist/`.
-  The optimiser prunes empty nodes, so imported GLBs have no anchor empties: `CarModel.deriveAnchors` rebuilds lamp
-  and exhaust anchors from the geometry. Lamp roles must only cover lamp parts (check: lamp materials only at the
-  car's ends). Retractable lamps: `CarSpec.popUpLamps` (runtime pods in `CarVisual`); dark lens textures: `tailLampGain`.
+  time per frame. Loaded car materials are flattened by `CarModel.withoutTransmission`.
 - Courses live in `track/courses.ts` (design + `Landform` from `track/landforms.ts` + rivals, medals, music, art).
   After changing a course design, regenerate the CPU ghosts (`npm run seed:bots`) and re-check medals with the sim.
   `CourseInfo.style`: `'touge'` (the three passes) or `'autobahn'` (motorway scenery in `render/autobahn*.ts`, no touge

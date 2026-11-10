@@ -1,0 +1,49 @@
+{
+ "cams": "/home/dev/Desktop/service/internal/webgame-by-claude/frontend/tools/blender/cars/fitdata/supra/cams.json",
+ "photos": {
+  "n07": {
+   "photo": "/home/dev/.local/opt/carfit/supra/ref/n07.jpg",
+   "band": 0.06,
+   "livery": "white",
+   "mask": "/home/dev/Desktop/service/internal/webgame-by-claude/frontend/tools/blender/cars/fitdata/supra/masks/n07.png"
+  },
+  "n06": {
+   "photo": "/home/dev/.local/opt/carfit/supra/ref/n06.jpg",
+   "band": 0.06,
+   "livery": "white",
+   "mask": "/home/dev/Desktop/service/internal/webgame-by-claude/frontend/tools/blender/cars/fitdata/supra/masks/n06.png"
+  },
+  "n15": {
+   "photo": "/home/dev/.local/opt/carfit/supra/ref/n15.jpg",
+   "band": 0.06,
+   "livery": "white",
+   "mask": "/home/dev/Desktop/service/internal/webgame-by-claude/frontend/tools/blender/cars/fitdata/supra/masks/n15.png"
+  },
+  "n14": {
+   "photo": "/home/dev/.local/opt/carfit/supra/ref/n14.jpg",
+   "band": 0.06,
+   "livery": "white",
+   "mask": "/home/dev/Desktop/service/internal/webgame-by-claude/frontend/tools/blender/cars/fitdata/supra/masks/n14.png"
+  },
+  "n01": {
+   "photo": "/home/dev/.local/opt/carfit/supra/ref/n01.jpg",
+   "band": 0.06,
+   "livery": "skip",
+   "mask": "/home/dev/Desktop/service/internal/webgame-by-claude/frontend/tools/blender/cars/fitdata/supra/masks/n01.png"
+  },
+  "n03": {
+   "photo": "/home/dev/.local/opt/carfit/supra/ref/n03.jpg",
+   "band": 0.06,
+   "livery": "skip",
+   "mask": "/home/dev/Desktop/service/internal/webgame-by-claude/frontend/tools/blender/cars/fitdata/supra/masks/n03.png"
+  },
+  "n05": {
+   "photo": "/home/dev/.local/opt/carfit/supra/ref/n05.jpg",
+   "band": 0.06,
+   "livery": "skip",
+   "mask": "/home/dev/Desktop/service/internal/webgame-by-claude/frontend/tools/blender/cars/fitdata/supra/masks/n05.png"
+  }
+ },
+ "det": "/home/dev/Desktop/service/internal/webgame-by-claude/frontend/tools/blender/cars/fitdata/supra/det",
+ "_note": "photos: re-fetch from photos.json (resized to 1280 wide) into ~/.local/opt/carfit/supra/ref/; masks: GrabCut + maskfix.py (masks.json) / polymask.py (polys.json); cams.json + ffd.json from tools/ffdfit.py; lamps.json: lamp / opening outlines traced on the photos, checked with tools/lamps.py (back: photo outline -> design frame; ids) + tools/lampscore.py (IoU, outline px, close-up sheet); wing.json: the rear wing's outline (wing_C, scored the same way on lamps.py's wing pass W)"
+}

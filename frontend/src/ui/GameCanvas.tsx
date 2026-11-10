@@ -34,24 +34,7 @@ function GameBridge() {
     gameHolder.game = game;
     window.__game = game;
     if (params.get('export') === '1') {
-      // dev hook for tools/export-cars: returns a GLB as base64
-      (window as unknown as Record<string, unknown>).__exportCar = async (id: CarId) => {
-        const { exportCarGLB } = await import('../game/render/carAssets');
-        const buf = new Uint8Array(await exportCarGLB(id));
-        let bin = '';
-        for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode(...buf.subarray(i, i + 0x8000));
-        return btoa(bin);
-      };
-      // dev hooks for tools/import-cars: third-party car models → game GLB (and orientation previews)
       const w = window as unknown as Record<string, unknown>;
-      w.__importCar = async (url: string, id: CarId, cfg: import('../game/render/carImport').CarImportConfig) => {
-        const [{ importCarModel }, { CAR_SPECS }] = await Promise.all([import('../game/render/carImport'), import('../game/vehicle/carSpecs')]);
-        const { glb, stats } = await importCarModel(url, CAR_SPECS[id], cfg);
-        const buf = new Uint8Array(glb);
-        let bin = '';
-        for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode(...buf.subarray(i, i + 0x8000));
-        return { b64: btoa(bin), stats };
-      };
       // dev hook for tools/vvvf-game-wav.cjs: a vehicle's sound as the game drives it, rendered offline. `plan`: one
       // [seconds, km/h, throttle, brake] per update (the game calls update once per frame); returns float32 as base64
       w.__renderTrainSound = async (id: CarId, plan: [number, number, number, number][], rate = 48000) => {
@@ -76,10 +59,6 @@ function GameBridge() {
         let bin = '';
         for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
         return { b64: btoa(bin), ms };
-      };
-      w.__previewCar = async (url: string, rotation?: [number, number, number]) => {
-        const { previewCarModel } = await import('../game/render/carImport');
-        return previewCarModel(url, rotation);
       };
     }
     game.on((e) => {

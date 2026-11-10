@@ -8,7 +8,7 @@ Textures of the Supra (game id `supra`), drawn with PIL on the host (determinist
 - headlamp.png   the head lamp unit under its cover: smoked housing, big chrome reflector inboard, two projector
                  lenses in chrome rings outboard (layout from the late-model photos); bright bowls = the night glow
 - taillamp.png   one round tail lamp lens: rings and a brighter centre
-- lamps.png      atlas: front indicator (clear lens, amber bulb), amber lens, clear reverse lens, fog lamp,
+- lamps.png      atlas: front indicator (amber inboard, clear outboard), amber lens, clear reverse lens, fog lamp,
                  high-mount stop lamp, red reflector
 - tyre.png       tyre: sidewalls with fine rings, tread blocks (u round the tyre, repeated; v across, inner → outer)
 """
@@ -140,13 +140,20 @@ def lamps():
         u0, v0, u1, v1 = CELLS[name]
         return u0 * s, (1 - v1) * s, u1 * s, (1 - v0) * s
 
-    # front indicator: clear prismatic lens, amber bulb shell in the middle third, chrome reflector
+    # front indicator (late model, as laid on the car: u inboard -> outboard = left -> right): an amber section over
+    # the inboard 60 %, clear outboard, both with upright prism ribs over a chrome reflector
     x0, y0, x1, y1 = box('indicator_front')
-    d.rectangle([x0 * k, y0 * k, x1 * k, y1 * k], fill=(214, 218, 222))
-    for i in range(int(x0), int(x1), 6):
-        d.line([(i * k, y0 * k), (i * k, y1 * k)], fill=(236, 238, 240), width=2 * k)
-    cx, cy = (x0 + x1) / 2 - 20, (y0 + y1) / 2
-    _radial(d, cx, cy, 48, [(1.0, (190, 120, 40)), (0.8, (255, 150, 30)), (0.5, (255, 200, 90))], k)
+    xa = x0 + 0.60 * (x1 - x0)
+    d.rectangle([x0 * k, y0 * k, xa * k, y1 * k], fill=(222, 118, 40))
+    d.rectangle([xa * k, y0 * k, x1 * k, y1 * k], fill=(206, 210, 216))
+    for i in range(int(x0), int(x1), 7):
+        amber = i < xa
+        d.line([(i * k, y0 * k), (i * k, y1 * k)], fill=(250, 160, 70) if amber else (238, 240, 243), width=2 * k)
+        d.line([((i + 3) * k, y0 * k), ((i + 3) * k, y1 * k)], fill=(170, 80, 22) if amber else (150, 154, 160), width=k)
+    for j in (0.30, 0.70):
+        y = y0 + j * (y1 - y0)
+        d.line([(x0 * k, y * k), (x1 * k, y * k)], fill=(120, 70, 30), width=k)
+    d.line([(xa * k, y0 * k), (xa * k, y1 * k)], fill=(250, 250, 250), width=3 * k)
     # amber lens
     x0, y0, x1, y1 = box('amber')
     d.rectangle([x0 * k, y0 * k, x1 * k, y1 * k], fill=(235, 120, 20))

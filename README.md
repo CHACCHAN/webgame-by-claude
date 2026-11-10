@@ -96,7 +96,6 @@ TLS は Cloudflare が終端し、オンライン対戦の WebSocket も同じ�
 | `npx tsx tools/sim-duel.ts [車:難易度] [車:難易度]` | 当たり判定ありで AI 2 台を同じコースで競わせ、接触回数・最大衝撃・完走を確認（`COURSE=` でコース指定） |
 | `npm run handling` | 加速・制動・旋回・ドリフト保持などの操縦性テスト |
 | `npm run seed:bots` | CPU ドライバーの記録とゴーストを生成（Laravel のシーダーが読み込む） |
-| `npm run assets:cars` | 車両モデルを GLB に書き出し、glTF-Transform で最適化（`vite preview` 起動中に実行） |
 
 デバッグ用 URL パラメータ：`?autodrive=1`（AI が自車を運転）、`?timescale=4`（時間を加速）。
 

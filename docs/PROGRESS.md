@@ -44,6 +44,13 @@ deployed yet: the owner sees each sheet first).
 - **Deployed** (2026-11-10, bundle `index-C8ga6l-7.js`; the R34 and Cybertruck GLBs served hash-equal; `/api/content`
   lists 18 vehicles). Before it, every new vehicle was opened in Chrome (garage, and a race start for the NSR, U9 and
   L0; no page errors). Bikes, U9 and L0 still show their procedural stand-ins. E2E not run for this deploy.
+- **Supra: our own model; every car is now our own** (owner: 「スープラ入れてイイヨ」, 2026-11-10). Late RZ with the
+  factory wing, fitted to 7 photos (silhouette IoU 0.906–0.955), lamps traced and scored per lens (head lamp 0.89,
+  corner opening 0.92, indicator 0.95), the wing rebuilt as a rigid aerofoil after the body fit (the lattice had
+  twisted it), the plate recess and rear seams redone; 73 k tris, 0.47 MB (the Sketchfab file was 1.1 MB). With no
+  third-party car left, the import tools are gone (`import-cars.cjs`, `car-import.json`, `render/carImport.ts`, the
+  `__importCar` / `__previewCar` hooks) and so is the procedural export (`export-cars.cjs`, `assets:cars`,
+  `__exportCar`). Checked in Chrome: garage at dawn and night, a night race start.
 
 ## Session 7 (2026-11-03 – 11-04) — every model our own (Blender); the owner's train lineup; a livery per line
 

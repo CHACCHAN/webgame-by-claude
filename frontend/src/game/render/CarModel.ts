@@ -255,7 +255,7 @@ export function adoptMaterials(root: THREE.Object3D, spec: CarSpec, bodyColor?: 
   return fresh;
 }
 
-/** Hinged pop-up lamp nodes written by the importer (CarImportConfig.popUps), if any. */
+/** Hinged pop-up lamp nodes of a model (`popup_l` / `popup_r`, modelled raised), if any. */
 function modelPopUps(root: THREE.Object3D): CarRig['popUps'] {
   const hinges = ['popup_l', 'popup_r'].map((n) => root.getObjectByName(n)).filter((o): o is THREE.Object3D => !!o);
   if (!hinges.length) return undefined;

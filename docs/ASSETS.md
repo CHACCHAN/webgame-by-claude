@@ -25,11 +25,11 @@ still blocked, so Poly Haven files cannot be fetched. Every photo texture has a 
 | Libraries | `frontend/package.json`, `backend/composer.json` | three.js (MIT), React (MIT), R3F (MIT), postprocessing (Zlib), Rapier (Apache-2.0), zustand (MIT), pusher-js (MIT), Laravel (MIT), Laravel Reverb (MIT) | See packages | |
 
 ## 3D model pipeline (glTF / GLB)
-1. Cars are authored procedurally (`buildProceduralCar`).
-2. `tools/export-cars.cjs` exports them to GLB through a headless browser (three.js GLTFExporter).
-3. `npm run assets:cars` optimises them with the glTF-Transform CLI (dedup, weld, meshopt compression).
-4. At runtime `loadCarTemplates()` loads `public/models/cars/<id>.glb`; if a file is missing or broken the
-   procedural builder is used instead.
+1. Every car is our own Blender model: a Python script per car (`frontend/tools/blender/cars/<id>.py`, headless
+   Blender 5.2), fitted to photos (measuring only) with the data in `fitdata/<id>/`.
+2. `node tools/blender-models.cjs cars [ids]` builds and optimises them with glTF-Transform (meshopt, WebP).
+3. At runtime `loadCarTemplates()` loads `public/models/cars/<id>.glb`; if a file is missing or broken the
+   procedural builder (`buildProceduralCar`) is used instead.
 
 **Replacing a car with an artist-made model** — export a GLB that follows this contract:
 - metres, +Z = forward, +Y = up, ground at y = 0, origin between the axles;
@@ -53,8 +53,9 @@ Downloaded from ambientCG (https://ambientcg.com, CC0 1.0 — no attribution req
 | `rock_albedo.webp` / `rock_normal.webp` | Rock030 | Color / NormalGL | 512 px, colour ×1.35 |
 | `concrete_albedo.webp` / `concrete_normal.webp` | Concrete034 | Color / NormalGL | 512 px, colour ×0.82; lattice frames and weathering are drawn on top |
 
-## Car models from Sketchfab (owner request, private use)
-The owner asked to replace the cars with Sketchfab models for a private game played by friends and family. The car
+## Car models (all our own since 2026-11-10; Sketchfab models before)
+Since 2026-11-10 every car is our own Blender model (table below); no third-party car model is left in the game.
+History: the owner first asked to replace the cars with Sketchfab models for a private game played by friends and family. The car
 names and designs are trademarks / designs of their manufacturers (private, non-commercial use decided by the
 owner). Attribution below is required by the licences and is also shown in the garage under each car.
 In cloud sessions the Sketchfab search API answers but downloads and images (`media.sketchfab.com`) are blocked, so
@@ -68,8 +69,10 @@ owner puts the zips into `~/Downloads` (2026-11-02).
 | `raijin` | Subaru Impreza WRX STI (GDB-C, 2004) | **own** (Blender, `tools/blender/cars/raijin*.py`) | — | own | **in game** since 2026-11-10 (49 k tris, 0.44 MB); fitted to 5 of the 20 listed Commons photos (measuring only, `fitdata/raijin/ref/list.json`) |
 | `r34` | Nissan Skyline GT-R (BNR34, V-spec look) | **own** (Blender, `tools/blender/cars/r34*.py`) | — | own | **in game** since 2026-11-10 (57 k tris, 0.56 MB); fitted to 6 of the 39 listed Commons photos (measuring only, `fitdata/r34/ref/list.json`) |
 | `cybertruck` | Tesla Cybertruck (Cyberbeast) | **own** (Blender, `tools/blender/cars/cybertruck*.py`) | — | own | **in game** since 2026-11-10 (39 k tris, 0.27 MB); fitted to 6 of the 10 listed Commons photos (measuring only, `fitdata/cybertruck/ref/list.json`) |
-| `supra` | Toyota Supra mk4 | Black Snow (@BlackSnow02) | https://sketchfab.com/3d-models/8bebdee25b774067929bb33e648533ac | CC BY 4.0 | **in game** (82 k tris, 1.1 MB), modified — see below |
+| `supra` | Toyota Supra RZ (JZA80, late, factory wing) | **own** (Blender, `tools/blender/cars/supra*.py`) | — | own | **in game** since 2026-11-10 (73 k tris, 0.47 MB); fitted to 7 Commons photos (measuring only, `fitdata/supra/photos.json`) |
 | `hayate` | Toyota Sprinter Trueno AE86 GT-APEX (late) | **own** (Blender, `tools/blender/cars/hayate*.py`) | — | own | **in game** since 2026-11-07 (42 k tris, 0.27 MB); fitted to 6 Commons photos (measuring only, `fitdata/hayate/ref/list.json`) |
+
+Notes on the replaced Sketchfab models (none is in the game any more):
 
 AE86 notes: chosen over the other delivered candidate, "Toyota Trueno AE86 (Initial D)" by Flamestroke
 (https://sketchfab.com/3d-models/40c0a445f8fa42568c7ecf208b6d97bd, 157 k tris at 1/10 scale; delivered, not used),
@@ -91,7 +94,7 @@ turned dark gunmetal, the red self-lit strips in the front bumper/headlamps turn
 headlamps, front indicators amber, tyre tread decimated (25 k → ~6 k triangles per axle), hidden duplicate interior
 parts and invisible helper meshes dropped.
 
-Processing (`tools/import-cars.cjs` + `tools/car-import.json`, converter `src/game/render/carImport.ts`): the glTF is
+Processing (the import tools `import-cars.cjs`, `car-import.json` and `render/carImport.ts` were removed on 2026-11-10 once every car was our own): the glTF was
 loaded with three.js in a headless browser, oriented to +Z forward (front detected from the headlamp parts), scaled
 so the wheelbase matches the physics spec, ground at y = 0; wheel parts (merged meshes split by corner) become
 `wheel_*`/`spin_*` pivots (calipers steer but do not spin) and are fitted to the physics wheel radius; paint /

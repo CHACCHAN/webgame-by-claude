@@ -30,18 +30,22 @@ def materials():
     m.add('paint', '#6c6d70', metallic=0.65, roughness=0.32, coat=1.0)
     m.add('glass', '#0b1016', metallic=0.1, roughness=0.04)
     m.add('trim', '#0d0e10', metallic=0.2, roughness=0.6)
-    m.add('chrome', '#d8dade', metallic=1.0, roughness=0.12)
+    # metal reads as metal (owner, 2026-11-10): chrome, the alloy wheels, the discs fully metallic
+    m.add('chrome', '#d8dade', metallic=1.0, roughness=0.08)
     m.add('headlight', '#dfe6ee', metallic=0.4, roughness=0.1, image=_img('headlamp.png'), emissive='#fff4e0')
     m.add('taillight', '#4a0505', roughness=0.25, image=_img('taillamp.png'), emissive='#ff1a10')
     m.add('tire', '#151515', roughness=0.92, image=_img('tyre.png'))
-    m.add('rim', '#b3b6bb', metallic=0.55, roughness=0.34)
+    m.add('rim', '#b8bbc0', metallic=1.0, roughness=0.26)
     m.add('brake', '#2a2b2e', metallic=0.3, roughness=0.5)
     m.add('under', '#121314', roughness=0.9)
     m.add('interior', '#2b2c2f', roughness=0.85)
-    m.add('lamps', '#ffffff', roughness=0.15, image=_img('lamps.png'))
+    # the small lenses (indicators, reverse, amber, markers): coloured or clear lenses over chrome reflectors
+    m.add('lamps', '#ffffff', metallic=0.5, roughness=0.15, image=_img('lamps.png'))
     m.add('plate', '#ffffff', roughness=0.5, image=_img('plate.png'))
-    m.add('disc', '#6e6c6a', metallic=0.85, roughness=0.45)
+    m.add('disc', '#8a8886', metallic=1.0, roughness=0.36)
     m.add('grille', '#060607', roughness=0.7)
+    # the head lamps' housing under the clear cover: dark grey, a little sheen (n07, n14)
+    m.add('housing', '#62666c', metallic=0.5, roughness=0.32)
     # helper (never exported): faces to delete after a cut
     m.cut = bpy.data.materials.new('_cut')
     return m
@@ -57,8 +61,11 @@ DIVIDER_Z = -0.615      # black divider between the door glass and the quarter g
 WINDSCREEN = [(0.0, 0.592), (0.36, 0.578), (0.56, 0.548), (0.640, 0.505), (0.655, 0.455), (0.600, 0.250),
               (0.545, 0.030), (0.500, -0.040), (0.30, -0.075), (0.0, -0.085)]
 # rear hatch glass (x, z) from above
-REAR_GLASS = [(0.0, -0.840), (0.28, -0.852), (0.42, -0.895), (0.475, -0.985), (0.480, -1.150), (0.450, -1.320),
-              (0.385, -1.470), (0.270, -1.555), (0.0, -1.585)]
+# (the bubble hatch reaches down to the deck: its lower corners at (±0.385, 0.93, -1.78), triangulated on n01, n06, n15)
+# (2026-11-10: wider at its lower corners, rays from n15 / n06 onto the body: far corner (0.45, 0.92, -1.79), the lower
+# edge at z -1.84 near the centre line)
+REAR_GLASS = [(0.0, -0.840), (0.28, -0.852), (0.42, -0.895), (0.475, -0.985), (0.488, -1.150), (0.488, -1.360),
+              (0.478, -1.560), (0.462, -1.700), (0.432, -1.785), (0.320, -1.825), (0.150, -1.845), (0.0, -1.850)]
 
 
 def _mirror_x(pts):
@@ -121,7 +128,8 @@ def window_cutters(mats, bvh):
         out.append(loft_cutter('cut_dlo', outer, inner, cut))
     out.append(K.prism3('cut_ws', [(x, 1.6, z) for x, z in ws], (0, 1, 0), -0.68, 0.1, cut, cut))
     rg = K.catmull(_full(REAR_GLASS), 100)
-    out.append(K.prism3('cut_rg', [(x, 1.6, z) for x, z in rg], (0, 1, 0), -0.62, 0.1, cut, cut))
+    # down to y 0.84: the glass's lower edge lies on the deck at y ~0.93 (a shallower prism left it short at y 0.98)
+    out.append(K.prism3('cut_rg', [(x, 1.6, z) for x, z in rg], (0, 1, 0), -0.76, 0.1, cut, cut))
     return out
 
 
@@ -216,13 +224,20 @@ def fix_normals(part, out_dir):
             f.normal_flip()
 
 
-def pocket(name, bvh, outline, fr, depth, wall, floor, n_rings=3):
-    """a closed cutter that follows the surface: its floor is the surface inside the outline pushed in by depth"""
+def pocket(name, bvh, outline, fr, depth, wall, floor, n_rings=3, cap=None):
+    """a closed cutter that follows the surface: its floor is the surface inside the outline pushed in by depth (with
+    cap: never higher than that height along fr.d, so parts set in the recess are not cut by a rising floor)"""
     part = K.Part(name)
     rs = rings_of(K.ccw(outline), n_rings)
     hits = [[fr.hit(bvh, u, v) for u, v in ring] for ring in rs]
+
+    def down(p):
+        q = p - fr.d * depth
+        if cap is not None and q.dot(fr.d) > cap:
+            q = q - fr.d * (q.dot(fr.d) - cap)
+        return q
     outer = [part.vert(p + fr.d * 0.12) for p, _ in hits[0]]
-    inner = [part.vert(p - fr.d * depth) for p, _ in hits[0]]
+    inner = [part.vert(down(p)) for p, _ in hits[0]]
     n = len(outline)
     wi, fi = part.slot(wall), part.slot(floor)
     for i in range(n):
@@ -230,7 +245,7 @@ def pocket(name, bvh, outline, fr, depth, wall, floor, n_rings=3):
         f = part.bm.faces.new([outer[i], outer[j], inner[j], inner[i]])
         f.material_index = wi
     # floor: the rings pushed in
-    rows = [inner] + [[part.vert(p - fr.d * depth) for p, _ in ring] for ring in hits[1:]]
+    rows = [inner] + [[part.vert(down(p)) for p, _ in ring] for ring in hits[1:]]
     for k in range(len(rows) - 1):
         a, b = rows[k], rows[k + 1]
         for i in range(n):
@@ -246,6 +261,47 @@ def pocket(name, bvh, outline, fr, depth, wall, floor, n_rings=3):
         f = part.bm.faces.new([outer[i], outer[(i + 1) % n], c])
         f.material_index = wi
     bmesh.ops.remove_doubles(part.bm, verts=part.bm.verts, dist=1e-6)
+    bmesh.ops.recalc_face_normals(part.bm, faces=part.bm.faces)
+    return part.build(weld=0)
+
+
+def pocket_rect(name, bvh, fr, cu, cv, w, h, r, depth, wall, floor, cols=56, rows=4):
+    """a rounded-rectangle recess (centre cu, cv in frame fr) whose floor is the surface pushed in by depth, laid as a
+    grid of columns: a wide recess in a panel curved in plan shades evenly across (pocket's rings shrunk toward the
+    centre leave diagonal facets from its corners)"""
+    part = K.Part(name)
+    a = w / 2 - r
+
+    def span(u):
+        e = max(0.0, abs(u - cu) - a)
+        dv = r - math.sqrt(max(0.0, r * r - e * e))
+        return cv - h / 2 + dv, cv + h / 2 - dv
+    us = [cu + (w / 2) * math.sin(math.pi * (k / cols - 0.5)) for k in range(cols + 1)]
+    pts, grid = [], []
+    for u in us:
+        v0, v1 = span(u)
+        pts.append([fr.hit(bvh, u, v0 + (v1 - v0) * j / rows)[0] - fr.d * depth for j in range(rows + 1)])
+        grid.append([part.vert(p) for p in pts[-1]])
+    fi, wi = part.slot(floor), part.slot(wall)
+    for i in range(cols):
+        for j in range(rows):
+            f = part.bm.faces.new([grid[i][j], grid[i + 1][j], grid[i + 1][j + 1], grid[i][j + 1]])
+            f.material_index = fi
+            f.smooth = True
+    ring = ([(us[i], i, 0) for i in range(cols + 1)] + [(us[cols], cols, j) for j in range(1, rows)] +
+            [(us[i], i, rows) for i in range(cols, -1, -1)] + [(us[0], 0, j) for j in range(rows - 1, 0, -1)])
+    inner = [grid[i][j] for _u, i, j in ring]
+    rim = [pts[i][j] + fr.d * (depth + 0.12) for _u, i, j in ring]     # straight out along d: walls square to the frame
+    outer = [part.vert(p) for p in rim]
+    n = len(ring)
+    for k in range(n):
+        m = (k + 1) % n
+        f = part.bm.faces.new([outer[k], outer[m], inner[m], inner[k]])
+        f.material_index = wi
+    c = part.vert(sum(rim, Vector()) / n)
+    for k in range(n):
+        f = part.bm.faces.new([outer[k], outer[(k + 1) % n], c])
+        f.material_index = wi
     bmesh.ops.recalc_face_normals(part.bm, faces=part.bm.faces)
     return part.build(weld=0)
 
@@ -337,20 +393,41 @@ def tail_z(x, y):
     return None
 
 
-# head lamp: frame (centre, outward direction, sweep direction) on the nose's left upper corner, its recess depth
-HEAD_C, HEAD_D, HEAD_E1 = (0.555, 0.60, 1.93), (0.45, 0.30, 0.84), (0.80, 0.12, -0.58)
-HEAD_DEPTH = 0.048
+# head lamp: frame (centre, outward direction, along the lens row) on the nose's left upper corner, its recess depth.
+# Measured on n07 (rays onto the fitted body, pre-field frame): the unit's ends at (0.278, 0.570, 2.070) inboard and
+# (0.662, 0.617, 1.819) outboard (0.46 m), its three elements level in a row along HEAD_E1, centres 0.124 / 0.106 apart
+HEAD_C, HEAD_D, HEAD_E1 = (0.47, 0.60, 1.94), (0.45, 0.30, 0.84), (0.86, 0.03, -0.51)
+HEAD_DEPTH = 0.042
 # rear lamp housing (left): centre, outward direction, long axis (outboard)
-TAIL_C, TAIL_D, TAIL_E1 = (0.50, 0.835, -2.1), (0.30, 0.30, -1.0), (1.0, 0.0, 0.30)
+# (lens centres triangulated on n03, n05, n06, n15: inner (0.267, 0.772, -2.14), outer (0.595, 0.765, -2.06))
+# (2026-11-10: lenses 2 cm lower: n05 / n06 / n15 / n03 rays put their centres at y 0.757 .. 0.772 after the projection
+# along TAIL_D, which lifts them ~1.5 cm)
+# (2026-11-10: the traced units carried back onto the body rise outboard: 0.03 rad more (n05, square on) .. 0.07 (n06,
+# n15): 0.04. Note the frame's v points down on this side)
+TAIL_C, TAIL_D, TAIL_E1 = (0.431, 0.750, -2.10), (0.30, 0.30, -1.0), (0.971, 0.02, 0.237)
+
+
+# the lamps' and openings' outlines as laid on the uncut shell (left side), for the photo check
+# (fitdata/supra/tools/lamps.py): key -> ('surf', frame, 2-D outline) | ('disc', centre, normal, radius); keys ending
+# in '_C' sit on the centre line (not mirrored)
+OUTLINES = {}
+
+
+# the head lamp unit's outline (outer edge of its black seal; u inboard -> outboard along the lens row, v up), metres:
+# a teardrop eye: the top edge long and nearly straight under the bonnet line, the inboard end a blunt point low down
+# (the top edge falling to it in a long slope), the outboard end tall and round where it wraps the corner, the bottom
+# edge straight (2026-11-10: the traced seal on n07 (near lamp) and n14 (near lamp, its camera's offset taken out by
+# the lens centres) carried back onto the body: fitdata/supra/tools/lamps.py back)
+HEAD_RIM = [(-0.234, -0.040), (-0.229, -0.012), (-0.212, 0.020), (-0.190, 0.052), (-0.163, 0.082), (-0.135, 0.100),
+            (-0.095, 0.109), (-0.030, 0.111), (0.050, 0.107), (0.130, 0.100), (0.180, 0.091), (0.208, 0.077),
+            (0.225, 0.052), (0.233, 0.020), (0.234, -0.015), (0.228, -0.046), (0.214, -0.068), (0.190, -0.078),
+            (0.130, -0.082), (0.050, -0.083), (-0.040, -0.080), (-0.130, -0.074), (-0.195, -0.068), (-0.222, -0.060)]
 
 
 def headlamp_outline():
-    """the late-model head lamp unit, a long teardrop set into the wing top (u inboard → outboard and back, v up),
-    metres: full and round inboard, tapering as it sweeps back along the wing, the top edge nearly straight"""
-    ctrl = [(-0.320, -0.010), (-0.305, 0.050), (-0.255, 0.088), (-0.170, 0.100), (-0.050, 0.098), (0.080, 0.090),
-            (0.200, 0.075), (0.280, 0.055), (0.318, 0.025), (0.322, -0.005), (0.300, -0.030), (0.230, -0.045),
-            (0.120, -0.062), (0.000, -0.080), (-0.130, -0.095), (-0.240, -0.092), (-0.300, -0.060)]
-    return K.catmull(ctrl, 56)
+    """the recess inside the seal (supra_details lays the seal from it: u * 1.012 +- 0.003, v * 1.03 +- 0.003)"""
+    ctrl = [((u - (0.003 if u > 0 else -0.003)) / 1.012, (v - (0.003 if v > 0 else -0.003)) / 1.03) for u, v in HEAD_RIM]
+    return K.catmull(ctrl, 72)
 
 
 def headlamp_frame(bvh):
@@ -379,33 +456,51 @@ def pocket_cutters(mats, bvh):
             circ = [(1.4 * s, 0.33 + r * math.sin(a), zc + r * math.cos(a)) for a in
                     (2 * math.pi * k / 64 for k in range(64))]
             out.append(K.prism3('cut_arch', circ, (s, 0, 0), -(1.4 - xin), 0.1, under, under))
-        # bumper corner opening (late model): a rounded black duct under the indicator, outboard of the mouth
-        fr = Frame((0.715 * s, 0.355, 1.95), (0.60 * s, 0.0, 1.0))
-        out.append(pocket('cut_corner', bvh, K.rounded_rect(0.0, 0.0, 0.130, 0.105, 0.045, 6), fr, 0.07, trim, grille))
+        # bumper corner duct (late model): a scoop under the indicator, its lower edge sweeping down inboard toward the
+        # mouth (n07: x 0.43 .. 0.66, y 0.30 .. 0.42); body-coloured walls, a dark opening at its back
+        fr = Frame((0.555 * s, 0.360, 1.99), (0.50 * s, 0.0, 1.0), e1=(1.0, 0, -0.5 * s))   # e1 inboard on the right: u * s
+        out.append(pocket('cut_corner', bvh, K.catmull([(u * s, v) for u, v in CORNER_DUCT], 40), fr, 0.055, paint, grille))
+        if s == 1:
+            OUTLINES['duct'] = ('surf', fr, K.catmull(CORNER_DUCT, 40))
         # side scoop: a recess sweeping back along the foot of the door into the slot ahead of the rear wheel
-        fr = Frame((0.88 * s, 0.44, -0.50), (s, 0, 0), e1=(0, 0, -1))
-        out.append(pocket('cut_scoop', bvh, K.catmull(SCOOP, 48), fr, 0.03, paint, paint, n_rings=4))
-        # rear lamp housing: a shallow black recess round the four lenses, wrapping round the corner
-        fr = Frame((TAIL_C[0] * s, TAIL_C[1], TAIL_C[2]), (TAIL_D[0] * s, TAIL_D[1], TAIL_D[2]),
-                   e1=(TAIL_E1[0] * s, TAIL_E1[1], TAIL_E1[2] * s))
-        out.append(pocket('cut_lamps', bvh, K.rounded_rect(0.0, 0.0, 0.64, 0.170, 0.078, 6), fr, 0.014, trim, trim))
-    # the head lamp recesses
+        fr = Frame((0.88 * s, 0.44, -0.50), (s, 0, 0), e1=(0, 0, -s))     # v up on both sides, u back as u * s
+        out.append(pocket('cut_scoop', bvh, K.catmull([(u * s, v) for u, v in SCOOP], 48), fr, 0.03, paint, paint,
+                          n_rings=4))
+    # the head lamp recesses: the floor follows the curved wing top but stays below the reflector bowls' rims (set
+    # square to the lamp's axis in supra_details), so no bowl is cut into a C by a rising floor
     fr = headlamp_frame(bvh)
-    out.append(pocket('cut_head', bvh, headlamp_outline(), fr, HEAD_DEPTH, mats['rim'], mats['chrome'], n_rings=4))
-    out.append(_mirrored(pocket('cut_head', bvh, headlamp_outline(), fr, HEAD_DEPTH, mats['rim'], mats['chrome'],
-                                n_rings=4)))
-    # the mouth: a wide black intake across the bumper, the plate over its upper edge, a body-coloured band under it
-    fr = Frame((0.0, 0.357, 2.1), (0, 0, 1))
-    out.append(pocket('cut_intake', bvh, K.rounded_rect(0.0, 0.0, 1.18, 0.135, 0.05, 6), fr, 0.09, trim, grille, n_rings=4))
-    # rear plate recess
+    from supra_details import HEAD_LENSES
+    cap = min(fr.hit(bvh, u, v)[0].dot(fr.d) for (u, v, _r), _px in HEAD_LENSES) - HEAD_DEPTH
+    for mirror in (False, True):
+        pk = pocket('cut_head', bvh, headlamp_outline(), fr, HEAD_DEPTH, mats['housing'], mats['housing'], n_rings=6,
+                    cap=cap)
+        out.append(_mirrored(pk) if mirror else pk)
+    # the mouth: a wide black intake across the bumper (n07, n14: x +-0.395, y 0.30 .. 0.435), the plate over its upper
+    # edge (2026-11-10: the n07 outline carried back onto the body: 0.79 x 0.135, its centre 3 mm lower)
+    fr = Frame((0.0, 0.372, 2.1), (0, 0, 1))
+    mouth = K.rounded_rect(0.0, -0.003, 0.79, 0.135, 0.045, 6)
+    out.append(pocket('cut_intake', bvh, mouth, fr, 0.09, trim, grille, n_rings=4))
+    OUTLINES['mouth_C'] = ('surf', fr, mouth)
+    # rear plate recess: a wide shallow panel round the plate, its top edge a crisp horizontal crease
+    # (2026-11-10: n05, n06 traced and carried onto the bumper: 0.70 x 0.19, centre 0.565)
     fr = Frame((0.0, 0.56, -2.25), (0, 0, -1), e1=(-1, 0, 0))
-    out.append(pocket('cut_plate_r', bvh, K.rounded_rect(0.0, 0.0, 0.40, 0.205, 0.025, 4), fr, 0.025, paint, paint))
+    out.append(pocket_rect('cut_plate_r', bvh, fr, 0.0, 0.005, 0.70, 0.19, 0.03, 0.022, paint, paint))
     return out
 
 
 # the side scoop's outline (u back along the body from z = -0.50, v up from y = 0.44), from the side photo
 SCOOP = [(-0.06, 0.004), (0.0, 0.022), (0.10, 0.048), (0.20, 0.060), (0.255, 0.045), (0.272, 0.0), (0.26, -0.05),
          (0.22, -0.072), (0.14, -0.066), (0.04, -0.042), (-0.03, -0.018)]
+
+
+# the corner opening's outline (u outboard, v up, about (0.555, 0.36)): the indicator sits in its top (supra_details),
+# the outboard side falls in a round curve to the bottom, the inboard side straight down from the indicator's end
+# (2026-11-10: the n07 and n14 outlines carried back onto the body; n14 sees the inboard bottom as surface, n07 as
+# opening: between them)
+CORNER_DUCT = [(-0.088, 0.123), (-0.040, 0.125), (0.020, 0.126), (0.080, 0.124), (0.100, 0.119), (0.108, 0.105),
+               (0.110, 0.080), (0.106, 0.050), (0.098, 0.025), (0.084, 0.000), (0.065, -0.020), (0.035, -0.033),
+               (0.000, -0.038), (-0.035, -0.036), (-0.065, -0.025), (-0.085, -0.005), (-0.096, 0.025),
+               (-0.100, 0.060), (-0.100, 0.095), (-0.096, 0.115)]
 
 
 def _round_ends(outline):
@@ -482,12 +577,41 @@ def surface_normals(ob, ref, tol=0.0015):
     print('NORMALS', done, 'of', len(m.loops))
 
 
-def build_all(root, mats):
+# the body is laid out 4.48 m long (ZN); everything ahead of the front arches is stretched to the published 4,520 (the
+# photos' front overhang is the longer one: n01, n06, n07)
+NOSE_EXT = 0.04
+NOSE_Z0 = 1.65
+
+
+def nose_disp(G):
+    """the nose stretch as a displacement of game points (N, 3)"""
+    import numpy as np
+    a = 0.15
+    t = np.clip((G[:, 2] - NOSE_Z0) / (BD.ZN - NOSE_Z0), 0.0, None)
+    s = np.where(t < a, t * t / (2 * a), t - a / 2) / (1 - a / 2)    # a soft start, then a uniform stretch
+    D = np.zeros_like(G)
+    D[:, 2] = NOSE_EXT * s
+    return D
+
+
+def stretch_nose(body):
+    import supra_ffd as FF
+    FF.deform_body(body, nose_disp)
+
+
+def build_all(root, mats, ffd=True):
+    """ffd: True = the fitted field in fitdata/supra/ffd.json (when present), False = none, or a Lattice"""
     count = {}
     body = K.empty('body', root)
     shell, glass, bvh = body_shell(body, mats, count)
     import supra_details as DT
     DT.build(body, mats, bvh, K.bvh_of(shell), count)
+    if NOSE_EXT:
+        stretch_nose(body)
+    if ffd is not False:
+        import supra_ffd as FF
+        FF.apply_to_body(body, None if ffd is True else ffd)
+    DT.build_wing(body, mats, shell, count)
     wheels(root, mats, count)
     return count
 
@@ -497,7 +621,7 @@ def build_all(root, mats):
 TYRE_W = {'f': 0.235, 'r': 0.255}
 RIM_W = {'f': 0.203, 'r': 0.229}
 RIM_R = 0.2159          # 17" bead seat
-TYRE_R = 0.3225         # 235/45R17: Ø645 mm (the wheel centre stays at WHEEL_Y)
+TYRE_R = 0.3216         # 235/45R17: Ø643 mm (the wheel centre at WHEEL_Y, slightly loaded)
 SEG = 40
 
 

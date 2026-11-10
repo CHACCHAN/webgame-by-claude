@@ -237,7 +237,8 @@ const CARS: Record<RoadCarId, CarSpec> = {
     driftiness: 0.65,
     stats: { power: 10, grip: 7, drift: 7, weight: 4 },
     colors: { body: '#eeeeee', accent: '#111111' },
-    model: { title: 'Toyota Supra mk4', author: 'Black Snow', url: 'https://sketchfab.com/3d-models/toyota-supra-mk4-8bebdee25b774067929bb33e648533ac', license: 'CC BY 4.0' },
+    // our own model (tools/blender/cars/supra*.py, fitted to photos; late RZ with the factory wing; the tailpipe is its `exhaust` part)
+    model: { title: 'スープラ RZ (JZA80)', author: 'TOUGE NOCTURNE', url: '', license: '自作', own: true },
   },
   r34: {
     id: 'r34',

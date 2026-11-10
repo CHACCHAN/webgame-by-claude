@@ -16,11 +16,11 @@ from mathutils import Vector
 
 import supra_kit as K
 
-ZN, ZT = 2.19, -2.29        # nose and tail (4.48: the side photo's tail; the published 4,520 is not reached)
+ZN, ZT = 2.19, -2.29        # nose and tail as laid out (4.48); supra_parts.stretch_nose takes the nose to the published 4,520
 AXLE = 1.275                # half the wheelbase
 TRACK_F, TRACK_R = 1.52, 1.525
 WHEEL_R = 0.33
-WHEEL_Y = WHEEL_R           # wheel centre height (ground at 0)
+WHEEL_Y = 0.318             # loaded wheel centre height (235/45R17, free radius 0.3216; ground at 0)
 
 P = K.pchip
 
@@ -37,28 +37,28 @@ TAIL_R = (-1.65, 2.0)
 YM = P([(-2.29, 0.47), (-2.2, 0.52), (-2.0, 0.60), (-1.7, 0.635), (-1.275, 0.63), (-0.8, 0.57), (0.0, 0.53), (0.8, 0.52),
         (1.275, 0.52), (1.7, 0.49), (2.0, 0.47), (2.19, 0.45)])
 # underside edge (rocker, bumper lips)
-YB = P([(-2.29, 0.34), (-2.25, 0.30), (-2.15, 0.28), (-1.95, 0.26), (-1.70, 0.245), (-1.275, 0.235), (-0.6, 0.225),
+YB = P([(-2.29, 0.30), (-2.25, 0.285), (-2.15, 0.275), (-1.95, 0.26), (-1.70, 0.245), (-1.275, 0.235), (-0.6, 0.225),
         (0.6, 0.225), (1.275, 0.225), (1.70, 0.215), (1.92, 0.205), (2.06, 0.205), (2.13, 0.215), (2.17, 0.235),
         (2.19, 0.27)])
 TUCK = P([(-2.29, 0.10), (-1.9, 0.15), (-1.275, 0.19), (-0.5, 0.25), (0.3, 0.25), (1.275, 0.18), (1.9, 0.10), (2.19, 0.08)])
 NL = P([(-2.29, 3.0), (-1.9, 2.6), (-1.6, 2.3), (0.0, 2.1), (1.6, 2.4), (2.19, 2.9)])
 # centre-line top of the lower body (bonnet, the deck under the glasshouse, the rear deck)
-HD = P([(-2.29, 0.60), (-2.285, 0.68), (-2.27, 0.74), (-2.24, 0.80), (-2.19, 0.858), (-2.12, 0.912), (-2.03, 0.954),
-        (-1.94, 0.975), (-1.80, 0.99), (-1.6, 1.0), (-1.0, 1.0), (-0.3, 0.99), (0.3, 0.95), (0.62, 0.885), (0.95, 0.842),
+HD = P([(-2.29, 0.60), (-2.285, 0.68), (-2.27, 0.74), (-2.24, 0.80), (-2.19, 0.858), (-2.12, 0.905), (-2.03, 0.925),
+        (-1.94, 0.925), (-1.80, 0.925), (-1.65, 0.94), (-1.45, 0.975), (-1.0, 1.0), (-0.3, 0.99), (0.3, 0.95), (0.62, 0.885), (0.95, 0.842),
         (1.25, 0.808), (1.55, 0.765), (1.80, 0.705), (1.98, 0.648), (2.06, 0.620), (2.12, 0.590), (2.16, 0.558),
         (2.18, 0.528), (2.19, 0.50)])
-PU = P([(-2.29, 3.2), (-2.0, 3.4), (-1.6, 3.3), (-0.6, 3.6), (0.2, 3.6), (0.8, 3.4), (1.3, 3.5), (1.7, 4.0), (1.95, 4.3),
+PU = P([(-2.29, 3.0), (-2.0, 3.0), (-1.6, 3.0), (-1.1, 3.4), (-0.6, 3.6), (0.2, 3.6), (0.8, 3.4), (1.3, 3.5), (1.7, 4.0), (1.95, 4.3),
         (2.19, 3.8)])
 # glasshouse: roof centre height and half width at the belt
 HR = P([(0.80, 0.74), (0.62, 0.855), (0.52, 0.892), (0.42, 0.952), (0.32, 1.012), (0.22, 1.058), (0.12, 1.113),
         (0.02, 1.178), (-0.08, 1.230), (-0.18, 1.252), (-0.28, 1.267), (-0.38, 1.274), (-0.48, 1.272), (-0.58, 1.267),
         (-0.68, 1.252), (-0.78, 1.232), (-0.88, 1.212), (-0.98, 1.177), (-1.08, 1.140), (-1.18, 1.108), (-1.28, 1.073),
-        (-1.38, 1.046), (-1.48, 1.012), (-1.60, 0.975), (-1.80, 0.90)])
+        (-1.38, 1.046), (-1.48, 1.015), (-1.60, 0.98), (-1.70, 0.955), (-1.80, 0.935), (-1.90, 0.92)])
 GW = P([(0.80, 0.70), (0.55, 0.705), (0.3, 0.712), (0.0, 0.716), (-0.5, 0.71), (-0.9, 0.682), (-1.2, 0.625),
-        (-1.45, 0.545), (-1.62, 0.47), (-1.80, 0.38)])
+        (-1.45, 0.56), (-1.62, 0.52), (-1.80, 0.47), (-1.90, 0.44)])
 # roof rail: half width, drop below the roof centre; roof crown exponent; rounding of the rail
 RW = P([(0.80, 0.63), (0.55, 0.62), (0.2, 0.585), (-0.2, 0.565), (-0.6, 0.555), (-0.9, 0.54), (-1.2, 0.50),
-        (-1.45, 0.44), (-1.65, 0.36), (-1.80, 0.30)])
+        (-1.45, 0.45), (-1.65, 0.41), (-1.80, 0.37), (-1.90, 0.33)])
 DR = P([(0.6, 0.040), (0.0, 0.045), (-0.6, 0.050), (-1.2, 0.060), (-1.7, 0.06)])
 PR = 2.2
 K_RAIL = 0.05
@@ -119,7 +119,7 @@ class Section:
         self.xf = max(0.0, self.W - min(TUCK(z), 0.6 * self.W))
         self.nl = NL(z)
         self.pu = PU(z)
-        hr = HR(z) if -1.80 <= z <= 0.80 else -10.0
+        hr = HR(z) if -1.90 <= z <= 0.80 else -10.0
         self.cab = None
         gw = min(GW(z), 0.98 * self.W)
         belt = self.lower(gw)
@@ -214,10 +214,26 @@ def stations(n):
     return out
 
 
-# height of the lower edge of the paint above YB: the black lip spoiler at the front, the valance at the rear; every
+# height of the lower edge of the paint above YB: the black lip spoiler at the front (the rear is painted to its edge); every
 # section has a ring vertex exactly there, so the colour border runs as a smooth line
-LIP = P([(-2.29, 0.065), (-1.90, 0.065), (-1.70, 0.045), (1.45, 0.045), (1.75, 0.030), (2.0, 0.058), (2.19, 0.06)])
+# At the tail the same ring row is the rear bumper's lower crease, level at 0.39 across the back (n05, n06), below
+# which a flat band leans back in a little (TAIL_FOLD) down to the bumper's lower edge, ~0.30 at the tail (n01, n06:
+# a squarer lower corner than a roll-under)
+LIP = P([(-2.29, 0.09), (-2.25, 0.105), (-2.15, 0.115), (-2.0, 0.125), (-1.85, 0.085), (-1.70, 0.045), (1.45, 0.045),
+         (1.75, 0.030), (2.0, 0.045), (2.19, 0.042)])
 N_LOW = 14          # ring points from the floor's centre up to that edge
+# the rear bumper's turn-under below that crease: the ring points below it move forward by slope x their depth under
+# it (at most cap), fully behind z0, fading out by z1 round the corners
+TAIL_FOLD = dict(z0=-2.12, z1=-1.92, slope=0.3, cap=0.015)
+
+
+def tail_fold(z, y, y_crease):
+    f = TAIL_FOLD
+    if z > f['z1'] or y >= y_crease:
+        return 0.0
+    t = min(1.0, (f['z1'] - z) / (f['z1'] - f['z0']))
+    t = t * t * (3 - 2 * t)
+    return t * min(f['cap'], f['slope'] * (y_crease - y))
 
 
 def split_resample(poly, z, nv):
@@ -235,15 +251,22 @@ def split_resample(poly, z, nv):
 
 
 def shell(name, mats, nu=110, nv=52):
-    """the closed body shell as a Part (paint; dark underside; black lip and valance below the lip line)"""
+    """the closed body shell as a Part (paint; dark underside; black front lip below the lip line)"""
     part = K.Part(name)
     rows = []
-    for z in stations(nu):
+    zs = stations(nu)
+    for z in zs:
         sec = Section(z)
         half = split_resample(sec.polyline(), z, nv)
         # the scallop moves the resampled points (resampling the dented outline would shift the rows and ripple)
         half = [(x - scallop(z, y) if x > 0.5 * sec.W else x, y) for x, y in half]
-        ring = [(-x, y, z) for x, y in half] + [(x, y, z) for x, y in reversed(half[1:-1])]
+        if z in (zs[0], zs[-1]):
+            # the end sections (a sliver 2.4 cm wide) collapse onto the centre line: the halves weld there, so no flat
+            # end cap shows as a seam below the plates
+            half = [(0.0, y) for _, y in half]
+        yc = half[N_LOW - 1][1]
+        ring = [(-x, y, z + tail_fold(z, y, yc)) for x, y in half] + \
+               [(x, y, z + tail_fold(z, y, yc)) for x, y in reversed(half[1:-1])]
         rows.append(ring)
     vs = part.grid(rows, mats['paint'], closed=True)
     m = 2 * nv - 2
@@ -253,8 +276,11 @@ def shell(name, mats, nu=110, nv=52):
             if j <= N_LOW - 1 or j >= m - (N_LOW - 1):
                 low.add(v)
     low_faces = {f for f in part.bm.faces if all(v in low for v in f.verts)}
-    # end caps
+    # end caps, where an end section still has a width (their fan triangles under the lip line take the lip's colour);
+    # collapsed ends weld in remove_doubles below
     for row, flip in ((vs[0], False), (vs[-1], True)):
+        if max(abs(v.co.x) for v in row) < 1e-4:
+            continue
         c = Vector((0, 0, 0))
         for v in row:
             c += v.co
@@ -268,6 +294,8 @@ def shell(name, mats, nu=110, nv=52):
                 f = part.bm.faces.new(q)
                 f.material_index = part.slot(mats['paint'])
                 f.smooth = True
+                if row[j] in low and row[(j + 1) % len(row)] in low:
+                    low_faces.add(f)
             except ValueError:
                 pass
     bmesh.ops.remove_doubles(part.bm, verts=part.bm.verts, dist=1e-6)
@@ -282,6 +310,7 @@ def shell(name, mats, nu=110, nv=52):
         n = K.G(f.normal)
         if n.y < -0.7 and c.y < YB(c.z) + 0.012:
             f.material_index = under
-        elif f in low_faces and (c.z > 1.62 or c.z < -1.90):
-            f.material_index = lip          # the black lip spoiler under the bumper, the rear valance
+        elif f in low_faces and c.z > 1.62:
+            f.material_index = lip          # the black lip spoiler under the front bumper (the rear bumper is painted
+            #                                 down to its lower edge: n05, n06)
     return part
