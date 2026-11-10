@@ -90,6 +90,8 @@ deployed yet: the owner sees each sheet first).
   and the H5 at night (lamps, window glow), the H2 and 隼 garage at dawn, the NSR garage at night and a night race start
   (chase, rider and rear views); no page errors. The bikes' refinement continues (Hayabusa detail round finished after
   this build; H2 round-3 sheet pending): rebuild and redeploy when they land.
+  Deployed (`c68aaa3`, bundle `index-GpzDFAQv.js`; e5, e5-h5 and the three bike GLBs served hash-equal; leaderboard
+  API 200). E2E not run.
 
 ## Session 7 (2026-11-03 – 11-04) — every model our own (Blender); the owner's train lineup; a livery per line
 
