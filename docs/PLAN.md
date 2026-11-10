@@ -24,7 +24,7 @@ curvature/grade smoothed; road widened in hairpins; banking from curvature.
   `track/courses.ts`, plus an entry in the backend `config/game.php` and CPU ghosts (`npm run seed:bots`).
 
 ## Online battle (added at the owner's request)
-Up to 3 players per room (4-character code). Laravel API for the lobby (create/join/leave, car choice, host start with a
+Up to 5 players per room (4-character code). Laravel API for the lobby (create/join/leave, car choice, each guest's ready button, host start with a
 server-chosen green-light time, finish times, rematch) with server-side limits; Laravel Reverb presence channel per room
 for live car states (client events) and room updates. Remote cars are drawn 120 ms in the past and, during the race,
 also exist as solid stand-in bodies in the local physics world (driven toward the extrapolated network pose), so cars

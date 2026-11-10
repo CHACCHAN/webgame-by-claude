@@ -94,16 +94,23 @@ pending. `docs/PLAN.md` holds the design.
   The autobahn's oncoming traffic is the game's cars: `render/trafficModels.ts` flattens each car's model into four
   instanced parts (paint / gloss / matte / lamps), simplified with meshoptimizer at load; a new car GLB shows up there
   without further work.
-- Online battle (≤3 players): lobby/start/results via `RoomController`; car states are presence-channel client events
+- Online battle (≤5 players, `game.online.max_players`): lobby/start/results via `RoomController`; car states are presence-channel client events
   (`client-state`, ~12 Hz) relayed by Reverb, which runs inside the `app` container (entrypoint, `START_REVERB`), proxied by
   nginx at `/app/`. Reverb key/secret are generated per container; never commit them. Client: `store/online.ts`,
   engine side `game/net/RemoteRacers.ts`. Online race time = max(physics clock, wall clock since the shared green light).
+  Start grid: `game/net/grid.ts` `onlineGrid(room, startS)`, a pure function of the room (slot + vehicle of everyone) used
+  for the local car and the peers alike: rows of up to three in the narrowest start road (9.5 m), trains behind the
+  others, rows as far apart as the vehicles in them are long (`grid.test.ts` checks every course and vehicle).
+  One paint per slot: `SLOT_COLORS` (five).
 - Public access: Cloudflare Tunnel, started by plain `docker compose up` when `.env` has `COMPOSE_PROFILES=tunnel` and `CLOUDFLARE_TUNNEL_TOKEN` (dashboard route → `http://web:80`); an explicit `--profile dev|test` replaces it.
   nginx restores the visitor IP from `CF-Connecting-IP`, trusting only cloudflared's fixed address `172.30.77.10`: keep `docker-compose.yml` and `docker/web/nginx.conf` in sync.
 - Race setup order (single player): mode → course → time & weather (`ConditionsScreen`) → car (`GarageScreen`) → AT/MT
   (`TransmissionScreen`) → rival (rival mode) → race; ghost battles pick the ghost between conditions and car. The last
   choices persist in settings (`timeOfDay`, `autoShift`) but are no longer in the settings screen. Online rooms carry the
-  host's `time_of_day`; AT/MT stays each player's. The host can start only when every member reported `ready`.
+  host's `time_of_day`; AT/MT stays each player's. The host can start only when every member is `loaded` (reported by
+  the game once it shows the room's course) and every guest is `ready` (the 準備完了 button, a toggle; the start button is
+  the host's own). The server enforces it and takes `ready` back on a change of car (the client also on AT/MT), of the
+  room's course or conditions, at every start and rematch.
 - Trains (joke entries, `vehicle/trains.ts`): the sim is only the leading front bogie; `TrainModel` draws three cars
   along its driven path every frame (`CarVisual.tick` → `rig.train.update`; call `CarVisual.refresh()` after moving
   a root by hand). Performance comes from the real figures via `trainSpec` (torque curve, redline, brake force);

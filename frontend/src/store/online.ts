@@ -93,6 +93,27 @@ export function chooseCar(carId: CarId) {
   }
 }
 
+const self = () => st().room?.players.find((p) => p.id === st().player?.id);
+
+/**
+ * The 準備完了 button (guests; the host's is the start button): on, or taken back. Only once the course is loaded:
+ * the server refuses it before. Another car takes it back (server side).
+ */
+export function toggleReady() {
+  const room = st().room;
+  const me = self();
+  if (!room || !me || room.status !== 'waiting' || !me.loaded) return;
+  return run(async () => applyRoom(await api.rooms.setReady(onlinePlayer(), room.code, !me.ready)));
+}
+
+/** The player changed something of their entry the server does not see (AT/MT): not ready any more. */
+export function takeBackReady() {
+  const room = st().room;
+  const player = st().player;
+  if (!room || !player || room.status !== 'waiting' || !self()?.ready) return;
+  void api.rooms.setReady(player, room.code, false).then(applyRoom).catch(() => undefined);
+}
+
 export function createRoom(trackId: CourseId, timeOfDay: TimeOfDay) {
   return run(async () => {
     const room = await timed(() => api.rooms.create(onlinePlayer(), trackId, timeOfDay, st().carId));
@@ -136,7 +157,8 @@ export async function leaveRoom() {
 
 /**
  * The world must show the room's course before anyone can start: the server lets the host start only once
- * every member has reported `ready` (sent here after loading, and again by the poll if that failed).
+ * every member has reported `loaded` (sent here after loading, and again by the poll if that failed) and every
+ * guest has pressed 準備完了 (`toggleReady`), which the server takes only from a loaded game.
  */
 async function enterRoom(room: RoomState) {
   const app = useApp.getState();
@@ -161,7 +183,7 @@ async function enterRoom(room: RoomState) {
   connectRealtime(room.code);
   startPolling();
   applyRoom(room);
-  if (st().room?.code === room.code) applyRoom(await api.rooms.setReady(onlinePlayer(), room.code));
+  if (st().room?.code === room.code) applyRoom(await api.rooms.setLoaded(onlinePlayer(), room.code));
 }
 
 function connectRealtime(code: string) {
@@ -214,6 +236,8 @@ function connectRealtime(code: string) {
 export function applyRoom(room: RoomState) {
   const prev = st().room;
   if (!prev || prev.code !== room.code) return;
+  // a reply overtaken by a newer state (a poll sent before the 準備完了 button was pressed) would undo it on screen
+  if (room.server_time_ms < prev.server_time_ms) return;
   st().set({ room });
   const app = useApp.getState();
   if (room.status === 'racing' && room.start_at_ms && room.race_no > startedRace) beginRace(room);
@@ -270,8 +294,8 @@ function startPolling() {
     // racing state comes from the cars themselves; the lobby and results need the room
     if (screen !== 'onlineRoom' && screen !== 'onlineResults') return;
     const me = room.players.find((p) => p.id === player.id);
-    // the room's course is on screen here: report ready if the server has not got it (failed call, rejoin)
-    const ask = me && !me.ready && gameHolder.game?.course.id === room.track_id ? api.rooms.setReady(player, room.code) : api.rooms.get(player, room.code);
+    // the room's course is on screen here: report it loaded if the server has not got it (failed call, rejoin)
+    const ask = me && !me.loaded && gameHolder.game?.course.id === room.track_id ? api.rooms.setLoaded(player, room.code) : api.rooms.get(player, room.code);
     void timed(() => ask)
       .then(applyRoom)
       .catch((e) => {

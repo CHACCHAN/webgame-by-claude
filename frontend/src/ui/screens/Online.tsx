@@ -11,11 +11,11 @@ import { SLOT_COLORS } from '../../game/net/RemoteRacers';
 import { formatTime } from '../format';
 import { sfx } from '../sfx';
 import { Hint } from './Menus';
-import { chooseCar, createRoom, joinRoom, leaveRoom, registerName, rematch, startOnlineRace, useOnline } from '../../store/online';
+import { chooseCar, createRoom, joinRoom, leaveRoom, registerName, rematch, startOnlineRace, takeBackReady, toggleReady, useOnline } from '../../store/online';
 import { CONDITIONS } from './RaceSetup';
 import type { TimeOfDay } from '../../game/render/Environment';
 
-const MAX_PLAYERS = 3;
+const MAX_PLAYERS = 5;
 
 /** the vehicles a course allows (the fighters only at Edwards) */
 function CarPicker({ carId, course, disabled }: { carId: CarId; course: string; disabled?: boolean }) {
@@ -35,6 +35,8 @@ function GearboxPicker({ carId, disabled }: { carId: CarId; disabled?: boolean }
   const autoShift = useSettings((s) => s.autoShift);
   const pick = (auto: boolean) => {
     sfx.move();
+    // in a room: the entry changed, so the 準備完了 is taken back (as with another car)
+    if (auto !== autoShift) takeBackReady();
     useSettings.getState().set({ autoShift: auto });
     if (gameHolder.game) gameHolder.game.autoShift = auto;
   };
@@ -157,8 +159,29 @@ export function OnlineRoomScreen() {
     void leaveRoom();
     go('online');
   };
+  // the race starts when the host presses start, which needs two players or more, every game showing the course
+  // (`loaded`, by itself) and every guest's 準備完了 (`ready`, their button); the server checks the same
+  const me = room?.players.find((p) => p.id === player?.id);
+  const isHost = !!room && room.host_id === player?.id;
+  const waiting = room?.status === 'waiting';
+  const enough = (room?.players.length ?? 0) >= 2;
+  const loading = room ? room.players.filter((p) => !p.loaded).length : 0;
+  const unready = room ? room.players.filter((p) => p.id !== room.host_id && !p.ready).length : 0;
+  const canStart = waiting && enough && !loading && !unready;
+  const start = () => {
+    if (busy || !canStart) return;
+    sfx.confirm();
+    void startOnlineRace();
+  };
+  const ready = () => {
+    if (busy || !waiting || !me?.loaded) return;
+    if (me.ready) sfx.back();
+    else sfx.confirm();
+    void toggleReady();
+  };
   useMenuInput((a) => {
     if (a === 'back') exit();
+    if (a === 'confirm') (isHost ? start : ready)();
     if ((a === 'left' || a === 'right') && room?.status === 'waiting') {
       const list = vehiclesFor(room.track_id);
       const i = list.indexOf(carId);
@@ -167,10 +190,6 @@ export function OnlineRoomScreen() {
     }
   });
   if (!room || !player) return null;
-  const isHost = room.host_id === player.id;
-  const enough = room.players.length >= 2;
-  const loading = room.players.filter((p) => !p.ready);
-  const canStart = enough && !loading.length;
   const course = COURSES[room.track_id as CourseId];
   return (
     <div className="screen online-room">
@@ -191,8 +210,12 @@ export function OnlineRoomScreen() {
                   <>
                     <b>{p.name}</b>
                     <span>{CAR_SPECS[p.car_id].name}</span>
-                    {!p.ready && <em className="loading">ロード中…</em>}
-                    {p.id === room.host_id && <em>HOST</em>}
+                    {!p.loaded ? (
+                      <em className="loading">ロード中…</em>
+                    ) : p.id !== room.host_id && (
+                      <em className={p.ready ? 'ready' : 'not-ready'}>{p.ready ? '準備完了 ✓' : '準備中'}</em>
+                    )}
+                    {p.id === room.host_id && <em className="host">HOST</em>}
                     {p.id === player.id && <em className="you">YOU</em>}
                   </>
                 ) : (
@@ -206,17 +229,22 @@ export function OnlineRoomScreen() {
         <GearboxPicker carId={carId} disabled={room.status !== 'waiting'} />
         <div className="ol-actions">
           {isHost ? (
-            <button className="cta" disabled={busy || !canStart} onClick={() => { sfx.confirm(); void startOnlineRace(); }}>
-              {!enough ? '2人以上でスタートできます' : loading.length ? 'コースの読み込みを待っています…' : 'レース開始'}
+            <button className="cta ol-start" disabled={busy || !canStart} onClick={start}>
+              {!enough ? '2人以上でスタートできます' : loading ? `読み込み待ち… あと${loading}人` : unready ? `準備完了待ち… あと${unready}人` : 'レース開始'}
             </button>
           ) : (
-            <div className="ol-waiting">ホストのスタートを待っています…</div>
+            <>
+              <button className={`cta ol-ready ${me?.ready ? 'on' : ''}`} disabled={busy || !waiting || !me?.loaded} onClick={ready}>
+                {!me?.loaded ? 'コースを読み込んでいます…' : me.ready ? '準備完了を取り消す' : '準備完了'}
+              </button>
+              {me?.ready && <div className="ol-waiting">ホストのスタートを待っています…</div>}
+            </>
           )}
-          <button className="cta small ghost" onClick={exit}>退出</button>
+          <button className="cta small ghost ol-leave" onClick={exit}>退出</button>
         </div>
         {error && <div className="ol-error">{error}</div>}
       </div>
-      <Hint items={[['←→', '車'], ['Esc', '退出']]} />
+      <Hint items={[['←→', '車'], ['Enter', isHost ? 'スタート' : me?.ready ? '準備完了を取り消す' : '準備完了'], ['Esc', '退出']]} />
     </div>
   );
 }

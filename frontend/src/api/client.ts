@@ -96,7 +96,9 @@ export interface RoomMember {
   name: string;
   car_id: CarId;
   slot: number;
-  /** their game has loaded the room's course */
+  /** their game has loaded the room's course (reported by the game itself) */
+  loaded: boolean;
+  /** they pressed 準備完了 (never before `loaded`; the host needs none: the start button is the host's) */
   ready: boolean;
   finish_ms: number | null;
 }
@@ -157,7 +159,7 @@ export const api = {
     return p;
   },
 
-  realtime: () => request<{ realtime?: RealtimeInfo }>('/content').then((r) => r.realtime ?? { enabled: false, key: null, max_players: 3 }),
+  realtime: () => request<{ realtime?: RealtimeInfo }>('/content').then((r) => r.realtime ?? { enabled: false, key: null, max_players: 5 }),
 
   rooms: {
     create: (p: StoredPlayer, trackId: string, timeOfDay: TimeOfDay, carId: CarId) =>
@@ -167,8 +169,10 @@ export const api = {
       request<RoomState>(`/rooms/${encodeURIComponent(code)}/join`, { method: 'POST', body: JSON.stringify({ car_id: carId }) }, p.token),
     setCar: (p: StoredPlayer, code: string, carId: CarId) =>
       request<RoomState>(`/rooms/${encodeURIComponent(code)}/me`, { method: 'PATCH', body: JSON.stringify({ car_id: carId }) }, p.token),
-    setReady: (p: StoredPlayer, code: string) =>
-      request<RoomState>(`/rooms/${encodeURIComponent(code)}/me`, { method: 'PATCH', body: JSON.stringify({ ready: true }) }, p.token),
+    setLoaded: (p: StoredPlayer, code: string) =>
+      request<RoomState>(`/rooms/${encodeURIComponent(code)}/me`, { method: 'PATCH', body: JSON.stringify({ loaded: true }) }, p.token),
+    setReady: (p: StoredPlayer, code: string, ready: boolean) =>
+      request<RoomState>(`/rooms/${encodeURIComponent(code)}/me`, { method: 'PATCH', body: JSON.stringify({ ready }) }, p.token),
     leave: (p: StoredPlayer, code: string) => request<{ left: boolean }>(`/rooms/${encodeURIComponent(code)}/leave`, { method: 'POST' }, p.token),
     start: (p: StoredPlayer, code: string) => request<RoomState>(`/rooms/${encodeURIComponent(code)}/start`, { method: 'POST' }, p.token),
     finish: (p: StoredPlayer, code: string, raceNo: number, timeMs: number) =>

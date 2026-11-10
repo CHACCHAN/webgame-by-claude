@@ -463,15 +463,27 @@ kbd {
 .ol-slots, .ol-standings { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
 .ol-slots li, .ol-standings li { display: flex; align-items: center; gap: 12px; padding: 11px 14px; border-radius: 6px; background: rgba(255, 255, 255, 0.04); border: 1px solid var(--line); }
 .ol-slots li.me, .ol-standings li.me { border-color: rgba(255, 138, 42, 0.6); }
+/* five seats: a little tighter than the results' rows */
+.ol-slots li { padding: 8px 14px; }
 .ol-slots li.empty { opacity: 0.55; border-style: dashed; }
 .ol-slots i, .ol-standings i { width: 10px; height: 26px; border-radius: 3px; flex: none; }
-.ol-slots b, .ol-standings b { font-size: 18px; }
-.ol-slots span, .ol-standings .car { color: var(--muted); font-family: var(--font-en); font-weight: 700; letter-spacing: 0.06em; font-size: 13px; }
-.ol-slots em { margin-left: auto; font-style: normal; font-family: var(--font-en); font-weight: 700; font-size: 12px; letter-spacing: 0.15em; padding: 2px 8px; border-radius: 3px; background: rgba(255, 255, 255, 0.1); }
+/* long names and car names give way (…) to the badges and the time */
+.ol-slots b, .ol-standings b { font-size: 18px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ol-slots span, .ol-standings .car { color: var(--muted); font-family: var(--font-en); font-weight: 700; letter-spacing: 0.06em; font-size: 13px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex-shrink: 3; }
+.ol-slots em { margin-left: auto; flex: none; font-style: normal; font-family: var(--font-en); font-weight: 700; font-size: 12px; letter-spacing: 0.15em; padding: 2px 8px; border-radius: 3px; background: rgba(255, 255, 255, 0.1); }
 .ol-slots em + em { margin-left: 0; }
 .ol-slots em.you { background: var(--accent); color: #1a0e02; }
-.ol-slots em.loading { background: none; color: var(--muted); font-family: inherit; letter-spacing: 0.05em; }
+/* a seat's state: loading the course (by itself), then 準備中 until the player presses 準備完了 */
+.ol-slots em.loading, .ol-slots em.not-ready, .ol-slots em.ready { font-family: inherit; letter-spacing: 0.05em; }
+.ol-slots em.loading, .ol-slots em.not-ready { background: none; color: var(--muted); }
+.ol-slots em.ready { background: rgba(89, 240, 160, 0.18); color: var(--good); }
 .ol-actions { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.ol-actions .cta:disabled { opacity: 0.5; cursor: default; transform: none; box-shadow: none; }
+/* the room's main button (準備完了 / レース開始) stays on screen while the seats and the vehicle list above it scroll */
+.online-room .ol-actions { position: sticky; bottom: -24px; margin: 0 -26px; padding: 12px 26px; background: var(--panel-solid); border-top: 1px solid var(--line); }
+/* pressed: the button now takes the ready back */
+.ol-ready.on { background: rgba(89, 240, 160, 0.12); color: var(--good); border: 1px solid rgba(89, 240, 160, 0.45); box-shadow: none; }
+.ol-ready.on:hover { transform: none; box-shadow: none; }
 .ol-waiting { color: var(--accent-2); font-weight: 700; animation: pulse 1.6s ease-in-out infinite; }
 @keyframes pulse { 50% { opacity: 0.45; } }
 .rt-badge { margin-left: 12px; padding: 2px 8px; border-radius: 3px; font-size: 11px; letter-spacing: 0.15em; background: rgba(255, 255, 255, 0.1); color: var(--muted); }
@@ -479,17 +491,19 @@ kbd {
 .rt-badge.failed { background: rgba(255, 138, 42, 0.16); color: var(--accent); }
 .ol-headline { font-family: var(--font-en); font-weight: 700; font-size: 40px; letter-spacing: 0.08em; text-align: center; }
 .ol-standings .pos { font-family: var(--font-en); font-weight: 700; font-size: 26px; width: 26px; text-align: center; }
-.ol-standings .time { margin-left: auto; font-family: var(--font-en); font-weight: 700; font-size: 20px; font-variant-numeric: tabular-nums; }
+.ol-standings .pos { flex: none; }
+.ol-standings .time { margin-left: auto; flex: none; font-family: var(--font-en); font-weight: 700; font-size: 20px; font-variant-numeric: tabular-nums; }
 .ol-mine { color: var(--muted); }
 .ol-mine b { color: var(--text); font-family: var(--font-en); font-size: 20px; }
-/* in-race standings */
-.online-standings { list-style: none; margin: 0; padding: 8px 12px; min-width: 240px; background: rgba(5, 8, 14, 0.62); border: 1px solid var(--line); border-radius: 8px; display: flex; flex-direction: column; gap: 4px; }
-.online-standings li { display: flex; align-items: center; gap: 9px; font-weight: 700; }
+/* in-race standings: under the clock on the left (five rows in the middle would reach down to the bend warning) */
+.online-standings { list-style: none; margin: 10px 0 0; padding: 6px 10px; width: 236px; background: rgba(5, 8, 14, 0.62); border: 1px solid var(--line); border-radius: 8px; display: flex; flex-direction: column; gap: 3px; }
+.online-standings:empty { display: none; }
+.online-standings li { display: flex; align-items: center; gap: 8px; font-weight: 700; line-height: 20px; }
 .online-standings li.me b { color: var(--accent); }
-.online-standings .pos { font-family: var(--font-en); font-size: 20px; width: 18px; text-align: center; }
-.online-standings i { width: 6px; height: 18px; border-radius: 2px; }
-.online-standings b { font-size: 15px; max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.online-standings em { margin-left: auto; font-style: normal; font-family: var(--font-en); font-size: 14px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.online-standings .pos { font-family: var(--font-en); font-size: 17px; width: 14px; padding: 0; text-align: center; flex: none; }
+.online-standings i { width: 6px; height: 16px; border-radius: 2px; flex: none; }
+.online-standings b { font-size: 14px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.online-standings em { margin-left: auto; flex: none; font-style: normal; font-family: var(--font-en); font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
 @media (max-width: 760px) {
   .ol-panel { right: 4vw; left: 4vw; width: auto; top: 12vh; }
   .ol-split { grid-template-columns: 1fr; }
@@ -657,7 +671,21 @@ kbd {
   .lb-table td { padding: 4px 8px; }
   /* online */
   .online-lobby .crumb, .online-room .crumb, .online-results .crumb { top: 8px; }
-  .ol-panel { top: 32px; max-height: calc(100vh - 40px); padding: 12px 16px; }
+  .ol-panel { top: 32px; max-height: calc(100vh - 40px); padding: 12px 16px; gap: 8px; }
+  /* five players in view: the room's seats and the results' rows without scrolling, the room's and the results'
+     buttons (準備完了 / レース開始 / もう一度走る) always on screen below the list that scrolls */
+  .ol-code-big { flex-direction: row; align-items: baseline; justify-content: center; gap: 12px; padding: 0 0 6px; }
+  .ol-code-big b { font-size: 30px; }
+  .ol-code-big span { display: none; }
+  .ol-slots, .ol-standings { gap: 4px; }
+  .ol-slots li, .ol-standings li { padding: 3px 10px; gap: 8px; }
+  .ol-slots i, .ol-standings i { height: 18px; }
+  .ol-slots b, .ol-standings b { font-size: 15px; }
+  .ol-standings .pos { font-size: 18px; width: 18px; }
+  .ol-standings .time { font-size: 16px; }
+  .ol-headline { font-size: 24px; }
+  .online-room .ol-actions, .online-results .ol-actions { position: sticky; bottom: -12px; margin: 0 -16px; padding: 8px 16px; background: var(--panel-solid); border-top: 1px solid var(--line); }
+  .ol-actions .cta { padding: 9px 18px; font-size: 14px; }
   /* results: the race HUD behind would show through the card */
   .screen-results .hud, .screen-onlineResults .hud { display: none; }
   .results-card { max-height: 96vh; }
@@ -668,6 +696,15 @@ kbd {
   /* race HUD */
   .hud-tl { top: 8px; left: 14px; }
   .hud-time { font-size: 26px; }
+  /* online: five rows and the four splits under the clock end above the steering pad */
+  .online-standings { margin-top: 4px; padding: 3px 8px; width: 190px; gap: 1px; }
+  .online-standings li { line-height: 16px; gap: 6px; }
+  .online-standings .pos { font-size: 13px; }
+  .online-standings i { height: 12px; }
+  .online-standings b { font-size: 12px; }
+  .online-standings em { font-size: 11px; }
+  .online-standings ~ .hud-splits { margin-top: 4px; }
+  .online-standings ~ .hud-splits .split { font-size: 12px; }
   .hud-tr { top: 8px; right: 14px; }
   .minimap { width: 130px; height: 84px; }
   .speedo .speed { font-size: 42px; }
