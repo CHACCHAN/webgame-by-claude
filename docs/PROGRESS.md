@@ -41,6 +41,9 @@ deployed yet: the owner sees each sheet first).
   39 k tris, 0.27 MB (fitted to 6 photos; `tailLampGain: 12` for its smoked light-bar lens). Checked in Chrome
   (software rendering, the GPU is off after a VM restart): garage at dawn and night for both, a night race start
   behind the Cybertruck (light bar and tail bar lit, the stainless reflects). The Supra is the last third-party car.
+- **Deployed** (2026-11-10, bundle `index-C8ga6l-7.js`; the R34 and Cybertruck GLBs served hash-equal; `/api/content`
+  lists 18 vehicles). Before it, every new vehicle was opened in Chrome (garage, and a race start for the NSR, U9 and
+  L0; no page errors). Bikes, U9 and L0 still show their procedural stand-ins. E2E not run for this deploy.
 
 ## Session 7 (2026-11-03 – 11-04) — every model our own (Blender); the owner's train lineup; a livery per line
 
