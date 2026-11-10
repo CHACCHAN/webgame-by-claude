@@ -125,6 +125,8 @@ Plan: `docs/FABLE_PLAN.md`. Commits `2074c02` (renderer), `0c79c61` + merge `a4c
 - **Found on the way, not fixed**: the WebGL 2 backend's picture is darker than WebGPU's and was before this round
   (same viewpoint, dawn: mean 93.6 against 102.4 on `588ddb3`; car body and trees clearly darker). A B1 leftover
   to look into: the earlier "same look" check compared WebGL 2 with itself.
+- **Deployed** (`26841c0`, bundle `index-SYHO0olc.js`, the same hash as the local build; leaderboard API 200). The
+  live site itself was not opened in a browser.
 
 ## Session 8 (2026-11-10) — new vehicles: Cybertruck, Yangwang U9 Xtreme, three motorcycles, the L0 maglev
 
