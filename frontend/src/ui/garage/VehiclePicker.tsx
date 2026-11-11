@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import './picker.css';
 import { gameHolder } from '../GameCanvas';
 import { useMenuInput } from '../useMenuInput';
 import { CAR_SPECS, type CarId } from '../../game/vehicle/carSpecs';
@@ -7,15 +6,16 @@ import { KIND_TRAITS, kindOf, traitsOf } from '../../game/vehicle/kinds';
 import { specForLivery } from '../../game/vehicle/trains';
 import { jetForLivery } from '../../game/vehicle/jets';
 import { useGarage } from '../../store/garage';
-import { Hint } from '../screens/Menus';
+import { CountText, FocusFrame, Hint, PadKey, type HintKey } from '../kit';
 import { COLORS, liveryName, originOf, useGarageOrbit } from '../screens/Cars';
 import { sfx } from '../sfx';
 import { BAR_KNEE, SORTS, garageFramingFor, moveInGrid, pickerTabs, sortFigure, sortVehicles, tabVehicles, vehicleBars, type TabId } from './picker';
 
 
 export interface VehiclePickerProps {
-  /** the heading line */
+  /** the heading: what is being chosen, and the same in the display face */
   title: string;
+  titleEn: string;
   /** what may be picked here (the course's vehicles), in the players' order */
   vehicles: CarId[];
   /** the vehicle highlighted on opening */
@@ -61,10 +61,10 @@ function Bars({ id }: { id: CarId }) {
         <div key={b.key} className={`vp-bar${b.neutral ? ' neutral' : ''}${b.over ? ' over' : ''}`}>
           <span>{b.label}</span>
           <div className="vp-track">
-            <div style={{ width: `${(b.fill * 100).toFixed(1)}%` }} />
+            <div style={{ transform: `scaleX(${b.fill.toFixed(3)})` }} />
             <i style={{ left: `${BAR_KNEE * 100}%` }} />
           </div>
-          <b>{b.text}</b>
+          <CountText text={b.text} />
         </div>
       ))}
       <p className="vp-bars-note">平坦な乾いた路面での実測値。バーは切れ目から先を縮めて表示</p>
@@ -80,7 +80,7 @@ function Bars({ id }: { id: CarId }) {
  * favourite, Enter confirms, Esc goes back. Mouse and touch: a tile highlights, the highlighted tile again (or the
  * button) confirms.
  */
-export function VehiclePicker({ title, vehicles, initial, initialColor = null, colors = true, entered, confirmLabel, overlay, onConfirm, onBack, onBrowse, extra }: VehiclePickerProps) {
+export function VehiclePicker({ title, titleEn, vehicles, initial, initialColor = null, colors = true, entered, confirmLabel, overlay, onConfirm, onBack, onBrowse, extra }: VehiclePickerProps) {
   const favourites = useGarage((s) => s.favourites);
   const sort = useGarage((s) => s.sort);
   const [id, setId] = useState<CarId>(vehicles.includes(initial) ? initial : vehicles[0]);
@@ -154,7 +154,7 @@ export function VehiclePicker({ title, vehicles, initial, initialColor = null, c
     if (t === tab) return;
     setTab(t);
     useGarage.getState().set({ tab: t });
-    sfx.move();
+    sfx.tab();
     // the cursor stays on the vehicle if the tab has it, else goes to the tab's first
     const next = sortVehicles(tabVehicles(vehicles, t, favourites), sort);
     if (next.length && !next.includes(id)) setId(next[0]);
@@ -194,24 +194,29 @@ export function VehiclePicker({ title, vehicles, initial, initialColor = null, c
   const orbit = useGarageOrbit();
   const sortLabel = SORTS.find((s) => s.key === sort)?.label ?? '';
   const badge = traitsOf(spec).badge;
-  const hints: [string, string][] = [['←↑↓→', '車両'], ['Q E / LB RB', 'タブ'], ['R / Back', '並べ替え'], ['X', 'お気に入り'], ['Enter', '決定'], ['Esc', '戻る']];
-  if (colors) hints.splice(3, 0, ['C / Y', 'カラー']);
+  const hints: [HintKey, string][] = [['all', '車両'], ['tab', 'タブ'], ['sort', '並べ替え'], ['fav', 'お気に入り'], ['ok', '決定']];
+  if (colors) hints.splice(3, 0, ['color', 'カラー']);
   return (
     <div ref={root} className={`screen vp${overlay ? ' vp-over' : ''}${orbit.dragging ? ' orbiting' : ''}`} {...orbit.handlers}>
       <div className="vp-browse">
         <div className="vp-top">
-          <div className="crumb">{title}</div>
+          <div className="vp-head">
+            <h2>{title}</h2>
+            <span className="sh-en">{titleEn}</span>
+          </div>
           <button className="vp-sort-cycle" onClick={nextSort}>並べ替え：{sortLabel}</button>
         </div>
         <div className="vp-tabs" role="tablist">
-          <kbd className="vp-key">Q</kbd>
+          <kbd className="vp-key k-key">Q</kbd>
+          <span className="vp-key"><PadKey name="LB" /></span>
           {tabs.map((t) => (
             <button key={t.id} role="tab" aria-selected={t.id === tab} data-tab={t.id} className={`vp-tab${t.id === tab ? ' on' : ''}`} onClick={() => openTab(t.id)} title={t.id === 'fav' ? 'お気に入り' : undefined}>
               {t.label}
               <i>{t.count}</i>
             </button>
           ))}
-          <kbd className="vp-key">E</kbd>
+          <kbd className="vp-key k-key">E</kbd>
+          <span className="vp-key"><PadKey name="RB" /></span>
         </div>
         <div className="vp-sorts">
           <span>並べ替え</span>
@@ -250,6 +255,7 @@ export function VehiclePicker({ title, vehicles, initial, initialColor = null, c
               {tab === 'fav' ? <>お気に入りはまだありません。<br />車両の ★（X キー）で登録できます。</> : 'このコースで選べる車両がありません。'}
             </p>
           )}
+          <FocusFrame on=".vp-tile.on" deps={[id, list]} pad={3} />
         </div>
       </div>
       <div className="vp-detail">

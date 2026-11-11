@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { noteInput } from './inputDevice';
 
 export type MenuAction = 'up' | 'down' | 'left' | 'right' | 'confirm' | 'back' | 'prevTab' | 'nextTab' | 'optionX' | 'optionY' | 'optionSort';
 
@@ -29,6 +30,7 @@ export function useMenuInput(handler: (a: MenuAction) => void, enabled = true) {
       const a = map[e.code];
       if (a) {
         e.preventDefault();
+        noteInput('key');
         ref.current(a);
       }
     };
@@ -56,6 +58,7 @@ export function useMenuInput(handler: (a: MenuAction) => void, enabled = true) {
         for (const k of Object.keys(st)) {
           if (st[k] && (!prev[k] || (['up', 'down', 'left', 'right'].includes(k) && now - repeatT > 220))) {
             repeatT = now;
+            noteInput('pad');
             ref.current(k as MenuAction);
           }
         }

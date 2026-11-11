@@ -1,0 +1,214 @@
+/* Base, the shared parts (cut panels, buttons, keys, the focus marker, the hint bar) and the shell around every
+   menu screen. Colours and sizes: tokens.css. */
+* { box-sizing: border-box; }
+html { font-size: clamp(12px, 1.4815vh, 20px); }
+html, body, #root { margin: 0; height: 100%; background: var(--void); color: var(--text); overflow: hidden; }
+body { font-family: var(--font-jp); font-size: var(--fs-m); -webkit-font-smoothing: antialiased; user-select: none; }
+button { font: inherit; color: inherit; cursor: pointer; }
+h1, h2, h3, p { margin: 0; }
+::selection { background: rgb(var(--c-cyan) / 0.35); }
+
+.app { position: fixed; inset: 0; overflow: hidden; }
+.game-canvas { position: absolute !important; inset: 0; }
+.game-canvas > canvas { display: block; width: 100%; height: 100%; }
+.overlay { position: absolute; inset: 0; pointer-events: none; }
+.overlay > * { pointer-events: auto; }
+.screen { position: absolute; inset: 0; isolation: isolate; animation: kf-fade var(--t-fast) linear both; }
+.no-webgl { position: fixed; inset: 0; display: grid; place-items: center; text-align: center; padding: var(--s-5); line-height: 2; color: var(--text); background: var(--void); }
+
+/* ---- motion: what comes in starts from these (the resting state is the element's own style, so a screen whose
+   animations are switched off — on its way out, or with motion reduced — simply stands as it is) */
+@keyframes kf-fade { from { opacity: 0; } }
+@keyframes kf-rise { from { opacity: 0; transform: translateY(1.1rem); } }
+@keyframes kf-slide { from { opacity: 0; transform: translateX(-1.6rem); } }
+@keyframes kf-drop { from { opacity: 0; transform: translateY(-0.7rem); } }
+@keyframes kf-cut { from { opacity: 0; clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
+@keyframes kf-pop { from { opacity: 0; transform: scale(1.5); } }
+@keyframes kf-stamp { 0% { opacity: 0; transform: scale(2.6) rotate(-9deg); } 60% { opacity: 1; transform: scale(0.94) rotate(-3deg); } 100% { transform: scale(1) rotate(-3deg); } }
+@keyframes kf-flicker { 0% { opacity: 0; } 12% { opacity: 0.9; } 20% { opacity: 0.2; } 34% { opacity: 1; } 46% { opacity: 0.55; } 60% { opacity: 1; } }
+@keyframes kf-blink { 50% { opacity: 0.35; } }
+@keyframes kf-sweep { from { transform: translateX(-100%); } to { transform: translateX(100%); } }
+
+/* children of `.stagger` come in one after another */
+.stagger > * { animation: var(--kf-rise) var(--t-enter) var(--e-out) both; animation-delay: calc(var(--i, 0) * var(--stagger) + var(--stagger-base, 60ms)); }
+.stagger > :nth-child(1) { --i: 0; } .stagger > :nth-child(2) { --i: 1; } .stagger > :nth-child(3) { --i: 2; } .stagger > :nth-child(4) { --i: 3; }
+.stagger > :nth-child(5) { --i: 4; } .stagger > :nth-child(6) { --i: 5; } .stagger > :nth-child(7) { --i: 6; } .stagger > :nth-child(8) { --i: 7; }
+.stagger > :nth-child(9) { --i: 8; } .stagger > :nth-child(10) { --i: 9; } .stagger > :nth-child(11) { --i: 10; } .stagger > :nth-child(12) { --i: 11; }
+.stagger > :nth-child(n + 13) { --i: 12; }
+
+/* a number counting to its figure: the element keeps the final text (what a reader or a test gets), the running
+   value is drawn over it (ui/motion.ts `useCount`) */
+[data-count] { position: relative; -webkit-text-fill-color: transparent; text-shadow: none !important; }
+[data-count]::after { content: attr(data-count); position: absolute; inset: 0; -webkit-text-fill-color: currentColor; text-shadow: var(--count-glow, none); text-align: inherit; }
+
+/* ---- cut panels: two corners chamfered, a hairline that follows the cut, scanlines, dark glass */
+.cut, .panel, .ol-panel, .choice-card, .course-card, .rival-card, .vp-detail, .vp-tile, .menu-desc, .cta, .mini, .chip, .tabs button, .vp-tab,
+.ol-vehicle, .ol-slots li, .ol-standings li, .results-grid .cell, .specs-row div, .local-ghost, .notice, .versus, .ghost-tag, .hud-plate,
+.touch-back, .fs-toggle, .tc-btn, .tc-half, .tc-pedal, .start-guide, .online-standings, .net-stats, .minimap-box, .vs-line, .rival-line, .pause-box, .drift-guide {
+  --c: var(--cut-m);
+  --edge: var(--line);
+  --fill: var(--glass);
+  border: 1px solid var(--edge);
+  clip-path: polygon(var(--c) 0, 100% 0, 100% calc(100% - var(--c)), calc(100% - var(--c)) 100%, 0 100%, 0 var(--c));
+  background:
+    linear-gradient(to bottom right, transparent 50%, var(--edge) 50%, var(--edge) calc(50% + 1.3px), transparent calc(50% + 1.3px)) top left / var(--c) var(--c) no-repeat border-box,
+    linear-gradient(to top left, transparent 50%, var(--edge) 50%, var(--edge) calc(50% + 1.3px), transparent calc(50% + 1.3px)) bottom right / var(--c) var(--c) no-repeat border-box,
+    var(--tex, var(--tex-scan)),
+    var(--fill);
+}
+
+/* ---- keys and pad buttons, as the hint bar and the tables print them */
+kbd { display: inline-flex; align-items: center; justify-content: center; min-width: 1.7em; padding: 0.05em 0.5em; font-family: var(--font-display); font-stretch: var(--w-norm); font-weight: 600;
+  font-size: 0.86em; line-height: 1.5; letter-spacing: 0.04em; color: var(--text); border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 3px; background: rgb(var(--c-ink-2) / 0.7); white-space: nowrap; }
+kbd.pad { border-radius: 1em; min-width: 1.6em; padding: 0.05em 0.35em; border-bottom-width: 1px; border-color: rgb(var(--c-steel) / 0.6); }
+kbd.pad.wide { border-radius: 0.45em; padding: 0.05em 0.55em; }
+/* which of the two is shown: the device used last (ui/inputDevice.ts sets data-input on <html>) */
+.k-pad { display: none; }
+[data-input='pad'] .k-pad { display: inline-flex; }
+[data-input='pad'] .k-key { display: none; }
+[data-input='pad'] .hint-mouse { display: none; }
+
+/* ---- buttons */
+.cta { --c: var(--cut-s); --edge: var(--cyan); --fill: var(--cyan); --tex: none; position: relative; display: inline-flex; align-items: center; justify-content: center; gap: var(--s-3); padding: 0.8rem 1.7rem;
+  font-weight: 700; font-size: var(--fs-l); letter-spacing: 0.08em; color: var(--on-cyan); white-space: nowrap; transition: filter var(--t-fast), transform var(--t-snap) var(--e-snap); }
+.cta:hover:not(:disabled), .cta.focus { filter: brightness(1.18) drop-shadow(0 0 0.5rem rgb(var(--c-cyan) / 0.55)); transform: translateY(-1px); }
+.cta:active:not(:disabled) { transform: translateY(1px); filter: brightness(0.9); }
+.cta:disabled { --edge: var(--line); --fill: var(--glass); color: var(--muted); cursor: default; }
+.cta.small { --edge: var(--line); --fill: rgb(var(--c-ink-2) / 0.72); padding: 0.55rem 1.2rem; font-size: var(--fs-m); color: var(--text); }
+.cta.small:hover:not(:disabled), .cta.small.focus { --edge: var(--cyan); --fill: var(--cyan); color: var(--on-cyan); }
+.cta.ghost { --fill: transparent; color: var(--muted); }
+.mini { --c: 5px; --fill: rgb(var(--c-ink-2) / 0.7); --tex: none; padding: 0.28rem 0.8rem; font-size: var(--fs-s); font-weight: 700; white-space: nowrap; transition: color var(--t-fast); }
+.mini:hover { --edge: var(--cyan); color: var(--cyan); }
+.mini.ghost { color: var(--muted); }
+.chip { --c: 5px; --fill: rgb(var(--c-ink-2) / 0.6); --tex: none; padding: 0.42rem 0.9rem; font-family: var(--font-display); font-stretch: var(--w-norm); font-weight: 600; letter-spacing: 0.05em; font-size: var(--fs-m); color: var(--text-2); }
+.chip:hover:not(:disabled) { --edge: rgb(var(--c-cyan) / 0.6); color: var(--text); }
+.chip.on { --edge: var(--cyan); --fill: var(--cyan); color: var(--on-cyan); }
+.chip:disabled { opacity: 0.45; cursor: default; }
+input { font: inherit; color: var(--text); padding: 0.55rem 0.8rem; border: 1px solid var(--line); border-radius: 0; background: var(--well); outline: none; transition: border-color var(--t-fast), box-shadow var(--t-fast); }
+input:focus { border-color: var(--cyan); box-shadow: inset 0 -2px 0 var(--cyan); }
+input::placeholder { color: var(--faint); }
+
+/* tabs (ranking: courses and vehicles) */
+.tabs { display: flex; gap: var(--s-1); flex-wrap: wrap; margin-bottom: var(--s-3); }
+.tabs button { --c: 5px; --fill: transparent; --tex: none; padding: 0.3rem 0.8rem; font-family: var(--font-display); font-stretch: var(--w-norm); font-weight: 600; letter-spacing: 0.05em; font-size: var(--fs-s); color: var(--muted); }
+.tabs button:hover { color: var(--text); }
+.tabs button.on { --edge: var(--cyan); --fill: var(--cyan); color: var(--on-cyan); }
+.course-tabs button { font-family: var(--font-jp); font-weight: 700; }
+
+/* ---- the focus marker: one element per list or row of cards that moves to the selected item (ui/kit.tsx) */
+.focus-box { position: relative; }
+.focus-frame { position: absolute; left: 0; top: 0; z-index: 3; pointer-events: none; opacity: 0; --b: 0.95rem; --w: 2px;
+  background:
+    linear-gradient(var(--cyan), var(--cyan)) top left / var(--b) var(--w) no-repeat, linear-gradient(var(--cyan), var(--cyan)) top left / var(--w) var(--b) no-repeat,
+    linear-gradient(var(--cyan), var(--cyan)) top right / var(--b) var(--w) no-repeat, linear-gradient(var(--cyan), var(--cyan)) top right / var(--w) var(--b) no-repeat,
+    linear-gradient(var(--cyan), var(--cyan)) bottom left / var(--b) var(--w) no-repeat, linear-gradient(var(--cyan), var(--cyan)) bottom left / var(--w) var(--b) no-repeat,
+    linear-gradient(var(--cyan), var(--cyan)) bottom right / var(--b) var(--w) no-repeat, linear-gradient(var(--cyan), var(--cyan)) bottom right / var(--w) var(--b) no-repeat;
+  filter: drop-shadow(0 0 0.4rem rgb(var(--c-cyan) / 0.8)); }
+.focus-frame.live { transition: transform var(--t-snap) var(--e-snap), width var(--t-snap) var(--e-snap), height var(--t-snap) var(--e-snap), opacity var(--t-fast); }
+/* in a list: a bar at the row's left and a wash that fades to the right */
+.focus-frame.row { background: linear-gradient(var(--cyan), var(--cyan)) left / 3px 100% no-repeat, linear-gradient(90deg, rgb(var(--c-cyan) / 0.22), rgb(var(--c-cyan) / 0) 82%); filter: none; z-index: 0; }
+.focus-frame.row::after { content: ''; position: absolute; left: 3px; top: 0; bottom: 0; width: 0.5rem; background: linear-gradient(90deg, rgb(var(--c-cyan) / 0.55), transparent); }
+.focus-frame.magenta { --cyan: var(--magenta); filter: drop-shadow(0 0 0.4rem rgb(var(--c-magenta) / 0.8)); }
+
+/* ---- the shell: where you are (top), back and fullscreen (bottom left), what the keys do (bottom right) */
+.shell-top { position: absolute; left: 0; right: 0; top: 0; height: var(--bar); z-index: 8; display: flex; align-items: center; gap: var(--s-4); padding: 0 var(--gutter);
+  background: linear-gradient(180deg, rgb(var(--c-void) / 0.88), rgb(var(--c-void) / 0.55)); border-bottom: 1px solid var(--line-soft); pointer-events: none; animation: var(--kf-drop) var(--t-enter) var(--e-out) both; }
+.shell-top::after { content: ''; position: absolute; left: 0; bottom: -1px; width: 22vw; height: 1px; background: linear-gradient(90deg, var(--cyan), transparent); }
+.shell-mark { font-family: var(--font-name); font-weight: 800; font-size: 1.5rem; line-height: 1; color: var(--text); text-shadow: var(--glow-cyan-text); }
+.trail { display: flex; align-items: stretch; align-self: stretch; gap: 0; list-style: none; margin: 0; padding: 0; min-width: 0; }
+.trail li { display: flex; flex-direction: column; justify-content: center; padding: 0 1.1rem 0 1.5rem; position: relative; min-width: 0; line-height: 1.15; }
+.trail li:first-child { padding-left: 0; }
+/* the step's chevron */
+.trail li + li::before { content: ''; position: absolute; left: 0.3rem; top: 50%; width: 0.42rem; height: 0.42rem; border-top: 1px solid var(--faint); border-right: 1px solid var(--faint); transform: translateY(-50%) rotate(45deg); }
+.trail small { font-family: var(--font-display); font-stretch: var(--w-norm); font-weight: 500; font-size: var(--fs-2xs); letter-spacing: 0.16em; color: var(--faint); white-space: nowrap; }
+.trail b { font-size: var(--fs-s); font-weight: 700; color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 14rem; }
+.trail li.todo b { color: var(--faint); font-weight: 400; }
+.trail li.now small { color: var(--cyan); }
+.trail li.now b { color: var(--text); text-shadow: var(--glow-cyan-text); }
+.trail li.now::after { content: ''; position: absolute; left: 1.5rem; right: 1.1rem; bottom: -1px; height: 2px; background: var(--cyan); box-shadow: var(--glow-cyan); animation: var(--kf-cut) var(--t-wipe) var(--e-out) both; }
+.trail li.now:first-child::after { left: 0; }
+.shell-meta { margin-left: auto; font-family: var(--font-display); font-stretch: var(--w-norm); font-weight: 500; font-size: var(--fs-xs); letter-spacing: 0.14em; color: var(--faint); white-space: nowrap; }
+.shell-meta b { color: var(--muted); font-weight: 600; }
+
+.shell-nav { position: absolute; left: var(--gutter); bottom: 0; height: var(--bar); z-index: 20; display: flex; align-items: center; gap: var(--s-2); pointer-events: none; }
+.shell-nav > * { pointer-events: auto; }
+.touch-back, .fs-toggle { --c: 5px; --tex: none; display: inline-flex; align-items: center; gap: 0.5em; padding: 0.36rem 0.85rem; font-size: var(--fs-s); font-weight: 700; color: var(--text-2); white-space: nowrap; transition: color var(--t-fast); }
+.touch-back:hover, .fs-toggle:hover { --edge: var(--cyan); color: var(--cyan); }
+.touch-back:active { --fill: rgb(var(--c-cyan) / 0.35); }
+.fs-toggle { font-weight: 400; color: var(--muted); }
+/* every menu screen keeps its foot clear for the two; the hints stand on the same line */
+.hint-bar { position: absolute; right: var(--gutter); bottom: 0; height: var(--bar); display: flex; align-items: center; gap: 1.3rem; font-size: var(--fs-s); color: var(--muted); pointer-events: none; animation: kf-fade var(--t-enter) linear both; }
+.hint-bar > span { display: inline-flex; align-items: center; gap: 0.45em; white-space: nowrap; }
+.hint-bar kbd + kbd { margin-left: -0.2em; }
+/* the foot's backdrop (under the screens: App puts it first) */
+.shell-foot { position: absolute; left: 0; right: 0; bottom: 0; height: var(--bar); background: linear-gradient(0deg, rgb(var(--c-void) / 0.88), rgb(var(--c-void) / 0.5)); border-top: 1px solid var(--line-soft); }
+.overlay > .shell-foot { pointer-events: none; }
+
+/* the screen's own heading under the top bar */
+.screen-head { position: absolute; left: var(--gutter); top: calc(var(--bar) + 1.5rem); display: flex; align-items: baseline; gap: 1rem; animation: var(--kf-slide) var(--t-enter) var(--e-out) both; pointer-events: none; }
+.screen-head h2 { font-size: var(--fs-xl); font-weight: 700; letter-spacing: 0.08em; }
+.screen-head .sh-en { font-family: var(--font-display); font-stretch: var(--w-cond); font-weight: 500; font-size: var(--fs-s); letter-spacing: 0.3em; color: var(--cyan); }
+.screen-head .sh-note { font-size: var(--fs-s); color: var(--muted); }
+/* (kept for the pieces that still print a one-line heading) */
+.crumb { font-family: var(--font-display); font-stretch: var(--w-cond); font-weight: 600; letter-spacing: 0.26em; font-size: var(--fs-s); color: var(--cyan); }
+
+/* ---- a screen change: the old screen is wiped away under a scan line as the new one is uncovered (ui/motion.ts) */
+.wipe-host { position: absolute; inset: 0; pointer-events: none !important; z-index: 7; }
+.wipe-layer, .wipe-layer > * { pointer-events: none !important; }
+.wipe-layer, .wipe-layer * { animation: none !important; transition: none !important; }
+.wipe-scan { position: absolute; top: 0; bottom: 0; left: 0; width: 3px; z-index: 9; pointer-events: none !important; opacity: 0; background: var(--cyan); box-shadow: 0 0 1.4rem 0.3rem rgb(var(--c-cyan) / 0.55), -2.5rem 0 3rem rgb(var(--c-cyan) / 0.12); will-change: transform; }
+
+/* ---- notices: errors and offline states say what happened and what still works */
+.notice { --c: var(--cut-s); --edge: rgb(var(--c-magenta) / 0.55); --fill: rgb(var(--c-magenta) / 0.08); display: flex; align-items: flex-start; gap: var(--s-3); padding: 0.7rem 1rem; text-align: left; font-size: var(--fs-s); line-height: 1.6; color: var(--text-2); animation: var(--kf-rise) var(--t-enter) var(--e-out) both; }
+.notice::before { content: '!'; flex: none; width: 1.5em; height: 1.5em; display: grid; place-items: center; font-family: var(--font-display); font-weight: 700; color: var(--void); background: var(--magenta); clip-path: polygon(50% 0, 100% 100%, 0 100%); padding-top: 0.25em; font-size: 0.95em; }
+.notice b { display: block; color: var(--text); font-size: var(--fs-m); }
+.notice.info { --edge: rgb(var(--c-cyan) / 0.45); --fill: rgb(var(--c-cyan) / 0.06); }
+.notice.info::before { content: 'i'; background: var(--cyan); clip-path: none; border-radius: 50%; padding-top: 0; }
+.notice .mini { margin-left: auto; align-self: center; flex: none; }
+
+/* medals */
+.medal-gold { color: var(--amber); }
+.medal-silver { color: rgb(var(--c-silver)); }
+.medal-bronze { color: rgb(var(--c-bronze)); }
+
+/* portrait phones: ask for landscape */
+.rotate-hint { display: none; }
+@media (orientation: portrait) {
+  .touch .rotate-hint { display: grid; place-content: center; justify-items: center; text-align: center; gap: var(--s-4); position: fixed; inset: 0; z-index: 50; background: var(--void); color: var(--text); font-size: 18px; letter-spacing: 0.05em; }
+  .rotate-hint svg { width: 84px; height: 84px; stroke: var(--cyan); fill: none; stroke-width: 2; animation: rotate-phone 2.4s var(--e-inout) infinite; animation-play-state: var(--kf-idle); }
+}
+@keyframes rotate-phone { 0%, 20% { transform: rotate(0deg); } 60%, 100% { transform: rotate(-90deg); } }
+
+/* ---- phones and tablets (touch) */
+.touch, .touch * { -webkit-tap-highlight-color: transparent; }
+.touch .overlay { touch-action: manipulation; }
+.touch .hint-bar { display: none; }
+.touch .touch-back kbd { display: none; }
+.touch .shell-nav { left: max(10px, env(safe-area-inset-left)); bottom: max(4px, env(safe-area-inset-bottom)); }
+.touch .touch-back, .touch .fs-toggle { padding: 9px 14px; font-size: 13px; touch-action: none; }
+
+/* landscape phones (short screens) */
+@media (max-height: 500px) {
+  :root { --bar: 26px; --gutter: 2.4vw; }
+  .hint-bar { display: none; }
+  .shell-top { gap: 10px; }
+  .shell-mark { font-size: 15px; }
+  .trail li { flex-direction: row; align-items: baseline; gap: 6px; padding: 0 8px 0 16px; }
+  .trail li + li::before { left: 2px; }
+  .trail li.done small, .trail li.todo { display: none; }
+  .trail b { font-size: 11px; max-width: 9rem; }
+  .trail li.now::after { display: none; }
+  .shell-meta { display: none; }
+  .screen-head { top: calc(var(--bar) + 4px); gap: 8px; }
+  .screen-head h2 { font-size: 14px; }
+  .screen-head .sh-note { display: none; }
+  /* (the room's note carries the link's state) */
+  .online-room .screen-head .sh-note { display: inline; font-size: 11px; }
+  /* back and fullscreen as a column in the bottom-left corner: the screens keep 98 px clear there */
+  .shell-nav, .touch .shell-nav { left: max(10px, env(safe-area-inset-left)); bottom: max(4px, env(safe-area-inset-bottom)); width: 88px; height: auto; flex-direction: column-reverse; align-items: stretch; gap: 4px; }
+  .touch-back, .fs-toggle, .touch .touch-back, .touch .fs-toggle { justify-content: center; padding: 9px 4px; font-size: 12px; }
+  .shell-nav .touch-back kbd { display: none !important; }
+  .shell-foot { display: none; }
+  .cta { padding: 9px 16px; font-size: 14px; }
+  .cta.small { padding: 7px 12px; font-size: 13px; }
+}

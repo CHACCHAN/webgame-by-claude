@@ -51,7 +51,8 @@ export function GarageScreen() {
   };
   return (
     <VehiclePicker
-      title="SELECT YOUR CAR ― 車両選択"
+      title="車両選択"
+      titleEn="SELECT YOUR MACHINE"
       vehicles={list}
       initial={carId}
       initialColor={carColor}

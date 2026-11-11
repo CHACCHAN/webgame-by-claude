@@ -4,15 +4,17 @@ import { currentCourseId, useSettings } from '../../store/settings';
 import { useMenuInput, hoverSelect } from '../useMenuInput';
 import { gameHolder } from '../GameCanvas';
 import { COURSES } from '../../game/track/courses';
+import { WET_GRIP } from '../../game/Game';
 import type { TimeOfDay } from '../../game/render/Environment';
-import { Hint, startRaceFromState } from './Menus';
+import { startRaceFromState } from './Menus';
 import { sfx } from '../sfx';
+import { FocusFrame, Hint, ScreenHead } from '../kit';
 
 /** Race conditions shown before the car select (the online lobby offers the same list). */
-export const CONDITIONS: { id: TimeOfDay; en: string; jp: string; desc: string }[] = [
-  { id: 'night', en: 'CLEAR NIGHT', jp: '深夜・晴れ', desc: '眼下に街の夜景。街灯とヘッドライトだけが頼りの定番コンディション。' },
-  { id: 'rain', en: 'RAIN', jp: '深夜・雨', desc: '濡れた路面はグリップが2割落ちて滑りやすい。ライトが路面に映り込み、ラインが読みにくい。' },
-  { id: 'dawn', en: 'DAWN', jp: '夜明け', desc: '雲海の向こうから朝日が昇る。視界は良いが、街灯は消えている。' },
+export const CONDITIONS: { id: TimeOfDay; en: string; jp: string; desc: string; lamps: string; sight: string }[] = [
+  { id: 'night', en: 'CLEAR NIGHT', jp: '深夜・晴れ', desc: '眼下に街の夜景。街灯とヘッドライトだけが頼りの定番コンディション。', lamps: '点灯', sight: '暗い' },
+  { id: 'rain', en: 'RAIN', jp: '深夜・雨', desc: '濡れた路面はグリップが2割落ちて滑りやすい。ライトが路面に映り込み、ラインが読みにくい。', lamps: '点灯', sight: '雨で悪い' },
+  { id: 'dawn', en: 'DAWN', jp: '夜明け', desc: '雲海の向こうから朝日が昇る。視界は良いが、街灯は消えている。', lamps: '消灯', sight: '良い' },
 ];
 
 /** Time of day and weather, chosen right after the course; the world behind the cards switches with the choice. */
@@ -45,17 +47,24 @@ export function ConditionsScreen() {
   });
   return (
     <div className="screen setup">
-      <div className="crumb center">TIME &amp; WEATHER ― 時間帯・天候{mode === 'ghost' ? '（ゴーストバトル）' : ''} ・ {course.name}</div>
-      <div className="choice-cards">
+      <ScreenHead jp="時間帯・天候" en="TIME & WEATHER" note={`${course.name}${mode === 'ghost' ? '・ゴーストバトル' : ''}`} />
+      <div className="choice-cards focus-box stagger">
         {CONDITIONS.map((c, k) => (
           <div key={c.id} className={`choice-card tod-${c.id} ${k === i ? 'active' : ''}`} {...hoverSelect(() => setI(k))} onClick={() => { setI(k); choose(k); }}>
+            <div className="ch-sky" />
             <div className="ch-en">{c.en}</div>
             <div className="ch-jp">{c.jp}</div>
             <p>{c.desc}</p>
+            <dl className="ch-data">
+              <div><dt>グリップ</dt><dd>{Math.round(course.surface.grip * (c.id === 'rain' ? WET_GRIP : 1) * 100)}%</dd></div>
+              <div><dt>街灯</dt><dd>{c.lamps}</dd></div>
+              <div><dt>視界</dt><dd>{c.sight}</dd></div>
+            </dl>
           </div>
         ))}
+        <FocusFrame on=".choice-card.active" deps={[i]} pad={5} />
       </div>
-      <Hint items={[['←→', '選択'], ['Enter', '決定'], ['Esc', '戻る']]} />
+      <Hint items={[['lr', '選択'], ['ok', '決定']]} />
     </div>
   );
 }
@@ -84,9 +93,9 @@ export function TransmissionScreen() {
     if (a === 'back') { sfx.back(); go('garage'); }
   });
   return (
-    <div className="screen setup">
-      <div className="crumb center">TRANSMISSION ― トランスミッション</div>
-      <div className="choice-cards two">
+    <div className="screen setup gearbox">
+      <ScreenHead jp="トランスミッション" en="TRANSMISSION" />
+      <div className="choice-cards two focus-box stagger">
         {GEARBOXES.map((g, k) => (
           <div key={g.en} className={`choice-card ${k === i ? 'active' : ''}`} {...hoverSelect(() => setI(k))} onClick={() => { setI(k); choose(k); }}>
             <div className="ch-big">{g.en}</div>
@@ -94,8 +103,9 @@ export function TransmissionScreen() {
             <p>{g.desc}</p>
           </div>
         ))}
+        <FocusFrame on=".choice-card.active" deps={[i]} pad={5} />
       </div>
-      <Hint items={[['←→', '選択'], ['Enter', mode === 'rival' ? 'ライバル選択へ' : 'スタート'], ['Esc', '戻る']]} />
+      <Hint items={[['ud', '選択'], ['ok', mode === 'rival' ? 'ライバル選択へ' : 'スタート']]} />
     </div>
   );
 }

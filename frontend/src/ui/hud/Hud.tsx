@@ -13,16 +13,22 @@ import { CONTROL_ROWS, Portrait } from '../screens/Menus';
 import type { Game, HudState } from '../../game/Game';
 import { leaveRoom } from '../../store/online';
 import { SLOT_COLORS } from '../../game/net/RemoteRacers';
+import { FocusFrame, Hint } from '../kit';
+import { motionOn } from '../motion';
 
-const TACH_START = 135, TACH_SWEEP = 270;
-const polar = (cx: number, cy: number, r: number, deg: number) => {
-  const a = ((deg - 90) * Math.PI) / 180;
-  return [cx + r * Math.cos(a), cy + r * Math.sin(a)];
+/**
+ * The rev band: a flat arc over the speed, its centre far below the cluster. Angles in degrees from straight up;
+ * the band is one path whose length is normalised to 100, so a rev figure is a single dash offset per frame.
+ */
+const TACH = { cx: 160, cy: 646, r: 600, half: 13.7 };
+const tachPoint = (deg: number, r = TACH.r) => {
+  const a = (deg * Math.PI) / 180;
+  return [TACH.cx + r * Math.sin(a), TACH.cy - r * Math.cos(a)] as const;
 };
-const arc = (cx: number, cy: number, r: number, a0: number, a1: number) => {
-  const [x0, y0] = polar(cx, cy, r, a0);
-  const [x1, y1] = polar(cx, cy, r, a1);
-  return `M${x0},${y0} A${r},${r} 0 ${a1 - a0 > 180 ? 1 : 0} 1 ${x1},${y1}`;
+const tachArc = (f0: number, f1: number, r = TACH.r) => {
+  const [x0, y0] = tachPoint(-TACH.half + f0 * 2 * TACH.half, r);
+  const [x1, y1] = tachPoint(-TACH.half + f1 * 2 * TACH.half, r);
+  return `M${x0.toFixed(1)},${y0.toFixed(1)} A${r},${r} 0 0 1 ${x1.toFixed(1)},${y1.toFixed(1)}`;
 };
 
 const CORNER_LABEL = { hairpin: ['ヘアピン', 'HAIRPIN'], tight: ['急カーブ', 'SHARP'], medium: ['カーブ', 'BEND'] } as const;
@@ -62,7 +68,7 @@ function updateStandings(el: HTMLOListElement | null, rows: HudState['online']) 
     r.name,
     r.finMs !== null ? formatTime(r.finMs) : r.lost ? '通信切断' : k === 0 || r.s >= lead ? '' : `-${Math.round(lead - r.s)} m`,
     SLOT_COLORS[r.slot % SLOT_COLORS.length],
-    r.me ? 'me' : '',
+    `${r.me ? 'me' : ''}${r.lost ? ' lost' : ''}`,
   ]);
   const key = JSON.stringify(cells);
   if (el.dataset.key === key) return;
@@ -136,19 +142,30 @@ function updateNetStats(el: HTMLPreElement | null, game: Game) {
   if (el.textContent !== text) el.textContent = text;
 }
 
+/** a design token's colour for the canvases (`--c-cyan` → "56 232 255") */
+const token = (name: string) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+
+/**
+ * The race's instruments. Everything that changes while driving is written straight to the DOM in one animation
+ * frame callback (no React state per frame), and only what changed: text when its string differs, the rev band as
+ * one dash offset, bars as transforms. Nothing here lays the page out again while the car is moving.
+ */
 export function Hud() {
   const { mode, rivalLevel, ghostChoice, phase } = useApp();
   const showFps = useSettings((s) => s.showFps);
   const guideOn = useSettings((s) => s.controlsGuide !== false);
   const autoShift = useSettings((s) => s.autoShift);
   const refs = {
+    root: useRef<HTMLDivElement>(null),
     time: useRef<HTMLDivElement>(null),
+    prog: useRef<HTMLElement>(null),
     speed: useRef<HTMLDivElement>(null),
     gear: useRef<HTMLDivElement>(null),
+    cluster: useRef<HTMLDivElement>(null),
     rpmFill: useRef<SVGPathElement>(null),
-    needle: useRef<SVGLineElement>(null),
     splits: useRef<HTMLDivElement>(null),
     countdown: useRef<HTMLDivElement>(null),
+    cdBar: useRef<HTMLElement>(null),
     wrong: useRef<HTMLDivElement>(null),
     drift: useRef<HTMLDivElement>(null),
     pos: useRef<HTMLDivElement>(null),
@@ -166,20 +183,25 @@ export function Hud() {
   };
   const [redline, setRedline] = useState(8000);
   const [turbo, setTurbo] = useState(false);
+  const [sectors, setSectors] = useState<number[]>([]);
 
   useEffect(() => {
     const game = gameHolder.game;
     if (!game) return;
     setRedline(game.hud.redline);
     setTurbo(game.hud.turbo);
-    // pre-render the course outline for the minimap
     const track = game.track;
+    const timed = track.finishS - track.startS;
+    // where the sector lines cross the progress bar (the last one is the finish)
+    setSectors(track.sectorSplits.slice(0, -1).map((s) => (s - track.startS) / timed));
+    const cyan = token('--c-cyan'), magenta = token('--c-magenta'), steel = token('--c-steel'), ink = token('--c-void'), text = token('--c-text'), green = token('--c-green');
+    // pre-render the course outline for the minimap
     let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
     for (let i = 0; i < track.count; i += 5) {
       minX = Math.min(minX, track.pos[i * 3]); maxX = Math.max(maxX, track.pos[i * 3]);
       minZ = Math.min(minZ, track.pos[i * 3 + 2]); maxZ = Math.max(maxZ, track.pos[i * 3 + 2]);
     }
-    const W = 220, H = 140, pad = 10;
+    const W = 220, H = 140, pad = 12;
     const sc = Math.min((W - pad * 2) / (maxX - minX), (H - pad * 2) / (maxZ - minZ));
     const ox = (W - (maxX - minX) * sc) / 2, oz = (H - (maxZ - minZ) * sc) / 2;
     const toMap = (x: number, z: number) => [ox + (x - minX) * sc, oz + (z - minZ) * sc] as const;
@@ -189,7 +211,7 @@ export function Hud() {
     const og = outline.getContext('2d')!;
     og.scale(2, 2);
     og.lineCap = og.lineJoin = 'round';
-    for (const [w, c] of [[5, 'rgba(0,0,0,0.6)'], [2.4, 'rgba(255,255,255,0.75)']] as const) {
+    for (const [w, c] of [[5.5, `rgb(${ink} / 0.8)`], [2.2, `rgb(${text} / 0.85)`]] as const) {
       og.strokeStyle = c;
       og.lineWidth = w;
       og.beginPath();
@@ -203,46 +225,77 @@ export function Hud() {
     for (const s of [track.startS, track.finishS]) {
       const p = track.pointAt(s);
       const [x, y] = toMap(p.x, p.z);
-      og.fillStyle = s === track.startS ? '#7dffb0' : '#ffffff';
-      og.beginPath();
-      og.arc(x, y, 3.5, 0, Math.PI * 2);
-      og.fill();
+      og.fillStyle = s === track.startS ? `rgb(${green})` : `rgb(${text})`;
+      og.fillRect(x - 3, y - 3, 6, 6);
     }
 
     let raf = 0;
     let lastSplits = -1;
+    const deltas: (number | null)[] = [];
+    let wasCounting = false, booted = false, goUntil = 0, lastCount = '';
+    let typed = { seq: '', at: 0, n: -1 };
+    let lastGear = '', lastSpeed = '', lastTime = '', lastGap = '', lastPos = 0, hot = false, lastDash = -1, lastProg = -1, lastBoost = -1, lastBar = -1;
     const streaks = Array.from({ length: 46 }, () => ({ a: Math.random() * Math.PI * 2, r: Math.random(), v: 0.6 + Math.random() }));
     let frames = 0, fpsT = performance.now();
     const loop = () => {
       const h = game.hud;
       const r = refs;
-      if (r.time.current) r.time.current.textContent = formatTime(h.raceTime * 1000);
-      if (r.speed.current) {
-        r.speed.current.textContent = String(Math.round(h.speedKmh));
+      const now = performance.now();
+      // ---- the grid: the instruments power on once per start
+      const counting = h.countdown > 0;
+      if (counting && !booted) {
+        booted = true;
+        const root = r.root.current;
+        if (root) {
+          root.classList.remove('boot');
+          void root.offsetWidth;
+          root.classList.add('boot');
+        }
+        if (motionOn()) sfx.boot();
+      }
+      if (!counting && h.raceTime > 2) booted = false;
+      // ---- clock, progress along the course
+      const time = formatTime(h.raceTime * 1000);
+      if (r.time.current && time !== lastTime) r.time.current.textContent = lastTime = time;
+      const prog = Math.round(Math.max(0, Math.min(1, h.progress)) * 500) / 500;
+      if (r.prog.current && prog !== lastProg) r.prog.current.style.transform = `scaleX(${(lastProg = prog)})`;
+      // ---- speed, gear, revs
+      const speed = String(Math.round(h.speedKmh));
+      if (r.speed.current && speed !== lastSpeed) {
+        r.speed.current.textContent = lastSpeed = speed;
         // four digits (the cockroach at Mach 1) in a smaller face
         r.speed.current.classList.toggle('wide', h.speedKmh >= 999.5);
       }
-      if (r.gear.current) r.gear.current.textContent = h.gear === -1 ? 'R' : h.gear === 0 ? 'N' : String(h.gear);
-      const rpmFrac = Math.min(1, h.rpm / (h.redline + 500));
-      const ang = TACH_START + rpmFrac * TACH_SWEEP;
-      if (r.rpmFill.current) r.rpmFill.current.setAttribute('d', arc(100, 100, 82, TACH_START, Math.max(TACH_START + 0.5, ang)));
-      if (r.needle.current) r.needle.current.setAttribute('transform', `rotate(${ang} 100 100)`);
-      if (r.rpmFill.current) r.rpmFill.current.classList.toggle('hot', h.rpm > h.redline * 0.93);
-      if (r.boost.current) r.boost.current.style.width = `${Math.round(h.boost * 100)}%`;
-      if (r.countdown.current) {
+      const gear = h.gear === -1 ? 'R' : h.gear === 0 ? 'N' : String(h.gear);
+      if (r.gear.current && gear !== lastGear) r.gear.current.textContent = lastGear = gear;
+      const dash = Math.round((1 - Math.min(1, h.rpm / (h.redline + 500))) * 400) / 4;
+      if (r.rpmFill.current && dash !== lastDash) r.rpmFill.current.style.strokeDashoffset = String((lastDash = dash));
+      // the shift point: the band and the gear turn hot just before the red
+      const isHot = h.rpm > h.redline * 0.93;
+      if (isHot !== hot) r.cluster.current?.classList.toggle('hot', (hot = isHot));
+      const boost = Math.round(h.boost * 50) / 50;
+      if (r.boost.current && boost !== lastBoost) r.boost.current.style.transform = `scaleX(${(lastBoost = boost)})`;
+      // ---- countdown: READY, 3, 2, 1 with the game's own beeps, GO as the clock starts
+      const cd = r.countdown.current;
+      if (cd) {
+        if (wasCounting && !counting) goUntil = now + 900;
+        wasCounting = counting;
         const c = h.countdown;
-        const show = c > 0 && c < 3.7;
-        r.countdown.current.style.opacity = show ? '1' : '0';
-        const n = Math.ceil(c);
-        const txt = c > 3 ? '' : String(n);
-        if (r.countdown.current.textContent !== txt) {
-          r.countdown.current.textContent = txt;
-          r.countdown.current.classList.remove('pop');
-          void r.countdown.current.offsetWidth;
-          r.countdown.current.classList.add('pop');
+        const txt = counting ? (c > 3 ? 'READY' : String(Math.ceil(c))) : now < goUntil ? 'GO' : '';
+        if (txt !== lastCount) {
+          lastCount = txt;
+          cd.dataset.n = txt;
+          cd.firstElementChild!.textContent = txt;
+          cd.classList.toggle('show', txt !== '');
+          cd.classList.remove('pop');
+          void cd.offsetWidth;
+          if (txt) cd.classList.add('pop');
         }
+        // the second running out under the numeral
+        const bar = counting && c <= 3 ? Math.round((c - Math.floor(c - 1e-6)) * 60) / 60 : 0;
+        if (r.cdBar.current && bar !== lastBar) r.cdBar.current.style.transform = `scaleX(${(lastBar = bar)})`;
       }
-      if (r.wrong.current) r.wrong.current.style.opacity = h.wrongWay ? '1' : '0';
+      if (r.wrong.current) r.wrong.current.classList.toggle('show', h.wrongWay);
       updateCornerNote(r.corner.current, h.corner);
       updateStandings(r.standings.current, h.online);
       updateNetStats(r.net.current, game);
@@ -255,33 +308,64 @@ export function Hud() {
       }
       if (r.drift.current) {
         const show = h.driftCombo > 20;
-        r.drift.current.style.opacity = show ? '1' : '0';
-        if (show) r.drift.current.querySelector('b')!.textContent = `+${Math.round(h.driftCombo)}`;
-        r.drift.current.querySelector('i')!.textContent = String(h.driftScore);
+        r.drift.current.classList.toggle('show', show);
+        if (show) {
+          const combo = `+${Math.round(h.driftCombo)}`;
+          const b = r.drift.current.querySelector('b')!;
+          if (b.textContent !== combo) b.textContent = combo;
+          const total = String(h.driftScore);
+          const i = r.drift.current.querySelector('i')!;
+          if (i.textContent !== total) i.textContent = total;
+        }
       }
       if (r.pos.current && h.rivalProgress !== null) {
-        r.pos.current.textContent = h.position === 1 ? '1ST' : '2ND';
-        r.pos.current.className = `pos ${h.position === 1 ? 'lead' : 'chase'}`;
-        if (r.gap.current) r.gap.current.textContent = `${h.gapMeters >= 0 ? '+' : ''}${Math.round(h.gapMeters)} m`;
+        if (h.position !== lastPos) {
+          lastPos = h.position;
+          r.pos.current.textContent = h.position === 1 ? '1ST' : '2ND';
+          r.pos.current.className = `pos ${h.position === 1 ? 'lead' : 'chase'}`;
+        }
+        const gap = `${h.gapMeters >= 0 ? '+' : ''}${Math.round(h.gapMeters)} m`;
+        if (r.gap.current && gap !== lastGap) r.gap.current.textContent = lastGap = gap;
       }
-      // the rival's line before the start: shown while the game keeps it
+      // the rival's line before the start, typed out as it comes over the radio: shown while the game keeps it
       const line = r.line.current, said = h.rivalLine?.moment === 'before' ? h.rivalLine : null;
-      if (line && line.dataset.seq !== String(said?.seq ?? '')) {
-        line.dataset.seq = String(said?.seq ?? '');
-        if (said) line.textContent = `「${said.text}」`;
-        line.classList.toggle('show', !!said);
+      if (line) {
+        const seq = String(said?.seq ?? '');
+        if (typed.seq !== seq) {
+          typed = { seq, at: now, n: -1 };
+          line.dataset.seq = seq;
+          line.parentElement!.classList.toggle('show', !!said);
+        }
+        if (said) {
+          const chars = [...said.text];
+          const n = motionOn() ? Math.min(chars.length, Math.floor((now - typed.at) / 32)) : chars.length;
+          if (n !== typed.n) {
+            typed.n = n;
+            line.textContent = `「${chars.slice(0, n).join('')}」`;
+            if (n < chars.length && n % 2 === 1) sfx.type();
+          }
+        }
       }
       if (r.splits.current && h.splits.length !== lastSplits) {
         lastSplits = h.splits.length;
+        if (h.lastSplitIndex >= 0 && h.splits.length > 0) deltas[h.lastSplitIndex] = h.lastSplitDelta;
+        if (h.splits.length === 0) deltas.length = 0;
         r.splits.current.innerHTML = h.splits
-          .map((ms, i) => `<div class="split"><span>S${i + 1}</span><b>${formatTime(ms)}</b></div>`)
+          .map((ms, i) => {
+            const d = deltas[i];
+            const delta = d === null || d === undefined ? '' : `<em class="${d <= 0 ? 'faster' : 'slower'}">${formatTime(d, { sign: true })}</em>`;
+            return `<div class="split"><span>S${i + 1}</span><b>${formatTime(ms)}</b>${delta}</div>`;
+          })
           .join('');
         if (r.delta.current && h.lastSplitIndex >= 0 && h.splits.length > 0) {
           const d = h.lastSplitDelta;
-          r.delta.current.textContent = d === null ? `SECTOR ${h.lastSplitIndex + 1}  ${formatTime(h.splits[h.lastSplitIndex])}` : `${formatTime(d, { sign: true })}`;
-          r.delta.current.className = `split-flash ${d === null ? '' : d <= 0 ? 'faster' : 'slower'}`;
-          void r.delta.current.offsetWidth;
-          r.delta.current.classList.add('show');
+          const el = r.delta.current;
+          el.innerHTML =
+            `<small>SECTOR ${h.lastSplitIndex + 1}</small><b>${formatTime(h.splits[h.lastSplitIndex])}</b>` +
+            (d === null ? '' : `<em>${formatTime(d, { sign: true })}</em><i>${d <= 0 ? 'AHEAD' : 'BEHIND'}</i>`);
+          el.className = `split-flash ${d === null ? '' : d <= 0 ? 'faster' : 'slower'}`;
+          void el.offsetWidth;
+          el.classList.add('show');
         }
       }
       // speed lines towards the screen edges at high speed
@@ -302,7 +386,7 @@ export function Hud() {
             st.r += st.v * 0.045 * (0.5 + k);
             if (st.r > 1) { st.r = 0.55; st.a = Math.random() * Math.PI * 2; }
             const r0 = R * st.r, r1 = r0 + R * 0.12 * k * st.v;
-            lg.strokeStyle = `rgba(220,230,255,${(0.05 + 0.13 * k) * (st.r - 0.5) * 2})`;
+            lg.strokeStyle = `rgb(${text} / ${((0.05 + 0.13 * k) * (st.r - 0.5) * 2).toFixed(3)})`;
             lg.beginPath();
             lg.moveTo(cx + Math.cos(st.a) * r0, cy + Math.sin(st.a) * r0 * 0.75);
             lg.lineTo(cx + Math.cos(st.a) * r1, cy + Math.sin(st.a) * r1 * 0.75);
@@ -318,9 +402,9 @@ export function Hud() {
         g.drawImage(outline, 0, 0);
         g.save();
         g.scale(2, 2);
-        const dot = (s01: number | null, color: string, rad: number) => {
+        const dot = (s01: number | null, color: string, rad: number, ring = false) => {
           if (s01 === null) return;
-          const s = track.startS + s01 * (track.finishS - track.startS);
+          const s = track.startS + Math.max(0, Math.min(1, s01)) * timed;
           const p = track.pointAt(s);
           const [x, y] = toMap(p.x, p.z);
           g.fillStyle = color;
@@ -329,14 +413,23 @@ export function Hud() {
           g.beginPath();
           g.arc(x, y, rad, 0, Math.PI * 2);
           g.fill();
+          if (ring) {
+            g.shadowBlur = 0;
+            g.strokeStyle = color;
+            g.lineWidth = 1;
+            g.beginPath();
+            g.arc(x, y, rad + 3.5, 0, Math.PI * 2);
+            g.stroke();
+          }
         };
-        dot(h.ghostProgress, '#7fd4ff', 3.5);
-        dot(h.rivalProgress, '#ff5050', 4);
-        dot(h.progress, '#ffb020', 4.5);
+        dot(h.ghostProgress, `rgb(${steel})`, 3.5);
+        dot(h.rivalProgress, `rgb(${magenta})`, 4);
+        // online: the others, in the paint of their grid slots
+        if (h.online) for (const o of h.online) if (!o.me && !o.lost) dot((o.s - track.startS) / timed, SLOT_COLORS[o.slot % SLOT_COLORS.length], 3.5);
+        dot(h.progress, `rgb(${cyan})`, 4.5, true);
         g.restore();
       }
       frames++;
-      const now = performance.now();
       if (now - fpsT > 500) {
         if (r.fps.current) r.fps.current.textContent = `${Math.round((frames * 1000) / (now - fpsT))} FPS`;
         frames = 0;
@@ -360,61 +453,80 @@ export function Hud() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // the rev band's scale: a tick and a figure per 1000 rpm, the red zone, the shift point
+  const span = redline + 500;
   const ticks = [];
-  const steps = Math.ceil((redline + 500) / 1000);
-  for (let i = 0; i <= steps; i++) {
-    const rpm = i * 1000;
-    const a = TACH_START + (rpm / (redline + 500)) * TACH_SWEEP;
-    if (a > TACH_START + TACH_SWEEP + 0.1) break;
-    const [x0, y0] = polar(100, 100, 92, a);
-    const [x1, y1] = polar(100, 100, 80, a);
-    const [tx, ty] = polar(100, 100, 66, a);
+  for (let i = 0; i * 1000 <= span; i++) {
+    const deg = -TACH.half + ((i * 1000) / span) * 2 * TACH.half;
+    const [x0, y0] = tachPoint(deg, TACH.r + 11);
+    const [x1, y1] = tachPoint(deg, TACH.r + 17);
+    const [tx, ty] = tachPoint(deg, TACH.r + 27);
     ticks.push(
-      <g key={i}>
-        <line x1={x0} y1={y0} x2={x1} y2={y1} className={rpm >= redline ? 'tick red' : 'tick'} />
-        <text x={tx} y={ty + 4} className="tick-label">{i}</text>
+      <g key={i} className={i * 1000 >= redline ? 'red' : ''}>
+        <line x1={x0} y1={y0} x2={x1} y2={y1} className="tick" />
+        <text x={tx} y={ty + 3.5} className="tick-label">{i}</text>
       </g>,
     );
   }
-  const redStart = TACH_START + (redline / (redline + 500)) * TACH_SWEEP;
+  const [sx, sy] = tachPoint(-TACH.half + ((redline * 0.93) / span) * 2 * TACH.half, TACH.r - 14);
+  const rival = mode === 'rival' ? COURSES[currentCourseId()].rivals[rivalLevel] : null;
 
   return (
-    <div className={`hud phase-${phase}`}>
+    <div className={`hud phase-${phase}`} ref={refs.root}>
       <canvas className="speedlines" ref={refs.lines} />
       <div className="hud-tl">
-        <div className="hud-label">TIME</div>
-        <div className="hud-time" ref={refs.time}>0:00.000</div>
+        <div className="hud-clock">
+          <div className="hud-label">TIME</div>
+          <div className="hud-time" ref={refs.time}>0:00.000</div>
+          <div className="hud-prog">
+            <i ref={refs.prog} />
+            {sectors.map((s) => <u key={s} style={{ left: `${(s * 100).toFixed(2)}%` }} />)}
+          </div>
+        </div>
         {/* online: the live order (up to five) under the clock, clear of the bend warning in the middle */}
         {mode === 'online' && <ol className="online-standings" ref={refs.standings} />}
         {mode === 'online' && <pre className="net-stats" ref={refs.net} />}
         <div className="hud-splits" ref={refs.splits} />
       </div>
       <div className="hud-tc">
-        {mode === 'rival' && (
+        {rival && (
           <div className="versus">
             <div className="pos lead" ref={refs.pos}>1ST</div>
-            <Portrait src={COURSES[currentCourseId()].rivals[rivalLevel].portrait} className="vs-portrait" />
+            <Portrait src={rival.portrait} className="vs-portrait" />
             <div className="vs-info">
               <small>VS {AI_LEVEL_LABEL[rivalLevel]}</small>
-              <b>{COURSES[currentCourseId()].rivals[rivalLevel].name}</b>
+              <b>{rival.name}</b>
               <span ref={refs.gap}>+0 m</span>
             </div>
           </div>
         )}
-        {mode === 'rival' && <div className="vs-line" ref={refs.line} />}
+        {rival && (
+          <div className="vs-radio">
+            <small>{rival.name}</small>
+            <div className="vs-line" ref={refs.line} />
+          </div>
+        )}
         {mode === 'ghost' && ghostChoice && (
           <div className="ghost-tag">
-            👻 VS {ghostChoice.label} <b>{formatTime(ghostChoice.timeMs)}</b>
+            <small>GHOST</small> {ghostChoice.label} <b>{formatTime(ghostChoice.timeMs)}</b>
           </div>
         )}
         <div className="split-flash" ref={refs.delta} />
       </div>
       <div className="hud-tr">
-        <canvas ref={refs.map} width={440} height={280} className="minimap" />
+        <div className="minimap-box">
+          <canvas ref={refs.map} width={440} height={280} className="minimap" />
+        </div>
         {showFps && <div className="fps" ref={refs.fps} />}
       </div>
-      <div className="countdown" ref={refs.countdown} />
-      <div className="wrong-way" ref={refs.wrong}>逆走中 ― WRONG WAY</div>
+      <div className="countdown" ref={refs.countdown}>
+        <b />
+        <i><i ref={refs.cdBar} /></i>
+      </div>
+      <div className="wrong-way" ref={refs.wrong}>
+        <b>逆走中</b>
+        <small>WRONG WAY</small>
+      </div>
       {guideOn && (
         <div className="start-guide" ref={refs.guide}>
           {CONTROL_ROWS.filter(([a]) => !a.includes('MT時') || !autoShift).map(([action, key, padKey]) => (
@@ -454,20 +566,26 @@ export function Hud() {
         <b>+0</b>
         <small>TOTAL <i>0</i></small>
       </div>
-      <div className="hud-br">
-        <svg viewBox="0 0 200 200" className="tach">
-          <path d={arc(100, 100, 82, TACH_START, TACH_START + TACH_SWEEP)} className="tach-bg" />
-          <path d={arc(100, 100, 86, redStart, TACH_START + TACH_SWEEP)} className="tach-red" />
-          <path ref={refs.rpmFill} d={arc(100, 100, 82, TACH_START, TACH_START + 1)} className="tach-fill" />
+      <div className="hud-br" ref={refs.cluster}>
+        <svg viewBox="0 0 320 76" className="tach">
+          <path d={tachArc(0, 1)} className="tach-bg" />
+          <path d={tachArc(0, 1)} className="tach-off" />
+          <path d={tachArc(redline / span, 1, TACH.r + 10)} className="tach-red" />
+          <path ref={refs.rpmFill} d={tachArc(0, 1)} className="tach-fill" pathLength={100} />
+          {/* the band cut into segments */}
+          <path d={tachArc(0, 1)} className="tach-comb" pathLength={100} />
           {ticks}
-          <line ref={refs.needle} x1="100" y1="100" x2="100" y2="24" className="needle" />
-          <circle cx="100" cy="100" r="5" className="hub" />
-          <text x="100" y="150" className="rpm-label">×1000 rpm</text>
+          <polygon points={`${sx.toFixed(1)},${(sy - 5).toFixed(1)} ${(sx - 4).toFixed(1)},${(sy + 2).toFixed(1)} ${(sx + 4).toFixed(1)},${(sy + 2).toFixed(1)}`} className="tach-shift" />
         </svg>
         <div className="speedo">
-          <div className="gear" ref={refs.gear}>1</div>
-          <div className="speed" ref={refs.speed}>0</div>
-          <div className="unit">km/h</div>
+          <div className="gear-box">
+            <small>GEAR</small>
+            <div className="gear" ref={refs.gear}>1</div>
+          </div>
+          <div className="speed-box">
+            <div className="speed" ref={refs.speed}>0</div>
+            <div className="unit">km/h</div>
+          </div>
           {turbo && (
             <div className="boost">
               <small>BOOST</small>
@@ -507,20 +625,25 @@ export function PauseMenu() {
     if (a === 'up') { setSel((s) => (s + items.length - 1) % items.length); sfx.move(); }
     if (a === 'down') { setSel((s) => (s + 1) % items.length); sfx.move(); }
     if (a === 'confirm') { sfx.confirm(); items[sel].action(); }
-    if (a === 'back') resume();
+    if (a === 'back') { sfx.back(); resume(); }
   });
   return (
-    <div className="screen pause">
+    <div className="screen pause" data-wipe="none">
       <div className="pause-box">
         <div className="pause-title">PAUSE</div>
-        <ul className="menu-list compact">
-          {items.map((it, i) => (
-            <li key={it.label} className={i === sel ? 'active' : ''} {...hoverSelect(() => setSel(i))} onClick={() => { sfx.confirm(); it.action(); }}>
-              <span className="mi-jp big">{it.label}</span>
-            </li>
-          ))}
-        </ul>
+        <div className="pause-sub">{online ? 'オンライン対戦は止まりません' : '一時停止中'}</div>
+        <div className="focus-box">
+          <ul className="menu-list compact">
+            {items.map((it, i) => (
+              <li key={it.label} className={i === sel ? 'active' : ''} {...hoverSelect(() => setSel(i))} onClick={() => { sfx.confirm(); it.action(); }}>
+                <span className="mi-jp big">{it.label}</span>
+              </li>
+            ))}
+          </ul>
+          <FocusFrame on="li.active" deps={[sel, items.length]} kind="row" />
+        </div>
       </div>
+      <Hint items={[['ud', '選択'], ['ok', '決定']]} />
     </div>
   );
 }
