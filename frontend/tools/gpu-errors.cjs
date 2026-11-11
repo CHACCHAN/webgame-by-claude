@@ -2,6 +2,7 @@
 // garage with several vehicles (one of them twice) → race in the car just shown → restart → another course → garage
 // → rival race → back to the first course → attract. A check that starts a race directly misses these: on WebGPU a
 // buffer destroyed with one clone of a model and used by the next freezes the picture (render/threeFixes.ts).
+// Also reported: a race camera that is not with the car.
 //   node tools/gpu-errors.cjs            exit code 1 when anything was reported
 // Env: URL (http://localhost:4173/), QUERY (e.g. ?webgl=1), VEHICLES (comma list shown in the garage),
 // OUT (directory for three pictures: race, rival race, attract), CHROME, PW_MODULE.
@@ -39,14 +40,21 @@ const OUT = process.env.OUT;
     await page.waitForTimeout(wait);
   };
   const shot = async (name) => OUT && page.screenshot({ path: `${OUT}/${name}.jpg`, quality: 80, type: 'jpeg' });
+  // the race camera is with the car (it once stayed at the garage while the car drove off: nothing errors then)
+  const followed = async () => {
+    const d = await page.evaluate(() => window.__game.camera.position.distanceTo(window.__game.player.sim.position));
+    if (!(d < 40)) seen[`${step}: the camera is ${Math.round(d)} m from the car`] = 1;
+  };
   const last = VEHICLES[VEHICLES.length - 1];
   for (const id of VEHICLES) await run(`garage ${id}`, (c) => window.__game.showGarage(c), id);
   await run(`race ${last}`, (c) => window.__game.startRace({ mode: 'time_attack', carId: c }), last, 9000);
+  await followed();
   await shot('race');
   await run('restart', () => window.__game.restart(), null, 6000);
   await run('other course', () => window.__game.switchCourse('autobahn'), null, 30000);
   await run(`garage ${last} (other course)`, (c) => window.__game.showGarage(c), last);
   await run('rival race', () => window.__game.startRace({ mode: 'rival', carId: 'shiden', rivalLevel: 'legend' }), null, 9000);
+  await followed();
   await shot('rival');
   await run('first course again', () => window.__game.switchCourse('oboro-downhill'), null, 30000);
   await run('attract', () => window.__game.startAttract(), null, 5000);

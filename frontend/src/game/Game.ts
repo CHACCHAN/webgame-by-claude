@@ -1386,8 +1386,6 @@ export class Game {
     if (this.phase === 'attract' && this.attractCar) this.cinematicCamera(dt, this.attractCar.visual.root, this.attractCar.proj.s);
     else if (this.phase === 'replay' && this.replay) this.updateReplay(dt);
     else if (this.phase === 'garage' && (this.garageCar || this.lobby)) this.garageCamera(dt);
-    // (the garage's clearing among the trees closes with any other view)
-    if (this.phase !== 'garage') clearing.value.z = -10;
     else if (this.player) {
       const sim = this.player.sim;
       const v = this.player.visual.root;
@@ -1401,6 +1399,9 @@ export class Game {
         lean: this.player.visual.lean,
       });
     }
+    // (the garage's clearing among the trees closes with any other view; its own statement: written into the
+    // chain above it cut the race camera off, and the car drove away from a camera left at the garage)
+    if (this.phase !== 'garage') clearing.value.z = -10;
 
     // ---- HUD + audio
     if (this.player) {

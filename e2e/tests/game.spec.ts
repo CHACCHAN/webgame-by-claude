@@ -106,6 +106,9 @@ test('time attack: full autodriven run, results and online submission', async ({
   await page.keyboard.press('Enter'); // gearbox as last time
   await expect(page.locator('.hud')).toBeVisible();
   await page.waitForFunction(() => (window as any).__game.phase === 'racing', null, { timeout: 120_000 });
+  // the camera goes with the car (it once stayed where the garage had it, and every other check still passed)
+  await page.waitForFunction(() => (window as any).__game.hud.progress > 0.04, null, { timeout: 240_000 });
+  expect(await page.evaluate(() => { const g = (window as any).__game; return g.camera.position.distanceTo(g.player.sim.position); })).toBeLessThan(60);
   await expect(page.locator('.results-time')).toBeVisible({ timeout: 480_000 });
   const time = await page.locator('.results-time').textContent();
   expect(time).toMatch(/^[1-3]:\d\d\.\d{3}$/);
@@ -159,6 +162,7 @@ test('rival battle starts with an AI opponent and can be paused', async ({ page 
   expect(setup).toEqual({ tod: 'rain', auto: false, wet: true });
   await page.waitForFunction(() => (window as any).__game.phase === 'racing', null, { timeout: 120_000 });
   await page.waitForFunction(() => (window as any).__game.hud.rivalProgress > 0.02, null, { timeout: 120_000 });
+  expect(await page.evaluate(() => { const g = (window as any).__game; return g.camera.position.distanceTo(g.player.sim.position); })).toBeLessThan(60);
   await page.keyboard.press('Escape');
   await expect(page.locator('.pause-title')).toBeVisible();
   const t1 = await page.evaluate(() => (window as any).__game.hud.raceTime);
