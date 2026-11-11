@@ -4,7 +4,7 @@ import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.j
 import { MeshBasicNodeMaterial, MeshSSSNodeMaterial, MeshStandardNodeMaterial } from 'three/webgpu';
 import {
   Fn, atan, attribute, cameraViewMatrix, cos, float, floor, fract, lights, max, mix, normalLocal, normalViewGeometry, positionLocal, positionPrevious,
-  positionView, screenCoordinate, sin, smoothstep, step, texture, uniform, uv, varying, vec2, vec3, vec4,
+  positionView, renderGroup, screenCoordinate, sin, smoothstep, step, texture, uniform, uv, varying, vec2, vec3, vec4,
 } from 'three/tsl';
 import { clearing } from './instancing';
 
@@ -60,21 +60,24 @@ export interface VegetationQuality {
 
 // ------------------------------------------------------------------------------------------------ frame state
 
+// These are the same for every plant, so they live in the renderer's shared group: in a uniform of its own each of
+// them is copied into every drawn mesh's buffer, and one that changes every frame (the viewer, the wind's clock) made
+// the renderer write ~150 buffers a frame for the vegetation alone.
 /** where the level of detail is measured from (the camera of the picture, also while a shadow map is drawn) */
-const viewer = uniform(new THREE.Vector3());
-const windNow = uniform(0);
+const viewer = uniform(new THREE.Vector3()).setGroup(renderGroup);
+const windNow = uniform(0).setGroup(renderGroup);
 let windDrawn = 0;
 /**
  * The wind's clock of the frame drawn before this one, for the motion vectors: taken when a frame is drawn, not when
  * the game steps, so a picture that stands still (the game not stepping) has no motion in it.
  */
-const windBefore = (uniform(0) as N).onFrameUpdate(() => {
+const windBefore = (uniform(0).setGroup(renderGroup) as N).onFrameUpdate(() => {
   const t = windDrawn;
   windDrawn = windNow.value;
   return t;
 });
-const windPower = uniform(0.6);
-const wet = uniform(0);
+const windPower = uniform(0.6).setGroup(renderGroup);
+const wet = uniform(0).setGroup(renderGroup);
 const WIND = new THREE.Vector2(0.86, 0.51);
 
 /** once a frame: the game's clock (wind) and the camera */
@@ -98,14 +101,14 @@ export function vegetationHold(on: boolean) {
 let farLights: THREE.Light[] | null = null;
 /** the sky's light as a colour, for the first of the trees' two passes */
 const skyColor = new THREE.Color(0.02, 0.02, 0.02);
-const skyLight = (uniform(skyColor) as N).onFrameUpdate(() => {
+const skyLight = (uniform(skyColor).setGroup(renderGroup) as N).onFrameUpdate(() => {
   const sky = farLights?.[1];
   // (a surface under a hemisphere light gets its colour × intensity / π at most: a crown's inside about half of that)
   return sky ? skyColor.copy(sky.color).multiplyScalar(sky.intensity * 0.16) : skyColor;
 });
 /** where the sun / moon stands (the direction towards it), for the shade of a hillside that faces away from it */
 const keyAt = new THREE.Vector3(0, 1, 0);
-const keyDir = (uniform(keyAt) as N).onFrameUpdate(() => {
+const keyDir = (uniform(keyAt).setGroup(renderGroup) as N).onFrameUpdate(() => {
   const key = farLights?.[0] as THREE.DirectionalLight | undefined;
   return key ? keyAt.copy(key.position).sub(key.target.position).normalize() : keyAt;
 });
@@ -419,15 +422,19 @@ function plantNodes(model: PlantModel, look: PlantLook, span: Span) {
   const veg: N = attribute('veg', 'vec4');
   const S: N = span;
   const windK = look.wind ?? 1;
-  const position = (motion: boolean): N =>
+  // `sway`: the motion vector has the wind's own movement in it (the nearest level). Further away that movement is
+  // a fraction of a pixel a frame, and working the wind out a second time for the frame before doubled the vertex
+  // stage of every tree under the upscaler (scene pass 8.9 ms against 4.7 ms without vegetation, 1440p quality)
+  const position = (sway: boolean): N =>
     Fn(() => {
       // outside the level's span (and inside the garage's clearing) the instance is drawn at no size, at its foot
       const size: N = I.open.mul(step(S.x.sub(S.y), I.dist)).mul(step(I.dist, S.z));
       const lp: N = I.place(positionLocal).toVar();
       const at: N = I.foot.add(I.turn(lp)).toVar();
       (normalLocal as N).assign(I.turn(normalLocal));
-      if (motion) (positionPrevious as N).assign(mix(I.foot, at.add(windPush(lp, veg, I.foot, I.seed, windBefore).mul(windK)), size));
-      return mix(I.foot, at.add(windPush(lp, veg, I.foot, I.seed, windNow).mul(windK)), size);
+      const now: N = mix(I.foot, at.add(windPush(lp, veg, I.foot, I.seed, windNow).mul(windK)), size).toVar();
+      (positionPrevious as N).assign(sway ? mix(I.foot, at.add(windPush(lp, veg, I.foot, I.seed, windBefore).mul(windK)), size) : now);
+      return now;
     })();
   // per instance, worked out in the vertex stage: the dither's two thresholds and the cutout's (far cards keep
   // their thin twigs: a mip's alpha is the coverage, and half of it would leave the crown bald)
@@ -448,13 +455,13 @@ function plantNodes(model: PlantModel, look: PlantLook, span: Span) {
  * The material of a level's meshes: bark and foliage from the species' one texture pair. `second`: the lit pass of
  * two (see the file's header): no cutout, only where the first pass left this very depth.
  */
-function plantMaterial(model: PlantModel, look: PlantLook, span: Span, second = false) {
+function plantMaterial(model: PlantModel, look: PlantLook, span: Span, second = false, sway = true) {
   const mat = new MeshSSSNodeMaterial();
   mat.side = THREE.DoubleSide;
   mat.metalness = 0;
   mat.envMapIntensity = 0.3;
   const { I, veg, position, mask, tex, shade, far } = plantNodes(model, look, span);
-  mat.positionNode = position(true);
+  mat.positionNode = position(sway);
   const texN: N = model.leafN ? texture(model.leafN, uv()) : vec4(0.5, 0.5, 1, 1);
   if (second) {
     mat.depthFunc = THREE.EqualDepth;
@@ -485,11 +492,11 @@ function plantMaterial(model: PlantModel, look: PlantLook, span: Span, second = 
 }
 
 /** The first of a tree level's two passes: the cutout, the depth, the motion vectors, and the colour under the sky's light. */
-function firstMaterial(model: PlantModel, look: PlantLook, span: Span) {
+function firstMaterial(model: PlantModel, look: PlantLook, span: Span, sway = true) {
   const mat = new MeshBasicNodeMaterial();
   mat.side = THREE.DoubleSide;
   const { I, veg, position, mask, tex, shade } = plantNodes(model, look, span);
-  mat.positionNode = position(true);
+  mat.positionNode = position(sway);
   mat.maskNode = mask;
   const hue: N = mix(vec3(0.8, 0.9, 0.74), vec3(1.14, 1.06, 0.9), I.tint).mul(vec3(...(look.tint ?? [1, 1, 1])));
   mat.colorNode = vec4(tex.rgb.mul(hue).mul(veg.r.mul(0.6).add(0.4)).mul(mix(1, 0.68, wet)).mul(shade).mul(skyLight), 1);
@@ -543,9 +550,11 @@ function shadowMaterial(model: PlantModel, look: PlantLook, reach: Reach, hull: 
   })();
   if (hull) {
     const q: N = varying(positionLocal), crown: N = varying(veg.a);
-    const gaps: N = sin(q.x.mul(4.1).add(q.y.mul(1.3)))
-      .mul(sin(q.z.mul(3.7).sub(q.y.mul(1.9))))
-      .add(sin(q.y.mul(5.3).add(q.x.mul(2.2)).add(q.z.mul(1.7))).mul(0.5));
+    // (holes under a metre across, each wave bent by another: at 1.5 m they lay on a wall as blots, and straight
+    // waves made a lattice of round spots on the road)
+    const gaps: N = sin(q.x.mul(7.3).add(sin(q.z.mul(2.9).add(q.y.mul(1.7))).mul(2.1)))
+      .mul(sin(q.z.mul(6.1).add(sin(q.x.mul(3.7).sub(q.y.mul(2.3))).mul(2.3))))
+      .add(sin(q.y.mul(9.7).add(sin(q.x.mul(4.3).add(q.z.mul(5.1))).mul(1.9))).mul(0.5));
     mat.maskShadowNode = gaps.lessThan(mix(9, 0.3, crown));
   } else mat.maskShadowNode = (texture(model.leaf, uv()) as N).a.greaterThan(0.4);
   return mat;
@@ -574,8 +583,11 @@ function impostorMaterial(model: PlantModel, look: PlantLook, span: Span) {
   };
   mat.positionNode = Fn(() => {
     const size: N = I.open.mul(step(S.x.sub(S.y), I.dist));
+    // (far away the cards are drawn wider: the crowns of a hillside close into a canopy, where trees a few pixels
+    // wide with the dark ground between them were a grain)
+    const wide: N = mix(1, 1.7, smoothstep(250, 800, I.dist));
     const at: N = I.foot
-      .add(right.mul(corner.x.mul(F.x).mul(B.x).mul(B.y)))
+      .add(right.mul(corner.x.mul(F.x).mul(B.x).mul(B.y).mul(wide)))
       .add(vec3(0, 1, 0).mul(corner.y.mul(F.y).add(F.z).mul(B.x)))
       .toVar();
     (positionPrevious as N).assign(mix(I.foot, at.add(lean(windBefore)), size));
@@ -594,7 +606,10 @@ function impostorMaterial(model: PlantModel, look: PlantLook, span: Span) {
   const tex: N = texture(model.imp!, coord);
   mat.maskNode = tex.a.greaterThan(fade.y).and(dither().greaterThanEqual(fade.x)).and(uv().y.lessThan(fade.z));
   const hue: N = mix(vec3(0.8, 0.9, 0.74), vec3(1.14, 1.06, 0.9), I.tint).mul(vec3(...(look.tint ?? [1, 1, 1])));
-  const albedo: N = tex.rgb.mul(mix(vec3(1), hue, 0.85)).mul(mix(1, 0.68, wet)).mul(varying(I.shade(true)));
+  // (a far hillside is a canopy: its trees stand in each other's shade. Lit one by one as if each stood alone they
+  // were bright dots on the darker ground, a grain over the whole mountain at dawn)
+  const canopy: N = mix(1, 0.55, smoothstep(250, 800, I.dist));
+  const albedo: N = tex.rgb.mul(mix(vec3(1), hue, 0.85)).mul(mix(1, 0.68, wet)).mul(varying(I.shade(true).mul(canopy)));
   mat.colorNode = vec4(albedo, 1);
   mat.roughnessNode = float(0.8);
   // the baked normal is in the view's frame: right, up, towards the viewer
@@ -675,6 +690,11 @@ export interface ForestOptions {
   capacity?: [number, number, number, number];
   /** how far the viewer moves before a level's instances are picked again (m; lod0, lod1, lod2, shadow) */
   strides?: [number, number, number, number];
+  /**
+   * Levels (lod0, lod1, lod2, shadow) that draw every plant of a species with its first variant's shape (as tall as
+   * its own): a draw call per species instead of one per variant, where the difference cannot be told (far, shadows).
+   */
+  single?: [boolean, boolean, boolean, boolean];
   /** the mesh levels are drawn in two passes, the cutout first and the lighting where it is seen (trees: see the file's header) */
   prepass?: boolean;
 }
@@ -698,7 +718,9 @@ interface LevelMesh {
   geo: THREE.InstancedBufferGeometry;
   data: THREE.InstancedInterleavedBuffer;
   capacity: number;
-  key: number;
+  /** the species × variant sets it draws, and what each one's height is multiplied by (a `single` level: the variant's height over the drawn shape's) */
+  keys: number[];
+  fit: number[];
   tris: number;
   n: number;
 }
@@ -714,6 +736,11 @@ interface Level {
 }
 
 const MAX_VARIANTS = 8;
+/** how tall a shape stands (m) */
+function tall(geo: THREE.BufferGeometry) {
+  if (!geo.boundingBox) geo.computeBoundingBox();
+  return Math.max(0.01, geo.boundingBox!.max.y);
+}
 /**
  * The nearest level's place in the drawing order: before everything else in the scene (see the file's header) but
  * the sky, which is at -10 and does not test the depth (it would paint over the forest).
@@ -804,10 +831,15 @@ export class Forest {
       this.levels.push(level);
       if (far <= near) continue;
       species.forEach((sp, si) => {
+        const one = !!opts.single?.[l];
+        const shape = (v: Variant) => (shadow ? (v.hull ?? v.lods[2]) : v.lods[l]);
         sp.model.variants.forEach((variant, vi) => {
-          const k = si * MAX_VARIANTS + vi;
-          const n = (shadow ? totalCast : total).get(k) ?? 0;
-          const base = shadow ? (variant.hull ?? variant.lods[2]) : variant.lods[l];
+          if (one && vi > 0) return;
+          const base = shape(variant);
+          const drawn = sp.model.variants.map((_, j) => j).filter((j) => (one || j === vi) && shape(sp.model.variants[j]));
+          const keys = drawn.map((j) => si * MAX_VARIANTS + j);
+          const fit = drawn.map((j) => (base ? tall(shape(sp.model.variants[j])!) / tall(base) : 1));
+          const n = keys.reduce((sum, k) => sum + ((shadow ? totalCast : total).get(k) ?? 0), 0);
           if (!n || !base) return;
           const capacity = Math.min(n, (opts.capacity ?? CAPACITY)[l]);
           const { geo, data } = instanced(base, capacity);
@@ -834,7 +866,7 @@ export class Forest {
             this.group.add(pre);
           }
           const tris = shadow ? (geo.index ? geo.index.count / 3 : 0) : (sp.model.tris[vi]?.[l] ?? 0);
-          level.meshes.push({ mesh, pre, geo, data, capacity, key: k, tris, n: 0 });
+          level.meshes.push({ mesh, pre, geo, data, capacity, keys, fit, tris, n: 0 });
         });
       });
     }
@@ -875,9 +907,9 @@ export class Forest {
     let m = this.materials.get(key);
     if (!m) {
       const sp = this.species[species];
-      if (level >= 8) m = firstMaterial(sp.model, sp.look, span) as unknown as THREE.Material;
+      if (level >= 8) m = firstMaterial(sp.model, sp.look, span, level === 8) as unknown as THREE.Material;
       else if (level >= 4) m = shadowMaterial(sp.model, sp.look, this.reach, level === 5) as unknown as THREE.Material;
-      else m = (sp.look.kind === 'rock' ? rockMaterial(sp.model, sp.look, span) : plantMaterial(sp.model, sp.look, span, prepass)) as unknown as THREE.Material;
+      else m = (sp.look.kind === 'rock' ? rockMaterial(sp.model, sp.look, span) : plantMaterial(sp.model, sp.look, span, prepass, level === 0)) as unknown as THREE.Material;
       this.materials.set(key, m);
     }
     return m;
@@ -907,15 +939,19 @@ export class Forest {
       near.sort((a, b) => a.d - b.d);
       for (const c of near) {
         for (const lm of lv.meshes) {
-          const set = (shadow ? c.casters : c.sets).get(lm.key);
-          if (!set) continue;
           const arr = lm.data.array as Float32Array;
-          for (let i = 0; i < set.length && lm.n < lm.capacity; i += STRIDE) {
-            const dx = set[i] - camera.x, dy = set[i + 1] - camera.y, dz = set[i + 2] - camera.z;
-            const d2 = dx * dx + dy * dy + dz * dz;
-            if (d2 > hi2 || d2 < lo2) continue;
-            const o = lm.n++ * STRIDE;
-            for (let k = 0; k < STRIDE; k++) arr[o + k] = set[i + k];
+          for (let j = 0; j < lm.keys.length; j++) {
+            const set = (shadow ? c.casters : c.sets).get(lm.keys[j]);
+            if (!set) continue;
+            const fit = lm.fit[j];
+            for (let i = 0; i < set.length && lm.n < lm.capacity; i += STRIDE) {
+              const dx = set[i] - camera.x, dy = set[i + 1] - camera.y, dz = set[i + 2] - camera.z;
+              const d2 = dx * dx + dy * dy + dz * dz;
+              if (d2 > hi2 || d2 < lo2) continue;
+              const o = lm.n++ * STRIDE;
+              for (let k = 0; k < STRIDE; k++) arr[o + k] = set[i + k];
+              arr[o + 4] *= fit;
+            }
           }
         }
       }
