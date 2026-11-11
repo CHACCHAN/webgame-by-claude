@@ -29,7 +29,7 @@ class BotRunSeeder extends Seeder
         DB::transaction(function () use ($records) {
             foreach ($records as $rec) {
                 $player = Player::where('name', $rec['player_name'])->where('is_bot', true)->first()
-                    ?? Player::register($rec['player_name'], true)[0];
+                    ?? Player::registerBot($rec['player_name']);
 
                 $existing = Run::where('player_id', $player->id)
                     ->where('track_id', $rec['track_id'])

@@ -16,7 +16,7 @@ class RoomTest extends TestCase
     /** @return array{0: Player, 1: array<string, string>} */
     private function player(string $name): array
     {
-        [$player, $token] = Player::register($name);
+        [$player, $token] = Player::registerGuest($name);
 
         return [$player, ['Authorization' => "Bearer {$token}"]];
     }
