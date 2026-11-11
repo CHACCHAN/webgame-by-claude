@@ -26,7 +26,7 @@ const WIPE_EASE = 'cubic-bezier(0.7, 0, 0.3, 1)';
  * Screen changes: React takes the old screen out of `.overlay` and puts the new one in at once (so the new screen
  * has the keys from the first frame). This watches that happen and animates around it: the node React removed is
  * kept on show for the length of the wipe, clipped away from one side while the new screen is uncovered from the
- * same side, a scan line running along the edge between them.
+ * same side (`uncover`: by a mask, so that it takes the pointer at once), a scan line running along the edge between them.
  *
  * The outgoing node lives in a closed shadow root meanwhile: nothing that looks for elements in the document (the
  * screens' own queries, the E2E tests' selectors) can find a screen that is no longer there. The shadow root gets
@@ -66,7 +66,6 @@ export function useScreenWipe(overlay: RefObject<HTMLElement | null>, host: RefO
       // a screen over another (the online car select) coming or going: forwards in, backwards out
       const d = gone.length && come.length ? dir : come.length ? 1 : -1;
       const hidden = d > 0 ? 'inset(0 0 0 100%)' : 'inset(0 100% 0 0)';
-      const covered = d > 0 ? 'inset(0 100% 0 0)' : 'inset(0 0 0 100%)';
       const shown = 'inset(0 0 0 0)';
       let wiped = false;
       for (const n of gone) {
@@ -84,7 +83,7 @@ export function useScreenWipe(overlay: RefObject<HTMLElement | null>, host: RefO
       for (const n of come) {
         if (plain(n)) continue;
         wiped = true;
-        n.animate([{ clipPath: covered }, { clipPath: shown }], { duration: WIPE_MS, easing: WIPE_EASE });
+        uncover(n, d);
       }
       if (wiped && scan.current) {
         const w = box.clientWidth;
@@ -102,6 +101,38 @@ export function useScreenWipe(overlay: RefObject<HTMLElement | null>, host: RefO
       root.replaceChildren();
     };
   }, [overlay, host, scan]);
+}
+
+/**
+ * The incoming screen uncovered from one side (`d` > 0: from the left) by a mask, not by a clip path: a clip path
+ * also takes the hidden part out of the pointer's reach, and a click or tap made in the quarter second of a wipe on a
+ * part not uncovered yet went to nothing (measured with the wipe slowed down: the canvas was under the pointer there,
+ * and a click on a menu row did not act; e2e `a click during a screen wipe acts at once`). A mask only paints, so
+ * the whole screen takes the pointer from its first frame, as it takes the keys.
+ *
+ * The mask is twice the screen's width, one half opaque: sliding it moves the edge. Its resting position is the
+ * screen fully shown, so nothing changes when the animation ends and the properties are taken off again.
+ */
+function uncover(n: HTMLElement, d: number) {
+  const st = n.style;
+  // (black here is the mask's opacity, not a colour of the theme)
+  const image = `linear-gradient(90deg, ${d > 0 ? '#000 50%, transparent 50%' : 'transparent 50%, #000 50%'})`;
+  const from = d > 0 ? '100% 0' : '0 0', to = d > 0 ? '0 0' : '100% 0';
+  const props: [string, string][] = [['mask-image', image], ['mask-size', '200% 100%'], ['mask-repeat', 'no-repeat'], ['mask-position', to]];
+  for (const [k, v] of props) {
+    st.setProperty(`-webkit-${k}`, v);
+    st.setProperty(k, v);
+  }
+  const a = n.animate([{ maskPosition: from, webkitMaskPosition: from }, { maskPosition: to, webkitMaskPosition: to }], { duration: WIPE_MS, easing: WIPE_EASE });
+  const clear = () => {
+    for (const [k] of props) {
+      st.removeProperty(`-webkit-${k}`);
+      st.removeProperty(k);
+    }
+  };
+  a.finished.then(clear, clear);
+  // (a tab in the background runs no animation frames)
+  setTimeout(clear, WIPE_MS + 400);
 }
 
 const easeOut = (t: number) => 1 - Math.pow(1 - t, 3);

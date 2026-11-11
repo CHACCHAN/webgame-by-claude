@@ -89,6 +89,25 @@ test('menu navigation, settings persistence and controls screen', async ({ page 
   await expect(page.locator('.menu-list')).toBeVisible();
 });
 
+test('a click during a screen wipe acts at once', async ({ page }) => {
+  await prepare(page);
+  await page.goto('/');
+  await waitForTitle(page);
+  await page.waitForTimeout(1500); // (the wipe from the boot screen is over)
+  // the wipe slowed twenty times (4.8 s): a click by coordinates, which waits for nothing, falls inside it
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send('Animation.enable');
+  await cdp.send('Animation.setPlaybackRate', { playbackRate: 0.05 });
+  await page.keyboard.press('Enter');
+  const row = (await page.locator('.menu-list li', { hasText: 'SETTINGS' }).boundingBox())!;
+  // the row's right end is the last part the wipe uncovers: the screen is under the pointer there already
+  const x = row.x + row.width - 6, y = row.y + row.height / 2;
+  expect(await page.evaluate(([x, y]) => !!document.elementFromPoint(x, y)?.closest('.menu-list'), [x, y])).toBe(true);
+  await page.mouse.click(x, y);
+  await expect(page.locator('.settings-list')).toBeVisible({ timeout: 3000 });
+  await cdp.send('Animation.setPlaybackRate', { playbackRate: 1 });
+});
+
 test('ranking shows the seeded CPU drivers from the Laravel API', async ({ page }) => {
   await prepare(page);
   await page.goto('/');
