@@ -5,6 +5,7 @@ import type { AssistLevel } from '../game/vehicle/VehicleSim';
 import type { QualitySettings } from '../game/Game';
 import { COURSES, DEFAULT_COURSE, type CourseId } from '../game/track/courses';
 import { isTouchDevice } from '../ui/touch';
+import type { BackendPref } from '../game/render/backendChoice';
 
 export type QualityLevel = 'low' | 'medium' | 'high' | 'ultra';
 
@@ -28,6 +29,8 @@ export interface Settings {
   autoShift: boolean;
   showGhost: boolean;
   cornerGuide: boolean;
+  /** the renderer's backend: WebGPU where it works (`auto`), or one of the two by hand (render/backendChoice.ts) */
+  backend: BackendPref;
   /** the rivals' lines and moves may come from the server's language model (off: the game's own) */
   rivalAi: boolean;
   controlsGuide: boolean;
@@ -55,6 +58,7 @@ export const useSettings = create<Settings>()(
       autoShift: true,
       showGhost: true,
       cornerGuide: true,
+      backend: 'auto',
       rivalAi: true,
       controlsGuide: true,
       showFps: false,

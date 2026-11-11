@@ -6,6 +6,7 @@ import { trainLivery, trainModelKey } from '../vehicle/trains';
 import type { Track } from '../track/Track';
 import { SLOT_COLORS } from './RemoteRacers';
 import { focusOf, lineupPlan, type LineupEntry, type RoadSpan } from './lineup';
+import { ensureVehicleModels, vehicleModelReady } from '../render/vehicleModels';
 
 /** a new model is shown once its shaders are compiled, or after this long (ms) if that never comes back */
 const COMPILE_WAIT = 4000;
@@ -102,6 +103,13 @@ export class LobbyLineup {
     const e = st.entry, key = keyOf(e);
     if (st.visual && key === st.key && !again) return;
     const spec = CAR_SPECS[e.carId];
+    // a model that is still on its way: built when it has come (what stands in the seat stays until then)
+    if (!vehicleModelReady(e.carId)) {
+      void ensureVehicleModels([e.carId]).then(() => {
+        if (!this.disposed && this.slots.get(st.slot) === st && keyOf(st.entry) === key) this.build(st, again);
+      });
+      return;
+    }
     const visual = new CarVisual(spec, { headlights: false, shadows: this.opts.shadows, rideHeight: 0, bodyColor: e.livery ?? SLOT_COLORS[e.slot % SLOT_COLORS.length] });
     const pending = { key, visual };
     st.pending = pending;

@@ -4,6 +4,7 @@ import { useApp } from '../../store/app';
 import { UPSCALE_SCALE, useSettings, type QualityLevel, type UpscaleMode } from '../../store/settings';
 import { useMenuInput, hoverSelect } from '../useMenuInput';
 import { gameHolder } from '../GameCanvas';
+import { forgetFailures, planBackend, type BackendPref, type FallbackReason } from '../../game/render/backendChoice';
 import { sfx } from '../sfx';
 import { fullscreenSupported, toggleFullscreen, useFullscreen } from '../fullscreen';
 import { TRAIN_INFO, TRAIN_ORDER } from '../../game/vehicle/trains';
@@ -26,6 +27,7 @@ export function SettingsScreen() {
   const s = useSettings();
   const [sel, setSel] = useState(0);
   const [needsReload, setNeedsReload] = useState(false);
+  const [backendReload, setBackendReload] = useState(false);
   const qualities: QualityLevel[] = ['low', 'medium', 'high', 'ultra'];
   const qLabel: Record<QualityLevel, string> = { low: '低', medium: '中', high: '高', ultra: '最高' };
   const upscaleModes: UpscaleMode[] = ['native', 'ultra', 'quality', 'balanced', 'performance'];
@@ -35,6 +37,14 @@ export function SettingsScreen() {
   const step = (v: number, dir: number, st = 0.1, lo = 0, hi = 1) => Math.round(Math.min(hi, Math.max(lo, v + dir * st)) * 100) / 100;
   const onOff = (v: boolean) => (v ? 'オン' : 'オフ');
   const game = gameHolder.game;
+  // the renderer's backend: what runs (and why WebGL 2, when it does), and what the next load would start
+  const running = useApp((a) => a.renderer);
+  const backends: BackendPref[] = ['auto', 'webgpu', 'webgl2'];
+  const backendLabel: Record<BackendPref, string> = { auto: '自動', webgpu: 'WebGPU', webgl2: 'WebGL 2' };
+  const fallbackNote: Record<FallbackReason, string> = { query: 'URLの指定', setting: '設定', unsupported: 'このブラウザ・GPUはWebGPU非対応のため自動で切り替え', failed: 'WebGPUで問題が起きたため自動で切り替え' };
+  const pref = s.backend ?? 'auto';
+  const backendNote = !running ? 'WebGPUが使えない環境では自動でWebGL 2に切り替わります'
+    : `現在: ${running.backend === 'webgpu' ? 'WebGPU' : `WebGL 2（${fallbackNote[running.reason ?? 'unsupported']}）`}`;
   const fullscreen = useFullscreen();
   const groups: { name: string; en: string; rows: Row[] }[] = [
     {
@@ -49,6 +59,14 @@ export function SettingsScreen() {
               { kind: 'level' as const, label: 'シャープネス', value: pct(s.sharpness), level: s.sharpness, note: '拡大したあとの輪郭の強さ', change: (d: number) => s.set({ sharpness: step(s.sharpness, d) }) },
             ]
           : []),
+        { kind: 'list', label: '描画方式', value: backendLabel[pref], note: backendNote, change: (d) => {
+          const v = cycle(backends, pref, d);
+          s.set({ backend: v });
+          // a choice by hand starts from a clean slate (what was remembered about WebGPU failing no longer counts)
+          forgetFailures();
+          const plan = planBackend(v, location.search);
+          setBackendReload(!!running && plan.forceWebGL !== (running.backend === 'webgl2') && running.reason !== 'unsupported');
+        } },
         { kind: 'switch', label: '全画面表示', value: !fullscreenSupported() ? '非対応' : onOff(fullscreen), on: fullscreen, note: 'F キーでも切り替えられます', change: () => fullscreenSupported() && toggleFullscreen() },
         { kind: 'switch', label: 'FPS表示', value: onOff(s.showFps), on: s.showFps, note: 'レース中、マップの下にフレームレートを出します', change: () => s.set({ showFps: !s.showFps }) },
         { kind: 'switch', label: 'UI アニメーション', value: onOff(s.uiMotion !== false), on: s.uiMotion !== false, note: '画面の切り替えや数値のカウントなどの動き。オフにすると単純なフェードだけになります', change: () => s.set({ uiMotion: s.uiMotion === false }) },
@@ -123,6 +141,12 @@ export function SettingsScreen() {
           </ul>
           <FocusFrame on="li.active" deps={[at, rows.length]} kind="row" />
         </div>
+        {backendReload && (
+          <div className="notice info reload-note">
+            <div>描画方式は再読み込み後に切り替わります。</div>
+            <button className="mini" onClick={() => location.reload()}>今すぐ再読み込み</button>
+          </div>
+        )}
         {needsReload && (
           <div className="notice info reload-note">
             <div>グラフィック品質の一部（影・木の密度）は再読み込み後に反映されます。</div>

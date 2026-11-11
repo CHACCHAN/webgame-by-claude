@@ -14,7 +14,14 @@ h1, h2, h3, p { margin: 0; }
 .overlay { position: absolute; inset: 0; pointer-events: none; }
 .overlay > * { pointer-events: auto; }
 .screen { position: absolute; inset: 0; isolation: isolate; animation: kf-fade var(--t-fast) linear both; }
-.no-webgl { position: fixed; inset: 0; display: grid; place-items: center; text-align: center; padding: var(--s-5); line-height: 2; color: var(--text); background: var(--void); }
+/* the renderer could not start, or lost its device for good (GameCanvas.tsx): a fault report over the dead canvas */
+.no-webgl { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; padding: var(--s-5); color: var(--text); background: var(--tex-scan), radial-gradient(ellipse at 50% 40%, rgb(var(--c-magenta) / 0.07), transparent 60%), var(--void); }
+.fault { --c: var(--cut-l); --edge: rgb(var(--c-magenta) / 0.55); --fill: var(--glass-solid); max-width: 44rem; padding: var(--s-6) var(--s-7); text-align: left; line-height: 1.9; animation: var(--kf-rise) var(--t-enter) var(--e-out) both; }
+.fault-code { display: flex; align-items: center; gap: var(--s-3); font-family: var(--font-display); font-stretch: var(--w-norm); font-weight: 600; font-size: var(--fs-s); letter-spacing: 0.22em; color: var(--magenta); }
+.fault-code::before { content: ''; width: 0.6em; height: 0.6em; background: var(--magenta); animation: kf-blink 1s steps(2) infinite; animation-play-state: var(--kf-idle); }
+.fault h2 { margin: var(--s-2) 0 var(--s-3); font-size: var(--fs-xl); font-weight: 700; letter-spacing: 0.06em; }
+.fault p { font-size: var(--fs-m); color: var(--text-2); }
+.fault .mini { margin-top: var(--s-5); padding: 0.5rem 1.4rem; font-size: var(--fs-m); }
 
 /* ---- motion: what comes in starts from these (the resting state is the element's own style, so a screen whose
    animations are switched off — on its way out, or with motion reduced — simply stands as it is) */
@@ -42,7 +49,7 @@ h1, h2, h3, p { margin: 0; }
 [data-count]::after { content: attr(data-count); position: absolute; inset: 0; -webkit-text-fill-color: currentColor; text-shadow: var(--count-glow, none); text-align: inherit; }
 
 /* ---- cut panels: two corners chamfered, a hairline that follows the cut, scanlines, dark glass */
-.cut, .panel, .ol-panel, .choice-card, .course-card, .rival-card, .vp-detail, .vp-tile, .menu-desc, .cta, .mini, .chip, .tabs button, .vp-tab,
+.cut, .panel, .fault, .ol-panel, .choice-card, .course-card, .rival-card, .vp-detail, .vp-tile, .menu-desc, .cta, .mini, .chip, .tabs button, .vp-tab,
 .ol-vehicle, .ol-slots li, .ol-standings li, .results-grid .cell, .specs-row div, .local-ghost, .notice, .versus, .ghost-tag, .hud-plate,
 .touch-back, .fs-toggle, .tc-btn, .tc-half, .tc-pedal, .start-guide, .online-standings, .net-stats, .minimap-box, .vs-line, .rival-line, .pause-box, .drift-guide {
   --c: var(--cut-m);

@@ -403,7 +403,10 @@ export async function startRaceFromState(rival?: AILevel) {
   // what the rival knows of the player when it speaks: their battles so far, the medal held with this car
   const best = loadCarBests(game.course.id)[app.carId];
   const rivalRecord = rivalLevel && { ...loadRivalRecord(game.course.id, rivalLevel), medal: (best ? medalFor(game.course.id, app.carId, best) : null) ?? ('none' as const) };
-  game.startRace({ mode: app.mode, carId: app.carId, color, rivalLevel, rivalRecord, ghost });
+  const cfg = { mode: app.mode, carId: app.carId, color, rivalLevel, rivalRecord, ghost };
+  // (the rival's or the ghost's vehicle may still be on its way: the busy mark shows meanwhile)
+  await game.prepareRace(cfg);
+  game.startRace(cfg);
   app.set({ screen: 'race', result: null, rivalLine: null, paused: false });
 }
 

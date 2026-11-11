@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { Game } from '../game/Game';
-import { RenderHost, type RenderOptions } from '../game/render/RenderHost';
+import { RenderHost, type RenderOptions, type RenderTrouble } from '../game/render/RenderHost';
+import { noteDeviceLost, planBackend, rememberFailure, type BackendPlan } from '../game/render/backendChoice';
 import type { CarId } from '../game/vehicle/carSpecs';
 import { UPSCALE_SCALE, currentCourseId, qualityProfile, useSettings, type Settings } from '../store/settings';
 import { useApp } from '../store/app';
+import { isTouchDevice } from './touch';
 import { serverBrain, warmRivalBrain } from '../api/rivalBrain';
 
 /** The single game instance (the 3D world is expensive to build). */
@@ -24,6 +26,11 @@ function startGame(host: RenderHost) {
     const s = useSettings.getState();
     const profile = qualityProfile(s.quality, s.resolutionScale);
     const game = new Game(host.renderer, host.scene, host.camera, profile);
+    // courses stay built once shown, by how much memory the machine has (`navigator.deviceMemory`, GB of RAM, is all
+    // a page is told: video memory is not; no value = a desktop browser that does not say): none on phones and at
+    // low quality, the previous one from 4 GB, all of them from 8 GB. Counted in MB on the GPU by our own estimate
+    const ram = (navigator as { deviceMemory?: number }).deviceMemory ?? 8;
+    game.keepBudget = isTouchDevice() || s.quality === 'low' || ram < 4 ? 0 : ram < 8 ? 500 : 2000;
     game.compileScene = (hold) => host.precompile(hold);
     game.compileObject = (object) => host.precompile(false, object);
     const params = new URLSearchParams(location.search);
@@ -72,6 +79,7 @@ function startGame(host: RenderHost) {
         app.set({ phase: e.phase });
         if (e.phase === 'attract' && app.screen === 'boot') app.set({ screen: 'title', loading: null });
       }
+      if (e.type === 'busy') app.set({ busy: e.label });
       if (e.type === 'rivalLine') app.set({ rivalLine: { moment: e.moment, text: e.text } });
       if (e.type === 'finish') app.set({ result: e.result, screen: e.result.mode === 'online' ? 'onlineResults' : 'results', paused: false });
     });
@@ -101,35 +109,76 @@ export function GameCanvas() {
   const upscaleMode = useSettings((s) => s.upscaleMode);
   const sharpness = useSettings((s) => s.sharpness);
   const canvas = useRef<HTMLCanvasElement>(null);
-  const [failed, setFailed] = useState(false);
+  /** 0: the planned backend; 1: WebGL 2 on a new canvas, after WebGPU came up and the renderer could not be built */
+  const [attempt, setAttempt] = useState(0);
+  const [failed, setFailed] = useState<null | 'none' | 'lost'>(null);
   useEffect(() => {
     if (!canvas.current || hostHolder.host || hostHolder.starting) return;
     const s = useSettings.getState();
-    // ?webgl=1: the WebGL 2 backend even where WebGPU works (comparisons, troubleshooting)
-    const forceWebGL = new URLSearchParams(location.search).get('webgl') === '1';
-    hostHolder.starting = RenderHost.create(canvas.current, renderOptions(s), forceWebGL);
-    hostHolder.starting.then(
+    const plan: BackendPlan = attempt > 0 ? { forceWebGL: true, reason: 'failed' } : planBackend(s.backend ?? 'auto', location.search);
+    const trouble = (kind: RenderTrouble, message: string) => {
+      if (kind === 'memory') {
+        console.warn(`renderer: out of video memory (${message}): the courses kept built are freed`);
+        gameHolder.game?.releaseKept();
+        return;
+      }
+      console.error(`renderer: ${kind === 'lost' ? 'the device is lost' : 'errors in a burst'} (${message})`);
+      if (kind === 'lost') {
+        // nothing is drawn any more: once more from a reload (WebGL 2 from the second loss on), but never in a loop
+        if (noteDeviceLost()) location.reload();
+        else setFailed('lost');
+      } else if ((useSettings.getState().backend ?? 'auto') === 'auto') {
+        // the GPU refuses what WebGPU draws: WebGL 2 from now on (a WebGPU chosen by hand stays)
+        rememberFailure(message);
+        location.reload();
+      }
+    };
+    const starting = RenderHost.create(canvas.current, renderOptions(s), plan.forceWebGL, trouble);
+    hostHolder.starting = starting;
+    starting.then(
       (host) => {
         hostHolder.host = host;
+        // (WebGL 2 without having been asked for: three.js found no WebGPU device and took its fallback)
+        useApp.getState().set({ renderer: { backend: host.backend, reason: host.backend === 'webgl2' ? (plan.reason ?? 'unsupported') : null } });
+        if (attempt > 0) rememberFailure('the renderer could not be built on WebGPU');
         startGame(host);
       },
       (err) => {
         console.error(err);
-        setFailed(true);
+        hostHolder.starting = null;
+        if (!plan.forceWebGL) setAttempt(1);
+        else setFailed('none');
       },
     );
-  }, []);
+  }, [attempt]);
   useEffect(() => {
     hostHolder.host?.configure(renderOptions({ quality, resolutionScale, upscale, upscaleMode, sharpness }));
   }, [quality, resolutionScale, upscale, upscaleMode, sharpness]);
   return (
     <div className="game-canvas">
-      <canvas ref={canvas} />
+      {/* (a new element per attempt: a canvas that has given a WebGPU context gives no WebGL 2 one) */}
+      <canvas key={attempt} ref={canvas} />
+      {/* (the mark for `busy` is the shell's: ui/Shell.tsx `BusyMark`, above every screen) */}
       {failed && (
-        <div className="no-webgl">
-          このブラウザでは WebGPU / WebGL2 が利用できないため、ゲームを表示できません。
-          <br />
-          最新の Chrome / Edge / Firefox で、ハードウェアアクセラレーションを有効にしてお試しください。
+        <div className="no-webgl" role="alert">
+          <div className="fault">
+            <div className="fault-code">{failed === 'none' ? 'RENDER / NO DEVICE' : 'RENDER / DEVICE LOST'}</div>
+            <h2>{failed === 'none' ? '描画を開始できません' : '描画を停止しました'}</h2>
+            {failed === 'none' ? (
+              <p>
+                このブラウザでは WebGPU / WebGL2 が利用できないため、ゲームを表示できません。
+                <br />
+                最新の Chrome / Edge / Firefox で、ハードウェアアクセラレーションを有効にしてお試しください。
+              </p>
+            ) : (
+              <p>
+                グラフィックスデバイスとの接続が繰り返し失われたため、描画を停止しました。
+                <br />
+                ほかの重いアプリやタブを閉じてから再読み込みしてください。
+              </p>
+            )}
+            <button className="mini" onClick={() => location.reload()}>再読み込み</button>
+          </div>
         </div>
       )}
     </div>

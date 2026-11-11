@@ -47,7 +47,10 @@ pending. `docs/PLAN.md` holds the design.
 ## Environment notes (owner's PC `ubuntu-dev`, when the owner opens a session there)
 - The live stack (compose project `touge-nocturne` + cloudflared) runs on this machine. Deploy finished changes with
   `docker compose up -d --build` without asking (owner's standing permission; nobody else uses the site yet), then
-  check that the new build is served. Other compose projects on the host are unrelated: leave them alone.
+  check that the new build is served. Before a deploy: `node tools/gpu-errors.cjs` on the build (GPU errors over the
+  garage / race paths, and that the race camera is with the car) and look at one picture of a race: tests look at
+  states, and a build whose camera stayed at the garage passed them all (11-11).
+  Other compose projects on the host are unrelated: leave them alone.
 - `vite preview` inherits the dev proxy (`/api` → localhost:8080 = the live server): always serve with
   `API_PROXY=http://127.0.0.1:9 npx vite preview …` so test runs cannot create players or submit runs.
 - No Node on the host: use a user-space Node 24 tarball (nodejs.org) and `npm i playwright-core` outside the repo
@@ -67,7 +70,9 @@ pending. `docs/PLAN.md` holds the design.
 ## Gotchas
 - Rendering (`render/RenderHost.ts`, created by `ui/GameCanvas.tsx`; no react-three-fiber): `WebGPURenderer` + a TSL
   `RenderPipeline` (scene → ambient occlusion → the lights' glow in the haze → bloom → tone mapping (AgX) + the time of
-  day's grade → SMAA → lens). `?webgl=1` forces the WebGL 2 backend. Custom
+  day's grade → SMAA → lens). `?webgl=1` forces the WebGL 2 backend; without WebGPU, or when it fails while running
+  (errors in a burst, a lost device), the game goes to WebGL 2 by itself (`render/backendChoice.ts`, settings 描画方式;
+  check with `node tools/backend-fallback.cjs` on the GPU). Custom
   shaders are TSL node materials only: no `ShaderMaterial`, no `onBeforeCompile`, no `THREE.Points` with a size
   (WebGPU points are 1 px: particles and lamps are instanced `Sprite`s, `fx/SpritePool.ts`). Plain three.js materials
   (GLB, `MeshStandardMaterial`) still work: the renderer makes their node twins. An `InstancedMesh` with no instances
@@ -90,6 +95,16 @@ pending. `docs/PLAN.md` holds the design.
   material, `CarVisual` lets only shell / glass / wheels throw shadows, only the followed car's headlights throw
   any); a `DynamicDrawUsage` attribute is uploaded every frame, changed or not. A material's nodes (`materialColor`…)
   read the material being drawn, which in a shadow map is the shadow material: name the texture itself there.
+  What makes the picture stand still (all materials rebuilt in one frame, 1–2.6 s): the shaders are built for the
+  scene's set of lights (ids + `castShadow`, in scene order), the fog object and the environment texture object.
+  So every light lives in `render/LightRig.ts`, made once: never add, remove or re-parent a light, never make a
+  second fog or PMREM target; change intensity / colour / position (a car's headlights are `CarVisual.headlight()`
+  → the rig's three spots via `Game.updateBeams`; the vending machine's light is `vendingSpot`). Measure with
+  `~/.local/opt/quality/hitch.cjs` (frame gaps over 40 ms per action).
+  Courses stay built after leaving them (`Game.leaveWorld` / `enterWorld`, `keepCourses`, `keepBudget` in MB of
+  `gpuBytes`, oldest freed first, all on a GPU out-of-memory: `releaseKept`); `disposeWorld` frees only what no
+  other built course uses. Vehicle models load in stages (`render/vehicleModels.ts`: one car before the title, the
+  rest behind the menus): whatever shows a vehicle first waits with `Game.needs` / `ensureVehicleModels`.
 - Upscaler (settings アップスケーリング, off by default; `RenderHost` + `render/TemporalUpscaler.ts`): WebGPU draws the
   scene at 50–100 % with a jittered camera into three targets (colour, `velocity`, `reactive`) and gathers the frames
   at the output's size (three.js' `TAAUNode` with our resolve; SMAA off, RCAS after); the WebGL 2 backend uses FSR 1.
@@ -240,8 +255,8 @@ pending. `docs/PLAN.md` holds the design.
   before the start and after the finish (`hud.rivalLine`, event `rivalLine`), and in the race it can only call two
   things the game then does by rule: `AIDriver.block(seconds)` (moves in front of the chaser across the road, inside
   the road's edges; the road is left open as long again afterwards) and the horn (`AudioEngine.horn`, also the
-  player's H key). Whom to ask is a list of `RivalBrain`s (`game.rivalBrains`; today `api/rivalBrain.ts` = the
-  server; a model in the browser would be one more), with the game's own lines and rules (`scriptedBrain`) always
+  player's H key). Whom to ask is a list of `RivalBrain`s (`game.rivalBrains`: `api/rivalBrain.ts` = the server;
+  the owner dropped inference in the browser on 11-11: everything goes through the API), with the game's own lines and rules (`scriptedBrain`) always
   last: no key, no network, a slow answer (line 3.2 s, decision 1.5 s) or the setting ライバルAI off give the same game.
   Server: `POST /api/ai/taunt|decide` (`RivalAiController` → `Services/RivalMind.php` → the owner's LiteLLM gateway,
   `config/llm.php`, `LLM_API_KEY` in `.env` only: never to the browser, never in a log or commit). The requests carry
