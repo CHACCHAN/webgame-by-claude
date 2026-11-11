@@ -105,6 +105,9 @@ test('a click during a screen wipe acts at once', async ({ page }) => {
   // the row's right end is the last part the wipe uncovers: the screen is under the pointer there already
   const x = row.x + row.width - 6, y = row.y + row.height / 2;
   expect(await page.evaluate(([x, y]) => !!document.elementFromPoint(x, y)?.closest('.menu-list'), [x, y])).toBe(true);
+  // (the wipe really is still running when the click is made: else this test would pass with nothing to show)
+  const wiping = () => page.evaluate(() => document.querySelector('.wipe-scan')!.getAnimations().some((a) => a.playState === 'running'));
+  expect(await wiping()).toBe(true);
   await page.mouse.click(x, y);
   await expect(page.locator('.settings-list')).toBeVisible({ timeout: 3000 });
   await cdp.send('Animation.setPlaybackRate', { playbackRate: 1 });
