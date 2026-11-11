@@ -15,7 +15,7 @@ import { medalFor } from '../../game/race/medals';
 import { formatTime } from '../format';
 import { sfx } from '../sfx';
 import { COLORS } from './Cars';
-import { Count, FocusFrame, Hint, Notice, ScreenHead } from '../kit';
+import { FocusFrame, Hint, Notice, ScreenHead } from '../kit';
 
 const TIPS = [
   'ブレーキで荷重を前に移し、ステアを切りながらアクセルを踏むとリアが流れ出します。',
@@ -50,10 +50,14 @@ function BootLog() {
       </ol>
       <div className="boot-bar">
         <div className="boot-fill" style={{ transform: `scaleX(${p.toFixed(3)})` }} />
+        {!failed && <i className="boot-sweep" aria-hidden />}
       </div>
       <div className="boot-read">
-        <span className="boot-label">{failed ? '起動できませんでした' : label || 'システム起動中'}</span>
-        <Count to={Math.round(p * 100)} format={(v) => `${String(Math.round(v)).padStart(3, '0')} %`} ms={300} className="boot-pct" />
+        <span className="boot-label">
+          {!failed && p < 1 && <i className="busy-glyph" aria-hidden />}
+          {failed ? '起動できませんでした' : label || 'システム起動中'}
+        </span>
+        <span className="boot-pct">{String(Math.round(p * 100)).padStart(3, '0')} %</span>
       </div>
       {failed && (
         <Notice title="読み込みに失敗しました" action={<button className="mini" onClick={() => location.reload()}>再読み込み</button>}>

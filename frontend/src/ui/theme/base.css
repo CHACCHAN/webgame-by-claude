@@ -158,6 +158,23 @@ input::placeholder { color: var(--faint); }
 .wipe-layer, .wipe-layer * { animation: none !important; transition: none !important; }
 .wipe-scan { position: absolute; top: 0; bottom: 0; left: 0; width: 3px; z-index: 9; pointer-events: none !important; opacity: 0; background: var(--cyan); box-shadow: 0 0 1.4rem 0.3rem rgb(var(--c-cyan) / 0.55), -2.5rem 0 3rem rgb(var(--c-cyan) / 0.12); will-change: transform; }
 
+/* ---- busy: work in the background the player waits for (Shell.tsx `BusyMark`), and the turning mark every loading
+   display shares. They must keep moving while the game holds the main thread (a course being built, shaders
+   compiling): CSS animations of transform / opacity only, which the compositor runs by itself; nothing driven from a
+   script, nothing that needs a repaint (no width, background-position, filter, box-shadow). */
+@keyframes busy-spin { to { transform: rotate(360deg); } }
+@keyframes busy-out { to { opacity: 0; } }
+.busy-glyph { display: inline-block; flex: none; width: 0.82em; height: 0.82em; border: 2px solid rgb(var(--c-cyan) / 0.28); border-top-color: var(--cyan); border-right-color: var(--cyan); animation: busy-spin 0.9s linear infinite; will-change: transform; }
+.motion-off .busy-glyph { animation: kf-blink 1s steps(2) infinite; }
+/* shown only after 150 ms of being busy: the animation's own delay (a timer would wait for the main thread) */
+.busy-mark { position: absolute; z-index: 30; top: calc(var(--bar) + 0.7rem); right: var(--gutter); display: flex; align-items: center; gap: 0.65rem; padding: 0.4rem 0.9rem 0.4rem 0.7rem; font-size: var(--fs-s); letter-spacing: 0.08em; color: var(--text); white-space: nowrap;
+  background: var(--glass-solid); border-left: 2px solid var(--cyan); pointer-events: none; animation: kf-fade 0.2s 0.15s linear both; will-change: opacity; }
+.busy-mark.out { animation: busy-out 0.26s linear both; }
+/* in a race the map has that corner: the mark stands beside it (on a phone beside the buttons, the mark alone) */
+.screen-race .busy-mark, .screen-replay .busy-mark, .screen-results .busy-mark, .screen-onlineResults .busy-mark { top: 2.6vh; right: calc(2.2vw + 15.4rem); }
+.touch.screen-race .busy-mark { top: max(10px, env(safe-area-inset-top)); right: calc(max(12px, env(safe-area-inset-right)) + 200px); padding: 0.6rem; font-size: 14px; }
+.touch.screen-race .busy-mark span { display: none; }
+
 /* ---- notices: errors and offline states say what happened and what still works */
 .notice { --c: var(--cut-s); --edge: rgb(var(--c-magenta) / 0.55); --fill: rgb(var(--c-magenta) / 0.08); display: flex; align-items: flex-start; gap: var(--s-3); padding: 0.7rem 1rem; text-align: left; font-size: var(--fs-s); line-height: 1.6; color: var(--text-2); animation: var(--kf-rise) var(--t-enter) var(--e-out) both; }
 .notice::before { content: '!'; flex: none; width: 1.5em; height: 1.5em; display: grid; place-items: center; font-family: var(--font-display); font-weight: 700; color: var(--void); background: var(--magenta); clip-path: polygon(50% 0, 100% 100%, 0 100%); padding-top: 0.25em; font-size: 0.95em; }

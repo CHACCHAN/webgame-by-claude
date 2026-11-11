@@ -1,3 +1,4 @@
+import { useLayoutEffect, useRef, useState } from 'react';
 import { useApp, type Screen } from '../store/app';
 import { currentCourseId, useSettings } from '../store/settings';
 import { useOnline } from '../store/online';
@@ -114,6 +115,49 @@ export function ShellNav({ screen, back }: { screen: Screen; back: boolean }) {
           {fullscreen ? '全画面終了' : '全画面'}
         </button>
       )}
+    </div>
+  );
+}
+
+/** how long the game must be busy before the mark shows (short work passes unseen), and its fade out */
+const BUSY_DELAY = 150;
+const BUSY_FADE = 260;
+
+/**
+ * The mark for work in the background the player waits for (`useApp().busy`: a model on its way, a course being
+ * built): a turning mark and the label, in a corner, above every screen and the HUD, never in the way of the input.
+ *
+ * It must keep turning while the game holds the main thread (building a course, compiling shaders), so everything
+ * that moves here is a CSS animation of `transform` / `opacity`, which the compositor runs by itself; the delay
+ * before it shows is the animation's own delay, not a timer. (Whoever sets `busy` has to let one frame through
+ * before the heavy work starts, or the mark is not on the screen yet.)
+ */
+export function BusyMark() {
+  const busy = useApp((s) => s.busy);
+  const label = useRef('');
+  const since = useRef<number | null>(null);
+  const [leaving, setLeaving] = useState(false);
+  if (busy !== null) label.current = busy;
+  const on = busy !== null;
+  useLayoutEffect(() => {
+    if (on) {
+      since.current = performance.now();
+      setLeaving(false);
+      return;
+    }
+    if (since.current === null) return;
+    const seen = performance.now() - since.current > BUSY_DELAY;
+    since.current = null;
+    if (!seen) return;
+    setLeaving(true);
+    const t = setTimeout(() => setLeaving(false), BUSY_FADE);
+    return () => clearTimeout(t);
+  }, [on]);
+  if (!on && !leaving) return null;
+  return (
+    <div className={`busy-mark${on ? '' : ' out'}`} role="status" aria-live="polite">
+      <i className="busy-glyph" aria-hidden />
+      <span>{label.current}</span>
     </div>
   );
 }

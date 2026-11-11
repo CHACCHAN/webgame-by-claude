@@ -22,8 +22,14 @@
 .boot-log li.now::before { color: var(--cyan); }
 .boot-log li.now em { color: var(--cyan); animation: kf-blink 0.9s steps(2) infinite; animation-play-state: var(--kf-idle); }
 /* the bar in forty segments */
-.boot-bar { height: 0.5rem; background: var(--well); overflow: hidden; -webkit-mask: repeating-linear-gradient(90deg, rgb(var(--c-black)) 0 calc(2.5% - 2px), transparent calc(2.5% - 2px) 2.5%); mask: repeating-linear-gradient(90deg, rgb(var(--c-black)) 0 calc(2.5% - 2px), transparent calc(2.5% - 2px) 2.5%); }
+.boot-bar { position: relative; height: 0.5rem; background: var(--well); overflow: hidden; -webkit-mask: repeating-linear-gradient(90deg, rgb(var(--c-black)) 0 calc(2.5% - 2px), transparent calc(2.5% - 2px) 2.5%); mask: repeating-linear-gradient(90deg, rgb(var(--c-black)) 0 calc(2.5% - 2px), transparent calc(2.5% - 2px) 2.5%); }
 .boot-fill { height: 100%; background: var(--cyan); transform-origin: left; transition: transform 0.4s var(--e-out); }
+/* the fill is set by the game and may jump; the glint across the bar and the turning mark beside the label run by
+   themselves, also while the game holds the main thread (see `.busy-glyph` in base.css) */
+.boot-sweep { position: absolute; left: 0; top: 0; bottom: 0; width: 28%; background: linear-gradient(90deg, transparent, rgb(var(--c-white) / 0.8), transparent); animation: boot-sweep 1.5s linear infinite; will-change: transform; }
+@keyframes boot-sweep { from { transform: translateX(-100%); } to { transform: translateX(360%); } }
+.motion-off .boot-sweep { display: none; }
+.boot-label { display: inline-flex; align-items: center; gap: 0.6rem; }
 .boot-read { display: flex; justify-content: space-between; align-items: baseline; font-size: var(--fs-s); color: var(--muted); letter-spacing: 0.08em; min-height: 1.4em; }
 .boot-pct { font-family: var(--font-display); font-stretch: var(--w-norm); font-weight: 600; font-variant-numeric: tabular-nums; font-size: var(--fs-l); color: var(--cyan); }
 .boot-tip { position: absolute; right: var(--gutter); bottom: 3.2rem; max-width: 30rem; font-size: var(--fs-s); line-height: 1.8; color: var(--text-2); padding-left: var(--s-4); border-left: 2px solid var(--line-hot); }
@@ -309,11 +315,11 @@
 .verdict.win { color: var(--cyan); text-shadow: var(--glow-cyan-text); }
 .verdict.lose { color: var(--muted); }
 .verdict.finish { color: var(--text); }
-.results-sub { color: var(--muted); margin-top: 0.5rem; font-size: var(--fs-s); }
+.results-sub { color: var(--text-2); margin-top: 0.6rem; font-size: var(--fs-m); }
 .results-main { position: relative; display: inline-block; margin-top: 0.4rem; }
 .results-time { font-family: var(--font-display); font-stretch: var(--w-tight); font-weight: 700; font-size: 7rem; line-height: 1.05; font-variant-numeric: tabular-nums; --count-glow: var(--glow-cyan-text); }
 /* the medal: stamped over the corner of the time once it has counted up */
-.medal { position: absolute; right: -6.5rem; top: 0.6rem; padding: 0.3rem 0.9rem; border: 3px solid currentColor; font-family: var(--font-display); font-stretch: var(--w-cond); font-weight: 700; letter-spacing: 0.24em; font-size: var(--fs-xl); line-height: 1.2;
+.medal { position: absolute; left: calc(100% - 0.5rem); top: 0.9rem; white-space: nowrap; padding: 0.3rem 0.9rem; border: 3px solid currentColor; font-family: var(--font-display); font-stretch: var(--w-cond); font-weight: 700; letter-spacing: 0.24em; font-size: var(--fs-xl); line-height: 1.2;
   transform: rotate(-3deg); background: rgb(var(--c-void) / 0.6); box-shadow: 0 0 1.2rem -0.2rem currentColor, inset 0 0 0.8rem -0.3rem currentColor; }
 .results.in .medal { animation: var(--kf-stamp) 0.36s cubic-bezier(0.3, 1.6, 0.5, 1) both; animation-delay: 1500ms; }
 .results.again .medal { animation: none; }
@@ -465,7 +471,7 @@
   .verdict { font-size: 26px; }
   .results-sub { margin-top: 2px; font-size: 11px; }
   .results-time { font-size: 50px; }
-  .medal { right: -84px; top: 2px; font-size: 15px; padding: 2px 8px; border-width: 2px; }
+  .medal { left: calc(100% - 4px); top: 4px; font-size: 15px; padding: 2px 8px; border-width: 2px; }
   .rival-line { margin-top: 4px; padding: 3px 12px 3px 4px; }
   .rival-line p { font-size: 13px; }
   .vs-portrait { width: 32px; height: 32px; }

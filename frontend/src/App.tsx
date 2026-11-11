@@ -14,9 +14,17 @@ import { CarsScreen } from './ui/screens/Cars';
 import { TouchControls } from './ui/hud/TouchControls';
 import { useTouch } from './ui/touch';
 import { toggleFullscreen } from './ui/fullscreen';
-import { ShellNav, ShellTop } from './ui/Shell';
+import { BusyMark, ShellNav, ShellTop } from './ui/Shell';
 import { useScreenWipe } from './ui/motion';
 import { noteInput } from './ui/inputDevice';
+
+declare global {
+  interface Window {
+    /** the app's store, for tests and probes (as `__game` is the game): `__app.setState({ busy: '…' })` */
+    __app?: typeof useApp;
+  }
+}
+window.__app = useApp;
 
 /** the menu screens: the shell (trail, back, fullscreen) stands around them */
 const SHELLED: Screen[] = ['modes', 'courses', 'conditions', 'garage', 'transmission', 'cars', 'rivals', 'leaderboard', 'settings', 'controls', 'online', 'onlineRoom', 'onlineResults'];
@@ -125,6 +133,7 @@ export function App() {
         {shelled && <ShellTop />}
         {(shelled || screen === 'title') && <ShellNav screen={screen} back={shelled} />}
       </div>
+      <BusyMark />
       {touch && (
         <div className="rotate-hint">
           <svg viewBox="0 0 48 48" aria-hidden>

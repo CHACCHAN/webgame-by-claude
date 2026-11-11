@@ -235,7 +235,7 @@ export function ResultsScreen() {
         </div>
         <div className="results-actions focus-box">
           {actions.map((a, i) => (
-            <button key={a.label} className={`cta small ${i === sel ? 'focus' : ''}`} {...hoverSelect(() => setSel(i))} onClick={() => { sfx.confirm(); a.action(); }}>
+            <button key={a.label} className={`cta small ${i === sel && submit.kind !== 'need-name' ? 'focus' : ''}`} {...hoverSelect(() => setSel(i))} onClick={() => { sfx.confirm(); a.action(); }}>
               {a.label}
             </button>
           ))}
