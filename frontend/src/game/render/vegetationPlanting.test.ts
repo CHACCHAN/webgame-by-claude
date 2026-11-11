@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { COURSES } from '../track/courses';
 import { Track } from '../track/Track';
 import { buildTerrain } from '../track/terrain';
-import { COVER_SET, plantCover, plantTrees, SPECIES, TREE_SETS, UNDER_SET, vegetationFiles } from './vegetationPlanting';
+import { COVER_SETS, plantCover, plantTrees, SPECIES, TREE_SETS, UNDER_SETS, vegetationFiles } from './vegetationPlanting';
 
 describe('vegetation planting', () => {
   for (const course of Object.values(COURSES)) {
@@ -31,7 +31,7 @@ describe('vegetation planting', () => {
     });
 
     it(`${course.id}: bushes, rocks and undergrowth beside the road`, () => {
-      const c = plantCover(track, terrain, 1, [], COVER_SET, UNDER_SET, { undergrowth: 1, style: course.style });
+      const c = plantCover(track, terrain, 1, [], COVER_SETS[course.style], UNDER_SETS[course.style], { undergrowth: 1, style: course.style });
       expect(c.cover.length).toBeGreaterThan(2000);
       expect(c.under.length).toBeGreaterThan(30000);
       expect(c.under.length).toBeLessThan(300000);
@@ -40,7 +40,7 @@ describe('vegetation planting', () => {
         // nothing grows on the carriageway (the terrain's distance to the centreline is a coarse grid: a margin)
         expect(terrain.roadDistAt(plant.x, plant.z)).toBeGreaterThan(2.5);
       }
-      expect(plantCover(track, terrain, 1, [], COVER_SET, UNDER_SET, { undergrowth: 0, style: course.style }).under.length).toBe(0);
+      expect(plantCover(track, terrain, 1, [], COVER_SETS[course.style], UNDER_SETS[course.style], { undergrowth: 0, style: course.style }).under.length).toBe(0);
     });
   }
 

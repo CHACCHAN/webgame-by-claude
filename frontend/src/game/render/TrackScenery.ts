@@ -20,7 +20,7 @@ import { placeProp, prop, type PropModel } from './props';
 import type { CourseStyle } from '../track/courses';
 import { ChunkedLods, cutout } from './instancing';
 import { Forest, vegetationFrame, type VegetationQuality } from './vegetation';
-import { cityWeight, COVER_SET, loadedSpecies, plantCover, plantTrees, TREE_SETS, UNDER_SET } from './vegetationPlanting';
+import { cityWeight, COVER_SETS, loadedSpecies, plantCover, plantTrees, TREE_SETS, UNDER_SETS } from './vegetationPlanting';
 import { buildAutobahnScenery } from './autobahnScenery';
 
 export interface Lamp {
@@ -1099,14 +1099,15 @@ export function buildClutter(
   group.name = 'clutter';
   // the Blender-made bushes, rocks and undergrowth (medium quality and above); the lumps below are the low quality's
   const veg = opts.vegetation;
-  const coverSet = veg && veg.tier !== 'legacy' ? loadedSpecies(COVER_SET) : null;
+  const style = opts.style ?? 'touge';
+  const coverSet = veg && veg.tier !== 'legacy' ? loadedSpecies(COVER_SETS[style]) : null;
   if (veg && coverSet?.ids.length) {
-    const underSet = loadedSpecies(veg.undergrowth > 0 ? UNDER_SET : []);
+    const underSet = loadedSpecies(veg.undergrowth > 0 ? UNDER_SETS[style] : []);
     const planted = plantCover(track, terrain, density, keepOut, coverSet.ids, underSet.ids, {
       accept: opts.accept,
       rocks: opts.rocks,
       undergrowth: veg.undergrowth,
-      style: opts.style ?? 'touge',
+      style,
     });
     const full = veg.tier === 'full';
     const forests = [

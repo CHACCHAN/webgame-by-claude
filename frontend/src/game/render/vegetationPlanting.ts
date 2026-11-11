@@ -55,14 +55,14 @@ export const TREE_SETS: Record<CourseStyle, string[]> = {
   autobahn: ['fichte', 'buna', 'birke'],
 };
 
-/** bushes and rocks beside the road (`buildClutter`) */
-export const COVER_SET = ['yabu', 'sasa', 'iwa'];
+/** bushes and rocks beside the road (`buildClutter`), by the course's style */
+export const COVER_SETS: Record<CourseStyle, string[]> = { touge: ['yabu', 'sasa', 'iwa'], autobahn: ['yabu', 'sasa'] };
 /** what grows on the ground near the road */
-export const UNDER_SET = ['kusa', 'susuki', 'shida', 'sasa'];
+export const UNDER_SETS: Record<CourseStyle, string[]> = { touge: ['kusa', 'susuki', 'shida', 'sasa'], autobahn: ['kusa', 'susuki'] };
 
 /** the model files a course of this style needs (`undergrowth`: the quality has any) */
 export function vegetationFiles(style: CourseStyle, undergrowth = true) {
-  return [...new Set([...TREE_SETS[style], ...COVER_SET, ...(undergrowth ? UNDER_SET : [])])];
+  return [...new Set([...TREE_SETS[style], ...COVER_SETS[style], ...(undergrowth ? UNDER_SETS[style] : [])])];
 }
 
 /** the species of `ids` whose model is loaded */
