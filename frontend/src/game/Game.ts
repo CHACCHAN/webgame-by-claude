@@ -330,7 +330,9 @@ export class Game {
         if ((o as THREE.InstancedMesh).isInstancedMesh) (o as THREE.InstancedMesh).dispose();
         const m = o as THREE.Mesh;
         if (!m.geometry) return;
-        m.geometry.dispose();
+        // every Sprite draws three.js' one shared quad: freeing it with a course took it from the sprites that stay
+        // (smoke, sparks, the next course's lamps), and the WebGL 2 backend never drew a sprite again
+        if (!(o as THREE.Sprite).isSprite) m.geometry.dispose();
         for (const mat of Array.isArray(m.material) ? m.material : [m.material]) {
           if (!mat) continue;
           for (const v of Object.values(mat)) if (v instanceof THREE.Texture) textures.add(v);

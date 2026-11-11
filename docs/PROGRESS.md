@@ -153,9 +153,32 @@ Plan: `docs/FABLE_PLAN.md`. Commits `2074c02` (renderer), `0c79c61` + merge `a4c
 - Checked: 96 viewpoints at ultra without page errors (at 0.5 scale, before the last tuning), then 32 of the final
   build, 8 with the upscaler, 8 on WebGL 2; a still scene in rain: 0.04 % of pixels changing natively, 0.16–0.28 %
   with the upscaler (rain and grain included); tsc, vitest 70, build.
-- **Not verified**: frame rate paired (agents still using every core); online peers' beams (wired through
-  `RemoteRacers.forEachExhaust`, not run with a second player); trains' and bikes' lamps in the haze; the
-  autobahn's oncoming traffic has no beams in the air; phones (the pass is off below high).
+- Deployed 11-10 (`b521295`, bundle `index-DAzv1geN.js`, API 200).
+- Frame rate, 1080p, before the phase (`588ddb3`) against C1 + C2, paired, 20 s each, machine idle (11-11): high
+  148 / 115 fps before, 110 / 125 after; ultra 122 / 129 before, 97 / 116 after. The same build scatters by ±15 %
+  between runs, as much as the difference: roughly 10 % slower at most; the GPU pass times above are the firm numbers.
+- **Not verified**: online peers' beams (wired through `RemoteRacers.forEachExhaust`, not run with a second
+  player); trains' and bikes' lamps in the haze; the autobahn's oncoming traffic has no beams in the air; phones
+  (the pass is off below high).
+
+### Fixed: the picture froze on the grid after the car select (WebGPU, since the switch to it)
+- Found while photographing the menus through the keyboard (title → … → car → race): the race ran (clock, gears,
+  sound) but the picture stayed on the garage's last frame, with "Buffer used in submit while destroyed" on every
+  frame. Not seen before because every tool and the E2E start a race directly or on the WebGL 2 backend.
+- Cause, in three.js 0.186: `geometry.dispose()` destroys an interleaved attribute's GPU buffer (every meshopt GLB
+  has them) but leaves the destroyed buffer on the shared `InterleavedBuffer`; the next clone of the model (the same
+  geometry: the garage's car, then the same car on the grid) gets the dead buffer back and WebGPU refuses the frame.
+  The WebGL 2 backend forgets the buffer properly. `render/threeFixes.ts` gives the WebGPU backend the same
+  behaviour (called once in `RenderHost.create`); remove it when three.js fixes it.
+- Checked on the real GPU: the keyboard path into a race shows the race, 0 errors (140 distinct before); garage with
+  seven vehicles (a car twice, a train, a bike, the cockroach) → race → restart → another course → garage → rival
+  race → back → attract: 0 errors. tsc, vitest 70, build. Deployed 11-11 (`c581eba`, bundle `index-D2cgf5O8.js`,
+  API 200). **Not verified**: the online path (lobby → race) on real WebGPU, phones.
+- The same check on the WebGL 2 backend found a second one, there since the first course switch existed:
+  `disposeWorld` freed the geometry of every mesh of the old course, and every `Sprite` draws three.js' one shared
+  quad, so after a change of course no sprite was drawn again on WebGL 2 (lamps' flares, smoke, sparks, the city's
+  lights; 252 `no buffer is bound to enabled attribute` per run; WebGPU makes the buffer again). Sprites keep their
+  quad now. `tools/gpu-errors.cjs` walks these paths and counts the GPU's errors: 0 on both backends.
 
 ## Session 8 (2026-11-10) — new vehicles: Cybertruck, Yangwang U9 Xtreme, three motorcycles, the L0 maglev
 

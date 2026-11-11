@@ -75,6 +75,10 @@ pending. `docs/PLAN.md` holds the design.
   A post pass at less than full size is `rtt(node, null, null, { resolutionScale })` (`convertToTexture` is always full
   size). three's `GTAONode` cost 3.2 ms at 4K whatever its settings: the occlusion is our own (`render/ambientOcclusion.ts`).
   Measure a new pass with `tools/perf-pass.cjs` before keeping it.
+  `render/threeFixes.ts`: three.js 0.186 keeps a destroyed GPU buffer on an `InterleavedBuffer` after
+  `geometry.dispose()` (a model shown, freed and shown again froze the picture on WebGPU); check whether it is still
+  needed when three.js is updated. A check that starts a race directly does not cover this: go through the garage
+  (`node tools/gpu-errors.cjs` counts the GPU's validation errors over those paths).
   Passes that work from the depth buffer share `render/screenSpace.ts` (view position from the depth, sized targets,
   the surface-keeping blur that cancels a five-pixel tap pattern). The glow in the haze (`render/volumetricLights.ts`)
   takes its lights from `volume` (the course's lamps, the cars' cones via `CarVisual.beamInto`) and its amount from the
