@@ -143,9 +143,12 @@ interface MenuItem {
   action: () => void;
 }
 
+/** the row of the main menu the player went in through: back from there, the focus is on it again (not on the top) */
+let menuRow = 0;
+
 export function ModesScreen() {
   const { go, set } = useApp();
-  const [idx, setIdx] = useState(0);
+  const [idx, setIdx] = useState(menuRow);
   const items: MenuItem[] = [
     { id: 'ta', group: '走る', label: 'TIME ATTACK', jp: 'タイムアタック', desc: '峠を全開で駆け下り、自己ベストとメダル、オンラインランキング上位を狙う。', action: () => { set({ mode: 'time_attack', ghostChoice: null, afterLoad: 'garage' }); go('courses'); } },
     { id: 'rival', label: 'RIVAL BATTLE', jp: 'ライバルバトル', desc: '峠に棲む走り屋と1対1のダウンヒルバトル。先にゴールした方が勝ち。', action: () => { set({ mode: 'rival', ghostChoice: null, afterLoad: 'garage' }); go('courses'); } },
@@ -159,7 +162,7 @@ export function ModesScreen() {
   useMenuInput((a) => {
     if (a === 'up') { setIdx((i) => (i + items.length - 1) % items.length); sfx.move(); }
     if (a === 'down') { setIdx((i) => (i + 1) % items.length); sfx.move(); }
-    if (a === 'confirm') { sfx.confirm(); items[idx].action(); }
+    if (a === 'confirm') { sfx.confirm(); menuRow = idx; items[idx].action(); }
     if (a === 'back') { sfx.back(); go('title'); }
   });
   useEffect(() => {
@@ -177,7 +180,7 @@ export function ModesScreen() {
                 className={`${i === idx ? 'active' : ''}${it.group ? ' group-start' : ''}`}
                 data-group={it.group}
                 {...hoverSelect(() => setIdx(i))}
-                onClick={() => { sfx.confirm(); it.action(); }}
+                onClick={() => { sfx.confirm(); menuRow = i; it.action(); }}
               >
                 <span className="mi-en">{it.label}</span>
                 <span className="mi-jp">{it.jp}</span>

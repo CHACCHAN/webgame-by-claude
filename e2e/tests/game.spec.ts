@@ -56,6 +56,8 @@ test('menu navigation, settings persistence and controls screen', async ({ page 
   await expect(page.locator('.shell-top .trail li.now')).toContainText('設定');
   await page.locator('.shell-nav .touch-back').click();
   await expect(page.locator('.menu-list')).toBeVisible();
+  // back in the menu, the focus is on the row left through, not on the top again
+  await expect(page.locator('.menu-list li.active')).toContainText('SETTINGS');
   await expect(page.locator('.shell-top .trail li.now')).toContainText('メインメニュー');
   await page.locator('.menu-list li', { hasText: 'CONTROLS' }).click();
   await expect(page.locator('.controls-table')).toContainText('サイドブレーキ');
