@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState, type PointerEvent, type WheelEvent } from 'react';
 import { gameHolder } from '../GameCanvas';
 import { useApp } from '../../store/app';
 import { useMenuInput } from '../useMenuInput';
@@ -6,23 +6,43 @@ import { CAR_SPECS, singleRatio, vehiclesFor, type CarId } from '../../game/vehi
 import { traitsOf } from '../../game/vehicle/kinds';
 import { COURSES, COURSE_ORDER, type CourseId } from '../../game/track/courses';
 import { currentCourseId, useSettings } from '../../store/settings';
-import { loadPlayer } from '../../api/client';
+import { loadPlayer, type RoomMember, type RoomState } from '../../api/client';
 import { SLOT_COLORS } from '../../game/net/RemoteRacers';
 import { formatTime } from '../format';
 import { sfx } from '../sfx';
 import { Hint } from './Menus';
 import { chooseCar, createRoom, joinRoom, leaveRoom, registerName, rematch, startOnlineRace, takeBackReady, toggleReady, useOnline } from '../../store/online';
+import { previewCar, showRoomLineup, useLobby } from '../../store/lobby';
 import { CONDITIONS } from './RaceSetup';
 import type { TimeOfDay } from '../../game/render/Environment';
 
 const MAX_PLAYERS = 5;
 
-/** the vehicles a course allows (the fighters only at Edwards) */
-function CarPicker({ carId, course, disabled }: { carId: CarId; course: string; disabled?: boolean }) {
+/**
+ * The vehicles a course allows (the fighters only at Edwards). `preview` (in a room): the vehicle under the pointer or
+ * the keyboard focus stands in the player's seat of the line-up, for everyone, as 選択中 until it is clicked or left.
+ */
+function CarPicker({ carId, course, disabled, preview }: { carId: CarId; course: string; disabled?: boolean; preview?: boolean }) {
+  const timer = useRef(0);
+  // (after a short rest on a chip: a pointer crossing the row does not build every model on its way)
+  const look = (id: CarId, wait: number) => {
+    if (!preview || disabled) return;
+    clearTimeout(timer.current);
+    timer.current = window.setTimeout(() => previewCar(id), wait);
+  };
+  useEffect(() => () => clearTimeout(timer.current), []);
   return (
-    <div className="ol-cars">
+    <div className="ol-cars" onPointerLeave={() => look(carId, 0)}>
       {vehiclesFor(course).map((id) => (
-        <button key={id} className={`chip ${id === carId ? 'on' : ''}`} disabled={disabled} onClick={() => { sfx.move(); chooseCar(id); }}>
+        <button
+          key={id}
+          className={`chip ${id === carId ? 'on' : ''}`}
+          disabled={disabled}
+          onPointerEnter={() => look(id, 140)}
+          onFocus={() => look(id, 140)}
+          onBlur={() => look(carId, 0)}
+          onClick={() => { clearTimeout(timer.current); sfx.move(); chooseCar(id); }}
+        >
           {CAR_SPECS[id].name}
         </button>
       ))}
@@ -142,13 +162,111 @@ function RealtimeBadge() {
   return <span className={`rt-badge ${realtime}`}>{label}</span>;
 }
 
-/** The room: code to share, who is in, car choice, and the host's start button. */
+/**
+ * What a member is doing, as their seat's row and their vehicle's name tag say it. `tag`: shorter, and in a crowded
+ * room (`tight`) only the tick of the ready ones (the tags of five vehicles would cover the vehicles behind).
+ */
+function MemberMark({ p, room, choosing, tag, tight }: { p: RoomMember; room: RoomState; choosing: boolean; tag?: boolean; tight?: boolean }) {
+  if (!p.loaded) return <em className="loading">ロード中…</em>;
+  if (choosing) return <em className="choosing">選択中</em>;
+  if (p.id === room.host_id) return null;
+  if (tight) return p.ready ? <em className="ready">✓</em> : null;
+  return <em className={p.ready ? 'ready' : 'not-ready'}>{p.ready ? (tag ? '準備OK ✓' : '準備完了 ✓') : '準備中'}</em>;
+}
+
+/**
+ * Name tags over the vehicles of the line-up: whose it is and what they are doing (the same marks as the list).
+ * Placed every animation frame from the game's camera, without React state.
+ */
+function LobbyTags({ room, playerId, choosing }: { room: RoomState; playerId: number; choosing: Record<number, CarId> }) {
+  const tags = useRef(new Map<number, HTMLDivElement>());
+  useEffect(() => {
+    let raf = 0;
+    const at = { x: 0, y: 0 };
+    const place = () => {
+      const game = gameHolder.game;
+      const box = tags.current.values().next().value?.parentElement;
+      const w = box?.clientWidth ?? 0, h = box?.clientHeight ?? 0;
+      // (sizes are read before anything is moved: no layout in the middle of the frame)
+      const shown: { el: HTMLDivElement; x: number; y: number; w: number; h: number }[] = [];
+      for (const [slot, el] of tags.current) {
+        if (game?.lobbyTag(slot, at) && w) shown.push({ el, x: at.x * w, y: at.y * h, w: el.offsetWidth, h: el.offsetHeight });
+        else el.style.visibility = 'hidden';
+      }
+      // vehicles side by side stand closer in the picture than their tags are wide: from the nearest one up, a tag
+      // that would cover another moves above it
+      shown.sort((a, b) => b.y - a.y);
+      shown.forEach((t, k) => {
+        for (let pass = 0; pass < 4; pass++) {
+          const hit = shown.slice(0, k).find((o) => Math.abs(o.x - t.x) < (o.w + t.w) / 2 + 2 && t.y > o.y - o.h - 2 && t.y - t.h < o.y + 2);
+          if (!hit) break;
+          t.y = hit.y - hit.h - 2;
+        }
+        t.el.style.visibility = 'visible';
+        t.el.style.left = `${t.x.toFixed(1)}px`;
+        t.el.style.top = `${t.y.toFixed(1)}px`;
+      });
+      raf = requestAnimationFrame(place);
+    };
+    raf = requestAnimationFrame(place);
+    return () => cancelAnimationFrame(raf);
+  }, []);
+  return (
+    <div className="lobby-tags">
+      {room.players.map((p) => (
+        <div
+          key={p.slot}
+          className={`lobby-tag ${p.id === playerId ? 'me' : ''}`}
+          style={{ visibility: 'hidden' }}
+          ref={(el) => { if (el) tags.current.set(p.slot, el); else tags.current.delete(p.slot); }}
+        >
+          <i style={{ background: SLOT_COLORS[p.slot] }} />
+          <b>{p.name}</b>
+          <MemberMark p={p} room={room} choosing={p.id in choosing} tag tight={room.players.length > 3} />
+          {p.id === room.host_id && <em className="host">HOST</em>}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** The room: code to share, who is in (and their vehicles on the course behind), car choice, and the host's start button. */
 export function OnlineRoomScreen() {
   const { room, player, carId, busy, error } = useOnline();
+  const choosing = useLobby((s) => s.choosing);
   const go = useApp((s) => s.go);
   useEffect(() => {
     void gameHolder.game?.audio?.playMusic('bgm_online');
+    // the members' vehicles on the course (again after a picker that showed the garage)
+    showRoomLineup();
   }, []);
+  // drag on the empty part of the screen to look around the line-up, the wheel zooms (as in the car select)
+  const drag = useRef<{ x: number; y: number } | null>(null);
+  const [dragging, setDragging] = useState(false);
+  const orbit = {
+    onPointerDown: (e: PointerEvent<HTMLDivElement>) => {
+      if (e.target !== e.currentTarget) return;
+      e.currentTarget.setPointerCapture(e.pointerId);
+      drag.current = { x: e.clientX, y: e.clientY };
+      setDragging(true);
+    },
+    onPointerMove: (e: PointerEvent<HTMLDivElement>) => {
+      if (!drag.current) return;
+      gameHolder.game?.orbitGarage(e.clientX - drag.current.x, e.clientY - drag.current.y);
+      drag.current = { x: e.clientX, y: e.clientY };
+    },
+    onPointerUp: () => {
+      drag.current = null;
+      setDragging(false);
+    },
+    onPointerCancel: () => {
+      drag.current = null;
+      setDragging(false);
+    },
+    onWheel: (e: WheelEvent<HTMLDivElement>) => {
+      if (e.target === e.currentTarget) gameHolder.game?.zoomGarage(Math.exp(e.deltaY * 0.001));
+    },
+  };
   // a fighter picked in the lobby cannot race this room's course: the first vehicle it allows instead
   const track = room?.track_id;
   useEffect(() => {
@@ -192,7 +310,8 @@ export function OnlineRoomScreen() {
   if (!room || !player) return null;
   const course = COURSES[room.track_id as CourseId];
   return (
-    <div className="screen online-room">
+    <div className={`screen online-room ${dragging ? 'orbiting' : ''}`} {...orbit}>
+      <LobbyTags room={room} playerId={player.id} choosing={choosing} />
       <div className="crumb center">ONLINE ROOM ― {course?.name ?? room.track_id} ・ {CONDITIONS.find((c) => c.id === room.time_of_day)?.jp ?? ''} <RealtimeBadge /></div>
       <div className="ol-panel">
         <div className="ol-code-big">
@@ -209,12 +328,8 @@ export function OnlineRoomScreen() {
                 {p ? (
                   <>
                     <b>{p.name}</b>
-                    <span>{CAR_SPECS[p.car_id].name}</span>
-                    {!p.loaded ? (
-                      <em className="loading">ロード中…</em>
-                    ) : p.id !== room.host_id && (
-                      <em className={p.ready ? 'ready' : 'not-ready'}>{p.ready ? '準備完了 ✓' : '準備中'}</em>
-                    )}
+                    <span>{CAR_SPECS[choosing[p.id] ?? p.car_id].name}</span>
+                    <MemberMark p={p} room={room} choosing={p.id in choosing} />
                     {p.id === room.host_id && <em className="host">HOST</em>}
                     {p.id === player.id && <em className="you">YOU</em>}
                   </>
@@ -225,7 +340,7 @@ export function OnlineRoomScreen() {
             );
           })}
         </ul>
-        <CarPicker carId={carId} course={room.track_id} disabled={room.status !== 'waiting'} />
+        <CarPicker carId={carId} course={room.track_id} disabled={room.status !== 'waiting'} preview />
         <GearboxPicker carId={carId} disabled={room.status !== 'waiting'} />
         <div className="ol-actions">
           {isHost ? (
@@ -244,7 +359,7 @@ export function OnlineRoomScreen() {
         </div>
         {error && <div className="ol-error">{error}</div>}
       </div>
-      <Hint items={[['←→', '車'], ['Enter', isHost ? 'スタート' : me?.ready ? '準備完了を取り消す' : '準備完了'], ['Esc', '退出']]} />
+      <Hint items={[['←→', '車'], ['ドラッグ', '視点'], ['Enter', isHost ? 'スタート' : me?.ready ? '準備完了を取り消す' : '準備完了'], ['Esc', '退出']]} />
     </div>
   );
 }

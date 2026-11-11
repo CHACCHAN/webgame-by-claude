@@ -477,6 +477,21 @@ kbd {
 .ol-slots em.loading, .ol-slots em.not-ready, .ol-slots em.ready { font-family: inherit; letter-spacing: 0.05em; }
 .ol-slots em.loading, .ol-slots em.not-ready { background: none; color: var(--muted); }
 .ol-slots em.ready { background: rgba(89, 240, 160, 0.18); color: var(--good); }
+/* 選択中: the vehicle shown is one the member is looking at in the picker, not the one they are entered with */
+.ol-slots em.choosing, .lobby-tag em.choosing { font-family: inherit; letter-spacing: 0.05em; background: rgba(95, 212, 255, 0.16); color: var(--accent-2); animation: pulse 1.6s ease-in-out infinite; }
+/* the room's vehicles stand on the course behind the panel: drag to look around them (as in the car select), a name
+   tag over each (placed from the 3D scene every frame; the list carries the same marks, alone on a phone) */
+.online-room { cursor: grab; }
+.online-room.orbiting { cursor: grabbing; }
+.online-room .ol-panel, .online-room .crumb { cursor: auto; }
+.lobby-tags { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+.lobby-tag { position: absolute; transform: translate(-50%, -100%); display: flex; align-items: center; gap: 6px; padding: 1px 8px 1px 6px; border-radius: 4px; background: rgba(5, 8, 14, 0.62); border: 1px solid var(--line); white-space: nowrap; font-size: 13px; line-height: 20px; }
+.lobby-tag.me { border-color: rgba(255, 138, 42, 0.6); }
+.lobby-tag i { width: 5px; height: 14px; border-radius: 2px; flex: none; }
+.lobby-tag b { max-width: 8em; overflow: hidden; text-overflow: ellipsis; }
+.lobby-tag em { font-style: normal; font-size: 11px; letter-spacing: 0.05em; padding: 0 5px; border-radius: 3px; color: var(--muted); }
+.lobby-tag em.ready { color: var(--good); }
+.lobby-tag em.host { font-family: var(--font-en); font-weight: 700; letter-spacing: 0.15em; color: var(--text); background: rgba(255, 255, 255, 0.1); }
 .ol-actions { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
 .ol-actions .cta:disabled { opacity: 0.5; cursor: default; transform: none; box-shadow: none; }
 /* the room's main button (準備完了 / レース開始) stays on screen while the seats and the vehicle list above it scroll */
@@ -506,6 +521,7 @@ kbd {
 .online-standings em { margin-left: auto; flex: none; font-style: normal; font-family: var(--font-en); font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
 @media (max-width: 760px) {
   .ol-panel { right: 4vw; left: 4vw; width: auto; top: 12vh; }
+  .lobby-tags { display: none; }
   .ol-split { grid-template-columns: 1fr; }
   .ol-code-big b { font-size: 48px; }
 }
@@ -671,6 +687,7 @@ kbd {
   .lb-table td { padding: 4px 8px; }
   /* online */
   .online-lobby .crumb, .online-room .crumb, .online-results .crumb { top: 8px; }
+  .lobby-tags { display: none; }
   .ol-panel { top: 32px; max-height: calc(100vh - 40px); padding: 12px 16px; gap: 8px; }
   /* five players in view: the room's seats and the results' rows without scrolling, the room's and the results'
      buttons (準備完了 / レース開始 / もう一度走る) always on screen below the list that scrolls */

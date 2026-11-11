@@ -4,6 +4,7 @@ import { api, ApiError, type RoomState, type StoredPlayer } from '../api/client'
 import { gameHolder } from '../ui/GameCanvas';
 import { useApp } from './app';
 import { useSettings } from './settings';
+import { lobbyChannel, lobbyRoom, previewCar, showRoomLineup } from './lobby';
 import type { NetState } from '../game/net/RemoteRacers';
 import type { CarId } from '../game/vehicle/carSpecs';
 import type { CourseId } from '../game/track/courses';
@@ -87,9 +88,36 @@ export function registerName(name: string) {
 export function chooseCar(carId: CarId) {
   st().set({ carId });
   const room = st().room;
-  gameHolder.game?.showGarage(carId);
-  if (room && room.status !== 'racing') {
-    void run(async () => applyRoom(await api.rooms.setCar(onlinePlayer(), room.code, carId)));
+  if (!room) {
+    gameHolder.game?.showGarage(carId);
+    return;
+  }
+  // in a room the line-up shows it in the player's seat (store/lobby.ts): 選択中 until the server has confirmed it
+  if (room.status === 'waiting') previewCar(carId);
+  if (room.status !== 'racing') void sendCar();
+}
+
+/**
+ * The chosen car to the server. A car picked while another call is under way (←→ pressed twice) follows once that
+ * call is done: it used to be dropped, and the room raced the car before it.
+ */
+let sendingCar = false;
+async function sendCar() {
+  if (sendingCar) return;
+  sendingCar = true;
+  try {
+    for (let tries = 0; tries < 40; tries++) {
+      const room = st().room;
+      const want = st().carId;
+      if (!room || room.status === 'racing' || self()?.car_id === want) return;
+      if (st().busy) await new Promise((r) => setTimeout(r, 120));
+      else {
+        await run(async () => applyRoom(await api.rooms.setCar(onlinePlayer(), room.code, want)));
+        if (st().error) return;
+      }
+    }
+  } finally {
+    sendingCar = false;
   }
 }
 
@@ -143,7 +171,9 @@ export function rematch() {
 export async function leaveRoom() {
   const room = st().room;
   stopLoops();
-  if (channel && pusher) pusher.unsubscribe(channel.name);
+  lobbyRoom(null, null);
+  // (closing the connection takes the player out of the room's channel. An unsubscribe before it never got there:
+  // pusher-js sends a tick later, on the socket that is closing by then, and the browser logs an error)
   channel = null;
   pusher?.disconnect();
   pusher = null;
@@ -175,7 +205,9 @@ async function enterRoom(room: RoomState) {
   }
   // everyone races in the conditions the host chose
   if (game && game.timeOfDay !== room.time_of_day) game.applyTimeOfDay(room.time_of_day);
-  game?.showGarage(st().carId);
+  // the members' vehicles on the course (store/lobby.ts)
+  lobbyRoom(room, st().player?.id ?? null);
+  showRoomLineup();
   useApp.getState().set({ mode: 'online' });
   useApp.getState().go('onlineRoom');
   hookGame();
@@ -224,6 +256,7 @@ function connectRealtime(code: string) {
       channel.bind('pusher:subscription_succeeded', () => st().set({ realtime: 'live' }));
       channel.bind('pusher:subscription_error', () => st().set({ realtime: 'failed' }));
       channel.bind('room.updated', (data: { room: RoomState }) => applyRoom(data.room));
+      lobbyChannel(channel);
       channel.bind('client-state', (data: NetState & { id: number }, meta?: { user_id?: string }) => {
         const id = meta?.user_id ? Number(meta.user_id) : data.id;
         if (id && id !== st().player?.id) gameHolder.game?.remotes.push(id, data, performance.now());
@@ -239,12 +272,13 @@ export function applyRoom(room: RoomState) {
   // a reply overtaken by a newer state (a poll sent before the 準備完了 button was pressed) would undo it on screen
   if (room.server_time_ms < prev.server_time_ms) return;
   st().set({ room });
+  lobbyRoom(room, st().player?.id ?? null);
   const app = useApp.getState();
   if (room.status === 'racing' && room.start_at_ms && room.race_no > startedRace) beginRace(room);
   if (room.status === 'waiting' && (app.screen === 'onlineResults' || app.screen === 'race')) {
     // rematch: back to the lobby of the same room
     stopSending();
-    gameHolder.game?.showGarage(st().carId);
+    showRoomLineup();
     app.set({ paused: false });
     app.go('onlineRoom');
   }

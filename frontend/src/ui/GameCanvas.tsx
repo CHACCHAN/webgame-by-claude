@@ -24,6 +24,7 @@ function startGame(host: RenderHost) {
     const profile = qualityProfile(s.quality, s.resolutionScale);
     const game = new Game(host.renderer, host.scene, host.camera, profile);
     game.compileScene = (hold) => host.precompile(hold);
+    game.compileObject = (object) => host.precompile(false, object);
     const params = new URLSearchParams(location.search);
     game.assist = s.assist;
     game.autoShift = s.autoShift;
