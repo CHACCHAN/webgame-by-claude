@@ -6,9 +6,16 @@ test.use({ viewport: { width: 844, height: 390 }, hasTouch: true, isMobile: true
 
 test('phone: menus by taps, back button, a race driven with the touch controls', async ({ page }) => {
   const errors = await prepare(page);
-  // (a screen's parts slide in: the place to tap is the one that has stopped moving)
+  // (a screen's parts slide in: the place to tap is the one that has stopped moving. Two looks 100 ms apart see the
+  // same place while the software renderer has not drawn a frame in between, so the animations are asked first)
   const tap = async (sel: string, text?: string) => {
     const target = page.locator(sel, text ? { hasText: text } : {}).first();
+    await target.evaluate(async (el) => {
+      for (let n: Element | null = el; n; n = n.parentElement) {
+        const running = n.getAnimations().filter((a) => a.effect?.getComputedTiming().iterations !== Infinity);
+        await Promise.all(running.map((a) => a.finished.catch(() => undefined)));
+      }
+    });
     let box = (await target.boundingBox())!;
     for (let i = 0; i < 40; i++) {
       await page.waitForTimeout(100);
