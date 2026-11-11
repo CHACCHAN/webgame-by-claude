@@ -4,14 +4,20 @@
 | The rivals' voice and judgement (taunts before a race, whether to block or sound the horn in one).
 | The browser never talks to the model: it sends the situation as numbers and names to /api/ai/*, the prompt is
 | made here and goes through the gateway (Gravitee → LiteLLM, OpenAI-compatible) with the key from the environment.
-| Without a key the endpoints answer 503 and the game uses its own lines and rules.
+| Without a key or an address the endpoints answer 503 and the game uses its own lines and rules.
 */
 
 $models = fn (string $key, string $default) => array_values(array_filter(array_map('trim', explode(',', (string) env($key, $default)))));
 
 return [
     'key' => env('LLM_API_KEY'),
-    'base_url' => rtrim((string) env('LLM_BASE_URL', 'https://llm-gateway.invalid/gateway/litellm/v1'), '/'),
+    // the gateway's address comes from the environment only (`LLM_API_URL` in `.env`: the OpenAI-compatible base,
+    // …/v1, or the chat completions endpoint itself); without it, as without a key, nobody is asked
+    'url' => (function (): string {
+        $url = rtrim(trim((string) env('LLM_API_URL', '')), '/');
+
+        return $url === '' || str_ends_with($url, '/chat/completions') ? $url : $url.'/chat/completions';
+    })(),
     'key_header' => env('LLM_KEY_HEADER', 'X-Gravitee-Api-Key'),
 
     // tried in this order; the next one when a model fails or takes too long (measured 2026-11-11: taunts

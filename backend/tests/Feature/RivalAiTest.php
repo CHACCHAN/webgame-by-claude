@@ -37,7 +37,7 @@ class RivalAiTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        config(['llm.key' => 'test-key', 'llm.base_url' => 'https://llm.test/v1', 'llm.taunt_models' => ['first', 'second'], 'llm.decide_models' => ['judge']]);
+        config(['llm.key' => 'test-key', 'llm.url' => 'https://llm.test/v1/chat/completions', 'llm.taunt_models' => ['first', 'second'], 'llm.decide_models' => ['judge']]);
     }
 
     public function test_without_a_key_the_endpoints_say_so_and_ask_nobody(): void

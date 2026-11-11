@@ -84,6 +84,10 @@ pending. `docs/PLAN.md` holds the design.
   `geometry.dispose()` (a model shown, freed and shown again froze the picture on WebGPU); check whether it is still
   needed when three.js is updated. A check that starts a race directly does not cover this: go through the garage
   (`node tools/gpu-errors.cjs` counts the GPU's validation errors over those paths).
+  `keepShaders` (same file): three.js throws a built shader and its pipeline away with the last object that used
+  them, so every car leaving the scene cost its 22–32 shaders again at the next one (0.3–0.6 s); they are kept now
+  (not those keyed by one object: `InstancedMesh`, morph targets). It reaches into `renderer._nodes` /
+  `_pipelines`: check both when three.js is updated (`~/.local/opt/quality/builds2.cjs` counts shaders built per step).
   Passes that work from the depth buffer share `render/screenSpace.ts` (view position from the depth, sized targets,
   the surface-keeping blur that cancels a five-pixel tap pattern). The glow in the haze (`render/volumetricLights.ts`)
   takes its lights from `volume` (the course's lamps, the cars' cones via `CarVisual.beamInto`) and its amount from the
@@ -259,7 +263,8 @@ pending. `docs/PLAN.md` holds the design.
   the owner dropped inference in the browser on 11-11: everything goes through the API), with the game's own lines and rules (`scriptedBrain`) always
   last: no key, no network, a slow answer (line 3.2 s, decision 1.5 s) or the setting ライバルAI off give the same game.
   Server: `POST /api/ai/taunt|decide` (`RivalAiController` → `Services/RivalMind.php` → the owner's LiteLLM gateway,
-  `config/llm.php`, `LLM_API_KEY` in `.env` only: never to the browser, never in a log or commit). The requests carry
+  `config/llm.php`; its address and key are `LLM_API_URL` / `LLM_API_KEY` in `.env` only: never to the browser, never in a log
+  or commit, no address written into the code). The requests carry
   facts only (ids, numbers, the rival's name / title / description), never a prompt; 45 a minute per address; 503 =
   nobody to ask. The decision is real tool calls (`block_player`, `sound_horn`), clamped by the server. The models are
   `LLM_TAUNT_MODELS` / `LLM_DECIDE_MODELS` (first that answers). Check the block with
