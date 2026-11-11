@@ -504,6 +504,38 @@ export class AudioEngine {
     o.stop(t + dur + 0.02);
   }
 
+  /**
+   * A car's horn: the two notes of a twin horn (a major third apart), bright and a little rough, cut off as a
+   * horn is. `short` = a tap, `long` = held, `double` = two taps. `level`: how near it is (0…1).
+   */
+  horn(style: 'short' | 'long' | 'double' = 'short', level = 1, pitch = 1) {
+    const blasts = style === 'long' ? [[0, 0.95]] : style === 'double' ? [[0, 0.13], [0.24, 0.3]] : [[0, 0.2]];
+    const t0 = this.ctx.currentTime + 0.01;
+    const out = this.ctx.createGain();
+    out.gain.value = 0.34 * Math.min(1, Math.max(0, level));
+    const tone = this.ctx.createBiquadFilter();
+    tone.type = 'bandpass';
+    tone.frequency.value = 1700;
+    tone.Q.value = 0.5;
+    tone.connect(out).connect(this.sfx);
+    for (const [at, len] of blasts) {
+      const env = this.ctx.createGain();
+      env.gain.setValueAtTime(0, t0 + at);
+      env.gain.linearRampToValueAtTime(1, t0 + at + 0.012);
+      env.gain.setValueAtTime(1, t0 + at + len);
+      env.gain.linearRampToValueAtTime(0, t0 + at + len + 0.035);
+      env.connect(tone);
+      for (const f of [405, 510]) {
+        const o = this.ctx.createOscillator();
+        o.type = 'sawtooth';
+        o.frequency.value = f * pitch;
+        o.connect(env);
+        o.start(t0 + at);
+        o.stop(t0 + at + len + 0.05);
+      }
+    }
+  }
+
   /** Pace-note beeps before a bend: one for a medium corner, two for a tight one, three for a hairpin. */
   cornerWarning(kind: 'hairpin' | 'tight' | 'medium') {
     const n = kind === 'hairpin' ? 3 : kind === 'tight' ? 2 : 1;

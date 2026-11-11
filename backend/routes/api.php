@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\LeaderboardController;
 use App\Http\Controllers\Api\MetaController;
 use App\Http\Controllers\Api\PlayerController;
+use App\Http\Controllers\Api\RivalAiController;
 use App\Http\Controllers\Api\RoomController;
 use App\Http\Controllers\Api\RunController;
 use App\Http\Middleware\AuthenticatePlayer;
@@ -15,6 +16,12 @@ Route::get('/tracks/{trackId}/leaderboard', [LeaderboardController::class, 'inde
 Route::get('/runs/{run}/ghost', [RunController::class, 'ghost']);
 
 Route::post('/players', [PlayerController::class, 'store'])->middleware('throttle:10,1');
+
+// the rivals' voice and judgement (a language model behind the server; 503 when there is none)
+Route::middleware('throttle:ai')->group(function () {
+    Route::post('/ai/taunt', [RivalAiController::class, 'taunt']);
+    Route::post('/ai/decide', [RivalAiController::class, 'decide']);
+});
 
 Route::middleware(AuthenticatePlayer::class)->group(function () {
     Route::get('/players/me', [PlayerController::class, 'show']);

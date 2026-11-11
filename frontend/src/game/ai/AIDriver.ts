@@ -48,6 +48,8 @@ export class AIDriver {
   s = 0;
   /** when set, steer for this lateral offset (m) instead of the racing line, e.g. to pull over after the finish */
   pullOver: number | null = null;
+  /** seconds left on the blocking line (see `block`) */
+  blocking = 0;
 
   constructor(track: Track, line: RacingLine, profile: AIProfile, seed = 7) {
     this.track = track;
@@ -56,6 +58,16 @@ export class AIDriver {
     this.random = rng(seed);
     this.wobblePhase = this.random() * 100;
     this.speeds = new Float32Array(0);
+  }
+
+  /**
+   * Take the line of the car behind for `seconds`: the one move the rival's mind (ai/RivalMind) can ask for. A rule,
+   * not a manoeuvre of its own: while it lasts, and while that car is within 25 m behind, this driver puts itself in
+   * front of it across the road (quicker and further than the standing `defend`), still inside the road's edges and
+   * still at the speed its own line allows.
+   */
+  block(seconds: number) {
+    this.blocking = Math.max(this.blocking, seconds);
   }
 
   /** Must be called once the car spec is known. */
@@ -74,6 +86,7 @@ export class AIDriver {
     this.s = s;
     const speed = vehicle.forwardSpeed;
 
+    this.blocking = Math.max(0, this.blocking - dt);
     // rubber band: a little faster when behind, a little slower when far ahead
     let speedScale = 1;
     let speedCap = Infinity;
@@ -91,6 +104,10 @@ export class AIDriver {
         const other = Math.max(0, this.opponent.speed);
         const room = gap - 7 - Math.max(0, speed - other) * 0.4; // a car length plus reaction distance
         speedCap = other + Math.sqrt(2 * 4 * Math.max(0, room));
+      } else if (this.blocking > 0 && gap < 0 && gap > -25) {
+        // blocking: where the chaser is across the road, whatever the racing line says there
+        const want = this.opponent.lateral - this.line.offsetAt(s + 7 + Math.max(speed, 0) * 0.42);
+        this.avoid += (clamp(want, -6, 6) - this.avoid) * (1 - Math.exp(-dt * 4));
       } else if (gap < 0 && gap > -14 && Math.abs(lateralGap) < 3.5 && this.profile.defend > 0) {
         // defending: lean towards the side the chaser is trying to pass on, which leads to
         // door-to-door contact when the chaser commits

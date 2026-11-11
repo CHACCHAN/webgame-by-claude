@@ -236,6 +236,19 @@ pending. `docs/PLAN.md` holds the design.
   `min_time_ms` per course leaves room for it.
 - Particles: any per-particle value raised to a power must have its base clamped (a NaN alpha on a puff drawn next to
   the camera covers the screen, and bloom turns a NaN frame black).
+- The rival's language model (rival battles; `ai/RivalMind.ts`): a model never drives. It gives the rival's line
+  before the start and after the finish (`hud.rivalLine`, event `rivalLine`), and in the race it can only call two
+  things the game then does by rule: `AIDriver.block(seconds)` (moves in front of the chaser across the road, inside
+  the road's edges; the road is left open as long again afterwards) and the horn (`AudioEngine.horn`, also the
+  player's H key). Whom to ask is a list of `RivalBrain`s (`game.rivalBrains`; today `api/rivalBrain.ts` = the
+  server; a model in the browser would be one more), with the game's own lines and rules (`scriptedBrain`) always
+  last: no key, no network, a slow answer (line 3.2 s, decision 1.5 s) or the setting ライバルAI off give the same game.
+  Server: `POST /api/ai/taunt|decide` (`RivalAiController` → `Services/RivalMind.php` → the owner's LiteLLM gateway,
+  `config/llm.php`, `LLM_API_KEY` in `.env` only: never to the browser, never in a log or commit). The requests carry
+  facts only (ids, numbers, the rival's name / title / description), never a prompt; 45 a minute per address; 503 =
+  nobody to ask. The decision is real tool calls (`block_player`, `sound_horn`), clamped by the server. The models are
+  `LLM_TAUNT_MODELS` / `LLM_DECIDE_MODELS` (first that answers). Check the block with
+  `BLOCK=4 npx tsx tools/sim-duel.ts <lead:level> <chase:level>`.
 - Race timing/splits/AI run per physics step (`Game.raceStep`, `driveAI`); keep frame-time logic out of timing.
 - Tyre grip = course surface (`CourseInfo.surface.grip`) × weather (`WET_GRIP` in rain): `Game.roadGrip` → `VehicleSim.gripScale`
   (before `AIDriver.calibrate`). Headless tools take the course's grip. Changing a grip: re-check medals with the sim

@@ -161,6 +161,14 @@ export const api = {
 
   realtime: () => request<{ realtime?: RealtimeInfo }>('/content').then((r) => r.realtime ?? { enabled: false, key: null, max_players: 5 }),
 
+  /** The rivals' language model behind the server (facts in, a line or a decision out; 503 = nobody to ask). */
+  ai: {
+    enabled: () => request<{ ai?: { enabled: boolean } }>('/content').then((r) => !!r.ai?.enabled),
+    taunt: (body: object, signal?: AbortSignal) => request<{ line: string }>('/ai/taunt', { method: 'POST', body: JSON.stringify(body), signal }),
+    decide: (body: object, signal?: AbortSignal) =>
+      request<{ block: number | null; horn: 'short' | 'long' | 'double' | null }>('/ai/decide', { method: 'POST', body: JSON.stringify(body), signal }),
+  },
+
   rooms: {
     create: (p: StoredPlayer, trackId: string, timeOfDay: TimeOfDay, carId: CarId) =>
       request<RoomState>('/rooms', { method: 'POST', body: JSON.stringify({ track_id: trackId, time_of_day: timeOfDay, car_id: carId }) }, p.token),
@@ -250,4 +258,22 @@ export function saveCarBest(trackId: string, car: CarId, timeMs: number): number
     writeJson(`touge-car-bests:${trackId}`, all);
   }
   return prev;
+}
+
+/** Battles against a course's rival, as the player's own record (what the rival knows when it speaks). */
+export interface RivalRecord {
+  wins: number;
+  losses: number;
+}
+
+export function loadRivalRecord(trackId: string, level: string): RivalRecord {
+  const all = readJson<Record<string, RivalRecord>>(`touge-rivals:${trackId}`) ?? {};
+  return { wins: all[level]?.wins ?? 0, losses: all[level]?.losses ?? 0 };
+}
+
+export function saveRivalResult(trackId: string, level: string, playerWon: boolean) {
+  const all = readJson<Record<string, RivalRecord>>(`touge-rivals:${trackId}`) ?? {};
+  const r = loadRivalRecord(trackId, level);
+  all[level] = { wins: r.wins + (playerWon ? 1 : 0), losses: r.losses + (playerWon ? 0 : 1) };
+  writeJson(`touge-rivals:${trackId}`, all);
 }

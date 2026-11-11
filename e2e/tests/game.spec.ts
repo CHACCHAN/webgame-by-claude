@@ -150,6 +150,8 @@ test('rival battle starts with an AI opponent and can be paused', async ({ page 
   await page.locator('.choice-card', { hasText: 'マニュアル' }).click();
   await page.locator('.rival-card.ace').click();
   await expect(page.locator('.versus')).toContainText('高嶺 遼');
+  // the rival says something before the start (no model on the test stack: one of the game's own lines)
+  await expect(page.locator('.vs-line')).toHaveText(/^「.+」$/, { timeout: 120_000 });
   const setup = await page.evaluate(() => {
     const g = (window as any).__game;
     return { tod: g.timeOfDay, auto: g.player.sim.autoShift, wet: g.weatherGrip < 1 };

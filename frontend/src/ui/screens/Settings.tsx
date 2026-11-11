@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { serverBrain } from '../../api/rivalBrain';
 import { useApp } from '../../store/app';
 import { UPSCALE_SCALE, useSettings, type QualityLevel, type UpscaleMode } from '../../store/settings';
 import { useMenuInput, hoverSelect } from '../useMenuInput';
@@ -43,6 +44,7 @@ export function SettingsScreen() {
     { label: 'ゴースト表示（タイムアタック）', value: s.showGhost ? 'オン' : 'オフ', change: () => { s.set({ showGhost: !s.showGhost }); if (game) game.showGhost = !s.showGhost; } },
     { label: '操作ガイド（スタート時）', value: s.controlsGuide !== false ? 'オン' : 'オフ', note: 'レース開始時に操作方法をしばらく表示します', change: () => s.set({ controlsGuide: s.controlsGuide === false }) },
     { label: 'コーナー予告', value: s.cornerGuide ? 'オン' : 'オフ', note: '急カーブの手前で標識と警告音を出します', change: () => { s.set({ cornerGuide: !s.cornerGuide }); if (game) game.cornerGuide = !s.cornerGuide; } },
+    { label: 'ライバルAI', value: (s.rivalAi ?? true) ? 'オン' : 'オフ', note: 'ライバルのセリフと駆け引き（進路ブロック・クラクション）を言語モデルに任せます。オフや通信不可のときはゲーム内蔵のルールで動きます', change: () => { const v = !(s.rivalAi ?? true); s.set({ rivalAi: v }); if (game) game.rivalBrains = v ? [serverBrain] : []; } },
     { label: 'マスター音量', value: pct(s.masterVolume), change: (d) => s.set({ masterVolume: step(s.masterVolume, d) }) },
     { label: '効果音', value: pct(s.sfxVolume), change: (d) => s.set({ sfxVolume: step(s.sfxVolume, d) }) },
     { label: '音楽', value: pct(s.musicVolume), change: (d) => s.set({ musicVolume: step(s.musicVolume, d) }) },

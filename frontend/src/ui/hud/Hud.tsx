@@ -153,6 +153,7 @@ export function Hud() {
     drift: useRef<HTMLDivElement>(null),
     pos: useRef<HTMLDivElement>(null),
     gap: useRef<HTMLDivElement>(null),
+    line: useRef<HTMLDivElement>(null),
     map: useRef<HTMLCanvasElement>(null),
     boost: useRef<HTMLDivElement>(null),
     fps: useRef<HTMLDivElement>(null),
@@ -262,6 +263,13 @@ export function Hud() {
         r.pos.current.textContent = h.position === 1 ? '1ST' : '2ND';
         r.pos.current.className = `pos ${h.position === 1 ? 'lead' : 'chase'}`;
         if (r.gap.current) r.gap.current.textContent = `${h.gapMeters >= 0 ? '+' : ''}${Math.round(h.gapMeters)} m`;
+      }
+      // the rival's line before the start: shown while the game keeps it
+      const line = r.line.current, said = h.rivalLine?.moment === 'before' ? h.rivalLine : null;
+      if (line && line.dataset.seq !== String(said?.seq ?? '')) {
+        line.dataset.seq = String(said?.seq ?? '');
+        if (said) line.textContent = `「${said.text}」`;
+        line.classList.toggle('show', !!said);
       }
       if (r.splits.current && h.splits.length !== lastSplits) {
         lastSplits = h.splits.length;
@@ -393,6 +401,7 @@ export function Hud() {
             </div>
           </div>
         )}
+        {mode === 'rival' && <div className="vs-line" ref={refs.line} />}
         {mode === 'ghost' && ghostChoice && (
           <div className="ghost-tag">
             👻 VS {ghostChoice.label} <b>{formatTime(ghostChoice.timeMs)}</b>

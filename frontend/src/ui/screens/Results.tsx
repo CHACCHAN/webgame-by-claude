@@ -2,14 +2,14 @@ import { useEffect, useRef, useState } from 'react';
 import { useApp } from '../../store/app';
 import { useMenuInput, hoverSelect } from '../useMenuInput';
 import { gameHolder } from '../GameCanvas';
-import { api, loadLocalBest, loadPlayer, saveCarBest, saveLocalBest, type SubmitResult } from '../../api/client';
+import { api, loadLocalBest, loadPlayer, saveCarBest, saveLocalBest, saveRivalResult, type SubmitResult } from '../../api/client';
 import { MEDAL_LABEL, medalFor } from '../../game/race/medals';
 import { encodeGhost, type EncodedGhost } from '../../game/race/Ghost';
 import type { RaceResult } from '../../game/Game';
 import { CAR_SPECS } from '../../game/vehicle/carSpecs';
 import { COURSES } from '../../game/track/courses';
 import { formatTime } from '../format';
-import { startRaceFromState } from './Menus';
+import { Portrait, startRaceFromState } from './Menus';
 import { sfx } from '../sfx';
 
 type SubmitState = { kind: 'idle' } | { kind: 'need-name' } | { kind: 'sending' } | { kind: 'done'; res: SubmitResult } | { kind: 'error'; msg: string };
@@ -19,7 +19,7 @@ const memo = new WeakMap<RaceResult, { submit: SubmitState; localPB: { isNew: bo
 const medalNew = new WeakMap<RaceResult, boolean>();
 
 export function ResultsScreen() {
-  const { result, go, set, ghostChoice } = useApp();
+  const { result, go, set, ghostChoice, rivalLine } = useApp();
   const [submit, setSubmit] = useState<SubmitState>({ kind: 'idle' });
   const [name, setName] = useState(() => loadPlayer()?.name ?? '');
   const [localPB, setLocalPB] = useState<{ isNew: boolean; prev: number | null }>({ isNew: false, prev: null });
@@ -44,6 +44,7 @@ export function ResultsScreen() {
     }
     encoded.current = encodeGhost(result.ghost);
     const prevCarBest = saveCarBest(result.trackId, result.carId, result.timeMs);
+    if (result.rivalLevel) saveRivalResult(result.trackId, result.rivalLevel, result.rivalWon === false);
     const before = prevCarBest === null ? null : medalFor(result.trackId, result.carId, prevCarBest);
     const now = medalFor(result.trackId, result.carId, result.timeMs);
     const rank = { gold: 3, silver: 2, bronze: 1 } as const;
@@ -146,6 +147,14 @@ export function ResultsScreen() {
         )}
         {result.rivalTimeMs !== undefined && (
           <div className="rival-time">ライバル: {formatTime(result.rivalTimeMs)}</div>
+        )}
+        {result.rivalLevel && rivalLine && rivalLine.moment !== 'before' && (
+          <div className="rival-line">
+            <Portrait src={COURSES[result.trackId].rivals[result.rivalLevel].portrait} className="vs-portrait" />
+            <p>
+              <small>{COURSES[result.trackId].rivals[result.rivalLevel].name}</small>「{rivalLine.text}」
+            </p>
+          </div>
         )}
         <div className="results-grid">
           {sectors.map((s, i) => (

@@ -45,6 +45,9 @@ class MetaController extends Controller
             'max_players' => (int) config('game.online.max_players'),
         ];
 
-        return response()->json(['version' => config('game.version'), 'tracks' => $tracks, 'cars' => $cars, 'realtime' => $realtime]);
+        // whether the rivals have a model to ask through this server (/api/ai/*); the key itself never leaves it
+        $ai = ['enabled' => (string) config('llm.key') !== ''];
+
+        return response()->json(['version' => config('game.version'), 'tracks' => $tracks, 'cars' => $cars, 'realtime' => $realtime, 'ai' => $ai]);
     }
 }

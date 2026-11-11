@@ -7,6 +7,7 @@ import { VehicleSim, emptyInput, type AssistLevel, type VehicleInput } from './v
 import { CAR_ORDER, CAR_SPECS, type CarId } from './vehicle/carSpecs';
 import { RacingLine } from './ai/RacingLine';
 import { AIDriver, AI_PROFILES, type AILevel } from './ai/AIDriver';
+import { RivalMind, cornerAhead, type Horn, type Moment, type RivalBrain, type Situation } from './ai/RivalMind';
 import { buildScenery, type SceneryResult } from './render/TrackScenery';
 import { buildEnvironment, PRESETS, type EnvironmentRig, type TimeOfDay } from './render/Environment';
 import { CarVisual } from './render/CarVisual';
@@ -57,6 +58,8 @@ export interface RaceConfig {
   mode: RaceMode;
   carId: CarId;
   rivalLevel?: AILevel;
+  /** the player's record against this rival and the medal held on the course: what the rival knows when it speaks */
+  rivalRecord?: { wins: number; losses: number; medal: 'none' | 'bronze' | 'silver' | 'gold' };
   /** body colour (a train: its livery) chosen in the car select */
   color?: string;
   ghost?: { data: GhostData; label: string; carId: CarId; timeMs: number; splits?: number[] } | null;
@@ -93,6 +96,8 @@ export interface HudState {
   lastSplitIndex: number;
   progress: number;
   rivalProgress: number | null;
+  /** what the rival says (before the start, at the finish); `seq` changes with every new line */
+  rivalLine: { text: string; moment: Moment; seq: number } | null;
   ghostProgress: number | null;
   position: number;
   gapMeters: number;
@@ -113,6 +118,8 @@ export type GameEvent =
   | { type: 'phase'; phase: GamePhase }
   | { type: 'loading'; progress: number; label: string }
   | { type: 'finish'; result: RaceResult }
+  /** the rival spoke (`hud.rivalLine`): the results screen shows what it says after the race */
+  | { type: 'rivalLine'; moment: Moment; text: string }
   /** the garage shows a vehicle (a picker's choice reaching the engine): what an online room tells the others */
   | { type: 'garage'; carId: CarId; color?: string }
   | { type: 'sector'; index: number; timeMs: number; deltaMs: number | null };
@@ -166,7 +173,7 @@ export class Game {
   paused = false;
   hud: HudState = {
     speedKmh: 0, rpm: 0, redline: 8000, gear: 1, raceTime: 0, countdown: 0, splits: [], lastSplitDelta: null, lastSplitIndex: -1,
-    progress: 0, rivalProgress: null, ghostProgress: null, position: 1, gapMeters: 0, wrongWay: false, driftCombo: 0, driftScore: 0,
+    progress: 0, rivalProgress: null, rivalLine: null, ghostProgress: null, position: 1, gapMeters: 0, wrongWay: false, driftCombo: 0, driftScore: 0,
     boost: 0, turbo: false, sectorFlashT: 0, corner: null, online: null,
   };
 
@@ -177,6 +184,15 @@ export class Game {
   private simTime = 0;
   private player: Racer | null = null;
   private rival: Racer | null = null;
+  /**
+   * Whom a rival may ask for its lines and for its two moves, blocking and the horn (`ai/RivalMind.ts`: the
+   * server's language model, set by the UI). Empty: the game's own lines and rules. Nobody asked ever drives.
+   */
+  rivalBrains: RivalBrain[] = [];
+  private mind: RivalMind | null = null;
+  private lineSeq = 0;
+  /** game time at which the line on the HUD is taken away */
+  private lineUntil = 0;
   private attractCar: Racer | null = null;
   private ghost: { player: GhostPlayer; visual: CarVisual; label: string; splits?: number[] } | null = null;
   private recorder = new GhostRecorder();
@@ -503,6 +519,8 @@ export class Game {
     this.removeRacer(this.rival);
     this.removeRacer(this.attractCar);
     this.player = this.rival = this.attractCar = null;
+    this.mind = null;
+    this.hud.rivalLine = null;
     if (this.ghost) {
       this.root.remove(this.ghost.visual.root);
       this.ghost.visual.dispose();
@@ -733,6 +751,16 @@ export class Game {
       const rival = this.course.rivals[cfg.rivalLevel];
       this.rival = this.createRacer(rival.car, gridS, -2.0, { ai: cfg.rivalLevel, headlights: true, color: rival.color, rival: true });
       this.rival.sim.powerScale = rival.power ?? 1;
+      const ai = this.rival.ai;
+      this.mind = new RivalMind({
+        rival: { name: rival.name, title: rival.title, description: rival.description },
+        level: cfg.rivalLevel,
+        brains: this.rivalBrains,
+        seed: (Date.now() & 0xffff) | 1,
+        onBlock: (seconds) => ai?.block(seconds),
+        onHorn: (style) => this.rivalHorn(style),
+      });
+      this.rivalSays('before');
     }
     if (cfg.ghost && (cfg.mode === 'ghost' || this.showGhost)) {
       const spec = CAR_SPECS[cfg.ghost.carId];
@@ -800,6 +828,7 @@ export class Game {
     this.wall = Math.abs(real - next) > 50 ? real : next + (real - next) * 0.05;
 
     if (this.input.menuPressed('camera')) this.chase.cycle();
+    if (this.hud.rivalLine && this.time > this.lineUntil) this.hud.rivalLine = null;
 
     if (!this.paused) {
       this.step(dt, dtRaw);
@@ -839,6 +868,7 @@ export class Game {
         } else {
           this.input.poll(dt, this.player.input);
           if (this.input.menuPressed('reset')) this.respawn(this.player);
+          if (this.input.menuPressed('horn')) this.audio?.horn('short');
         }
       } else if (phase === 'countdown') {
         // allow revving on the line, but hold the car
@@ -1143,6 +1173,7 @@ export class Game {
           : s >= rs;
       this.hud.position = ahead ? 1 : 2;
       this.hud.gapMeters = s - rs;
+      if (this.mind && this.phase === 'racing' && !pl.finished && !this.rival.finished) this.mind.update(raceTime, () => this.rivalSituation());
     } else this.hud.rivalProgress = null;
 
     if (this.ghost) {
@@ -1262,8 +1293,61 @@ export class Game {
     };
     // the last split must equal the total time
     result.splitsMs[result.splitsMs.length - 1] = result.timeMs;
+    if (this.rival) {
+      // the gap at the line; a rival still on its way: what it has left at the pace it is running
+      const r = this.rival;
+      const behind = (this.track.finishS - r.proj.s) / Math.max(r.sim.forwardSpeed, 15);
+      this.rivalSays(result.rivalWon ? 'won' : 'lost', rivalTime === undefined ? Math.max(0, behind) : Math.abs(rivalTime - pl.finishTime));
+    }
     this.setPhase('finished');
     this.emit({ type: 'finish', result });
+  }
+
+  // ------------------------------------------------------------- the rival's lines and moves
+  /** The race as the rival sees it: the numbers a brain decides on (`ai/RivalMind.ts`). */
+  private rivalSituation(): Situation {
+    const pl = this.player!, r = this.rival!;
+    const ahead = r.proj.s >= pl.proj.s;
+    const front = ahead ? r : pl, back = ahead ? pl : r;
+    return {
+      level: this.config!.rivalLevel!,
+      remaining_m: Math.max(0, this.track.finishS - r.proj.s),
+      rival_ahead: ahead,
+      gap_m: Math.abs(r.proj.s - pl.proj.s),
+      closing_kmh: (back.sim.forwardSpeed - front.sim.forwardSpeed) * 3.6,
+      // (the track's lateral is + to the right)
+      lateral_m: r.proj.lateral - pl.proj.lateral,
+      corner: cornerAhead(this.corners, r.proj.s),
+      blocks: 0,
+      horns: 0,
+    };
+  }
+
+  /** The rival's horn, as loud as it is near. */
+  private rivalHorn(style: Horn) {
+    const r = this.rival;
+    if (!r || !this.audio) return;
+    const d = r.sim.position.distanceTo(this.camera.position);
+    this.audio.horn(style, clamp(1 - d / 150, 0.2, 1), 0.92);
+  }
+
+  /**
+   * A line from the rival: `before` the start (shown on the HUD if it comes while the race is still young), or
+   * once it has `won` or `lost` (kept for the results). `gap`: seconds between the two at the line.
+   */
+  private rivalSays(moment: Moment, gap?: number) {
+    const mind = this.mind, cfg = this.config, r = this.rival;
+    if (!mind || !cfg || !r) return;
+    const record = cfg.rivalRecord ?? { wins: 0, losses: 0, medal: 'none' as const };
+    void mind
+      .taunt({ course: this.course.id, tod: this.timeOfDay, player_car: cfg.carId, rival_car: r.sim.spec.id, ...record, moment, gap_s: gap })
+      .then((text) => {
+        if (this.mind !== mind || !text) return;
+        if (moment === 'before' && !(this.phase === 'countdown' || (this.phase === 'racing' && this.raceClock() < 3))) return;
+        this.hud.rivalLine = { text, moment, seq: ++this.lineSeq };
+        this.lineUntil = moment === 'before' ? this.time + 5.5 * this.timeScale : Infinity;
+        this.emit({ type: 'rivalLine', moment, text });
+      });
   }
 
   // ------------------------------------------------------------- visuals

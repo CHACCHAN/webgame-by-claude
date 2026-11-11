@@ -256,6 +256,62 @@ What a deploy or a bad hour could break, found by reading the stack, and changed
   in every test (boot 47 → 55 s, rival 1.7 → 2.3 min, phone 1.6 → 2.6 min); the machine was idle (no steal time).
   Why: not found. On the host's Chrome with SwiftShader the merged build is not slower than the old one.
 - The two tests wait longer now (the lap up to 8 min, a game's loading up to 7 min).
+- Time attack again with the longer limit: passed (9.8 min).
+- Five-player battle, three more runs, each stopped by something else:
+  1. `通信: ポーリング` instead of LIVE: Reverb was hung, by my own `docker network disconnect / connect` test on the
+     running container (→ the watchdog above).
+  2. A real inconsistency between two merged packages: a ready member who opened the car select lost the ready mark
+     on the others' screens (`MemberMark` showed 選択中 instead of it), while the rule is that looking around enters
+     nothing. Fixed: both marks are shown.
+  3. After the car select was confirmed the test waited 60 s for the ready button; the page's main thread stood
+     still for 60–80 s at each change of scene (garage ↔ line-up) under the software renderer (the trace: the room
+     poll, every 2.5 s, has gaps of 61–82 s there; the request itself took 81 ms). The two waits are 240 s now.
+     Not seen on the GPU (the garage and line-up changes there were checked by the packages' own GPU runs).
+  Result of the run after that: see the end of this section's next entry.
+
+### Generated assets: ChatGPT (images) and Gemini (music) through the owner's browser (11-11)
+- Owner (11-11): generate what is needed, images with ChatGPT, music / video with Gemini, both in the browser.
+- In the game: the autobahn's three rival portraits (it had none: silhouettes), its course art (was a screenshot) and
+  its own race music (`bgm_race_autobahn`, loop 59.05 → 133.31 s found with `tools/music-loop.cjs`: tempo, level per
+  10 s, the best pairs of whole-bar distances by band spectrum; loudness matched to the other tracks, −15.4 LUFS).
+  Listed in docs/ASSETS.md. No names, no project details in the prompts.
+- Not verified: nobody has heard the music in the game (the loop point is a measurement); sent to the owner with a
+  preview of the seam.
+
+### The rival's language model (11-11, owner's request)
+- What the owner asked for: LiteRT-LM.js with Spark 2.6 1.7B in the browser (8-bit weights and KV cache, 64k context),
+  the server (Gravitee → LiteLLM) where the client cannot; uses: the rival's taunt before a race, and in the race the
+  decision to obstruct or to sound the horn, the model never driving itself (a fixed blocking routine as a tool).
+- Built (the server path and the whole game side):
+  - `ai/RivalMind.ts`: a `RivalBrain` is asked for a line (before the start, after the finish) and, when the two cars
+    are close, for a decision; the game's own lines and rules (`scriptedBrain`) are always the last brain, so nothing
+    depends on a model being there. At most one question per 3.5 s, none while a block is on or the road is left open
+    after one, an answer older than 3 s of race is dropped.
+  - `AIDriver.block(seconds)`: the one blocking routine (in front of the chaser across the road, inside the road's
+    edges). `AudioEngine.horn` (synthesised twin horn; the player has one too: H / right stick).
+  - Server: `/api/ai/taunt`, `/api/ai/decide` (facts only, 45 / min per address, key from `.env` to the gateway in a
+    header, models by env, first that answers; decisions as real tool calls, clamped). `/api/content` → `ai.enabled`.
+  - UI: the line under the versus plate (countdown and first seconds), the line on the results, the setting
+    ライバルAI, the player's record against each rival (localStorage `touge-rivals:<course>`) as a fact for the line.
+- Verified: backend tests 27 passed (7 new: no key → 503 and nothing sent, key header, next model on failure, empty
+  answers → 503, tool calls clamped, a model that calls nothing, only facts accepted; they found a real bug: `trim()`
+  with 「」 in its list cut the 。 off a line byte-wise → invalid UTF-8 → 500). Frontend: tsc, vitest 138 passed (5 new for RivalMind),
+  build. The block in the duel sim (`BLOCK=4 npx tsx tools/sim-duel.ts`): Oboro and the autobahn, three pairings: no
+  respawn, no flip, the blocker never off the road, in front of the chaser 82–90 % of the blocked time on Oboro.
+  With only a 2 s breath between blocks a rookie held a legend behind for the whole autobahn (57 % cover, 30 blocks):
+  the road is now left open as long as the block was (+1 s), and the legend gets past (148 s vs 174 s).
+- Measured on the gateway (11-11, one request each, from this machine): sarashina-3-nano 0.19 s, sarashina-3-mini
+  0.29 s, qwen-3.8-27b 0.33 s, nemotron-3.5-bolt 0.58 s, gemini-3.5-flash-lite 2.0 s (the best line), gemma-4-31b
+  6.7 s, gemini-3.8-flash 12 s; tool calls correct with sarashina-3-mini in 0.15–0.47 s. Defaults: lines
+  gemini-3.5-flash-lite then sarashina-3-mini, decisions sarashina-3-mini then qwen-3.8-27b.
+- **Not done: the model in the browser.** The combination asked for is unconfirmed at every point: LiteRT-LM.js
+  (`@litert-lm/core`, early preview) documents Gemma 4 only for the web; there is no `.litertlm` of Spark-X2.6-1.7B,
+  its architecture is its own (`Spark2_5ForCausalLM`) and no conversion path for such a model is documented; nothing on
+  an 8-bit KV cache; the documented example context is 8192 tokens; tool calling from JS is undocumented. The gateway
+  has no Spark either. Alternatives for the owner to choose from: (a) LiteRT-LM.js with Gemma 4 E2B (the documented
+  path), (b) Spark through ONNX Runtime Web (WebGPU) or llama.cpp's WASM build (GGUF q8_0) if a conversion works,
+  (c) stay with the server. The seam is there: one more `RivalBrain` in `game.rivalBrains`, before the server's.
+  No experiment in the browser has been run yet.
 
 ## Session 8 (2026-11-10) — new vehicles: Cybertruck, Yangwang U9 Xtreme, three motorcycles, the L0 maglev
 

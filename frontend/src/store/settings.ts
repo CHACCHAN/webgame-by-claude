@@ -28,6 +28,8 @@ export interface Settings {
   autoShift: boolean;
   showGhost: boolean;
   cornerGuide: boolean;
+  /** the rivals' lines and moves may come from the server's language model (off: the game's own) */
+  rivalAi: boolean;
   controlsGuide: boolean;
   showFps: boolean;
   courseId: CourseId;
@@ -51,6 +53,7 @@ export const useSettings = create<Settings>()(
       autoShift: true,
       showGhost: true,
       cornerGuide: true,
+      rivalAi: true,
       controlsGuide: true,
       showFps: false,
       courseId: DEFAULT_COURSE,

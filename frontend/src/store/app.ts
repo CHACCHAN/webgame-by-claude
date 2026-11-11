@@ -25,6 +25,8 @@ interface AppState {
   /** screen after the race conditions (car select, or the ghost list in ghost battles) */
   afterLoad: Screen;
   result: RaceResult | null;
+  /** what the rival said last (before the start, after the finish) */
+  rivalLine: { moment: 'before' | 'won' | 'lost'; text: string } | null;
   paused: boolean;
   go: (s: Screen) => void;
   set: (patch: Partial<AppState>) => void;
@@ -42,6 +44,7 @@ export const useApp = create<AppState>((set, get) => ({
   ghostChoice: null,
   afterLoad: 'garage',
   result: null,
+  rivalLine: null,
   paused: false,
   go: (s) => set({ prevScreen: get().screen, screen: s }),
   set: (patch) => set(patch),

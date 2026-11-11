@@ -10,7 +10,8 @@ import { COURSES, COURSE_ORDER, type CourseId } from '../../game/track/courses';
 import { Track } from '../../game/track/Track';
 import { currentCourseId, useSettings } from '../../store/settings';
 import { decodeGhost } from '../../game/race/Ghost';
-import { api, loadCarBests, loadLocalBest } from '../../api/client';
+import { api, loadCarBests, loadLocalBest, loadRivalRecord } from '../../api/client';
+import { medalFor } from '../../game/race/medals';
 import { formatTime } from '../format';
 import { sfx } from '../sfx';
 import { COLORS } from './Cars';
@@ -338,8 +339,12 @@ export async function startRaceFromState(rival?: AILevel) {
   }
   game.initAudio();
   const color = app.carColor && COLORS[app.carId].includes(app.carColor) ? app.carColor : undefined;
-  game.startRace({ mode: app.mode, carId: app.carId, color, rivalLevel: app.mode === 'rival' ? (rival ?? app.rivalLevel) : undefined, ghost });
-  app.set({ screen: 'race', result: null, paused: false });
+  const rivalLevel = app.mode === 'rival' ? (rival ?? app.rivalLevel) : undefined;
+  // what the rival knows of the player when it speaks: their battles so far, the medal held with this car
+  const best = loadCarBests(game.course.id)[app.carId];
+  const rivalRecord = rivalLevel && { ...loadRivalRecord(game.course.id, rivalLevel), medal: (best ? medalFor(game.course.id, app.carId, best) : null) ?? ('none' as const) };
+  game.startRace({ mode: app.mode, carId: app.carId, color, rivalLevel, rivalRecord, ghost });
+  app.set({ screen: 'race', result: null, rivalLine: null, paused: false });
 }
 
 /** [action, keyboard, gamepad] — also shown briefly at every race start */
@@ -352,6 +357,7 @@ export const CONTROL_ROWS: [string, string, string, string][] = [
   ['シフトアップ / ダウン（MT時）', 'E / Q', 'Y / LB', '▲ / ▼'],
   ['カメラ切替', 'C', '十字キー↑', '右上 CAM'],
   ['コースに復帰', 'R', 'Back', '右上 復帰'],
+  ['クラクション', 'H', '右スティック押し込み', '—'],
   ['ポーズ', 'Esc / P', 'Start', '右上 II'],
   ['全画面表示の切り替え', 'F', '—', '左下 全画面'],
 ];

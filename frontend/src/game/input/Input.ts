@@ -123,7 +123,7 @@ export class InputManager {
   }
 
   /** Menu-style edge triggers shared by keyboard & pad. */
-  menuPressed(action: 'pause' | 'reset' | 'camera' | 'confirm') {
+  menuPressed(action: 'pause' | 'reset' | 'camera' | 'confirm' | 'horn') {
     switch (action) {
       case 'pause':
         return this.consume('Escape', 'KeyP') || this.consumePad(9);
@@ -133,6 +133,8 @@ export class InputManager {
         return this.consume('KeyC') || this.consumePad(12);
       case 'confirm':
         return this.consume('Enter') || this.consumePad(0);
+      case 'horn':
+        return this.consume('KeyH') || this.consumePad(11);
     }
   }
 

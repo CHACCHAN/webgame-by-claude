@@ -1,6 +1,9 @@
 // Headless duel: two AI cars share one physics world (solid car-to-car contact),
 // the chaser starts right behind the leader. Checks that bumping never leaves a car
 // stuck, flipped or unable to finish. Usage: COURSE=<id> npx tsx tools/sim-duel.ts [leadCar:level] [chaseCar:level]
+// BLOCK=<seconds>: the leader takes the blocking line (AIDriver.block, the rival's move in a battle) for that long
+// whenever the chaser comes within 20 m, leaving the road open as long again (+1 s) after each, as RivalMind does: how well it covers the chaser, and
+// whether the two still get down the hill.
 import { Track } from '../src/game/track/Track';
 import { COURSES, type CourseId } from '../src/game/track/courses';
 import { PhysicsWorld, PHYSICS_DT, initRapier } from '../src/game/vehicle/PhysicsWorld';
@@ -28,10 +31,25 @@ const cars = entries.map(([car, level], k) => {
   return { car, level, sim, ai, proj, input: emptyInput(), finish: -1, respawns: 0, flips: 0 };
 });
 let t = 0, contactSteps = 0, hits = 0, touching = false, maxDv = 0;
+const blockFor = Number(process.env.BLOCK ?? 0);
+let blockFree = 0, blocks = 0, blockSteps = 0, coveredSteps = 0, edge = 0;
 while (t < 480 && cars.some((c) => c.finish < 0)) {
   for (const c of cars) {
     const p = c.sim.position;
     track.project(p.x, p.y, p.z, c.proj.index, c.proj);
+  }
+  if (blockFor > 0 && cars.every((c) => c.finish < 0)) {
+    const gap = cars[0].proj.s - cars[1].proj.s;
+    if (t >= blockFree && gap > 0 && gap < 20) {
+      cars[0].ai.block(blockFor);
+      blocks++;
+      blockFree = t + blockFor * 2 + 1;
+    }
+    if (cars[0].ai.blocking > 0 && gap > 0 && gap < 25) {
+      blockSteps++;
+      if (Math.abs(cars[0].proj.lateral - cars[1].proj.lateral) < 1.2) coveredSteps++;
+      edge = Math.max(edge, Math.abs(cars[0].proj.lateral));
+    }
   }
   for (const [k, c] of cars.entries()) {
     const o = cars[1 - k];
@@ -73,4 +91,5 @@ console.log(`${course.id}  hits ${hits}  contact ${(contactSteps * PHYSICS_DT).t
 for (const c of cars) {
   console.log(`  ${c.car.padEnd(7)} ${c.level.padEnd(7)} ${c.finish > 0 ? 'FINISH ' + c.finish.toFixed(2) + 's' : 'DNF at s=' + c.ai.s.toFixed(0)}  respawns ${c.respawns} flips ${c.flips}`);
 }
+if (blockFor > 0) console.log(`  blocks ${blocks}  on the line ${(blockSteps * PHYSICS_DT).toFixed(1)}s, in front of the chaser ${((100 * coveredSteps) / Math.max(1, blockSteps)).toFixed(0)}%  furthest from the centre ${edge.toFixed(2)} m`);
 physics.dispose();
