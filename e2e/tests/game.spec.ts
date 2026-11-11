@@ -304,7 +304,8 @@ test('car select: tabs by kind, pictures, sorting, favourites, grid keys', async
   await page.keyboard.press('KeyX');
   await page.locator('.vp-tile[data-id="e5"] .vp-star').click();
   await expect(page.locator('.vp-star.on')).toHaveCount(2);
-  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('touge-garage')!).state.favourites)).toEqual(['e231', 'e5']);
+  // (a guest's stars live in the page only: nothing of them is stored; a member's follow the account)
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('touge-garage')!).state.favourites)).toEqual([]);
   await page.keyboard.press('KeyE');
   await page.keyboard.press('KeyE'); // その他 → ★
   await expect(page.locator('.vp-tab.on')).toHaveAttribute('data-tab', 'fav');

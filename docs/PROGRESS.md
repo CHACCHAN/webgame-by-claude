@@ -446,9 +446,12 @@ name whenever a record is kept. Later the same day: the account's key should be 
   ask a guest for the name every time, the online lobby takes a member in at once, MEMBER marks in the ranking.
 - **Decided here** (the owner can change them): the login itself lives in a cookie of our own (the account is
   Authentik's; nothing a script can read); a member's name is Authentik's `preferred_username` (cut to the game's
-  16 characters and letters), not editable in the game; guests keep their medals and times on the machine as before
-  (not an account: the server knows nothing of it), and what is on the machine at a login goes into the member's
-  save; a logout clears it from the machine; device settings (graphics, sound, controls) stay per machine.
+  16 characters and letters), not editable in the game; what a machine holds at a login (the progress of before)
+  goes into the member's save; a logout clears it from the machine; device settings (graphics, sound, controls)
+  stay per machine for everyone.
+- **Owner's decision (same day)**: nothing of a guest is kept, not even for the tab: pass, times, medals, battle
+  records and favourites live in the page's memory; sending a record under a typed name stays. (A guest who
+  reloads in an online room loses the seat: the pass is gone with the page.)
 - Verified: backend tests 40 passed (12 new: the whole trip with Authentik faked, PKCE, state from another browser,
   refusal, the same subject = the same player, the cookie without the header, expiry, guests, the old tokens and
   the claim, the save's revisions); the migration on a copy of the live database (32 players, 71 runs: all kept,

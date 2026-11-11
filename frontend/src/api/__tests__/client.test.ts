@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { api, asProgress, legacyToken, loadGuest, loadPlayer, mergeProgress, type Progress } from '../client';
+import { api, asProgress, legacyToken, loadCarBests, loadGuest, loadPlayer, loadRivalRecord, mergeProgress, readProgress, resetGuest, saveCarBest, saveRivalResult, type Progress } from '../client';
 import { mergeFavourites } from '../../store/account';
 
 const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
@@ -53,17 +53,18 @@ describe('who plays', () => {
       return json(404, {});
     });
     await api.auth.me();
+    resetGuest();
     calls.length = 0;
   });
 
   afterEach(() => vi.unstubAllGlobals());
 
-  it('a guest is the name typed: a pass for the sitting, kept in the tab only', async () => {
+  it('a guest is the name typed: a pass for the sitting, kept nowhere but in the page', async () => {
     expect(loadPlayer()).toBeNull();
     const p = await api.ensurePlayer('a');
     expect(p).toEqual({ id: 11, name: 'a', token: 'pass-1' });
     expect(loadGuest()?.token).toBe('pass-1');
-    expect(local.store.size).toBe(0);
+    expect(local.store.size + session.store.size).toBe(0);
     // the same name again in this sitting is the same guest
     expect((await api.ensurePlayer('a')).token).toBe('pass-1');
     expect(calls).toEqual(['POST /api/players', 'GET /api/players/me as pass-1']);
@@ -77,9 +78,29 @@ describe('who plays', () => {
   });
 
   it('a pass the server no longer knows is replaced', async () => {
-    session.store.set('touge-guest', JSON.stringify({ id: 3, name: 'a', token: 'over' }));
-    expect((await api.ensurePlayer('a')).token).toBe('pass-1');
-    expect(calls).toEqual(['GET /api/players/me as over', 'POST /api/players']);
+    await api.ensurePlayer('a');
+    known.clear();
+    expect((await api.ensurePlayer('a')).token).toBe('pass-2');
+    expect(calls).toEqual(['POST /api/players', 'GET /api/players/me as pass-1', 'POST /api/players']);
+  });
+
+  it("a guest's progress is in the page only; a member's is kept on the machine", async () => {
+    saveCarBest('oboro-downhill', 'hayate', 150_000);
+    saveRivalResult('oboro-downhill', 'ace', true);
+    expect(loadCarBests('oboro-downhill')).toEqual({ hayate: 150_000 });
+    expect(loadRivalRecord('oboro-downhill', 'ace')).toEqual({ wins: 1, losses: 0 });
+    expect(readProgress([]).carBests).toEqual({ 'oboro-downhill': { hayate: 150_000 } });
+    expect(local.store.size + session.store.size).toBe(0);
+
+    // what the browser kept from before is not a guest's to see
+    local.store.set('touge-car-bests:kirifuri-lakeside', JSON.stringify({ r34: 140_000 }));
+    expect(loadCarBests('kirifuri-lakeside')).toEqual({});
+    // a member logging in there finds it (and it goes into the save: store/account.ts)
+    member = { id: 5, name: 'ryo' };
+    await api.auth.me();
+    expect(loadCarBests('kirifuri-lakeside')).toEqual({ r34: 140_000 });
+    saveCarBest('kirifuri-lakeside', 'r34', 139_000);
+    expect(JSON.parse(local.store.get('touge-car-bests:kirifuri-lakeside')!)).toEqual({ r34: 139_000 });
   });
 
   it('the player a browser kept from before logs nobody in', async () => {

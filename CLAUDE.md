@@ -276,15 +276,19 @@ pending. `docs/PLAN.md` holds the design.
   Authentik at every login. A login is the cookie `touge_session` (HttpOnly, SameSite=Lax; its hash in
   `player_sessions`, 30 days from the last visit, `Services/MemberSession.php`); a request that changes something is
   taken from the cookie only with the header `X-Touge-Client` (`api/client.ts` sends it always). **Guests** are
-  everyone else: `POST /api/players` gives a name a pass for the sitting (bearer token, 24 h, kept in
-  `sessionStorage`), and a record asks for the name every time (`Results`: only a member's is sent by itself);
+  everyone else: `POST /api/players` gives a name a pass for the sitting (bearer token, 24 h, in the page's memory
+  only), and a record asks for the name every time (`Results`: only a member's is sent by itself);
   another name is another guest. A token without an end date (the players of before 11-11) lets nobody in; a member
   claims such records, and those set as a guest in the sitting, at login (`POST /api/auth/claim`,
   `store/account.ts` `memberArrived`). A member's save data (`players.save` + `save_rev`, `GET/PUT
   /api/players/me/save`): best time per vehicle, records against rivals, favourites (`Progress` in `api/client.ts`),
   merged with the machine's at start and sent 1.5 s after a change (409 = changed elsewhere: merge, send again);
-  ghosts are not in it (the runs have them: `best_runs` of `/api/players/me`). Guests keep their progress on the
-  machine as before; a logout clears the member's from it. Without `AUTHENTIK_*` (dev, the test stacks, E2E)
+  ghosts are not in it (the runs have them: `best_runs` of `/api/players/me`). **Nothing of a guest is kept by the browser**
+  (owner 11-11): pass, times, medals, battle records and favourites live in the page's memory (`guestProgress`,
+  the garage store's `partialize`); only device settings (`touge-settings`) are stored. What a browser kept from
+  before stays untouched until a member logs in there (it goes into their save); a logout clears the member's
+  copy from the machine. The guest's token rides along to Authentik and back in `sessionStorage` (`touge-claim`,
+  taken out at once) so that records set just before a login become the member's. Without `AUTHENTIK_*` (dev, the test stacks, E2E)
   everyone is a guest and `/api/content` says `auth.enabled: false`. The redirect URI the provider must know is
   `<public address>/api/auth/callback` (taken from the request: `X-Forwarded-Proto` + `Host`; `AUTHENTIK_REDIRECT_URI`
   overrides). Tests: `AuthTest.php` (Authentik faked), `client.test.ts`.

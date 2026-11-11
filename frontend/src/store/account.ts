@@ -4,10 +4,10 @@ import {
   ApiError,
   asProgress,
   clearProgress,
-  forgetGuest,
+  carryGuest,
   forgetLegacy,
   legacyToken,
-  loadGuest,
+  takeCarried,
   loadLocalBest,
   mergeProgress,
   onProgress,
@@ -55,28 +55,35 @@ export async function initAccount() {
   } catch {
     /* no address to read (tests) */
   }
+  // (a guest's token carried over the trip to Authentik: used once below, never kept)
+  const carried = takeCarried();
   try {
     const me = await api.auth.me();
+    // a guest starts with nothing: not even the stars a browser kept (they stay stored for a member to take along)
+    if (!me.member) useGarage.setState({ favourites: [] });
     useAccount.setState({ known: true, enabled: me.enabled, member: me.member, notice });
-    if (me.member) await memberArrived();
+    if (me.member) await memberArrived(carried);
   } catch {
-    // no server: a guest whose records stay on this machine
+    // no server: a guest
+    useGarage.setState({ favourites: [] });
     useAccount.setState({ known: true, enabled: false, member: null, notice: notice === 'ok' ? 'failed' : notice });
   }
 }
 
 /** Off to Authentik; the game is loaded again when the browser comes back. */
 export function login() {
+  carryGuest();
   location.assign(api.auth.loginUrl(location.pathname));
 }
 
 export async function logout() {
   window.clearTimeout(pushTimer);
-  await api.auth.logout().catch(() => undefined);
-  // the member's progress is on the server: the next one at this machine starts as a guest with nothing of it
+  // the member's progress is on the server: nothing of it stays on this machine (while still the member: a guest's
+  // writes do not reach the machine's storage)
   clearProgress();
   writeBase(null);
   useGarage.setState({ favourites: [] });
+  await api.auth.logout().catch(() => undefined);
   useAccount.setState({ member: null, notice: null, claimed: 0 });
 }
 
@@ -169,16 +176,17 @@ let listening = false;
  * A member has arrived (at start, logged in): records set as a guest on this browser become theirs, the save data
  * of the server and the progress on this machine are made one, and the ghosts of their best runs are fetched.
  */
-async function memberArrived() {
+async function memberArrived(carried: string | null) {
   const member = useAccount.getState().member;
   if (!member) return;
 
   let claimed = 0;
-  for (const [token, forget] of [[loadGuest()?.token, forgetGuest], [legacyToken(), forgetLegacy]] as const) {
-    if (!token) continue;
+  if (carried) claimed += await api.auth.claim(carried).then((r) => r.claimed, () => 0);
+  const old = legacyToken();
+  if (old) {
     try {
-      claimed += (await api.auth.claim(token)).claimed;
-      forget();
+      claimed += (await api.auth.claim(old)).claimed;
+      forgetLegacy();
     } catch {
       /* next start */
     }

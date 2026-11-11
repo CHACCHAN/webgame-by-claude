@@ -5,14 +5,15 @@ import type { TimeOfDay } from '../game/render/Environment';
 
 export const CLIENT_VERSION = '1.0.0';
 const BASE = (import.meta.env.VITE_API_BASE as string | undefined) ?? '/api';
-/** a guest's pass for this sitting (the tab: a reload keeps the seat in an online room, closing it ends it) */
-const GUEST_KEY = 'touge-guest';
+/** a guest's token carried over the trip to Authentik and back, so the records just set become the member's */
+const CLAIM_KEY = 'touge-claim';
 /** the player a browser kept for good before accounts came from Authentik: of use only to a member, who can claim its records */
 const LEGACY_KEY = 'touge-player';
 
 /**
  * Who plays. A member is logged in through Authentik (the login is a cookie the scripts cannot read: no token here);
- * a guest is a name typed for a record or for an evening online, with a pass that ends by itself.
+ * a guest is a name typed for a record or for an evening online, with a pass that ends by itself. Nothing of a
+ * guest is kept by the browser (owner 11-11): the pass and the progress live in this page's memory only.
  */
 export interface StoredPlayer {
   id: number;
@@ -105,11 +106,10 @@ const writeStored = (kind: 'session' | 'local', key: string, value: unknown | nu
 /** the member this browser is logged in as (told by the server at start: `api.auth.me`) */
 let member: StoredPlayer | null = null;
 
-/** The guest of this sitting, if a name was typed already. */
-export function loadGuest(): StoredPlayer | null {
-  const g = readStored<StoredPlayer>('session', GUEST_KEY);
-  return g && typeof g.token === 'string' ? g : null;
-}
+/** the guest of this page, once a name was typed (memory only: a reload is a new guest) */
+let guest: StoredPlayer | null = null;
+
+export const loadGuest = () => guest;
 
 /** Who plays right now: the member, else the guest of this sitting, else nobody yet. */
 export function loadPlayer(): StoredPlayer | null {
@@ -121,7 +121,14 @@ export const currentMember = () => member;
 /** The token of the player this browser kept before the accounts came from Authentik (for a member to claim). */
 export const legacyToken = () => readStored<{ token?: string }>('local', LEGACY_KEY)?.token ?? null;
 export const forgetLegacy = () => writeStored('local', LEGACY_KEY, null);
-export const forgetGuest = () => writeStored('session', GUEST_KEY, null);
+/** Before the browser leaves for Authentik: the guest's token goes along (the page is loaded anew on the way back). */
+export const carryGuest = () => guest?.token && writeStored('session', CLAIM_KEY, guest.token);
+/** Back from Authentik: the token carried along, taken out (whatever the login came to, it is not kept). */
+export function takeCarried(): string | null {
+  const token = readStored<string>('session', CLAIM_KEY);
+  writeStored('session', CLAIM_KEY, null);
+  return typeof token === 'string' ? token : null;
+}
 
 export interface PlayerProfile {
   id: number;
@@ -177,8 +184,11 @@ export const api = {
     /** Where the browser goes to log in (it comes back to `path` with `?login=ok|failed|denied|off`). */
     loginUrl: (path = '/') => `${BASE}/auth/login?return=${encodeURIComponent(path)}`,
     async logout() {
-      await request('/auth/logout', { method: 'POST' });
-      member = null;
+      try {
+        await request('/auth/logout', { method: 'POST' });
+      } finally {
+        member = null;
+      }
     },
     /** A guest's records become the member's (the guest's token says whose they were). */
     claim: (token: string) => request<{ claimed: number }>('/auth/claim', { method: 'POST', body: JSON.stringify({ token }) }),
@@ -199,7 +209,6 @@ export const api = {
    */
   async ensurePlayer(name: string): Promise<StoredPlayer> {
     if (member) return member;
-    const guest = loadGuest();
     if (guest && guest.name === name) {
       try {
         await request('/players/me', {}, guest.token);
@@ -212,9 +221,8 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ name }),
     });
-    const p: StoredPlayer = { id: created.id, name: created.name, token: created.token };
-    writeStored('session', GUEST_KEY, p);
-    return p;
+    guest = { id: created.id, name: created.name, token: created.token };
+    return guest;
   },
 
   realtime: () => request<{ realtime?: RealtimeInfo }>('/content').then((r) => r.realtime ?? { enabled: false, key: null, max_players: 5 }),
@@ -269,7 +277,15 @@ export const api = {
   ghost: (runId: number) => request<GhostResponse>(`/runs/${runId}/ghost`),
 };
 
-// -------- local personal bests (work offline too), per course
+// -------- the progress (best times and ghosts, records against rivals), per course. A member's is kept on the
+// machine (a copy of what the server has: store/account.ts); a guest's lives in this page's memory and is gone with it.
+// What a browser kept from before 11-11 stays where it is until a member logs in there and takes it along.
+const guestProgress = new Map<string, string>();
+/** A new guest: nothing of the one before (tests; a page starts like this by itself). */
+export function resetGuest() {
+  guest = null;
+  guestProgress.clear();
+}
 /** told after the progress kept on this machine changed (store/account.ts sends a member's to the server) */
 const progressListeners = new Set<() => void>();
 export const onProgress = (f: () => void) => {
@@ -280,13 +296,14 @@ const progressChanged = () => progressListeners.forEach((f) => f());
 const LEGACY_TRACK = 'oboro-downhill';
 const readJson = <T,>(key: string, legacy?: string): T | null => {
   try {
-    const raw = localStorage.getItem(key) ?? (legacy ? localStorage.getItem(legacy) : null);
+    const raw = member ? localStorage.getItem(key) ?? (legacy ? localStorage.getItem(legacy) : null) : guestProgress.get(key) ?? null;
     return raw ? (JSON.parse(raw) as T) : null;
   } catch {
     return null;
   }
 };
 const writeJson = (key: string, v: unknown) => {
+  if (!member) return void guestProgress.set(key, JSON.stringify(v));
   try {
     localStorage.setItem(key, JSON.stringify(v));
   } catch {
@@ -361,6 +378,7 @@ const RIVALS = 'touge-rivals:';
 const LOCAL_BEST = 'touge-local-best:';
 const keysWith = (prefix: string) => {
   const out: string[] = [];
+  if (!member) return [...guestProgress.keys()].filter((k) => k.startsWith(prefix)).map((k) => k.slice(prefix.length));
   try {
     for (let i = 0; i < localStorage.length; i++) {
       const k = localStorage.key(i);
