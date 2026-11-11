@@ -28,3 +28,38 @@ export function fixInterleavedDispose(renderer: WebGPURenderer) {
     backend.delete(attribute);
   };
 }
+
+type BuiltShader = { usedTimes: number };
+type NodeManager = { get(o: object): { nodeBuilderState?: BuiltShader }; delete(o: object): unknown };
+type RenderObjectLike = { isRenderObject?: boolean; object?: THREE.Object3D & { count?: number; isBatchedMesh?: boolean }; geometry?: THREE.BufferGeometry };
+type Pipelines = { _releasePipeline?: (p: unknown) => void; _releaseProgram?: (p: unknown) => void };
+
+/**
+ * Built shaders are kept. three.js counts the objects drawn with a shader (a material's shape × a geometry's layout
+ * × the lights) and throws the built shader away with the last of them: a car taken out of the garage took its
+ * 22–32 shaders along, and the next car, or the same one again, built them all anew in one frame (~0.5 s, every
+ * time a car was shown and at every race start). One use that never ends keeps them; the GPU's pipelines and shader
+ * modules likewise. What can pile up is bounded by the shapes of material the game has: shaders whose key names
+ * one object (an `InstancedMesh`, morph targets) are left to three.js, or every course's trees would stay.
+ */
+export function keepShaders(renderer: WebGPURenderer) {
+  const inner = renderer as unknown as { _nodes?: NodeManager; _pipelines?: Pipelines };
+  const nodes = inner._nodes;
+  if (nodes && typeof nodes.delete === 'function' && typeof nodes.get === 'function') {
+    const drop = nodes.delete.bind(nodes);
+    nodes.delete = (o: object) => {
+      const ro = o as RenderObjectLike;
+      if (ro.isRenderObject && ro.object) {
+        const own = (ro.object as THREE.InstancedMesh).isInstancedMesh || (ro.object.count ?? 1) > 1 || ro.object.isBatchedMesh || Object.keys(ro.geometry?.morphAttributes ?? {}).length > 0;
+        const state = nodes.get(o).nodeBuilderState;
+        if (!own && state && state.usedTimes === 1) state.usedTimes++;
+      }
+      return drop(o);
+    };
+  }
+  const pipelines = inner._pipelines;
+  if (pipelines?._releasePipeline && pipelines._releaseProgram) {
+    pipelines._releasePipeline = () => {};
+    pipelines._releaseProgram = () => {};
+  }
+}

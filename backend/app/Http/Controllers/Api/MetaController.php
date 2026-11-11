@@ -46,7 +46,7 @@ class MetaController extends Controller
         ];
 
         // whether the rivals have a model to ask through this server (/api/ai/*); the key itself never leaves it
-        $ai = ['enabled' => (string) config('llm.key') !== ''];
+        $ai = ['enabled' => (string) config('llm.key') !== '' && (string) config('llm.url') !== ''];
 
         return response()->json(['version' => config('game.version'), 'tracks' => $tracks, 'cars' => $cars, 'realtime' => $realtime, 'ai' => $ai]);
     }

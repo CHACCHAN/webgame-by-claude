@@ -308,7 +308,7 @@ What a deploy or a bad hour could break, found by reading the stack, and changed
   - `AIDriver.block(seconds)`: the one blocking routine (in front of the chaser across the road, inside the road's
     edges). `AudioEngine.horn` (synthesised twin horn; the player has one too: H / right stick).
   - Server: `/api/ai/taunt`, `/api/ai/decide` (facts only, 45 / min per address, key from `.env` to the gateway in a
-    header, models by env, first that answers; decisions as real tool calls, clamped). `/api/content` → `ai.enabled`.
+    header, the gateway's address from `.env` too since 11-11 (`LLM_API_URL`, owner: no address in the code), models by env, first that answers; decisions as real tool calls, clamped). `/api/content` → `ai.enabled`.
   - UI: the line under the versus plate (countdown and first seconds), the line on the results, the setting
     ライバルAI, the player's record against each rival (localStorage `touge-rivals:<course>`) as a fact for the line.
 - In the browser on the GPU, a stack with the key, through the menus (`~/.local/opt/quality/rivalmind.cjs`): the line
@@ -412,6 +412,19 @@ proposed freeing the oldest first when it runs short.
   sliding in, which the old freeze had hidden; its taps now wait until the target stands still).
   Not verified: phones on a device; a slow network (the mark and the waits were only seen locally); the hitch numbers
   on WebGL 2 and on medium / low; a real GPU out-of-memory.
+- **Built shaders are kept** (`render/threeFixes.ts` `keepShaders`, later the same day). What was left of the garage's
+  0.34–0.6 s: three.js counts the uses of a built shader and of its pipeline and throws both away with the last
+  object that used them, so a car that left the scene took its 22–32 shaders along and the next car (or the same one
+  again) built them anew. The count now never reaches zero for shaders that are not bound to one object (an
+  `InstancedMesh`'s and a morph target's key holds the object's id: those go as before), and pipelines / programs
+  are not released. Shaders built per garage step (`~/.local/opt/quality/builds2.cjs`): 32 / 29 / 26 / 22 / 22 →
+  21 (first car) / 11 / 3 / 3 / 6 / 2, a train 24. Worst frame (`hitch.cjs`, 1080p high, WebGPU): another car in
+  the garage 536 → 113 ms, a car shown before 547 → 58 ms, race start 648 → 107 ms, the attract run 381 ms → none
+  over 40 ms; a train's first showing 463 ms and the first car's 374 ms stay (shapes drawn for the first time).
+  Restart: no difference between the builds in paired runs (another session loaded the machine: 0–26 frames of
+  40–150 ms on both). Verified: tsc, vitest 147, `gpu-errors.cjs` 0 on both backends, one race picture.
+  Not measured: how much memory the kept shaders hold over a long sitting (a few hundred small objects; nothing
+  frees them before the page is left).
 
 ### Ground, road and roadside remade (11-11, the owner's request to re-model everything; package `terrain`)
 An agent's package (six commits, `46041ec` … `6a1854a`), merged with the freeze work on its branch and checked there
