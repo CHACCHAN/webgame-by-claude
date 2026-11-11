@@ -53,6 +53,26 @@ Downloaded from ambientCG (https://ambientcg.com, CC0 1.0 — no attribution req
 | `rock_albedo.webp` / `rock_normal.webp` | Rock030 | Color / NormalGL | 512 px, colour ×1.35 |
 | `concrete_albedo.webp` / `concrete_normal.webp` | Concrete034 | Color / NormalGL | 512 px, colour ×0.82; lattice frames and weathering are drawn on top |
 
+### Layers of the ground and the roadside (2026-11-11)
+For the layered materials of quality medium and up (`render/terrainMaterial.ts`, `render/roadMaterial.ts`,
+`render/structureMaterials.ts`). ambientCG 1K-JPG packages (CC0 1.0), downloaded 2026-11-11 and built by
+`node tools/surface-textures.cjs` (sharp) into `frontend/public/textures/terrain/{1024,512}/`: `<layer>_c.webp` =
+Color with the Displacement map in alpha (from 96 to 255), `<layer>_n.webp` = NormalGL.
+
+| Layer | ambientCG asset | Used for |
+|---|---|---|
+| `rock` | Rock030 | steep faces and cuttings (textured from the sides) |
+| `floor` | Ground023 | the forest's floor |
+| `moss` | Ground037 | gentle open ground of the mountain courses |
+| `grass` | Grass004 | meadows, the land above the tree line, the autobahn's verges |
+| `gravel` | Gravel040 | the verge along the road, towns |
+| `shotcrete` | Concrete035 (Color and Displacement only) | sprayed slopes |
+| `concrete` | Concrete034 | kerbs, gutters, copings, slope frames, rock shed, bridge, the autobahn's structures |
+
+Our own, drawn in code by the same tool (no source images): `blockwall_c/n` (the wall of sloped blocks with its weep
+holes), `shotcrete_n` (the sprayed concrete's lumps), `roadmarks` (cracks, cells, grit for the road's wear),
+`terrain/macro.webp` (slow noises), `terrain/wiremesh.webp` (the rockfall fence's net).
+
 ## Car models (all our own since 2026-11-10; Sketchfab models before)
 Since 2026-11-10 every car is our own Blender model (table below); no third-party car model is left in the game.
 History: the owner first asked to replace the cars with Sketchfab models for a private game played by friends and family. The car
@@ -113,6 +133,10 @@ Since 2026-11-03 every scenery model is our own: built from numbers by Python sc
 fails to load. No third-party geometry or textures; dimensions from public figures and photos (used for measuring
 only). Street light, wind turbine (rotor turns), curve mirror, vending machine (front lit at night; generic drinks,
 no brands or logos), torii, stone lantern, bus stop, traffic cone.
+The roadside's modules (2026-11-11; `frontend/tools/blender/roadside/<id>.py` → `node tools/blender-models.cjs roadside`
+→ `frontend/public/models/roadside/*.glb`, laid along the road by `render/roadside.ts`): guardrail span (W-beam, splice,
+post), its end terminal, delineator, gutter grating, rockfall fence bay. Own geometry, no textures; dimensions from the
+published standard sections (used for measuring only).
 The AUTOBAHN course (2026-11-06) adds a sign gantry, an emergency phone, a village house, a farmhouse and a church.
 Its sign atlas `textures/autobahn_signs.webp` is painted procedurally by `tools/blender/props/paint_autobahn.py` (invented
 place names, no real road signs copied). Its noise-wall, anti-glare and fence textures are generated in code

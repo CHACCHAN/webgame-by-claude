@@ -60,6 +60,10 @@ pending. `docs/PLAN.md` holds the design.
   `id -nG`, else Chrome silently renders with llvmpipe; `~/.local/opt/quality/gpurun.sh VAR=… <command>` runs one
   through `sudo -u dev` with the groups, variables given as arguments).
 - The GPU picks its own clock (800–2100 MHz) and frame costs change ~2× with it: compare builds with paired runs.
+  Uncapped frame rates also follow whatever else runs on the machine (another session's test job moved them between
+  47 and 120 fps on one build, 11-11): check `uptime` first; what holds then is the GPU time per pass
+  (`tools/perf-pass.cjs`) and the make-up of a CPU profile (`~/.local/opt/quality/cpuprof.cjs` with `DUMP=`,
+  `profdiff.py`), not the fps.
 - ubuntu-dev is a Proxmox VM (QEMU Q35) with the RX 5700 XT passed through. Navi 10 cannot be reset from a VM restart:
   after a `reboot` (or a start within ~30 s of a shutdown) amdgpu fails (`PSP load smu failed`, no `/dev/dri`) and
   Chrome falls back to llvmpipe. Recovery: shut the VM down, wait ≥ 3 min, start it from Proxmox (boots 11-08 and 10-15
@@ -109,6 +113,23 @@ pending. `docs/PLAN.md` holds the design.
   `gpuBytes`, oldest freed first, all on a GPU out-of-memory: `releaseKept`); `disposeWorld` frees only what no
   other built course uses. Vehicle models load in stages (`render/vehicleModels.ts`: one car before the title, the
   rest behind the menus): whatever shows a vehicle first waits with `Game.needs` / `ensureVehicleModels`.
+- Ground, road and roadside at quality medium and up (`surfaceDetail` 1–3 in `store/settings.ts`; 0 = `low`, the old
+  plain path `plainRoadside` / `plainTerrainMaterial`): `render/terrainMaterial.ts` (`groundMaterial`: photo layers
+  blended by slope, height and the `surf` vertex attribute), `render/roadMaterial.ts` (`roadSurface`: wear, markings
+  and puddles in one material; it reads the `road` attribute from `roadGeometry`: every asphalt strip merged into
+  the road must carry it), `render/weather.ts` `wetness` (set in `Game.applyTimeOfDay`). Costs ~1–1.8 ms of GPU time
+  a frame (scene pass, 1080p–4K); the layer textures are 512 px (medium, 2.6 MB) or 1024 px (high / ultra, 9.5 MB),
+  loaded before the title: `ACG=<dir of ambientCG zips> node tools/surface-textures.cjs [photo|own|all]` →
+  `public/textures/terrain/{512,1024}`.
+  Roadside (`render/roadside.ts`, materials in `render/structureMaterials.ts`): positions are `out` (metres outward
+  from the barrier line = width/2 + 0.6) and `h` (metres above the road there); a profile is a polyline of (out, h)
+  with its visible side on the left of the drawing direction; (right, up, fwd) is left-handed, so a module's
+  triangles are flipped when `side * dz > 0`. Colliders are not built here. Its models: `BLENDER=<bin> node
+  tools/blender-models.cjs roadside [ids]` → `public/models/roadside/<id>.glb`, materials by name only (`METAL` in
+  `structureMaterials.ts`); the optimiser drops the UVs of untextured models (`Roadside.bake` derives them);
+  `--render` does not work for this kind: run the script with `--out <dir> --render <dir>`.
+  A cut-out or line thinner than a pixel flickers under the upscaler (the rockfall net): dissolve it by `fwidth` of
+  its UV, keep thin steel dark.
 - Upscaler (settings アップスケーリング, off by default; `RenderHost` + `render/TemporalUpscaler.ts`): WebGPU draws the
   scene at 50–100 % with a jittered camera into three targets (colour, `velocity`, `reactive`) and gathers the frames
   at the output's size (three.js' `TAAUNode` with our resolve; SMAA off, RCAS after); the WebGL 2 backend uses FSR 1.
