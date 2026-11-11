@@ -64,6 +64,8 @@ export function buildRoadGeometry(track: Track): BufferGeometry {
   const uv = new Float32Array(rows * cols * 2);
   // lightmap coordinates: x across the full cross-section, y along the road (row)
   const uv1 = new Float32Array(rows * cols * 2);
+  // (metres from the centreline, half width up to the barriers): what render/roadMaterial.ts paints by
+  const road = new Float32Array(rows * cols * 2);
   const p = new Vector3(), up = new Vector3();
   for (let r = 0; r < rows; r++) {
     const i = Math.min(r * STEP, track.count - 1);
@@ -94,6 +96,8 @@ export function buildRoadGeometry(track: Track): BufferGeometry {
       nor[o + 1] = up.y;
       nor[o + 2] = up.z;
       uv[(r * cols + c) * 2] = u;
+      road[(r * cols + c) * 2] = lat;
+      road[(r * cols + c) * 2 + 1] = hw;
       uv1[(r * cols + c) * 2] = (lat + hw + 0.6) / (2 * (hw + 0.6));
       uv1[(r * cols + c) * 2 + 1] = (r + 0.5) / rows;
       uv[(r * cols + c) * 2 + 1] = i;
@@ -111,6 +115,7 @@ export function buildRoadGeometry(track: Track): BufferGeometry {
   g.setAttribute('normal', new BufferAttribute(nor, 3));
   g.setAttribute('uv', new BufferAttribute(uv, 2));
   g.setAttribute('uv1', new BufferAttribute(uv1, 2));
+  g.setAttribute('road', new BufferAttribute(road, 2));
   g.userData.lightmapRows = rows;
   g.userData.lightmapStep = STEP;
   g.setIndex(idx);
@@ -213,6 +218,7 @@ export function buildAutobahnRoadGeometry(
   const nor = new Float32Array(rows * cols * 3);
   const uv = new Float32Array(rows * cols * 2);
   const uv1 = new Float32Array(rows * cols * 2);
+  const road = new Float32Array(rows * cols * 2);
   const p = new Vector3(), up = new Vector3();
   samples.forEach(([i, atlasU], r) => {
     const hw = track.width[i] / 2 + SHOULDER;
@@ -234,6 +240,9 @@ export function buildAutobahnRoadGeometry(
       nor.set([up.x, up.y, up.z], o * 3);
       uv[o * 2] = (atlasU + Math.max(-0.3, Math.min(lat + hw, 2 * hw + 0.3))) / atlasWidth;
       uv[o * 2 + 1] = i;
+      // (the carriageway's own frame: + = its right, like the texture's u)
+      road[o * 2] = lat;
+      road[o * 2 + 1] = hw;
       uv1[o * 2] = (world - lm.lat[0]) / (lm.lat[1] - lm.lat[0]);
       uv1[o * 2 + 1] = (i / lm.step + 0.5) / lm.rows;
     }
@@ -251,6 +260,7 @@ export function buildAutobahnRoadGeometry(
   g.setAttribute('normal', new BufferAttribute(nor, 3));
   g.setAttribute('uv', new BufferAttribute(uv, 2));
   g.setAttribute('uv1', new BufferAttribute(uv1, 2));
+  g.setAttribute('road', new BufferAttribute(road, 2));
   g.setIndex(idx);
   return g;
 }

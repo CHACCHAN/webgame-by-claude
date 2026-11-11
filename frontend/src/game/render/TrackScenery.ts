@@ -15,7 +15,9 @@ import {
   makeSignTexture,
   makeVendingTexture,
 } from './textures';
-import { surfaceImage as photoImage, surfaceTexture as photoTexture, type SurfaceName } from './surfaceTextures';
+import { layersLoaded, surfaceImage as photoImage, surfaceTexture as photoTexture, type SurfaceName } from './surfaceTextures';
+import { groundMaterial, type GroundDetail, type GroundLook } from './terrainMaterial';
+import { roadMaterial as roadSurface } from './roadMaterial';
 import { findCorners } from '../track/corners';
 import { placeProp, prop, type PropModel } from './props';
 import type { CourseStyle } from '../track/courses';
@@ -55,6 +57,8 @@ export interface SceneryQuality {
   shadows: boolean;
   photoTextures: boolean;
   treeLod: number;
+  /** 0 (default): the plain materials and shapes; 1–3: the layered ground, road and roadside (store/settings.ts) */
+  surfaceDetail?: number;
   /** 'autobahn': the motorway's own scenery (render/autobahnScenery.ts) instead of the mountain road's */
   style?: CourseStyle;
 }
@@ -69,54 +73,32 @@ export function buildScenery(track: Track, terrain: TerrainData, quality: Scener
   const surfaceImage = (n: SurfaceName) => (quality.photoTextures ? photoImage(n) : null);
   const surfaceTexture = (n: SurfaceName, srgb: boolean) => (quality.photoTextures ? photoTexture(n, srgb) : null);
 
+  // the layered materials and the modelled roadside, or (the low setting, or a texture that did not load) the plain ones
+  const detail = surfaceDetailOf(quality);
+
   // ------------------------------------------------------------------ road
-  // scanned asphalt when available (normal/roughness at full resolution, 2.7 m tiles)
-  const roadTex = makeRoadTexture(surfaceImage('asphalt_albedo'));
-  roadTex.repeat.set(1, 1 / 8);
-  const photoN = surfaceTexture('asphalt_normal', false);
-  const asphaltN = photoN ?? makeAsphaltNormal();
-  if (photoN) asphaltN.repeat.set(4, 3 / 8);
-  else asphaltN.repeat.set(3, 1 / 2.4);
-  const asphaltR = surfaceTexture('asphalt_rough', false);
-  asphaltR?.repeat.copy(asphaltN.repeat);
-  const roadMaterial = new THREE.MeshStandardMaterial({
-    map: roadTex,
-    normalMap: asphaltN,
-    normalScale: new THREE.Vector2(photoN ? 1 : 0.6, photoN ? 1 : 0.6),
-    roughnessMap: asphaltR,
-    roughness: asphaltR ? 1 : 0.78,
-    metalness: 0.0,
-    envMapIntensity: 0.6,
-  });
+  const roadMaterial = detail ? (roadSurface({ markings: 'touge' }, detail) as unknown as THREE.MeshStandardMaterial) : plainRoadMaterial(surfaceImage, surfaceTexture);
   const road = new THREE.Mesh(buildRoadGeometry(track), roadMaterial);
   road.receiveShadow = true;
   road.name = 'road';
   group.add(road);
 
   // --------------------------------------------------------------- terrain
-  const detail = surfaceTexture('ground_detail', true) ?? makeGroundDetail();
-  const groundN = surfaceTexture('ground_normal', false) ?? makeGroundNormal();
-  const terrainMat = new THREE.MeshStandardMaterial({
-    vertexColors: true,
-    map: detail,
-    normalMap: groundN,
-    normalScale: new THREE.Vector2(0.8, 0.8),
-    roughness: 0.95,
-    metalness: 0,
-    envMapIntensity: 0.3,
-  });
-  const nearMesh = new THREE.Mesh(gridGeometry(terrain.near, terrain, true), terrainMat);
+  const lf = terrain.landform;
+  const look: GroundLook = { grass: lf.treeLine < 1000 ? 'grass' : 'moss', waterLevel: lf.waterLevel };
+  const terrainMat = detail ? (groundMaterial(look, detail) as unknown as THREE.MeshStandardMaterial) : plainTerrainMaterial(surfaceTexture);
+  const nearMesh = new THREE.Mesh(gridGeometry(terrain.near, terrain, true, !!detail), terrainMat);
   nearMesh.receiveShadow = true;
   nearMesh.name = 'terrain-near';
   group.add(nearMesh);
-  const farMat = terrainMat.clone();
-  farMat.normalMap = null;
+  const farMat = detail ? (groundMaterial(look, detail, true) as unknown as THREE.MeshStandardMaterial) : terrainMat.clone();
+  if (!detail) farMat.normalMap = null;
   // where the two grids overlap at the near grid's border they are nearly coplanar: push the coarse
   // mesh back in depth so the near mesh always wins instead of z-fighting (flickering hillsides)
   farMat.polygonOffset = true;
   farMat.polygonOffsetFactor = 2;
   farMat.polygonOffsetUnits = 4;
-  const farMesh = new THREE.Mesh(gridGeometry(terrain.far, terrain, false), farMat);
+  const farMesh = new THREE.Mesh(gridGeometry(terrain.far, terrain, false, !!detail), farMat);
   farMesh.name = 'terrain-far';
   group.add(farMesh);
 
@@ -241,6 +223,47 @@ export function buildScenery(track: Track, terrain: TerrainData, quality: Scener
   };
 }
 
+/** the low setting's road: the lines painted into one texture over the asphalt photo (or noise) */
+function plainRoadMaterial(surfaceImage: (n: SurfaceName) => HTMLImageElement | null, surfaceTexture: (n: SurfaceName, srgb: boolean) => THREE.Texture | null) {
+  // scanned asphalt when available (normal/roughness at full resolution, 2.7 m tiles)
+  const roadTex = makeRoadTexture(surfaceImage('asphalt_albedo'));
+  roadTex.repeat.set(1, 1 / 8);
+  const photoN = surfaceTexture('asphalt_normal', false);
+  const asphaltN = photoN ?? makeAsphaltNormal();
+  if (photoN) asphaltN.repeat.set(4, 3 / 8);
+  else asphaltN.repeat.set(3, 1 / 2.4);
+  const asphaltR = surfaceTexture('asphalt_rough', false);
+  asphaltR?.repeat.copy(asphaltN.repeat);
+  return new THREE.MeshStandardMaterial({
+    map: roadTex,
+    normalMap: asphaltN,
+    normalScale: new THREE.Vector2(photoN ? 1 : 0.6, photoN ? 1 : 0.6),
+    roughnessMap: asphaltR,
+    roughness: asphaltR ? 1 : 0.78,
+    metalness: 0.0,
+    envMapIntensity: 0.6,
+  });
+}
+
+/** the low setting's ground: vertex colours times one detail texture */
+export function plainTerrainMaterial(surfaceTexture: (n: SurfaceName, srgb: boolean) => THREE.Texture | null) {
+  return new THREE.MeshStandardMaterial({
+    vertexColors: true,
+    map: surfaceTexture('ground_detail', true) ?? makeGroundDetail(),
+    normalMap: surfaceTexture('ground_normal', false) ?? makeGroundNormal(),
+    normalScale: new THREE.Vector2(0.8, 0.8),
+    roughness: 0.95,
+    metalness: 0,
+    envMapIntensity: 0.3,
+  });
+}
+
+/** 1–3 when the layered materials are asked for and their textures are there, else 0 */
+export function surfaceDetailOf(quality: SceneryQuality): 0 | GroundDetail {
+  const d = Math.round(quality.surfaceDetail ?? 0);
+  return d > 0 && layersLoaded() ? (Math.min(d, 3) as GroundDetail) : 0;
+}
+
 /** Soft pool of light under a lamp head at height h: roughly cos³ falloff. */
 export function lampPool(dx: number, dy: number, dz: number) {
   const d2 = dx * dx + dy * dy + dz * dz;
@@ -314,7 +337,11 @@ export function bakeTerrainLightmap(g: HeightGrid, lamps: Lamp[]) {
 }
 
 // --------------------------------------------------------------------------
-export function gridGeometry(g: HeightGrid, terrain: TerrainData, near: boolean) {
+/**
+ * A height grid's mesh. `layered`: for render/terrainMaterial.ts, which reads what the ground is from `surf` (four
+ * bytes per vertex, see there) instead of vertex colours.
+ */
+export function gridGeometry(g: HeightGrid, terrain: TerrainData, near: boolean, layered = false) {
   const { nx, nz, cell, x0, z0, heights } = g;
   const geo = new THREE.PlaneGeometry((nx - 1) * cell, (nz - 1) * cell, nx - 1, nz - 1);
   geo.rotateX(-Math.PI / 2);
@@ -335,6 +362,29 @@ export function gridGeometry(g: HeightGrid, terrain: TerrainData, near: boolean)
   }
   // (rows now run towards +z, which keeps PlaneGeometry's winding facing +y)
   geo.computeVertexNormals();
+  if (layered) {
+    const lf = terrain.landform;
+    const surf = new Uint8Array(nx * nz * 4);
+    const h = (i: number, j: number) => heights[clamp(j, 0, nz - 1) * nx + clamp(i, 0, nx - 1)];
+    for (let j = 0; j < nz; j++)
+      for (let i = 0; i < nx; i++) {
+        const vi = j * nx + i;
+        const x = x0 + i * cell, z = z0 + j * cell, y = heights[vi];
+        const beyond = near && g.edgeDist ? g.edgeDist[vi] : 1e6;
+        // convex (a spur, a bank's shoulder) above 0.5, hollow below: the land's second derivative, per metre
+        const lap = (h(i - 1, j) + h(i + 1, j) + h(i, j - 1) + h(i, j + 1) - 4 * y) / (cell * cell);
+        const urban = cityWeight(lf, x, z);
+        let forest = smoothstep(0.15, 0.35, lf.relief(x, z)) * smoothstep(lf.treeLine + 35, lf.treeLine - 25, y) * (1 - urban);
+        if (lf.waterLevel !== null) forest *= smoothstep(lf.waterLevel + 1.5, lf.waterLevel + 4, y);
+        surf[vi * 4] = clamp((beyond + 2) / 34, 0, 1) * 255;
+        surf[vi * 4 + 1] = clamp(0.5 - lap * 7, 0, 1) * 255;
+        surf[vi * 4 + 2] = urban * 255;
+        surf[vi * 4 + 3] = forest * 255;
+      }
+    geo.setAttribute('surf', new THREE.BufferAttribute(surf, 4, true));
+    geo.deleteAttribute('uv');
+    return geo;
+  }
   const nor = geo.getAttribute('normal') as THREE.BufferAttribute;
   const colors = new Float32Array(nx * nz * 3);
   const c = new THREE.Color();

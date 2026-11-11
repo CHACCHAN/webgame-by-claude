@@ -17,6 +17,7 @@ import { loadCarTemplates } from './render/carAssets';
 import { loadTrafficModels } from './render/trafficModels';
 import { loadSurfaceTextures } from './render/surfaceTextures';
 import { loadProps } from './render/props';
+import { wetness } from './render/weather';
 import { findCorners, type Corner, type CornerKind } from './track/corners';
 import { RemoteRacers, SLOT_COLORS, type Peer } from './net/RemoteRacers';
 import { NetLink, type LocalState } from './net/NetLink';
@@ -52,6 +53,8 @@ export interface QualitySettings {
   headlightShadows: boolean;
   photoTextures: boolean;
   treeLod: number;
+  /** the ground's, the road's and the roadside's layered materials: 0 = the plain ones, 1–3 = medium to ultra */
+  surfaceDetail?: number;
 }
 
 export interface RaceConfig {
@@ -313,7 +316,7 @@ export class Game {
     await this.yieldFrame(0.05, '物理エンジンを初期化中');
     await initRapier();
     await this.yieldFrame(0.08, '車両モデルを読み込み中');
-    await Promise.all([loadCarTemplates(CAR_ORDER), loadBikeModels(BIKE_ORDER), loadTrainModels(TRAIN_ORDER), loadRoachModel(), loadSurfaceTextures(), loadProps()]);
+    await Promise.all([loadCarTemplates(CAR_ORDER), loadBikeModels(BIKE_ORDER), loadTrainModels(TRAIN_ORDER), loadRoachModel(), loadSurfaceTextures(this.quality.surfaceDetail ?? 0), loadProps()]);
     // the trains' other lines (liveries with their own model) follow in the background
     void loadTrainVariants(TRAIN_ORDER);
     this.root.add(this.smoke.points, this.skids.mesh, this.rain.mesh, this.exhaust.group);
@@ -354,7 +357,7 @@ export class Game {
     this.physics = new PhysicsWorld(this.track);
     // the autobahn's oncoming traffic is the game's own cars (light copies of their models)
     if (course.style === 'autobahn') await loadTrafficModels(CAR_ORDER);
-    this.scenery = buildScenery(this.track, this.terrain, { treeDensity: this.quality.treeDensity, shadows: this.quality.shadows, photoTextures: this.quality.photoTextures, treeLod: this.quality.treeLod, style: course.style });
+    this.scenery = buildScenery(this.track, this.terrain, { treeDensity: this.quality.treeDensity, shadows: this.quality.shadows, photoTextures: this.quality.photoTextures, treeLod: this.quality.treeLod, surfaceDetail: this.quality.surfaceDetail, style: course.style });
     // an instanced mesh without instances has an empty matrix buffer, which WebGPU refuses to bind
     const empty: THREE.Object3D[] = [];
     this.scenery.group.traverse((o) => {
@@ -429,6 +432,7 @@ export class Game {
     this.exhaust.setColor(tod === 'dawn' ? '#c4c1bd' : tod === 'rain' ? '#9aa3ad' : '#a3a0a6');
     // wet roads: glossy, darker asphalt and slicker terrain; less tyre grip
     const wet = this.env.preset.rain;
+    wetness.value = wet;
     const road = this.scenery.roadMaterial;
     this.dryMaterials.road ??= { roughness: road.roughness, color: road.color.clone(), normal: road.normalScale.x, env: road.envMapIntensity };
     const dry = this.dryMaterials.road;
