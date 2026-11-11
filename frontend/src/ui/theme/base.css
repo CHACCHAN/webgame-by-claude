@@ -143,7 +143,8 @@ input::placeholder { color: var(--faint); }
 .shell-who.member b { color: var(--cyan); }
 /* what a login came back with: once, top centre, over any screen */
 .account-notice { position: absolute; z-index: 31; left: 0; right: 0; top: calc(var(--bar) + 0.7rem); display: flex; justify-content: center; pointer-events: none; }
-.account-notice .notice { pointer-events: auto; cursor: pointer; max-width: min(36rem, 92vw); --fill: rgb(var(--c-void) / 0.92); }
+/* (over the live scene, not on a panel: its own dark ground; twice the class to stand above .notice.info) */
+.account-notice .notice.notice { pointer-events: auto; cursor: pointer; max-width: min(36rem, 92vw); --fill: rgb(var(--c-void) / 0.9); }
 
 .shell-nav { position: absolute; left: var(--gutter); bottom: 0; height: var(--bar); z-index: 20; display: flex; align-items: center; gap: var(--s-2); pointer-events: none; }
 .shell-nav > * { pointer-events: auto; }
