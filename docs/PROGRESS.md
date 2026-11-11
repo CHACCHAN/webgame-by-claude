@@ -473,8 +473,8 @@ name whenever a record is kept. Later the same day: the account's key should be 
   in the provider and a member's own credentials), the save across two real machines.
 ### Ground, road and roadside remade (11-11, the owner's request to re-model everything; package `terrain`)
 An agent's package (six commits, `46041ec` … `6a1854a`), merged with the freeze work on its branch and checked there
-by the main session. **Not in the live game yet**: it brings new models (guardrail, terminal, delineator, gutter
-grating, rockfall fence), and the owner sees a model's sheet first.
+by the main session. Live since the release of 11-11 (below): the owner saw the sheets and asked for it
+(「それも頼む」).
 - What it is: the ground as one layered TSL material (rock on steep faces from its two sides, forest floor, moss or
   grass, gravel at the verge, shoreline; wet and pooled in rain), the road's wear in one material (patches, seams,
   cracks, tar lines, polished wheel tracks, worn markings, puddles), a modelled roadside (guardrail spans with
@@ -523,15 +523,29 @@ grating, rockfall fence), and the owner sees a model's sheet first.
 - Seen and left for a follow-up: the title's roadside cameras are now and then behind a mound or pass a post of the
   new roadside (the cameras do not look for what stands in the way).
 
-### Grains over the menus (11-11, owner's idea; branch `ui-fx`, not merged)
+### Grains over the menus (11-11, owner's idea)
 
 - Owner: 「粒が浮いている表現→マウスで特定の選択肢に重なると→粒子が形を変えてボタンの装飾になる」. `ui/fx/grains.ts` (simulation,
   6 tests) + `ui/fx/Grains.tsx` (one canvas): dust that gathers into the outline of what the pointer is on, else of
   the keys' selection; a change of screen sweeps it. Pictures and a 21 s recording taken on the GPU and looked at
   (menus hold 60 fps with it: frame gaps median 16.7 ms); the recording was sent to the owner. Phones: fewer grains,
   the selection's frame only (looked at one picture).
-- Not done: cost on a slow phone, a look with the owner's eyes (waiting for their word before it is merged), the
-  other uses (the boot bar, results' medals).
+- The results' medal pulls them in as it is stamped (`data-grains-first`: an element has the grains for its first
+  moments on show), in amber; looked at on frames of a made-up result (the store set by a script, no race driven).
+- Not done: cost on a slow phone; other uses (the boot bar). The owner has the recording; their word on the look
+  is still to come (their brief left it to my judgement, so it ships with the next update).
+
+### The title's and the replay's camera sees the car (11-11)
+
+- Seen on the release: the four cinematic shots were offsets from the car, and with the remade ground and roadside
+  the orbit went through posts and slopes, the trackside camera stood behind mounds, the wide shot in a hillside.
+- Now laid along the road (`Game.cinematicCamera`): orbit and front shot inside the rails, the wide shot over the
+  centre line; the trackside camera (`tracksideAnchor`) takes the place with most of the road in sight over the
+  ground and is cut when the car is hidden or 80 m past; the front shot sits above the headlight cones (inside them
+  the glow in the haze whitened the picture).
+- Checked: sixteen frames over 30 s of the title on the GPU, before and after (`~/.local/opt/quality/cmp/title`,
+  `title2`): the car is in every frame after. Trees and bushes are not asked (only the ground's heights), so a tree
+  can still pass in front. The replay uses the same camera: not looked at separately.
 - The condition cards as looping video (owner's idea): Gemini's video generation failed three times in a row
   ("Sorry, something went wrong"); asked the owner.
 

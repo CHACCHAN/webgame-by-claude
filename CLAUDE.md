@@ -307,8 +307,12 @@ pending. `docs/PLAN.md` holds the design.
   The grains over the menus (`ui/fx/`: `grains.ts` is the simulation, DOM-free and tested; `Grains.tsx` one canvas
   over the interface, not in a race, not with motion off): dust that gathers into the outline of what the pointer is
   on (anything with `cursor: pointer`), else of the screen's `FocusFrame`, else of an element with `data-grains`
-  (`"line"` / `"ring"` / its panel; `data-grains-tone="magenta|amber"`). A new clickable thing gets its frame by
-  itself; a new kind of shape is an outline function in `grains.ts`.
+  (`"line"` / `"ring"` / its panel; `data-grains-tone="magenta|amber"`; `data-grains-first="<ms>"`: before all of
+  these for its first moments on show, as the results' medal). A new clickable thing gets its frame by itself; a
+  new kind of shape is an outline function in `grains.ts`.
+  The title's and the replay's camera (`Game.cinematicCamera`): every shot is laid along the road or checked against
+  the ground (`tracksideAnchor`, `groundClear`); a new shot must be too (an offset from the car alone ends up inside
+  a slope or behind the roadside).
 - Who plays (owner 11-11: accounts come from Authentik; nothing in the browser keeps an account any more). **Members**
   log in through the owner's Authentik (`AuthController`: authorization code + PKCE, the code is exchanged on the
   server; `config/authentik.php`, `AUTHENTIK_*` in `.env` only: never to the browser, a log or a commit). The account
