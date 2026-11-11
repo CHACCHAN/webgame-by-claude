@@ -1,33 +1,17 @@
 import * as THREE from 'three';
 import { CarVisual } from '../render/CarVisual';
 import { CAR_SPECS, type CarId } from '../vehicle/carSpecs';
-import { clamp } from '../util/math';
 import type { PhysicsWorld, RAPIER } from '../vehicle/PhysicsWorld';
 import { ProxyCar } from './ProxyCar';
 import { newExhaustState, type ExhaustState } from '../fx/Exhaust';
+import type { NetLink } from './NetLink';
+import { RemoteBody } from './RemoteBody';
+import { newPose } from './PeerTrack';
+
+export type { NetState } from './codec';
 
 /** Paint per grid slot so identical cars stay distinguishable (also shown in the lobby and HUD). */
 export const SLOT_COLORS = ['#2a62d8', '#d6283c', '#ecedef', '#22dd44', '#cc99dd'];
-
-/** Car state a client broadcasts ~12 times a second while racing. */
-export interface NetState {
-  /** sender clock (ms, performance.now) */
-  t: number;
-  /** body position and orientation */
-  p: [number, number, number];
-  q: [number, number, number, number];
-  /** forward speed (m/s), front wheel steer angle (rad) */
-  v: number;
-  st: number;
-  /** progress along the course (m) and braking flag */
-  s: number;
-  br: 0 | 1;
-  /** throttle and engine speed as a share of the redline (for the exhaust; absent from older clients) */
-  th?: number;
-  rp?: number;
-  /** finish time (ms) once across the line */
-  fin?: number;
-}
 
 export interface Peer {
   id: number;
@@ -40,39 +24,33 @@ interface RemoteCar {
   peer: Peer;
   visual: CarVisual;
   tag: THREE.Sprite;
-  buf: NetState[];
-  /** estimated (local receive time − sender time); the minimum seen is the one-way latency floor */
-  offset: number;
+  /** the car as its packets describe it (`body.rx`: clock, path, corrections) and its solid stand-in (`body.proxy`) */
+  body: RemoteBody;
   wheelSpin: number;
-  s: number;
-  fin: number | null;
-  lastHeard: number;
-  /** physical stand-in (online contact); when present the visual follows it */
-  proxy: ProxyCar | null;
-  /** what the exhaust needs this frame: forward speed (m/s), throttle and rpm share when the peer sends them */
+  /** what the exhaust needs this frame: forward speed (m/s), throttle and rpm share */
   fx: { speed: number; th?: number; rp?: number };
   exhaust: ExhaustState & { speed: number };
 }
 
-/** Interpolation delay: render other cars this far in the past so two snapshots bracket the time. */
-const DELAY_MS = 120;
-const _a = new THREE.Vector3(), _b = new THREE.Vector3(), _qa = new THREE.Quaternion(), _qb = new THREE.Quaternion();
-const _vel = new THREE.Vector3();
-/** how far ahead of the newest snapshot a stand-in may be extrapolated (s) */
-const MAX_EXTRAPOLATION = 0.25;
+const _pose = newPose(), _scratch = newPose();
 
 /**
- * Other players' cars in an online race, driven by network snapshots. Before the race (and without
- * physics) they are drawn interpolated in the past; once `enablePhysics` gives them solid stand-ins
- * (`ProxyCar`), they are drawn where those bodies are, so a bump shows on screen at once.
+ * Other players' cars in an online race, driven by network packets (`NetLink` → one `PeerReceiver` each). A car
+ * is drawn on its path at the moment the local car is drawn at (so both are on screen at the same time of the
+ * race, whatever the frame rate), and its solid stand-in (`ProxyCar`) is steered along the same path at each
+ * physics step's own moment; what a bump does to the stand-in is added to the picture at once.
  */
 export class RemoteRacers {
   private cars = new Map<number, RemoteCar>();
+  /** the game's time scale (a test aid): packets speak in wall-clock seconds, the physics world in its own */
+  timeScale = 1;
+  private lastUpdate = 0;
 
   constructor(
     private root: THREE.Object3D,
     private rideHeightOf: (carId: CarId) => number,
     private shadows: boolean,
+    private link: NetLink,
   ) {}
 
   /** Creates cars for the peers, parked on their grid slots until their first state arrives. */
@@ -95,59 +73,31 @@ export class RemoteRacers {
       this.root.add(visual.root);
       // a train's cars are placed by its rig, not by the root: without this they stay at the origin until the first state
       visual.refresh();
-      this.cars.set(peer.id, { peer, visual, tag, buf: [], offset: Infinity, wheelSpin: 0, s: 0, fin: null, lastHeard: 0, proxy: null, fx: { speed: 0 }, exhaust: { ...newExhaustState(), speed: 0 } });
+      this.cars.set(peer.id, { peer, visual, tag, body: new RemoteBody(this.link.peer(peer.id), _scratch), wheelSpin: 0, fx: { speed: 0 }, exhaust: { ...newExhaustState(), speed: 0 } });
     }
-  }
-
-  push(id: number, st: NetState, now: number) {
-    const car = this.cars.get(id);
-    if (!car) return;
-    car.offset = Math.min(car.offset, now - st.t);
-    car.lastHeard = now;
-    const buf = car.buf;
-    if (buf.length && st.t <= buf[buf.length - 1].t) return; // out of order
-    buf.push(st);
-    if (buf.length > 40) buf.splice(0, buf.length - 40);
-    car.s = st.s;
-    if (st.fin !== undefined) car.fin = st.fin;
   }
 
   /** Gives every remote car a physical stand-in so the local car can bump into it. */
   enablePhysics(physics: PhysicsWorld) {
     for (const car of this.cars.values()) {
-      if (car.proxy) continue;
-      car.proxy = new ProxyCar(physics, CAR_SPECS[car.peer.carId], car.visual.root.position, car.visual.root.quaternion);
+      if (car.body.proxy) continue;
+      car.body.proxy = new ProxyCar(physics, CAR_SPECS[car.peer.carId], car.visual.root.position, car.visual.root.quaternion);
     }
   }
 
-  /**
-   * Physics step: steer each stand-in to where its car is now — the newest snapshot extrapolated by
-   * its velocity over the snapshot's age (capped), i.e. the present, not the interpolation delay.
-   */
-  stepProxies(now: number, localCar: THREE.Vector3 | null) {
-    for (const car of this.cars.values()) {
-      const buf = car.buf;
-      if (!car.proxy) continue;
-      car.proxy.updateGhost(now, localCar);
-      if (!buf.length) continue;
-      const b = buf[buf.length - 1], a = buf.length > 1 ? buf[buf.length - 2] : null;
-      if (a && b.t > a.t) _vel.set((b.p[0] - a.p[0]) / ((b.t - a.t) / 1000), (b.p[1] - a.p[1]) / ((b.t - a.t) / 1000), (b.p[2] - a.p[2]) / ((b.t - a.t) / 1000));
-      else _vel.set(0, 0, 0);
-      const age = clamp((now - (b.t + car.offset)) / 1000, 0, MAX_EXTRAPOLATION);
-      _b.fromArray(b.p).addScaledVector(_vel, age);
-      _qb.fromArray(b.q);
-      car.proxy.drive(_b, _qb, _vel, now);
-    }
+  /** Physics step: every stand-in goes where its car is at `at` (ms, our clock; see `RemoteBody.step`). */
+  stepProxies(at: number, now: number, localCar: THREE.Vector3 | null) {
+    for (const car of this.cars.values()) car.body.step(at, now, localCar, this.timeScale);
   }
 
   /** After the local car respawns: nobody is solid until clear of it. */
   ghostAll(until: number) {
-    for (const c of this.cars.values()) c.proxy?.ghost(until);
+    for (const c of this.cars.values()) c.body.proxy?.ghost(until);
   }
 
   colliders(): RAPIER.Collider[] {
     const out: RAPIER.Collider[] = [];
-    for (const c of this.cars.values()) if (c.proxy) out.push(c.proxy.collider);
+    for (const c of this.cars.values()) if (c.body.proxy) out.push(c.body.proxy.collider);
     return out;
   }
 
@@ -155,49 +105,30 @@ export class RemoteRacers {
     for (const c of this.cars.values()) c.visual.setHeadlights(on);
   }
 
-  update(now: number, dt: number) {
+  /** Per frame: every car drawn where it is at `at` (ms, our clock: the moment the local car is drawn at). */
+  update(at: number, dt: number) {
+    const wallMs = Math.min(250, Math.max(0, at - this.lastUpdate));
+    this.lastUpdate = at;
     for (const car of this.cars.values()) {
-      const buf = car.buf;
-      if (!buf.length) continue;
-      // let the latency estimate creep up slowly so clock drift cannot freeze a car
-      car.offset += dt * 5;
-      if (car.proxy) {
-        // contact mode: draw the car where its physical stand-in is
-        const v = buf[buf.length - 1].v;
-        car.fx = { speed: v, th: buf[buf.length - 1].th, rp: buf[buf.length - 1].rp };
-        car.wheelSpin += (v / CAR_SPECS[car.peer.carId].wheelRadius) * dt;
-        car.visual.syncFromPose({ position: car.proxy.position, quaternion: car.proxy.quaternion, steer: buf[buf.length - 1].st, wheelRotations: [car.wheelSpin, car.wheelSpin, car.wheelSpin, car.wheelSpin] }, dt);
-        car.visual.setBrakeLights(buf[buf.length - 1].br === 1);
-        continue;
-      }
-      const t = now - car.offset - DELAY_MS;
-      let i = buf.length - 1;
-      while (i > 0 && buf[i - 1].t > t) i--;
-      const b = buf[i], a = buf[Math.max(0, i - 1)];
-      let k = 1;
-      if (b !== a) k = clamp((t - a.t) / (b.t - a.t), 0, 1.5); // up to half a gap of extrapolation
-      _a.fromArray(a.p);
-      _b.fromArray(b.p);
-      _qa.fromArray(a.q);
-      _qb.fromArray(b.q);
-      const pos = _a.lerp(_b, k);
-      const q = _qa.slerp(_qb, Math.min(k, 1));
-      const v = a.v + (b.v - a.v) * Math.min(k, 1);
-      car.fx = { speed: v, th: b.th, rp: b.rp };
-      car.wheelSpin += (v / CAR_SPECS[car.peer.carId].wheelRadius) * dt;
-      car.visual.syncFromPose({ position: pos, quaternion: q, steer: b.st, wheelRotations: [car.wheelSpin, car.wheelSpin, car.wheelSpin, car.wheelSpin] }, dt);
-      car.visual.setBrakeLights(b.br === 1);
+      if (!car.body.frame(at, wallMs, _pose)) continue;
+      car.fx = { speed: _pose.speed / this.timeScale, th: _pose.throttle, rp: _pose.rpm };
+      car.wheelSpin += (_pose.speed / CAR_SPECS[car.peer.carId].wheelRadius) * (wallMs / 1000);
+      car.visual.syncFromPose({ position: _pose.position, quaternion: _pose.quaternion, steer: _pose.steer, wheelRotations: [car.wheelSpin, car.wheelSpin, car.wheelSpin, car.wheelSpin] }, dt);
+      car.visual.setBrakeLights(_pose.brake);
     }
   }
 
   /** Every remote car's visual with what its exhaust needs (see Game.emitExhaustFromPose). */
   forEachExhaust(cb: (visual: CarVisual, fx: RemoteCar['fx'], state: RemoteCar['exhaust']) => void) {
-    for (const car of this.cars.values()) if (car.buf.length) cb(car.visual, car.fx, car.exhaust);
+    for (const car of this.cars.values()) if (car.body.rx.track.length) cb(car.visual, car.fx, car.exhaust);
   }
 
   /** Progress of every remote car for live positions. */
   standings(): { id: number; name: string; slot: number; s: number; fin: number | null; lastHeard: number }[] {
-    return [...this.cars.values()].map((c) => ({ id: c.peer.id, name: c.peer.name, slot: c.peer.slot, s: c.s, fin: c.fin, lastHeard: c.lastHeard }));
+    return [...this.cars.values()].map((c) => {
+      const st = c.body.rx.track.newest;
+      return { id: c.peer.id, name: c.peer.name, slot: c.peer.slot, s: st?.s ?? 0, fin: st?.fin ?? null, lastHeard: c.body.rx.lastHeard };
+    });
   }
 
   removePeer(id: number) {
@@ -210,12 +141,13 @@ export class RemoteRacers {
   }
 
   private remove(id: number, car: RemoteCar) {
-    car.proxy?.dispose();
+    car.body.proxy?.dispose();
     this.root.remove(car.visual.root);
     car.visual.dispose();
     (car.tag.material as THREE.SpriteMaterial).map?.dispose();
     car.tag.material.dispose();
     this.cars.delete(id);
+    this.link.drop(id);
   }
 }
 

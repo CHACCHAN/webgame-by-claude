@@ -498,6 +498,11 @@ kbd {
 /* in-race standings: under the clock on the left (five rows in the middle would reach down to the bend warning) */
 .online-standings { list-style: none; margin: 10px 0 0; padding: 6px 10px; width: 236px; background: rgba(5, 8, 14, 0.62); border: 1px solid var(--line); border-radius: 8px; display: flex; flex-direction: column; gap: 3px; }
 .online-standings:empty { display: none; }
+/* the live order doubles as the switch of the connection numbers below it */
+.online-standings { pointer-events: auto; }
+.net-stats { margin: 6px 0 0; padding: 6px 10px; width: max-content; max-width: 46vw; background: rgba(5, 8, 14, 0.62); border: 1px solid var(--line); border-radius: 8px;
+  font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace; font-size: 11px; line-height: 15px; color: var(--muted); white-space: pre; overflow: hidden; text-shadow: none; }
+.net-stats:empty { display: none; }
 .online-standings li { display: flex; align-items: center; gap: 8px; font-weight: 700; line-height: 20px; }
 .online-standings li.me b { color: var(--accent); }
 .online-standings .pos { font-family: var(--font-en); font-size: 17px; width: 14px; padding: 0; text-align: center; flex: none; }
@@ -704,6 +709,7 @@ kbd {
   .online-standings b { font-size: 12px; }
   .online-standings em { font-size: 11px; }
   .online-standings ~ .hud-splits { margin-top: 4px; }
+  .net-stats { margin-top: 3px; padding: 3px 8px; font-size: 9px; line-height: 12px; }
   .online-standings ~ .hud-splits .split { font-size: 12px; }
   .hud-tr { top: 8px; right: 14px; }
   .minimap { width: 130px; height: 84px; }

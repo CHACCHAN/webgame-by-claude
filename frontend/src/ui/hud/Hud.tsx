@@ -10,7 +10,7 @@ import { COURSES } from '../../game/track/courses';
 import { currentCourseId } from '../../store/settings';
 import { fullscreenSupported, toggleFullscreen, useFullscreen } from '../fullscreen';
 import { CONTROL_ROWS, Portrait } from '../screens/Menus';
-import type { HudState } from '../../game/Game';
+import type { Game, HudState } from '../../game/Game';
 import { leaveRoom } from '../../store/online';
 import { SLOT_COLORS } from '../../game/net/RemoteRacers';
 
@@ -86,6 +86,56 @@ function updateStandings(el: HTMLOListElement | null, rows: HudState['online']) 
   );
 }
 
+/**
+ * The numbers of an online race's connections (off by default: the N key or a tap on the live order shows them,
+ * `?netstats=1` too; remembered). Per player: round trip and its jitter, share of packets lost, packets per second,
+ * how far past the newest packet the car is drawn (and in what share of the frames), how far a new packet moves
+ * the prediction, and how far behind the present the car is drawn (with the delay a buffer would need).
+ */
+const NET_STATS_KEY = 'touge-netstats';
+let netStatsOn = false;
+try {
+  netStatsOn = new URLSearchParams(location.search).get('netstats') === '1' || localStorage.getItem(NET_STATS_KEY) === '1';
+} catch {
+  // (no storage: off)
+}
+function toggleNetStats() {
+  netStatsOn = !netStatsOn;
+  try {
+    localStorage.setItem(NET_STATS_KEY, netStatsOn ? '1' : '0');
+  } catch {
+    // (not remembered)
+  }
+}
+let netStatsAt = 0;
+function updateNetStats(el: HTMLPreElement | null, game: Game) {
+  if (!el) return;
+  if (!netStatsOn) {
+    if (el.textContent) el.textContent = '';
+    netStatsAt = 0;
+    return;
+  }
+  // twice a second: these are for reading, not for watching
+  const now = performance.now();
+  if (now - netStatsAt < 500) return;
+  netStatsAt = now;
+  const names = new Map(game.remotes.standings().map((r) => [r.id, r.name]));
+  const ms = (v: number) => `${Math.round(v)} ms`;
+  const lines = game.net.stats().map((s) => {
+    const cm = (v: number) => (v * 100).toFixed(v < 0.1 ? 1 : 0);
+    return (
+      `${names.get(s.id) ?? s.id}\n` +
+      `  往復 ${s.synced ? ms(s.rtt) : '—'}  ゆらぎ ${ms(s.jitter)}  欠落 ${(s.loss * 100).toFixed(1)} %\n` +
+      `  受信 ${s.rate.toFixed(0)} Hz / ${ms(s.interval)}  外挿 ${Math.round(s.ahead * 100)} % ${ms(s.horizon)}\n` +
+      `  補正 ${cm(s.correction)} / ${cm(s.correctionMax)} cm  遅延 ${ms(s.lag)} (要 ${ms(s.bufferDelay)})`
+    );
+  });
+  const worse = game.net.impaired?.recv ?? game.net.impaired?.send;
+  if (worse) lines.push(`回線を悪化中: 片道 ${worse.delay}±${worse.jitter} ms  欠落 ${(worse.loss * 100).toFixed(0)} %`);
+  const text = lines.join('\n');
+  if (el.textContent !== text) el.textContent = text;
+}
+
 export function Hud() {
   const { mode, rivalLevel, ghostChoice, phase } = useApp();
   const showFps = useSettings((s) => s.showFps);
@@ -110,6 +160,7 @@ export function Hud() {
     lines: useRef<HTMLCanvasElement>(null),
     corner: useRef<HTMLDivElement>(null),
     standings: useRef<HTMLOListElement>(null),
+    net: useRef<HTMLPreElement>(null),
     guide: useRef<HTMLDivElement>(null),
   };
   const [redline, setRedline] = useState(8000);
@@ -193,6 +244,7 @@ export function Hud() {
       if (r.wrong.current) r.wrong.current.style.opacity = h.wrongWay ? '1' : '0';
       updateCornerNote(r.corner.current, h.corner);
       updateStandings(r.standings.current, h.online);
+      updateNetStats(r.net.current, game);
       if (r.guide.current) {
         // during the countdown and the first seconds of the race, then it fades away
         const show = guideOn && (h.countdown > 0 || h.raceTime < 8);
@@ -285,7 +337,18 @@ export function Hud() {
       raf = requestAnimationFrame(loop);
     };
     raf = requestAnimationFrame(loop);
-    return () => cancelAnimationFrame(raf);
+    // the connection numbers of an online race: N, or a tap on the live order
+    const onKey = (e: KeyboardEvent) => {
+      if (e.code === 'KeyN' && !e.repeat && useApp.getState().mode === 'online') toggleNetStats();
+    };
+    const order = refs.standings.current;
+    window.addEventListener('keydown', onKey);
+    order?.addEventListener('click', toggleNetStats);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener('keydown', onKey);
+      order?.removeEventListener('click', toggleNetStats);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -315,6 +378,7 @@ export function Hud() {
         <div className="hud-time" ref={refs.time}>0:00.000</div>
         {/* online: the live order (up to five) under the clock, clear of the bend warning in the middle */}
         {mode === 'online' && <ol className="online-standings" ref={refs.standings} />}
+        {mode === 'online' && <pre className="net-stats" ref={refs.net} />}
         <div className="hud-splits" ref={refs.splits} />
       </div>
       <div className="hud-tc">
