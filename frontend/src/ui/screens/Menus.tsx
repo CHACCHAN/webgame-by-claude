@@ -18,6 +18,8 @@ import { COLORS } from './Cars';
 import { FocusFrame, Hint, Notice, ScreenHead } from '../kit';
 import { login, logout, useAccount } from '../../store/account';
 import { useOnline } from '../../store/online';
+import { useSpeech } from '../../store/voice';
+import { VoiceOffer, VoiceStatus } from './VoiceOffer';
 
 const TIPS = [
   'ブレーキで荷重を前に移し、ステアを切りながらアクセルを踏むとリアが流れ出します。',
@@ -107,12 +109,12 @@ export function TitleScreen() {
       <div className="title-logo">
         <div className="title-small">{COURSES[currentCourseId()].nameEn} ・ {COURSE_ORDER.length} COURSES</div>
         <h1>
-          <span className="kanji" data-text="峠">峠</span>
+          <span className="kanji" data-text="峠" data-cloud="glyph">峠</span>
           <span className="en">TOUGE<br />NOCTURNE</span>
         </h1>
         <div className="title-jp">朧 峠 夜 想 曲</div>
       </div>
-      <div className="press-start">{isTouchDevice() ? 'TAP TO START' : 'PRESS ENTER / CLICK TO START'}</div>
+      <div className="press-start" data-grains="line">{isTouchDevice() ? 'TAP TO START' : 'PRESS ENTER / CLICK TO START'}</div>
       <div className="title-ticker" aria-hidden>
         <div>
           {[0, 1].map((k) => (
@@ -211,6 +213,11 @@ export function RivalsScreen() {
   const levels: AILevel[] = ['rookie', 'ace', 'legend'];
   const [i, setI] = useState(levels.indexOf(rivalLevel));
   const course = COURSES[currentCourseId()];
+  // the rivals' voice is offered once (where it can exist at all); "not now" asks again at the next visit
+  const speech = useSpeech();
+  const asked = useSettings((s) => s.rivalVoice) !== 'ask';
+  const [later, setLater] = useState(false);
+  const offer = !asked && !later && speech.state === 'idle';
   const start = (level: AILevel = levels[i]) => {
     set({ rivalLevel: level });
     sfx.confirm();
@@ -221,7 +228,7 @@ export function RivalsScreen() {
     if (a === 'right' || a === 'down') { setI((x) => (x + 1) % 3); sfx.move(); }
     if (a === 'confirm') start();
     if (a === 'back') { sfx.back(); go(singleRatio(CAR_SPECS[useApp.getState().carId]) ? 'garage' : 'transmission'); }
-  });
+  }, !offer);
   return (
     <div className="screen rivals">
       <ScreenHead jp="ライバル選択" en="CHOOSE YOUR RIVAL" note={`${course.name}の走り屋`} />
@@ -249,6 +256,8 @@ export function RivalsScreen() {
         })}
         <FocusFrame on=".rival-card.active" deps={[i]} kind="magenta" pad={5} />
       </div>
+      <VoiceStatus />
+      {offer && <VoiceOffer onClose={() => setLater(true)} />}
       <Hint items={[['lr', '選択'], ['ok', 'バトル開始']]} />
     </div>
   );
@@ -367,6 +376,8 @@ export function CoursesScreen() {
         })}
         <FocusFrame on=".course-card.active" deps={[i]} pad={5} />
       </div>
+      {/* the selected course as a relief of grains, turning under the cards (ui/fx/Cloud.tsx) */}
+      <div className="course-relief" data-cloud={`course:${COURSE_ORDER[i]}`} aria-hidden />
       <Hint items={[['lr', 'コース'], ['ok', '決定']]} />
     </div>
   );
@@ -375,9 +386,12 @@ export function CoursesScreen() {
 /** Shown while a different course is being built. */
 export function CourseLoadingScreen() {
   const c = COURSES[currentCourseId()];
+  const progress = useApp((s) => s.loading?.progress ?? 0);
   return (
     <div className="screen boot course-loading">
       <div className="boot-art" style={{ backgroundImage: `url(${c.art}), url(/img/keyart.webp)` }} />
+      {/* the course gathers out of grains as it is built (ui/fx/Cloud.tsx) */}
+      <div className="cl-relief" data-cloud={`course:${c.id}`} data-cloud-fill={(0.15 + 0.85 * progress).toFixed(2)} aria-hidden />
       <div className="boot-mark">
         <div className="cl-en">{c.nameEn}</div>
         <div className="cl-name">{c.name}</div>

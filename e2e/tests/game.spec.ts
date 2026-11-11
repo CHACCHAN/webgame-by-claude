@@ -13,7 +13,7 @@ test('boots to the title screen and renders the 3D world without errors', async 
   expect(stats.lamps).toBeGreaterThan(30);
   expect(stats.trackLength).toBeGreaterThan(3000);
   // the canvas actually draws something (not a blank frame)
-  const shot = await page.locator('canvas').screenshot();
+  const shot = await page.locator('.game-canvas canvas').screenshot();
   expect(shot.byteLength).toBeGreaterThan(20_000);
   expect(errors).toEqual([]);
 });

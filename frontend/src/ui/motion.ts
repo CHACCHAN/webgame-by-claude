@@ -19,6 +19,9 @@ const DEPTH: Record<Screen, number> = {
   cars: 3, settings: 3, controls: 3, online: 3, onlineRoom: 4, race: 8, results: 9, replay: 10, onlineResults: 9,
 };
 
+/** how deep in the menus a screen is (the grains are swept the way the wipe goes: ui/fx/Grains.tsx) */
+export const screenDepth = (screen: Screen) => DEPTH[screen] ?? 0;
+
 const WIPE_MS = 240;
 const WIPE_EASE = 'cubic-bezier(0.7, 0, 0.3, 1)';
 

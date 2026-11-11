@@ -9,6 +9,8 @@ import { sfx } from '../sfx';
 import { fullscreenSupported, toggleFullscreen, useFullscreen } from '../fullscreen';
 import { TRAIN_INFO, TRAIN_ORDER } from '../../game/vehicle/trains';
 import { FocusFrame, Hint, ScreenHead } from '../kit';
+import { chooseVoice, forgetVoice, useSpeech } from '../../store/voice';
+import { MODEL_BASE } from '../../game/audio/speech/protocol';
 
 interface Row {
   label: string;
@@ -37,6 +39,27 @@ export function SettingsScreen() {
   const step = (v: number, dir: number, st = 0.1, lo = 0, hi = 1) => Math.round(Math.min(hi, Math.max(lo, v + dir * st)) * 100) / 100;
   const onOff = (v: boolean) => (v ? 'オン' : 'オフ');
   const game = gameHolder.game;
+  // the rivals' voice: whether it can exist here, where its model stands, whether this browser holds a copy
+  const speech = useSpeech();
+  const [kept, setKept] = useState(false);
+  useEffect(() => {
+    void speech.probe();
+  }, [speech]);
+  useEffect(() => {
+    let live = true;
+    void speech.kept().then((k) => live && setKept(k));
+    return () => { live = false; };
+  }, [speech, speech.state]);
+  const voiceOn = s.rivalVoice === 'on';
+  const voiceCan = speech.state !== 'unsupported' && speech.state !== 'absent' && speech.state !== 'unknown';
+  const voiceValue = !voiceCan ? (speech.state === 'unknown' ? '確認中' : '非対応')
+    : !voiceOn ? 'オフ'
+    : speech.state === 'loading' ? (speech.building || speech.progress >= 1 ? '準備中' : `取得中 ${Math.round(speech.progress * 100)}%`)
+    : speech.state === 'failed' ? '失敗' : 'オン';
+  const voiceNote = speech.state === 'unsupported' ? 'WebGPU で描画していないため（非対応、または描画方式が WebGL 2）、ライバルのセリフは文字だけで表示します'
+    : speech.state === 'absent' ? 'このサーバーには音声モデルがありません。ライバルのセリフは文字だけで表示します'
+    : voiceOn && speech.state === 'failed' ? '音声モデルを準備できませんでした（セリフは文字で出ます）。もう一度オンにすると再試行します'
+    : 'ライバルのセリフを音声で喋らせます。音声合成モデル（約 400 MB）を一度だけ取得してこのブラウザに保存し、GPU（WebGPU）で動かします';
   // the renderer's backend: what runs (and why WebGL 2, when it does), and what the next load would start
   const running = useApp((a) => a.renderer);
   const backends: BackendPref[] = ['auto', 'webgpu', 'webgl2'];
@@ -80,6 +103,10 @@ export function SettingsScreen() {
         { kind: 'switch', label: '操作ガイド（スタート時）', value: onOff(s.controlsGuide !== false), on: s.controlsGuide !== false, note: 'レース開始時に操作方法をしばらく表示します', change: () => s.set({ controlsGuide: s.controlsGuide === false }) },
         { kind: 'switch', label: 'ゴースト表示（タイムアタック）', value: onOff(s.showGhost), on: s.showGhost, note: '自己ベストの走りを半透明の車で一緒に走らせます', change: () => { s.set({ showGhost: !s.showGhost }); if (game) game.showGhost = !s.showGhost; } },
         { kind: 'switch', label: 'ライバルAI', value: onOff(s.rivalAi ?? true), on: s.rivalAi ?? true, note: 'ライバルのセリフと駆け引き（進路ブロック・クラクション）を言語モデルに任せます。オフや通信不可のときはゲーム内蔵のルールで動きます', change: () => { const v = !(s.rivalAi ?? true); s.set({ rivalAi: v }); if (game) game.rivalBrains = v ? [serverBrain] : []; } },
+        { kind: 'switch', label: 'ライバルの声', value: voiceValue, on: voiceCan && voiceOn && speech.state !== 'failed', note: voiceNote, change: () => voiceCan && chooseVoice(!voiceOn || speech.state === 'failed') },
+        ...(kept
+          ? [{ kind: 'list' as const, label: '音声モデルのデータ', value: '保存済み 約 400 MB', note: '決定（または →）で、このブラウザに保存した音声モデルを削除します。ライバルの声はオフになります', change: (d: number) => { if (d > 0) void forgetVoice().then(() => setKept(false)); } }]
+          : []),
       ],
     },
     {
@@ -154,6 +181,9 @@ export function SettingsScreen() {
           </div>
         )}
         <div className="gpu-note">目標は 1080p / 60fps です。カクつく場合は品質か解像度スケールを下げてください。</div>
+        <div className="credits">
+          ライバルの声: 音声合成モデル Supertonic 3（Supertone Inc.）を、<a href={`${MODEL_BASE}/LICENSE`} target="_blank" rel="noreferrer">OpenRAIL-M ライセンス</a>の利用制限のもとで使用。
+        </div>
         <div className="credits">
           VVVF電車の音: VVVF Simulator（VvvfGeeks, https://github.com/VvvfGeeks/VVVF-Simulator）の計算（PWM・誘導電動機・車内音のインパルス応答）と同梱のスイッチング角テーブル（CHM）を移植して使用（非商用に限り無償の利用規約による）。制御パターン:{' '}
           {[...new Set(TRAIN_ORDER.flatMap((id) => [TRAIN_INFO[id].vvvf, ...TRAIN_INFO[id].liveries.map((l) => l.vvvf)].flatMap((v) => (v ? [v.source] : []))))].join('・')}

@@ -10,8 +10,12 @@ export default defineConfig({
       '/api': { target: process.env.API_PROXY ?? 'http://localhost:8080', changeOrigin: true },
       // Reverb WebSocket (online battles)
       '/app': { target: process.env.API_PROXY ?? 'http://localhost:8080', changeOrigin: true, ws: true },
+      // the speech model (the rivals' voice): the stack's `tts` volume, or a folder served for a test (TTS_PROXY)
+      '/tts': { target: process.env.TTS_PROXY ?? process.env.API_PROXY ?? 'http://localhost:8080', changeOrigin: true },
     },
   },
+  // module workers (the speech model's: the ONNX runtime is an ES module that imports its own parts)
+  worker: { format: 'es' },
   build: {
     target: 'es2022',
     chunkSizeWarningLimit: 2500,

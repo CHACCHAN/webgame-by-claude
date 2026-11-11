@@ -185,6 +185,22 @@ export class RenderHost {
     return (this.renderer.backend as { isWebGPUBackend?: boolean }).isWebGPUBackend ? 'webgpu' : 'webgl2';
   }
 
+  /** Drawn by the processor (SwiftShader, llvmpipe: no GPU)? Then nothing but the game itself should draw. */
+  get software(): boolean {
+    const gl = (this.renderer.backend as { gl?: WebGL2RenderingContext }).gl;
+    if (!gl) return false;
+    const info = gl.getExtension('WEBGL_debug_renderer_info');
+    return /swiftshader|llvmpipe|softpipe|software/i.test(info ? String(gl.getParameter(info.UNMASKED_RENDERER_WEBGL)) : '');
+  }
+
+  /**
+   * The WebGPU device the game is drawn with (null on the WebGL 2 backend): what else draws on the page draws with
+   * it (the interface's grains, ui/fx), not with a context of its own.
+   */
+  get gpuDevice(): unknown {
+    return this.backend === 'webgpu' ? ((this.renderer.backend as { device?: unknown }).device ?? null) : null;
+  }
+
   /** Changes the drawing resolution and the effects (the settings screen). */
   configure(options: RenderOptions) {
     const was = this.options;

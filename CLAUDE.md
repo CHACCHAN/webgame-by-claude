@@ -290,6 +290,27 @@ pending. `docs/PLAN.md` holds the design.
   nobody to ask. The decision is real tool calls (`block_player`, `sound_horn`), clamped by the server. The models are
   `LLM_TAUNT_MODELS` / `LLM_DECIDE_MODELS` (first that answers). Check the block with
   `BLOCK=4 npx tsx tools/sim-duel.ts <lead:level> <chase:level>`.
+- The rivals' voice (owner 11-11; `game/audio/speech/`): a rival's line is spoken by a speech model on the player's
+  GPU: Supertonic 3 (four ONNX graphs, 398 MB, OpenRAIL-M) through `onnxruntime-web/webgpu` in a module worker
+  (`speech.worker.ts`; `Speech.ts` is its controller, `text.ts` the publisher's text preparation: NFKD, `<ja>…</ja>`,
+  only the sound tags `<laugh>` `<breath>` `<sigh>` pass, so a language model cannot write tags). **Text is the rule,
+  the voice an extra**: no WebGPU adapter, no model on the server (`/tts/supertonic-3/onnx/tts.json` must be the
+  model's own JSON), a failed download or set-up, a slow answer: the line is shown and nothing else changes. No CPU
+  fallback (it would take the game's frames). The model is fetched only after a yes (setting `rivalVoice`:
+  `ask` → the offer on the rivals screen, `ui/screens/VoiceOffer.tsx`; `on` / `off`; settings rows ライバルの声 and
+  音声モデルのデータ), kept in Cache Storage (`touge-tts-supertonic-3`), brought up on the way to a rival battle and
+  released when another kind of race starts (`store/voice.ts`: its weights are ~400 MB of video memory).
+  `Game.rivalVoice` is injected like `rivalBrains`; `rivalSays` waits `VOICE_WAIT` (0.7 s) for the sound so that line
+  and voice come together; `AudioEngine.say` plays it at one level over the `bed` (everything else, turned down
+  meanwhile). A voice per rival: `RivalInfo.voice` (`F1`–`F5`, `M1`–`M5`). Server: the model is not in the
+  repository; `docker compose --profile tts run --rm tts-fetch` puts it into the `tts` volume once (pinned revision,
+  SHA-256 per file, `docker/tts/fetch.sh`), nginx serves it at `/tts/` (404 without it, never the app's page); the
+  test stacks have none, so E2E never meets the offer. The model's files are the publisher's, unchanged, with its
+  LICENSE next to them (linked from the offer and the settings: the licence asks that its use restrictions reach
+  whoever gets the model). Local check: `~/.local/opt/tts/proto/ttsserve.cjs` + `TTS_PROXY=http://127.0.0.1:4191
+  npx vite preview`, then `~/.local/opt/quality/voicecheck.cjs` on the GPU (offer, download, a spoken line in a rival
+  battle, frame gaps with the model busy, the second visit from the cache); `window.__speech` for probes.
+  The vite build makes ES-module workers (`worker.format: 'es'`): the audio worklets are built that way too.
 - Interface (redesigned 11-11: a telemetry terminal over the live scene; `ui/theme/`: `tokens.css`, `base.css`,
   `screens.css`, `picker.css`, `online.css`, `hud.css`; parts in `ui/kit.tsx`, the shell around every menu in
   `ui/Shell.tsx`). Colour: tokens only, as rgb triplets (`rgb(var(--c-cyan) / 0.3)`); cyan = focus and live data,
@@ -304,6 +325,28 @@ pending. `docs/PLAN.md` holds the design.
   move while the main thread is blocked (the busy mark, the boot bar) is a CSS transform / opacity animation only.
   Lists the keys walk: hover moves the selection (`hoverSelect`), inside `.focus-box` only the selected button is
   filled. `window.__app` is the app's store for probes (as `__game` is the game).
+  The grains over the menus (`ui/fx/`, owner 11-11: fine, close to 3D particles; grains alone depict things and
+  grains alone emphasise them; "the part in charge of beauty"): up to 48 000 grains (12 000 on a phone) in a volume
+  behind the screen, one canvas over the interface (`Cloud.tsx`; not in a race, not with motion off, none on a
+  software renderer). `cloud.ts` is the simulation (DOM-free, tested): three interleaved groups (dust / the thing a
+  screen shows / the selection's edge); a group is given a `Shape` (points in its own space, placed anew every frame)
+  and its grains fly there, a shape let go scatters through the volume. `shapes.ts` makes the shapes: a course's
+  relief (`courseRelief`: road, start / finish beams, the land as contour lines; laid across its place, `box` fits
+  it), a glyph from a mask, the edge of a selection (`shellOf`). In the markup: `data-cloud="course:<id>"` or
+  `"glyph"` (`data-cloud-fill="0…1"`: how much has gathered, as on the loading screen) = a thing depicted where the
+  element stands; the emphasis goes to what the pointer is on (anything with `cursor: pointer`), else the screen's
+  `FocusFrame`, else an element with `data-grains` (`"line"` / `"ring"` / its panel; `data-grains-tone`;
+  `data-grains-first="<ms>"`). While the grains depict, the app has the class `cloud-on` and the page's own picture
+  of the same thing steps back (the title's kanji, the drawn focus frame). The count follows the grains' own cost
+  on the main thread (`BUDGET` 4 ms a frame; 48 000 cost ~3–4 ms here), never the frame time. What is slow in the
+  step: `Math.hypot`, sines (a table), anything per grain per frame that could be done for a quarter of them in turn.
+  **Nothing else on the page may make a WebGL context while the game is on WebGPU**: it lost the game's device
+  (`VK_ERROR_DEVICE_LOST`, 11-11). Whatever else draws uses the game's own API: the grains draw on
+  `RenderHost.gpuDevice` (`cloudRenderGpu.ts`), or with WebGL 2 next to the WebGL 2 backend (`cloudRender.ts`); the
+  rivals' voice (WebGPU, in a worker) is offered only when the game is drawn with WebGPU (`Speech.usable`).
+  The title's and the replay's camera (`Game.cinematicCamera`): every shot is laid along the road or checked against
+  the ground (`tracksideAnchor`, `groundClear`); a new shot must be too (an offset from the car alone ends up inside
+  a slope or behind the roadside).
 - Who plays (owner 11-11: accounts come from Authentik; nothing in the browser keeps an account any more). **Members**
   log in through the owner's Authentik (`AuthController`: authorization code + PKCE, the code is exchanged on the
   server; `config/authentik.php`, `AUTHENTIK_*` in `.env` only: never to the browser, a log or a commit). The account

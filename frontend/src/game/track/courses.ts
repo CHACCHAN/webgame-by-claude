@@ -4,6 +4,7 @@ import { AUTOBAHN, KIRIFURI_LAKESIDE, OBORO_DOWNHILL, TENROU_SKYLINE, type Cours
 import { BAY, CALDERA, PLATEAU, RIDGE, type Landform } from './landforms';
 import type { TrainId } from '../vehicle/trains';
 import type { BikeId } from '../vehicle/bikes';
+import type { VoiceId } from '../audio/speech/text';
 
 export type CourseId = 'oboro-downhill' | 'kirifuri-lakeside' | 'tenrou-skyline' | 'autobahn';
 
@@ -20,6 +21,8 @@ export interface RivalInfo {
   portrait: string;
   /** engine tune of the rival's car (legend cars are tuned) */
   power?: number;
+  /** the voice its lines are spoken in (audio/speech: one of the speech model's ten) */
+  voice: VoiceId;
 }
 
 export interface CourseInfo {
@@ -54,9 +57,9 @@ export const COURSES: Record<CourseId, CourseInfo> = {
     landform: BAY,
     surface: { grip: 1, label: '年季の入った峠の舗装' },
     rivals: {
-      rookie: { name: '森 健太', title: 'ROOKIE / 走り始めた新人', car: 'hayate', color: '#f2b705', portrait: '/img/rivals/oboro-rookie.webp', description: '免許を取ったばかりの新人。ラインは甘いが、峠への情熱は本物。' },
-      ace: { name: '高嶺 遼', title: 'LOCAL ACE / 朧峠の地元最速', car: 'raijin', color: '#0c0c0e', portrait: '/img/rivals/oboro-ace.webp', description: '朧峠を知り尽くした地元最速の男。ミスを待っていても勝てない。' },
-      legend: { name: '朧', title: 'LEGEND / 夜を走る幽霊', car: 'shiden', color: '#e9e9ea', portrait: '/img/rivals/oboro-legend.webp', description: '夜明け前にだけ現れるという白い影。誰も、その背中に追いついたことがない。' },
+      rookie: { name: '森 健太', voice: 'M1', title: 'ROOKIE / 走り始めた新人', car: 'hayate', color: '#f2b705', portrait: '/img/rivals/oboro-rookie.webp', description: '免許を取ったばかりの新人。ラインは甘いが、峠への情熱は本物。' },
+      ace: { name: '高嶺 遼', voice: 'M2', title: 'LOCAL ACE / 朧峠の地元最速', car: 'raijin', color: '#0c0c0e', portrait: '/img/rivals/oboro-ace.webp', description: '朧峠を知り尽くした地元最速の男。ミスを待っていても勝てない。' },
+      legend: { name: '朧', voice: 'M3', title: 'LEGEND / 夜を走る幽霊', car: 'shiden', color: '#e9e9ea', portrait: '/img/rivals/oboro-legend.webp', description: '夜明け前にだけ現れるという白い影。誰も、その背中に追いついたことがない。' },
     },
     medals: {
       hayate: { gold: 108_000, silver: 115_000, bronze: 125_000 },
@@ -83,9 +86,9 @@ export const COURSES: Record<CourseId, CourseInfo> = {
     // the lake mist leaves the road damp
     surface: { grip: 0.92, label: '湖の霧で湿った路面（滑りやすい）' },
     rivals: {
-      rookie: { name: '椎名 ほのか', title: 'ROOKIE / 温泉宿の配達係', car: 'hayate', color: '#f6d743', portrait: '/img/rivals/kirifuri-rookie.webp', description: '実家の温泉宿の配達で湖畔道を毎朝往復している。速さの自覚はまだない。' },
-      ace: { name: '九条 迅', title: 'LOCAL ACE / 湖畔のチューナー', car: 'raijin', color: '#7a1e2c', portrait: '/img/rivals/kirifuri-ace.webp', description: '湖畔のチューニングショップの若き店長。自分で組んだ車を誰より速く走らせる。' },
-      legend: { name: '霧姫', title: 'LEGEND / 霧の中の女王', car: 'shiden', color: '#c9d6e3', power: 1.18, portrait: '/img/rivals/kirifuri-legend.webp', description: '霧が湖を覆う夜にだけ現れる。テールランプを見た者は、その夜を一生忘れない。' },
+      rookie: { name: '椎名 ほのか', voice: 'F1', title: 'ROOKIE / 温泉宿の配達係', car: 'hayate', color: '#f6d743', portrait: '/img/rivals/kirifuri-rookie.webp', description: '実家の温泉宿の配達で湖畔道を毎朝往復している。速さの自覚はまだない。' },
+      ace: { name: '九条 迅', voice: 'M4', title: 'LOCAL ACE / 湖畔のチューナー', car: 'raijin', color: '#7a1e2c', portrait: '/img/rivals/kirifuri-ace.webp', description: '湖畔のチューニングショップの若き店長。自分で組んだ車を誰より速く走らせる。' },
+      legend: { name: '霧姫', voice: 'F2', title: 'LEGEND / 霧の中の女王', car: 'shiden', color: '#c9d6e3', power: 1.18, portrait: '/img/rivals/kirifuri-legend.webp', description: '霧が湖を覆う夜にだけ現れる。テールランプを見た者は、その夜を一生忘れない。' },
     },
     medals: {
       hayate: { gold: 92_000, silver: 98_500, bronze: 107_500 },
@@ -112,9 +115,9 @@ export const COURSES: Record<CourseId, CourseInfo> = {
     // a toll skyline: fresh, coarse asphalt
     surface: { grip: 1.04, label: '新しい有料道路の舗装（高グリップ）' },
     rivals: {
-      rookie: { name: '大河内 拓也', title: 'ROOKIE / 大学自動車部', car: 'hayate', color: '#2f6db5', portrait: '/img/rivals/tenrou-rookie.webp', description: '大学自動車部の二年生。理論派だが、実戦の経験はまだ浅い。' },
-      ace: { name: '真壁 冴子', title: 'LOCAL ACE / 元ラリードライバー', car: 'raijin', color: '#e6e6e6', portrait: '/img/rivals/tenrou-ace.webp', description: '元ラリードライバー。高速コーナーでの迷いのなさは圧倒的。' },
-      legend: { name: '天狼', title: 'LEGEND / 稜線の狼', car: 'shiden', color: '#202428', power: 1.18, portrait: '/img/rivals/tenrou-legend.webp', description: '頬に傷を持つ寡黙な男。「狼が走る夜は風が止む」と噂される。' },
+      rookie: { name: '大河内 拓也', voice: 'M5', title: 'ROOKIE / 大学自動車部', car: 'hayate', color: '#2f6db5', portrait: '/img/rivals/tenrou-rookie.webp', description: '大学自動車部の二年生。理論派だが、実戦の経験はまだ浅い。' },
+      ace: { name: '真壁 冴子', voice: 'F3', title: 'LOCAL ACE / 元ラリードライバー', car: 'raijin', color: '#e6e6e6', portrait: '/img/rivals/tenrou-ace.webp', description: '元ラリードライバー。高速コーナーでの迷いのなさは圧倒的。' },
+      legend: { name: '天狼', voice: 'M3', title: 'LEGEND / 稜線の狼', car: 'shiden', color: '#202428', power: 1.18, portrait: '/img/rivals/tenrou-legend.webp', description: '頬に傷を持つ寡黙な男。「狼が走る夜は風が止む」と噂される。' },
     },
     medals: {
       hayate: { gold: 84_000, silver: 90_500, bronze: 99_500 },
@@ -142,9 +145,9 @@ export const COURSES: Record<CourseId, CourseInfo> = {
     rivals: {
       // a drag race: no corner sorts the field, so the rivals' cars and tunes set the battle (tools/sim-run.ts):
       // the rookie loses to any car driven flat out, the ace to the R34 and the RX-7, the legend only to a clean RX-7
-      rookie: { name: '早瀬 ユリア', title: 'ROOKIE / 留学帰りの新人', car: 'hayate', color: '#d8dde4', power: 0.95, portrait: '/img/rivals/autobahn-rookie.webp', description: 'ドイツ留学から帰ったばかり。速度無制限の道に憧れて、初めて夜のアウトバーンに挑む。' },
-      ace: { name: '神崎 ルカ', title: 'LOCAL ACE / 深夜便の運び屋', car: 'supra', color: '#14161a', portrait: '/img/rivals/autobahn-ace.webp', description: '夜ごとこの道を往復する運び屋。追い越し車線の空け方まで知り尽くしている。' },
-      legend: { name: 'ファルケ', title: 'LEGEND / 無制限区間の亡霊', car: 'r34', color: '#9aa4ae', power: 1.02, portrait: '/img/rivals/autobahn-legend.webp', description: '鷹の名で呼ばれる正体不明のドライバー。ミラーに映ったと思った時には、もう前にいる。' },
+      rookie: { name: '早瀬 ユリア', voice: 'F4', title: 'ROOKIE / 留学帰りの新人', car: 'hayate', color: '#d8dde4', power: 0.95, portrait: '/img/rivals/autobahn-rookie.webp', description: 'ドイツ留学から帰ったばかり。速度無制限の道に憧れて、初めて夜のアウトバーンに挑む。' },
+      ace: { name: '神崎 ルカ', voice: 'M4', title: 'LOCAL ACE / 深夜便の運び屋', car: 'supra', color: '#14161a', portrait: '/img/rivals/autobahn-ace.webp', description: '夜ごとこの道を往復する運び屋。追い越し車線の空け方まで知り尽くしている。' },
+      legend: { name: 'ファルケ', voice: 'F5', title: 'LEGEND / 無制限区間の亡霊', car: 'r34', color: '#9aa4ae', power: 1.02, portrait: '/img/rivals/autobahn-legend.webp', description: '鷹の名で呼ばれる正体不明のドライバー。ミラーに映ったと思った時には、もう前にいる。' },
     },
     // flat out from a standing start, the legend AI's race time +1.5 % (a clean run; no corner to gain time in),
     // silver +7 %, bronze +17 % (tools/sim-run.ts, 2026-11-06)

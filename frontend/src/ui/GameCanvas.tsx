@@ -7,6 +7,7 @@ import { UPSCALE_SCALE, currentCourseId, qualityProfile, useSettings, type Setti
 import { useApp } from '../store/app';
 import { isTouchDevice } from './touch';
 import { serverBrain, warmRivalBrain } from '../api/rivalBrain';
+import { wireVoice } from '../store/voice';
 
 /** The single game instance (the 3D world is expensive to build). */
 export const gameHolder: { game: Game | null } = { game: null };
@@ -19,6 +20,8 @@ declare global {
 
 /** the renderer of the single game (kept with it: React may mount the canvas component twice in development) */
 const hostHolder: { host: RenderHost | null; starting: Promise<RenderHost> | null } = { host: null, starting: null };
+/** the renderer that is up (null before it is): its backend and device, for what else draws on the page */
+export const renderHost = () => hostHolder.host;
 
 function startGame(host: RenderHost) {
   {
@@ -40,6 +43,7 @@ function startGame(host: RenderHost) {
     game.cornerGuide = s.cornerGuide ?? true;
     game.rivalBrains = (s.rivalAi ?? true) ? [serverBrain] : [];
     warmRivalBrain();
+    wireVoice(game);
     if (params.get('autodrive') === '1') game.autoDrive = true;
     if (params.get('timescale')) game.timeScale = Math.max(0.1, Math.min(20, Number(params.get('timescale')) || 1));
     gameHolder.game = game;

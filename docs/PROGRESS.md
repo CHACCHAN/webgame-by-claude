@@ -473,8 +473,8 @@ name whenever a record is kept. Later the same day: the account's key should be 
   in the provider and a member's own credentials), the save across two real machines.
 ### Ground, road and roadside remade (11-11, the owner's request to re-model everything; package `terrain`)
 An agent's package (six commits, `46041ec` … `6a1854a`), merged with the freeze work on its branch and checked there
-by the main session. **Not in the live game yet**: it brings new models (guardrail, terminal, delineator, gutter
-grating, rockfall fence), and the owner sees a model's sheet first.
+by the main session. Live since the release of 11-11 (below): the owner saw the sheets and asked for it
+(「それも頼む」).
 - What it is: the ground as one layered TSL material (rock on steep faces from its two sides, forest floor, moss or
   grass, gravel at the verge, shoreline; wet and pooled in rain), the road's wear in one material (patches, seams,
   cracks, tar lines, polished wheel tracks, worn markings, puddles), a modelled roadside (guardrail spans with
@@ -523,17 +523,139 @@ grating, rockfall fence), and the owner sees a model's sheet first.
 - Seen and left for a follow-up: the title's roadside cameras are now and then behind a mound or pass a post of the
   new roadside (the cameras do not look for what stands in the way).
 
-### Grains over the menus (11-11, owner's idea; branch `ui-fx`, not merged)
+### Grains over the menus (11-11, owner's idea)
 
 - Owner: 「粒が浮いている表現→マウスで特定の選択肢に重なると→粒子が形を変えてボタンの装飾になる」. `ui/fx/grains.ts` (simulation,
   6 tests) + `ui/fx/Grains.tsx` (one canvas): dust that gathers into the outline of what the pointer is on, else of
   the keys' selection; a change of screen sweeps it. Pictures and a 21 s recording taken on the GPU and looked at
   (menus hold 60 fps with it: frame gaps median 16.7 ms); the recording was sent to the owner. Phones: fewer grains,
   the selection's frame only (looked at one picture).
-- Not done: cost on a slow phone, a look with the owner's eyes (waiting for their word before it is merged), the
-  other uses (the boot bar, results' medals).
+- The results' medal pulls them in as it is stamped (`data-grains-first`: an element has the grains for its first
+  moments on show), in amber; looked at on frames of a made-up result (the store set by a script, no race driven).
+- Not done: cost on a slow phone; other uses (the boot bar). The owner has the recording; their word on the look
+  is still to come (their brief left it to my judgement, so it ships with the next update).
+
+### The title's and the replay's camera sees the car (11-11)
+
+- Seen on the release: the four cinematic shots were offsets from the car, and with the remade ground and roadside
+  the orbit went through posts and slopes, the trackside camera stood behind mounds, the wide shot in a hillside.
+- Now laid along the road (`Game.cinematicCamera`): orbit and front shot inside the rails, the wide shot over the
+  centre line; the trackside camera (`tracksideAnchor`) takes the place with most of the road in sight over the
+  ground and is cut when the car is hidden or 80 m past; the front shot sits above the headlight cones (inside them
+  the glow in the haze whitened the picture).
+- Checked: sixteen frames over 30 s of the title on the GPU, before and after (`~/.local/opt/quality/cmp/title`,
+  `title2`): the car is in every frame after. Trees and bushes are not asked (only the ground's heights), so a tree
+  can still pass in front. The replay uses the same camera: not looked at separately.
 - The condition cards as looping video (owner's idea): Gemini's video generation failed three times in a row
   ("Sorry, something went wrong"); asked the owner.
+
+### Second release the same day (11-11): the grains, the cinematic camera
+- Main `4e8f88b` deployed (bundle `index-B6xGEdHc.js`): the grains over the menus, the medal's grains, the title's and
+  the replay's camera. **Verified**: the bundle served locally and through the public address, leaderboard 200,
+  `tools/gpu-errors.cjs` 0 on WebGPU and WebGL 2, title frames and a race picture looked at. E2E on an isolated
+  stack: only a subset (boot, menu navigation, click during a wipe, car select, rival battle, time attack, phone:
+  all passed after the boot test was pointed at the game's canvas); the whole suite was **not** run again.
+- Seen in the live database afterwards (counts only): one member row (`oidc_sub` set), one session, one save: a real
+  Authentik login has happened. How it felt (name shown, the save on another device, logout) is the owner's to say.
+- **The owner on the grains (11-11, after seeing them live): not what they had in mind.** They want far finer
+  grains, close to 3D particles, that depict things and emphasise things by themselves: "the part in charge of
+  beautiful expression". The 2D layer (`ui/fx/`) is to be remade on that brief.
+
+### The grains as a cloud in depth (11-11, after the owner's word on the first grains)
+Owner: 「粒はもっと細かく、3d パーティクルに近いです。粒だけで物を表現したり、粒だけで強調させたりといった使い方を
+予想してました。美しい寄りな表現担当ですね。」 The 2D layer (420 grains tracing frames) is gone; CLAUDE.md "The grains
+over the menus" describes what replaced it.
+
+- `ui/fx/cloud.ts` (simulation, 9 tests with `shapes.ts`), `shapes.ts`, `Cloud.tsx`, `cloudRenderGpu.ts` (instanced
+  quads on the game's WebGPU device), `cloudRender.ts` (WebGL 2 points, only next to the WebGL 2 backend).
+  Depicted by grains alone: the title's 峠 (the element's own text through a mask), the selected course as a relief
+  under the course cards and on the loading screen, where it fills with the progress (road, start and finish beams,
+  the land as contour lines from the course's `Landform`, water as a sheet; it sways and follows the pointer).
+  Emphasis by grains alone: the edge of what the pointer is on or the keys selected (the drawn focus frame is hidden
+  while the grains depict; rows keep their bar and wash).
+- **Found: a WebGL context made next to the game's WebGPU device loses that device** (`vkQueueSubmit failed with
+  VK_ERROR_DEVICE_LOST`, headless Chrome on the RX 5700 XT; the game then fell back and reloaded). Hence the WebGPU
+  renderer on the game's own device, and the rivals' voice offered only when the game is drawn with WebGPU
+  (`Speech.usable`; a WebGPU model next to a WebGL 2 game is the same pairing, untested and now excluded).
+- **Found: the first cloud cost 2.9 ms a frame for 9 400 grains** (~15 ms for 48 000: frames were lost and the
+  count, then steered by the frame time, fell to nothing under any load and stayed there). The step was rewritten
+  (no `Math.hypot`, sines from a table, flow / brightness / colour for a quarter of the grains in turn, the look
+  bytes written in the step): 48 000 grains cost 1.2 ms floating and 3.0 ms all seated in Node, 2.5–4.1 ms in the
+  page (upload and draw included). The count now follows the grains' own cost (4 ms budget).
+- Verified on the GPU (machine load 2–5 meanwhile): pictures of the title, the main menu with the pointer, the four
+  courses' reliefs with the pointer left and right (each stays in its place under the cards), the rivals screen,
+  the loading screen at three fills; two recordings (41 s, 57 fps of screencast frames) looked at as sheets of
+  frames; frame gaps with 48 000 grains median 16.7 ms, p95 16.8–33 ms; `tools/gpu-errors.cjs` 0 on WebGPU and on
+  `?webgl=1`; the WebGL 2 twin looked at (same picture). tsc, vitest 167, build.
+- **Found by E2E: on a software renderer (SwiftShader) the grains' WebGL 2 context blanked the game's canvas** (the
+  boot test's picture of it: 5.6 kB). No grains without a GPU now, decided from the game's own context
+  (`RenderHost.software`), no second context made. E2E on an isolated stack, a subset only: boot, menu navigation,
+  phone passed on the final tree; click during a wipe, course select, rival battle passed on the tree before that
+  fix. The whole suite was **not** run.
+- Not verified: other GPUs, browsers and phones (the WebGL 2 twin next to a WebGL 2 game on Firefox / Safari: one
+  machine's Chrome only); a display with a pixel ratio of 2 or 4K (pictures at 1280×720, ratio 1); the medal's
+  grains on the results screen are an amber edge only and faint on so small a thing (one picture of a made-up
+  result); the owner's eye on the whole.
+- Not built yet (ideas): the results' medal itself, the condition cards' pictures (stars, rain, dawn: a stand-in
+  for the Gemini videos that fail), the rival's portrait gathering; the simulation on the GPU (a compute pass) for
+  several hundred thousand grains if the owner wants it denser still.
+- **Live (11-11)**: main `6f453b4` deployed, bundle `index-BoanQkpS.js` served locally and through the public
+  address, leaderboard 200, the speech model's JSON 200; the grains pictured on the live site on the GPU (47 250
+  grains, 3.8–3.9 ms a frame of their own, frame gaps median 16.7 ms, no page errors). A 42 s recording of the
+  final build went to the owner.
+
+### Trees, bushes, undergrowth, rocks remade: a branch with pictures, not merged (11-11)
+- The `nature` package's branch `worktree-agent-a93b5dfec501746d9` (tip `2621c03`): twelve own species (Blender
+  scripts, three levels + impostor each), forests planted by altitude and slope, on medium and up; low keeps the old
+  trees. Its own numbers, all taken under load (2–18): GPU time a frame at 1080p high 5.0 → 7.8 ms, ultra 8.0 →
+  9.5 ms, 1440p ultra with upscaling Quality 6.7 → 11.6 ms; frame-rate pairs contradict each other; the plan's
+  targets are **not shown met**. Downloads per course: 9.6 MB (high / ultra), 2.7 MB (medium).
+- Reviewed by me on its sheets (oboro dawn / night, kirifuri dawn pairs, close-ups, quality levels, one species):
+  a large step up, but **not ready**: the forest closes the views the courses are named for (the sea and the town
+  from oboro, the lake from kirifuri), one artefact on a retaining wall at night, far hillsides as dots. Sent back
+  for one more round (views open by a planting rule, the artefact, far hills, frustum culling, timings on a quiet
+  machine). Five sheets went to the owner; nothing of it is in the game.
+
+### The rivals speak (11-11, owner's request): a speech model on the player's GPU
+Request: a TTS model, Supertonic 3, WebGPU assumed; the language model's lines are spoken; without WebGPU no TTS
+model, text only. My plan (the ~400 MB model only after the player's yes, served from our own server, a voice per
+rival) was approved by the owner the same day. CLAUDE.md "The rivals' voice"; docs/ASSETS.md for the model.
+
+- `game/audio/speech/`: `text.ts` (the publisher's text preparation; tags other than the three sound tags are taken
+  out of a line), `speech.worker.ts` (onnxruntime-web 1.31.1 on WebGPU in a module worker; the model's files into
+  Cache Storage with progress; a warm-up line so that the first real one is quick), `Speech.ts` (states:
+  unsupported / absent / idle / loading / ready / failed). `Game.rivalSays` waits up to 0.7 s for the sound;
+  `AudioEngine.say` plays it over the rest, turned down to 40 % meanwhile. The offer once on the rivals screen, two
+  settings rows (on / off with the state, delete the browser's copy), the licence linked from both.
+- Server: volume `tts` + `docker compose --profile tts run --rm tts-fetch` (revision pinned, SHA-256 per file),
+  nginx `/tts/` (404 without the model).
+- **Verified** on the RX 5700 XT in headless Chrome (WebGPU), `~/.local/opt/quality/voicecheck.cjs`, against a
+  preview and against an isolated stack that got the model through `tts-fetch` (26 s for 383 MB):
+  - the offer appears, a yes fetches and sets the model up: 8–10 s from a local server (no network to speak of);
+    a second visit from the browser's copy 5–13 s (the machine was shared: load 2–3), no model file asked of the
+    network again, no offer;
+  - a rival battle: the line before the start came with its voice (the sound took 0.42–0.59 s after the text;
+    2.6 s of speech), the rest stepped back to 0.4 and returned to 1;
+  - frames in the race (720p, quality high, vsync 60): no gap over 40 ms in 8 s without the model and in ~9 s with
+    a line synthesised every 1.5 s (0.3–0.7 s per line of 6–17 characters; worst frame 33 ms, one dropped);
+  - in the menus the set-up costs frames while it runs (8–27 gaps over 40 ms, worst 0.2–0.7 s): it is started on
+    the way to a rival battle, where the course loads anyway.
+  - E2E on that stack (the model in its volume; headless Chromium there has no WebGPU adapter, so no offer): boot,
+    menu navigation, rival battle, course select, phone: 5 passed (10.6 min). The whole suite was not run.
+  - `tsc`, 164 unit tests, build (the worker is 126 kB, the runtime's WebAssembly 28.7 MB, both fetched only when
+    the voice is loaded).
+- **Live** (11-11, main `27efc93` + this note, bundle `index-3tF9oDyG.js`): deployed, the model fetched into the live
+  `tts` volume (`tts-fetch`, 383 MB, checksums right). Checked: the bundle and the leaderboard locally and through
+  the public address; the model's files through the public address (36 MB in 0.8 s from this machine, the 257 MB
+  file's headers, the licence as text; Cloudflare does not cache them: `DYNAMIC`); `gpu-errors.cjs` 0 on WebGPU and
+  WebGL 2; `voicecheck.cjs` against the live site: the language model's own line (「免許取り立てだけど、この峠じゃ負け
+  ないからな！」) came up with its voice 0.35 s after the text, 3.5 s of speech. In that run a line synthesised every
+  1.5 s **during** the race gave 10 frames over 40 ms (worst 67 ms; the two runs before gave none, the machine was
+  busier): the game itself speaks only before the start and after the finish.
+- **Not verified**: how it sounds (I cannot hear: the owner got a sample of the ten voices on 11-11; which rival
+  gets which voice was assigned from names and portraits, to be changed by ear), whether names and kanji are read
+  right, other GPUs and browsers (Safari, Firefox, phones: the download alone is 400 MB), the download through the
+  public tunnel, video memory next to the game at 4K / ultra (the model's weights are ~400 MB there).
 
 ## Session 8 (2026-11-10) — new vehicles: Cybertruck, Yangwang U9 Xtreme, three motorcycles, the L0 maglev
 

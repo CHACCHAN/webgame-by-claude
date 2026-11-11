@@ -98,6 +98,10 @@ services:
       start_period: 20s
     ports:
       - "${WEB_PORT:-8080}:80"
+    volumes:
+      # the speech model for the rivals' voice, served at /tts/ (filled once by `tts-fetch` below; while it is
+      # empty the game shows the rivals' lines as text only)
+      - tts:/usr/share/nginx/html/tts:ro
     networks:
       - default
       - edge
@@ -124,6 +128,20 @@ services:
     depends_on:
       db:
         condition: service_healthy
+
+  # --- the rivals' voice: the speech model (Supertonic 3, ≈ 400 MB, not in the repository) from its publisher into
+  # the `tts` volume, pinned and checked (docker/tts/fetch.sh). Once per server:
+  #   docker compose --profile tts run --rm tts-fetch
+  tts-fetch:
+    profiles: ["tts"]
+    image: alpine:3.20
+    environment:
+      TTS_SOURCE: ${TTS_SOURCE:-}
+    volumes:
+      - tts:/tts
+      - ./docker/tts/fetch.sh:/usr/local/bin/fetch.sh:ro
+    entrypoint: ["/bin/sh", "/usr/local/bin/fetch.sh"]
+    network_mode: bridge
 
   # --- public access: Cloudflare Tunnel, started by `docker compose up` when .env has COMPOSE_PROFILES=tunnel
   # Hostname → service mapping lives in the Cloudflare dashboard: point it at http://web:80.
@@ -202,5 +220,6 @@ volumes:
   pgdata:
   secrets:
   backups:
+  tts:
   vite_node_modules:
   e2e_node_modules:
