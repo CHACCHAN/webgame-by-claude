@@ -8,6 +8,7 @@ import { smaa } from 'three/addons/tsl/display/SMAANode.js';
 import { ambientOcclusion } from './ambientOcclusion';
 import { graded } from './grade';
 import { beamCones, updateVolume, volumetricLights } from './volumetricLights';
+import { fixInterleavedDispose } from './threeFixes';
 import { TemporalUpscaler, biasSceneTextures, sceneTextureBias, temporalUpscale } from './TemporalUpscaler';
 
 /** The renderer every engine module draws with (WebGPU, or its WebGL 2 backend where the browser has no WebGPU). */
@@ -118,6 +119,7 @@ export class RenderHost {
     // (`?gputime`: the passes' GPU times, for tools/perf-pass.cjs)
     const renderer = new WebGPURenderer({ canvas, antialias: false, powerPreference: 'high-performance', stencil: false, forceWebGL, trackTimestamp: new URLSearchParams(location.search).has('gputime') });
     await renderer.init();
+    fixInterleavedDispose(renderer);
     const host = new RenderHost(renderer, canvas, options);
     renderer.toneMapping = THREE.AgXToneMapping;
     renderer.setClearColor('#05070c');
