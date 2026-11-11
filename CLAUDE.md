@@ -304,6 +304,11 @@ pending. `docs/PLAN.md` holds the design.
   move while the main thread is blocked (the busy mark, the boot bar) is a CSS transform / opacity animation only.
   Lists the keys walk: hover moves the selection (`hoverSelect`), inside `.focus-box` only the selected button is
   filled. `window.__app` is the app's store for probes (as `__game` is the game).
+  The grains over the menus (`ui/fx/`: `grains.ts` is the simulation, DOM-free and tested; `Grains.tsx` one canvas
+  over the interface, not in a race, not with motion off): dust that gathers into the outline of what the pointer is
+  on (anything with `cursor: pointer`), else of the screen's `FocusFrame`, else of an element with `data-grains`
+  (`"line"` / `"ring"` / its panel; `data-grains-tone="magenta|amber"`). A new clickable thing gets its frame by
+  itself; a new kind of shape is an outline function in `grains.ts`.
 - Who plays (owner 11-11: accounts come from Authentik; nothing in the browser keeps an account any more). **Members**
   log in through the owner's Authentik (`AuthController`: authorization code + PKCE, the code is exchanged on the
   server; `config/authentik.php`, `AUTHENTIK_*` in `.env` only: never to the browser, a log or a commit). The account
