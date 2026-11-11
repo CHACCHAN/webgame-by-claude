@@ -20,7 +20,7 @@ import { placeProp, prop, type PropModel } from './props';
 import type { CourseStyle } from '../track/courses';
 import { ChunkedLods, cutout } from './instancing';
 import { Forest, vegetationFrame, type VegetationQuality } from './vegetation';
-import { cityWeight, loadedSpecies, plantTrees, TREE_SETS } from './vegetationPlanting';
+import { cityWeight, COVER_SET, loadedSpecies, plantCover, plantTrees, TREE_SETS, UNDER_SET } from './vegetationPlanting';
 import { buildAutobahnScenery } from './autobahnScenery';
 
 export interface Lamp {
@@ -226,7 +226,8 @@ export function buildScenery(track: Track, terrain: TerrainData, quality: Scener
   // ------------------------------------------------------------- trees
   const trees = buildTrees(terrain, quality.treeDensity, quality.treeLod, { vegetation: quality.vegetation });
   group.add(trees);
-  group.add(buildClutter(track, terrain, quality.treeDensity, surfaceTexture, keepOut));
+  const clutter = buildClutter(track, terrain, quality.treeDensity, surfaceTexture, keepOut, { vegetation: quality.vegetation });
+  group.add(clutter);
   const turbines = buildTurbines(terrain);
   group.add(turbines.group);
 
@@ -240,6 +241,7 @@ export function buildScenery(track: Track, terrain: TerrainData, quality: Scener
     update(time, cameraPos) {
       vegetationFrame(time, cameraPos);
       updateTreeLods(trees, cameraPos);
+      updateTreeLods(clutter, cameraPos);
       turbines.update(time);
     },
   };
@@ -1091,10 +1093,46 @@ export function buildClutter(
   surfaceTexture: (n: SurfaceName, srgb: boolean) => THREE.Texture | null,
   keepOut: { x: number; z: number; r: number }[],
   /** the autobahn's: where along / beside the road (+ = right) clutter may go, and no rocks */
-  opts: { accept?: (s: number, lateral: number) => boolean; rocks?: boolean } = {},
+  opts: { accept?: (s: number, lateral: number) => boolean; rocks?: boolean; vegetation?: VegetationQuality; style?: CourseStyle } = {},
 ) {
   const group = new THREE.Group();
   group.name = 'clutter';
+  // the Blender-made bushes, rocks and undergrowth (medium quality and above); the lumps below are the low quality's
+  const veg = opts.vegetation;
+  const coverSet = veg && veg.tier !== 'legacy' ? loadedSpecies(COVER_SET) : null;
+  if (veg && coverSet?.ids.length) {
+    const underSet = loadedSpecies(veg.undergrowth > 0 ? UNDER_SET : []);
+    const planted = plantCover(track, terrain, density, keepOut, coverSet.ids, underSet.ids, {
+      accept: opts.accept,
+      rocks: opts.rocks,
+      undergrowth: veg.undergrowth,
+      style: opts.style ?? 'touge',
+    });
+    const full = veg.tier === 'full';
+    const forests = [
+      new Forest(coverSet.species, planted.cover, {
+        ranges: [full ? 16 * veg.range : 0, 42 * veg.range, 120 * veg.range],
+        shadows: 45,
+        impostors: false,
+        capacity: [200, 800, 3000, 800],
+      }),
+    ];
+    if (planted.under.length) {
+      forests.push(
+        new Forest(underSet.species, planted.under, {
+          // (what is this small is not seen further away; the density is the quality's, not the reach)
+          ranges: [full ? 9 : 0, 24, 62 * Math.min(veg.range, 1.1)],
+          shadows: 0,
+          impostors: false,
+          capacity: [600, 3000, 12000, 1],
+          strides: [2, 3, 6, 8],
+        }),
+      );
+    }
+    for (const f of forests) group.add(f.group);
+    group.userData.lods = { update: (camera: THREE.Vector3) => forests.forEach((f) => f.update(camera)), stats: () => forests.map((f) => f.stats()) };
+    return group;
+  }
   const r = rng(77);
   const bushGeo = lumpGeometry(11, 0.32, 'bush');
   const rockGeo = lumpGeometry(5, 0.22, 'rock');

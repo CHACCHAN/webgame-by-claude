@@ -3,7 +3,7 @@
 import { COURSES } from '../src/game/track/courses';
 import { Track } from '../src/game/track/Track';
 import { buildTerrain } from '../src/game/track/terrain';
-import { plantTrees, TREE_SETS } from '../src/game/render/vegetationPlanting';
+import { COVER_SET, plantCover, plantTrees, TREE_SETS, UNDER_SET } from '../src/game/render/vegetationPlanting';
 
 const density = +(process.argv[2] ?? 1);
 for (const course of Object.values(COURSES)) {
@@ -20,6 +20,11 @@ for (const course of Object.values(COURSES)) {
     const d = terrain.roadDistAt(p.x, p.z);
     bands[d < 85 ? 0 : d < 260 ? 1 : d < 1e5 ? 2 : 3]++;
   }
+  // bushes, rocks and undergrowth (no keep-out circles and none of the autobahn's own rules here)
+  const t1 = performance.now();
+  const c = plantCover(track, terrain, density, [], COVER_SET, UNDER_SET, { undergrowth: 1, style: course.style });
+  const tally = (list: { species: number }[], names: string[]) => names.map((n, i) => `${n} ${list.filter((p) => p.species === i).length}`).join(', ');
+  console.log(`  cover ${c.cover.length} (${tally(c.cover, COVER_SET)}); undergrowth ${c.under.length} (${tally(c.under, UNDER_SET)}) in ${(performance.now() - t1).toFixed(0)} ms`);
   const g = terrain.near, f = terrain.far;
   const x1 = g.x0 + (g.nx - 1) * g.cell, z1 = g.z0 + (g.nz - 1) * g.cell;
   const inside = plants.filter((p) => p.x > g.x0 && p.x < x1 && p.z > g.z0 && p.z < z1).length;

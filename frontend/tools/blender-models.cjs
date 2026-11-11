@@ -49,7 +49,9 @@ const KINDS = {
     dir: 'tools/blender/nature', out: 'public/models/nature', palette: false, textureSize: 2048, big: {},
     textures: { foliage: { base: 'leaf', normal: 'leaf_n', mask: true }, impostor: { base: 'imp', normal: 'imp_n', mask: true }, rock: { base: 'rock', normal: 'rock_n' } },
     lite: { drop: /_lod0$/, scale: 0.5 },
-    ids: ['sugi'],
+    // (the small plants' sprites are seen from a few metres at most)
+    sizes: { kusa: 512, susuki: 512, shida: 512, sasa: 512 },
+    ids: ['sugi', 'hinoki', 'buna', 'akamatsu', 'fichte', 'birke', 'yabu', 'sasa', 'shida', 'kusa', 'susuki', 'iwa'],
   },
 };
 
@@ -163,7 +165,7 @@ async function optimise(raw, out, id) {
     steps.push(F.textureCompress({ encoder: sharp, targetFormat: 'webp', pattern: new RegExp(`^${name}(\\.|$)`), resize: [size, size], quality: 92 }));
   }
   const others = new RegExp(`^(?!(${['Palette', ...big].join('|')})(\\.|$|[A-Z0-9]))..*$`);
-  steps.push(F.textureCompress({ encoder: sharp, targetFormat: 'webp', pattern: others, resize: [kind.textureSize, kind.textureSize], quality: 90 }));
+  steps.push(F.textureCompress({ encoder: sharp, targetFormat: 'webp', pattern: others, resize: [kind.sizes?.[id] ?? kind.textureSize, kind.sizes?.[id] ?? kind.textureSize], quality: 90 }));
   if (kind.palette) steps.push(F.textureCompress({ encoder: sharp, targetFormat: 'webp', pattern: /^Palette/, lossless: true }));
   steps.push(F.meshopt({ encoder: MeshoptEncoder, level: 'high' }));
   await doc.transform(...steps);

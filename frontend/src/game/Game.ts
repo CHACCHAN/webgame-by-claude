@@ -12,7 +12,7 @@ import { buildScenery, type SceneryResult } from './render/TrackScenery';
 import { buildEnvironment, PRESETS, type EnvironmentRig, type TimeOfDay } from './render/Environment';
 import { CarVisual } from './render/CarVisual';
 import { clearing } from './render/instancing';
-import { loadVegetation, SHADOW_LAYER, vegetationWeather, type VegetationQuality } from './render/vegetation';
+import { loadVegetation, SHADOW_LAYER, vegetationHold, vegetationWeather, type VegetationQuality } from './render/vegetation';
 import { vegetationFiles } from './render/vegetationPlanting';
 import { volume, volumeSpot } from './render/volumetricLights';
 import { loadCarTemplates } from './render/carAssets';
@@ -358,7 +358,9 @@ export class Game {
     this.physics = new PhysicsWorld(this.track);
     // the autobahn's oncoming traffic is the game's own cars (light copies of their models)
     if (course.style === 'autobahn') await loadTrafficModels(CAR_ORDER);
-    await loadVegetation(vegetationFiles(course.style ?? 'touge'), this.quality.vegetation.tier);
+    await loadVegetation(vegetationFiles(course.style ?? 'touge', this.quality.vegetation.undergrowth > 0), this.quality.vegetation.tier);
+    // (every level of every species stays in the scene until its shader is compiled)
+    vegetationHold(true);
     this.scenery = buildScenery(this.track, this.terrain, { treeDensity: this.quality.treeDensity, shadows: this.quality.shadows, photoTextures: this.quality.photoTextures, treeLod: this.quality.treeLod, vegetation: this.quality.vegetation, style: course.style });
     // an instanced mesh without instances has an empty matrix buffer, which WebGPU refuses to bind
     const empty: THREE.Object3D[] = [];
@@ -381,6 +383,7 @@ export class Game {
     this.chase.reset();
     await this.yieldFrame(0.92, 'シェーダーを準備中');
     await this.precompile(true);
+    vegetationHold(false);
     await this.yieldFrame(1, '準備完了');
   }
 

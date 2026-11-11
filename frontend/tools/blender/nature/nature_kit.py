@@ -324,7 +324,7 @@ def foliage(spec, rng, trunk):
             length = lf['size'] * rng.u(0.75, 1.2) * (lf.get('tip_scale', 1.0) if tip else 1.0)
             width = length * lf.get('aspect', 0.66)
             if lf.get('mode', 'fan') == 'fan':
-                plane = br.plane
+                plane = UP if lf.get('face') == 'up' else br.plane
                 sidev = unit(np.cross(plane, tang)) * (1 if i % 2 else -1)
                 ang = 0.0 if tip else math.radians(lf.get('angle', 50) + rng.n(10))
                 axis = unit(math.cos(ang) * tang + math.sin(ang) * sidev + UP * lf.get('rise', 0.0))
@@ -401,6 +401,8 @@ class Tree:
         dark = self.spec.get('inner_dark', 0.38)
         ao = dark + (1 - dark) * np.clip((d - 0.15) / 0.75, 0, 1) ** 1.2
         ao *= 0.8 + 0.2 * hrel
+        # (a tuft's foot stands in its own shade)
+        ao *= 1 - self.spec.get('ground_ao', 0.0) * (1 - hrel) ** 2
         leaf = L > 0.5
         # bark: darker inside the crown, lighter on the bare trunk below it
         ao_b = np.where(P[:, 1] < self.y0, 0.95, 0.55 + 0.45 * np.clip(d, 0, 1))
@@ -414,6 +416,11 @@ class Tree:
         k = self.spec.get('volume_normal', 0.72)
         Nv = N * flip * (1 - k) + out * k
         Nv /= np.linalg.norm(Nv, axis=1, keepdims=True) + 1e-9
+        # (grass takes the light as the ground under it does: its blades' own normals would make it sparkle)
+        up = self.spec.get('normal_up', 0.0)
+        if up:
+            Nv = Nv * (1 - up) + UP * up
+            Nv /= np.linalg.norm(Nv, axis=1, keepdims=True) + 1e-9
         N = np.where(leaf[:, None], Nv, N)
         return P, N, UV, C, T
 
@@ -421,7 +428,8 @@ class Tree:
         g = Geo()
         tk = self.spec['trunk']
         t = self.trunk
-        tube(g, t.pts, t.rad, tk.get('sides', 12), tk.get('rep', 2.0), np.ones(len(t.pts)), np.zeros(len(t.pts)), 0.0)
+        if not tk.get('hidden'):
+            tube(g, t.pts, t.rad, tk.get('sides', 12), tk.get('rep', 2.0), np.ones(len(t.pts)), np.zeros(len(t.pts)), 0.0)
         for b in t.walk():
             if b.level == 0:
                 continue
@@ -430,7 +438,7 @@ class Tree:
             sides = 6 if b.rad[0] > 0.05 else 5 if b.rad[0] > 0.02 else 3
             tube(g, b.pts, b.rad, sides, 1.0 if b.rad[0] > 0.04 else 0.5, np.ones(len(b.pts)), b.sway(), b.phase)
         for s in self.sites:
-            card(g, s.base, s.axis, s.side, s.nrm, s.length, s.width, CELLS[s.cell], 1.0, s.sway, s.phase, s.bend, 2, mirror=s.phase > 0.5)
+            card(g, s.base, s.axis, s.side, s.nrm, s.length, s.width, CELLS[s.cell], 1.0, s.sway, s.phase, s.bend, self.spec['leaf'].get('card_segs', 2), mirror=s.phase > 0.5)
         return self.finish(g)
 
     def clumps(self, level):
@@ -453,6 +461,9 @@ class Tree:
         s = np.cross(n, a)
         q = np.stack([pts @ a, pts @ s, pts @ n], axis=1)
         lo, hi = np.percentile(q, 2, axis=0), np.percentile(q, 98, axis=0)
+        if branch.level == 0:
+            # a whole plant on two cards: all of it, or its outline is cut square
+            lo, hi = q.min(axis=0), q.max(axis=0)
         mid = (lo + hi) / 2
         half = np.maximum((hi - lo) / 2 * grow_by, [0.15, 0.15, 0.12])
         return a, s, n, mid - half, mid + half
@@ -461,6 +472,8 @@ class Tree:
         a, s, n, lo, hi = self.box(branch, sites, grow_by)
         P = lambda u, v, w: a * u + s * v + n * w
         sw = (min(1.0, branch.sway0 + 0.1), min(1.0, branch.sway0 + branch.flex))
+        if branch.level == 0:
+            sw = (0.0, self.spec.get('clump_sway', 0.0))
         mid = (lo + hi) / 2
         # from above: the cell's bottom is the bough's base
         quad(g, [P(lo[0], lo[1], mid[2]), P(lo[0], hi[1], mid[2]), P(hi[0], hi[1], mid[2]), P(hi[0], lo[1], mid[2])], CELLS['top'], 1.0, sw, branch.phase)
@@ -472,7 +485,8 @@ class Tree:
         sp, t = self.spec, self.trunk
         tk = sp['trunk']
         idx = sorted(set(list(range(0, len(t.pts), 2)) + [len(t.pts) - 1]))
-        tube(g, t.pts[idx], t.rad[idx], 7, tk.get('rep', 2.0), np.ones(len(idx)), np.zeros(len(idx)), 0.0)
+        if not tk.get('hidden'):
+            tube(g, t.pts[idx], t.rad[idx], 7, tk.get('rep', 2.0), np.ones(len(idx)), np.zeros(len(idx)), 0.0)
         for b in t.walk():
             if b.level == 0 or b.rad[0] < sp.get('lod1_branch_r', 0.035):
                 continue
@@ -492,7 +506,8 @@ class Tree:
         g = Geo()
         sp, t = self.spec, self.trunk
         idx = np.linspace(0, len(t.pts) - 1, 5).round().astype(int)
-        tube(g, t.pts[idx], t.rad[idx] * 1.1, 5, sp['trunk'].get('rep', 2.0), np.ones(5), np.zeros(5), 0.0)
+        if not sp['trunk'].get('hidden'):
+            tube(g, t.pts[idx], t.rad[idx] * 1.1, 5, sp['trunk'].get('rep', 2.0), np.ones(5), np.zeros(5), 0.0)
         cl = self.clumps(sp['clump2'])
         every = sp.get('lod2_every', 1)
         # by height, so that what is left out is spread over the crown
@@ -851,6 +866,8 @@ def clump_local(tree, branch, sites):
     a, s, n, lo, hi = tree.box(branch, sites)
     g = Geo()
     for b in branch.walk():
+        if b.level == 0 and tree.spec['trunk'].get('hidden'):
+            continue
         if b.rad[0] >= tree.spec.get('twig_r', 0.006):
             tube(g, b.pts, b.rad, 5, 1.0, np.ones(len(b.pts)), b.sway(), b.phase)
     for st in sites:
@@ -979,13 +996,15 @@ def run(species):
 
     # 3. the meshes and the impostors
     lods = [(t.lod0(), t.lod1(), t.lod2()) for t in trees]
-    cw, ch = species['impostor']
     rows_c, rows_n, frames = [], [], []
-    for k, t in enumerate(trees):
-        c, n, half, span_h = bake_impostor(lods[k][0], t, cw, ch, leaf_png, tmp, k)
-        rows_c.append(c), rows_n.append(n), frames.append((half, span_h))
-    imp_png = save_png(stem + '_imp.png', np.concatenate(rows_c, axis=0))
-    save_png(stem + '_imp_n.png', np.concatenate(rows_n, axis=0))
+    imp_png = None
+    if species.get('impostor'):
+        cw, ch = species['impostor']
+        for k, t in enumerate(trees):
+            c, n, half, span_h = bake_impostor(lods[k][0], t, cw, ch, leaf_png, tmp, k)
+            rows_c.append(c), rows_n.append(n), frames.append((half, span_h))
+        imp_png = save_png(stem + '_imp.png', np.concatenate(rows_c, axis=0))
+        save_png(stem + '_imp_n.png', np.concatenate(rows_n, axis=0))
 
     # 4. the GLB
     clear_scene()
@@ -997,9 +1016,10 @@ def run(species):
             ob = to_object(f'v{k}_lod{l}', lods[k][l], fol)
             objs.append(ob)
             print(f'TRIS {sid} v{k} lod{l}: {ob["tris"]}')
-        half, span_h = frames[k]
-        objs.append(quad_object(f'v{k}_imp', half, span_h, (0.0, k / nv, 1 / 8, (k + 1) / nv)))
-        objs[-1].data.materials.append(imp)
+        if frames:
+            half, span_h = frames[k]
+            objs.append(quad_object(f'v{k}_imp', half, span_h, (0.0, k / nv, 1 / 8, (k + 1) / nv)))
+            objs[-1].data.materials.append(imp)
     export_glb(out, objs)
     print(f'NATURE {sid}: {nv} variants, {os.path.getsize(out) / 1024:.0f} KiB raw')
     if opt['render']:
@@ -1033,7 +1053,8 @@ def render_sheet(species, out_dir, trees, lods, leaf_png, imp_png, frames):
         gt = nt.nodes.new('ShaderNodeMath')
         gt.operation = 'GREATER_THAN'
         nt.links.new(tex.outputs['Alpha'], gt.inputs[0])
-        gt.inputs[1].default_value = 0.5
+        # (the game lowers the cutout with the distance, as the mips thin the twigs out: the sheet stands far off)
+        gt.inputs[1].default_value = 0.3
         p.inputs['Roughness'].default_value = 0.7
         # leaves let light through: without it every card seen from below is black in a path tracer
         out = nt.nodes['Material Output']
@@ -1051,15 +1072,15 @@ def render_sheet(species, out_dir, trees, lods, leaf_png, imp_png, frames):
         nt.links.new(mix.outputs[0], out.inputs['Surface'])
         return m
 
-    fol, imp = shown('foliage', leaf_png), shown('impostor', imp_png)
+    fol, imp = shown('foliage', leaf_png), shown('impostor', imp_png) if imp_png else None
     font = bpy.data.materials.new('label')
     font.use_nodes = True
     font.node_tree.nodes['Principled BSDF'].inputs['Base Color'].default_value = (0.9, 0.9, 0.9, 1)
     x = 0.0
     nv = len(trees)
     for k, t in enumerate(trees):
-        step = t.radius * 2 + 1.5
-        for l in range(4):
+        step = t.radius * 2 + min(1.5, t.radius)
+        for l in range(4 if imp else 3):
             if l < 3:
                 # (Cycles shades a card black where its volume normal looks away: the sheet shows the plain geometry)
                 ob = to_object(f'v{k}_lod{l}', lods[k][l], fol, normals=False)
@@ -1072,10 +1093,10 @@ def render_sheet(species, out_dir, trees, lods, leaf_png, imp_png, frames):
             ob.location = (x + step / 2, 0, 0)
             cu = bpy.data.curves.new('txt', 'FONT')
             cu.body = label
-            cu.size = max(0.4, t.radius * 0.2)
+            cu.size = max(0.05, t.top * 0.04)
             cu.align_x = 'CENTER'
             tx = bpy.data.objects.new('txt', cu)
-            tx.location = (x + step / 2, -t.radius - 1.4, 0.02)
+            tx.location = (x + step / 2, -t.radius - max(0.25, min(1.4, t.radius)), 0.02)
             tx.data.materials.append(font)
             sc.collection.objects.link(tx)
             x += step
@@ -1095,25 +1116,27 @@ def render_sheet(species, out_dir, trees, lods, leaf_png, imp_png, frames):
     world = bpy.data.worlds.new('sky')
     sc.world = world
     world.use_nodes = True
-    world.node_tree.nodes['Background'].inputs['Color'].default_value = (0.55, 0.68, 0.9, 1)
+    world.node_tree.nodes['Background'].inputs['Color'].default_value = (0.7, 0.78, 0.9, 1)
     world.node_tree.nodes['Background'].inputs['Strength'].default_value = 0.9
     sun = bpy.data.objects.new('sun', bpy.data.lights.new('sun', 'SUN'))
     sun.data.energy = 3.2
     sun.data.angle = math.radians(3)
     sun.rotation_euler = (math.radians(55), 0, math.radians(35))
     sc.collection.objects.link(sun)
-    W, Hh = 2400, 900
+    # (a row of small plants is a low strip)
+    W = 3200
+    Hh = int(min(1400, max(360, W * top * 1.45 / max(width, 1e-6))))
     lens, sensor = 60, 36
     half_w = math.atan(sensor / 2 / lens)
-    dist = max(width * 0.54 / math.tan(half_w), (top * 0.75) / (math.tan(half_w) * Hh / W))
+    dist = max(width * 0.52 / math.tan(half_w), (top * 0.66) / (math.tan(half_w) * Hh / W))
     cam = bpy.data.objects.new('cam', bpy.data.cameras.new('cam'))
     sc.collection.objects.link(cam)
     sc.camera = cam
     cam.data.lens = lens
     cam.data.clip_end = 4000
-    eye = Vector((width / 2, -dist, top * 0.5))
+    eye = Vector((width / 2, -dist, top * 0.62))
     cam.location = eye
-    cam.rotation_euler = (Vector((width / 2, 0, top * 0.4)) - eye).to_track_quat('-Z', 'Y').to_euler()
+    cam.rotation_euler = (Vector((width / 2, 0, top * 0.42)) - eye).to_track_quat('-Z', 'Y').to_euler()
     sc.render.engine = 'CYCLES'
     sc.cycles.device = 'CPU'
     sc.cycles.samples = 64
@@ -1134,6 +1157,6 @@ def render_sheet(species, out_dir, trees, lods, leaf_png, imp_png, frames):
     bpy.ops.render.render(write_still=True)
     # the textures next to it
     import shutil
-    for f in (leaf_png, leaf_png.replace('_leaf', '_leaf_n'), imp_png, imp_png.replace('_imp', '_imp_n')):
+    for f in (leaf_png, leaf_png.replace('_leaf', '_leaf_n')) + ((imp_png, imp_png.replace('_imp', '_imp_n')) if imp_png else ()):
         shutil.copy(f, os.path.join(out_dir, os.path.basename(f)))
     print('SHEET', sc.render.filepath)

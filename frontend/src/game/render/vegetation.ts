@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
-import { MeshBasicNodeMaterial, MeshSSSNodeMaterial } from 'three/webgpu';
+import { MeshBasicNodeMaterial, MeshSSSNodeMaterial, MeshStandardNodeMaterial } from 'three/webgpu';
 import {
   Fn, atan, attribute, cameraViewMatrix, cos, float, floor, fract, max, mix, normalLocal, normalViewGeometry, positionLocal, positionPrevious,
   positionView, screenCoordinate, sin, smoothstep, step, texture, uniform, uv, varying, vec2, vec3, vec4,
@@ -68,6 +68,16 @@ export function vegetationFrame(time: number, camera: THREE.Vector3) {
 }
 
 /** rain (0 … 1): wet leaves and bark are darker and glossier, and the wind is up */
+/**
+ * While the world's shaders are compiled every mesh of every forest stays in the scene, also those that hold no
+ * plant at that moment (the renderer compiles what is visible: a species first met halfway down the course would
+ * otherwise stop the picture for its shader). `Game` holds before it builds the scenery and lets go after the compile.
+ */
+let held = false;
+export function vegetationHold(on: boolean) {
+  held = on;
+}
+
 export function vegetationWeather(rain: number) {
   wet.value = rain;
   windPower.value = 0.55 + 0.8 * rain;
@@ -284,6 +294,10 @@ export interface PlantLook {
   translucency?: number;
   /** strength of the wind on it (a bush moves less than a tree top) */
   wind?: number;
+  /** `rock`: no leaves, no wind; the texture pair is colour and the normal in the model's own frame (tools/blender/nature/iwa.py) */
+  kind?: 'plant' | 'rock';
+  /** rocks: how much moss grows on what faces the sky (0…1) */
+  moss?: number;
 }
 
 /** the material of a level's meshes: bark and foliage from the species' one texture pair */
@@ -333,6 +347,36 @@ function plantMaterial(model: PlantModel, look: PlantLook, span: Span) {
   mat.thicknessAttenuationNode = float(1);
   mat.thicknessPowerNode = float(3);
   mat.thicknessScaleNode = float(2);
+  return mat;
+}
+
+/** a rock: its colour and normal from the octahedral map, moss on what faces the sky, darker and shinier in rain */
+function rockMaterial(model: PlantModel, look: PlantLook, span: Span) {
+  const mat = new MeshStandardNodeMaterial();
+  mat.metalness = 0;
+  mat.envMapIntensity = 0.4;
+  const I = instanceNodes();
+  const S: N = span;
+  mat.positionNode = Fn(() => {
+    const size: N = I.open.mul(step(S.x.sub(S.y), I.dist)).mul(step(I.dist, S.z));
+    const at: N = mix(I.foot, I.foot.add(I.turn(I.place(positionLocal))), size).toVar();
+    (normalLocal as N).assign(I.turn(normalLocal));
+    (positionPrevious as N).assign(at);
+    return at;
+  })();
+  const fade: N = varying(vec2(float(1).sub(smoothstep(S.x.sub(S.y), S.x, I.dist)), float(1).sub(smoothstep(S.z.sub(S.w), S.z, I.dist))));
+  const d: N = dither();
+  mat.maskNode = d.lessThan(fade.y).and(d.greaterThanEqual(fade.x));
+  const tex: N = texture(model.leaf, uv());
+  const texN: N = model.leafN ? texture(model.leafN, uv()) : vec4(0.5, 1, 0.5, 0.5);
+  // the normal in the rock's frame, turned with the instance: the world's
+  const world: N = I.turn(texN.rgb.mul(2).sub(1)).normalize();
+  const moss: N = smoothstep(0.5, 0.82, world.y.mul(0.7).add(texN.a.mul(0.5))).mul(look.moss ?? 1);
+  const shade: N = mix(0.82, 1.12, I.tint);
+  const albedo: N = mix(tex.rgb.mul(shade).mul(vec3(...(look.tint ?? [1, 1, 1]))), vec3(0.075, 0.115, 0.035).mul(tex.g.mul(1.6).add(0.45)), moss).mul(mix(1, 0.62, wet));
+  mat.colorNode = vec4(albedo, 1);
+  mat.roughnessNode = mix(mix(0.88, 0.97, moss), 0.32, wet.mul(0.85));
+  mat.normalNode = (cameraViewMatrix as N).mul(vec4(world, 0)).xyz.normalize();
   return mat;
 }
 
@@ -386,9 +430,13 @@ function impostorMaterial(model: PlantModel, look: PlantLook, span: Span) {
   const view: N = floor(fract(az.mul(1 / (2 * Math.PI)).add(1 / 16)).mul(8));
   const cell: N = varying(vec4(C.x.add(view.mul(C.z)), C.y, C.z, C.w));
   const coord: N = vec2(cell.x.add(uv().x.mul(cell.z)), cell.y.add(float(1).sub(uv().y).mul(cell.w)));
-  const fade: N = varying(vec2(float(1).sub(smoothstep(S.x.sub(S.y), S.x, I.dist)), mix(0.45, 0.25, smoothstep(150, 600, I.dist))));
+  // (z: how much of the card's height is drawn. Far away the texture's small mips mix a view with the cells around
+  // it, and the trunk's foot of the variant in the row above showed as a dot in the air over every distant tree)
+  const fade: N = varying(
+    vec3(float(1).sub(smoothstep(S.x.sub(S.y), S.x, I.dist)), mix(0.45, 0.25, smoothstep(150, 600, I.dist)), mix(1.0, 0.93, smoothstep(230, 600, I.dist))),
+  );
   const tex: N = texture(model.imp!, coord);
-  mat.maskNode = tex.a.greaterThan(fade.y).and(dither().greaterThanEqual(fade.x));
+  mat.maskNode = tex.a.greaterThan(fade.y).and(dither().greaterThanEqual(fade.x)).and(uv().y.lessThan(fade.z));
   const hue: N = mix(vec3(0.8, 0.9, 0.74), vec3(1.14, 1.06, 0.9), I.tint).mul(vec3(...(look.tint ?? [1, 1, 1])));
   const albedo: N = tex.rgb.mul(mix(vec3(1), hue, 0.85)).mul(mix(1, 0.68, wet));
   mat.colorNode = vec4(albedo, 1);
@@ -457,6 +505,10 @@ export interface ForestOptions {
   /** side of a chunk (m) */
   chunk?: number;
   receiveShadow?: boolean;
+  /** most instances a mesh of each level holds (lod0, lod1, lod2, shadow) */
+  capacity?: [number, number, number, number];
+  /** how far the viewer moves before a level's instances are picked again (m; lod0, lod1, lod2, shadow) */
+  strides?: [number, number, number, number];
 }
 
 interface Chunk {
@@ -506,6 +558,8 @@ export class Forest {
   private impostorMeshes: { mesh: THREE.Mesh; count: number }[] = [];
   private reach = uniform(0);
   private materials = new Map<number, THREE.Material>();
+  /** every mesh is in the scene, empty or not (see `vegetationHold`) */
+  private showingAll = true;
   count = 0;
 
   constructor(private readonly species: ForestSpecies[], plants: Planted[], opts: ForestOptions) {
@@ -555,7 +609,7 @@ export class Forest {
       const near = shadow ? 0 : bounds[l], far = shadow ? opts.shadows : bounds[l + 1];
       // (the last mesh level without impostors behind it fades out into nothing over a long band)
       const span = uniform(new THREE.Vector4(near, l === 0 ? 0 : band(near), far, l === 2 && !impostors ? far * 0.3 : band(far)));
-      const level: Level = { near: near - (l === 0 ? 0 : band(near)), far, stride: STRIDES[l], at: new THREE.Vector3(1e9, 0, 0), meshes: [] };
+      const level: Level = { near: near - (l === 0 ? 0 : band(near)), far, stride: (opts.strides ?? STRIDES)[l], at: new THREE.Vector3(1e9, 0, 0), meshes: [] };
       this.levels.push(level);
       if (far <= near) continue;
       species.forEach((sp, si) => {
@@ -564,7 +618,7 @@ export class Forest {
           const n = total.get(k) ?? 0;
           const base = variant.lods[shadow ? 2 : l];
           if (!n || !base) return;
-          const capacity = Math.min(n, CAPACITY[l]);
+          const capacity = Math.min(n, (opts.capacity ?? CAPACITY)[l]);
           const { geo, data } = instanced(base, capacity);
           const mat = shadow ? shadowMaterial(sp.model, sp.look, this.reach) : this.material(si, l, span);
           const mesh = new THREE.Mesh(geo, mat as unknown as THREE.Material);
@@ -615,13 +669,17 @@ export class Forest {
     let m = this.materials.get(key);
     if (!m) {
       const sp = this.species[species];
-      m = plantMaterial(sp.model, sp.look, span) as unknown as THREE.Material;
+      m = (sp.look.kind === 'rock' ? rockMaterial : plantMaterial)(sp.model, sp.look, span) as unknown as THREE.Material;
       this.materials.set(key, m);
     }
     return m;
   }
 
   update(camera: THREE.Vector3) {
+    if (this.showingAll && !held) {
+      this.showingAll = false;
+      for (const lv of this.levels) for (const lm of lv.meshes) lm.mesh.visible = lm.n > 0;
+    }
     for (const lv of this.levels) {
       if (!lv.meshes.length || lv.at.distanceToSquared(camera) < lv.stride * lv.stride) continue;
       lv.at.copy(camera);
@@ -648,7 +706,7 @@ export class Forest {
       }
       for (const lm of lv.meshes) {
         lm.geo.instanceCount = lm.n;
-        lm.mesh.visible = lm.n > 0;
+        lm.mesh.visible = lm.n > 0 || this.showingAll;
         if (!lm.n) continue;
         lm.data.clearUpdateRanges();
         lm.data.addUpdateRange(0, lm.n * STRIDE);

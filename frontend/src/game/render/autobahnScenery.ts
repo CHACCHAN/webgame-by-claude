@@ -940,12 +940,13 @@ export function buildAutobahnScenery(track: Track, terrain: TerrainData, quality
     },
   });
   group.add(trees);
-  group.add(
-    buildClutter(track, terrain, quality.treeDensity * 0.6, () => null, keepOut, {
-      accept: (s, lat) => !inRanges(s, bridges, 10) && (lat > 0 ? lat > E + 7 && !inGap(s) : lat < OUT - 3),
-      rocks: false,
-    }),
-  );
+  const clutter = buildClutter(track, terrain, quality.treeDensity * 0.6, () => null, keepOut, {
+    accept: (s, lat) => !inRanges(s, bridges, 10) && (lat > 0 ? lat > E + 7 && !inGap(s) : lat < OUT - 3),
+    rocks: false,
+    vegetation: quality.vegetation,
+    style: 'autobahn',
+  });
+  group.add(clutter);
   const turbines = buildTurbines(terrain);
   group.add(turbines.group);
 
@@ -970,6 +971,7 @@ export function buildAutobahnScenery(track: Track, terrain: TerrainData, quality
     update(time, cameraPos) {
       vegetationFrame(time, cameraPos);
       updateTreeLods(trees, cameraPos);
+      updateTreeLods(clutter, cameraPos);
       turbines.update(time);
       traffic.update(time, cameraPos);
     },

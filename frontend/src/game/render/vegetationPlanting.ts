@@ -1,4 +1,7 @@
+import * as THREE from 'three';
 import type { TerrainData } from '../track/terrain';
+import type { Track } from '../track/Track';
+import { SHOULDER } from '../track/roadGeometry';
 import type { Landform } from '../track/landforms';
 import type { CourseStyle } from '../track/courses';
 import { clamp, noise2, rng, smoothstep } from '../util/math';
@@ -32,6 +35,18 @@ export const SPECIES: Record<string, SpeciesDef> = {
   fichte: { look: { tint: [1, 1, 1], translucency: 0.6 }, scale: [0.75, 1.2], bare: 2 },
   // Birke: the edges of those forests and the copses in the fields
   birke: { look: { tint: [1, 1, 1], translucency: 1.4 }, scale: [0.7, 1.1], bare: 4 },
+  // 藪: the bushes of the roadside
+  yabu: { look: { translucency: 0.9, wind: 0.5 }, scale: [0.55, 1.25], bare: 0 },
+  // 笹: bamboo grass, as thickets among the bushes and as undergrowth
+  sasa: { look: { translucency: 1.1, wind: 0.6 }, scale: [0.75, 1.4], bare: 0 },
+  // 岩: boulders and stones
+  iwa: { look: { kind: 'rock', moss: 1 }, scale: [0.3, 1.25], bare: 0 },
+  // 草: grass tufts
+  kusa: { look: { translucency: 1.2, wind: 0.8 }, scale: [0.55, 1.15], bare: 0 },
+  // ススキ: the tall grass along the rails
+  susuki: { look: { translucency: 1.2, wind: 1 }, scale: [0.55, 1.0], bare: 0 },
+  // シダ: ferns
+  shida: { look: { translucency: 1.2, wind: 0.5 }, scale: [0.7, 1.3], bare: 0 },
 };
 
 /** the trees of a course, by its style (a species without a model is left out) */
@@ -40,9 +55,14 @@ export const TREE_SETS: Record<CourseStyle, string[]> = {
   autobahn: ['fichte', 'buna', 'birke'],
 };
 
-/** the model files a course of this style needs */
-export function vegetationFiles(style: CourseStyle) {
-  return [...TREE_SETS[style]];
+/** bushes and rocks beside the road (`buildClutter`) */
+export const COVER_SET = ['yabu', 'sasa', 'iwa'];
+/** what grows on the ground near the road */
+export const UNDER_SET = ['kusa', 'susuki', 'shida', 'sasa'];
+
+/** the model files a course of this style needs (`undergrowth`: the quality has any) */
+export function vegetationFiles(style: CourseStyle, undergrowth = true) {
+  return [...new Set([...TREE_SETS[style], ...COVER_SET, ...(undergrowth ? UNDER_SET : [])])];
 }
 
 /** the species of `ids` whose model is loaded */
@@ -196,4 +216,125 @@ export function plantTrees(terrain: TerrainData, density: number, style: CourseS
   });
   opts.extra?.((x, z, scale) => add(x, z, scale, roadDist(x, z)));
   return out;
+}
+
+export interface CoverOptions {
+  /** the autobahn's: where along / beside the road (+ = right) anything may go */
+  accept?: (s: number, lateral: number) => boolean;
+  rocks?: boolean;
+  /** undergrowth per metre of road, relative (0: none) */
+  undergrowth: number;
+  style: CourseStyle;
+}
+
+/**
+ * Bushes and rocks along the road, and the undergrowth near it (grass at the edge, tall grass by the rails, ferns and
+ * bamboo grass further in), placed in the road's own coordinates: `cover` and `under` index into `coverIds` / `underIds`.
+ */
+export function plantCover(
+  track: Track,
+  terrain: TerrainData,
+  density: number,
+  keepOut: { x: number; z: number; r: number }[],
+  coverIds: string[],
+  underIds: string[],
+  opts: CoverOptions,
+): { cover: Planted[]; under: Planted[] } {
+  const cover: Planted[] = [], under: Planted[] = [];
+  const lf = terrain.landform;
+  const r = rng(77);
+  const p = new THREE.Vector3();
+  const touge = opts.style !== 'autobahn';
+
+  /** the ground at a spot beside the road, or null where nothing grows */
+  const spot = (s: number, lateral: number, tidyStart: boolean) => {
+    const i = clamp(Math.round(s), 0, track.count - 1);
+    if (track.zone[i] === 'bridge' || track.zone[i] === 'rockshed') return null;
+    // keep the summit start area (garage, grid) tidy
+    if (tidyStart && s < track.startS + 45 && Math.abs(lateral) < 16) return null;
+    if (opts.accept && !opts.accept(s, lateral)) return null;
+    track.pointAt(s, lateral, p);
+    const x = p.x, z = p.z;
+    if (keepOut.some((k) => (x - k.x) ** 2 + (z - k.z) ** 2 < k.r * k.r)) return null;
+    const y = terrain.heightAt(x, z);
+    if (Math.abs(y - p.y) > 14) return null;
+    if (lf.waterLevel !== null && y < lf.waterLevel + 0.4) return null;
+    const gx = (terrain.heightAt(x + 1.5, z) - terrain.heightAt(x - 1.5, z)) / 3;
+    const gz = (terrain.heightAt(x, z + 1.5) - terrain.heightAt(x, z - 1.5)) / 3;
+    return { x, y, z, steep: Math.hypot(gx, gz) };
+  };
+  const put = (list: Planted[], ids: string[], id: string, g: { x: number; y: number; z: number; steep: number }, size: number, sink: number) => {
+    const species = ids.indexOf(id);
+    if (species < 0) return;
+    const def = SPECIES[id];
+    const scale = (def.scale[0] + (def.scale[1] - def.scale[0]) * r()) * size;
+    list.push({
+      species,
+      variant: Math.floor(r() * 8),
+      x: g.x,
+      y: g.y - sink * scale,
+      z: g.z,
+      yaw: r() * Math.PI * 2,
+      scale,
+      girth: 0.85 + r() * 0.4,
+      tint: clamp(0.5 + noise2(g.x / 40, g.z / 40) * 0.45 + (r() - 0.5) * 0.5, 0, 1),
+      seed: r(),
+    });
+  };
+
+  // bushes and rocks
+  const count = Math.round(9000 * density * (track.length / 3300));
+  for (let k = 0; k < count; k++) {
+    const s = r() * track.length;
+    const side = r() < 0.5 ? -1 : 1;
+    const off = track.width[clamp(Math.round(s), 0, track.count - 1)] / 2 + SHOULDER + 1.4 + r() ** 2 * 22;
+    const g = spot(s, side * off, true);
+    if (!g) continue;
+    const rock = touge && (g.steep > 0.9 || r() < 0.18);
+    if (rock) {
+      if (opts.rocks === false) continue;
+      // boulders are half buried, more so in a slope: on the cuttings they read as outcrops
+      put(cover, coverIds, 'iwa', g, 1, 0.12 + Math.min(g.steep, 1.5) * 0.3);
+    } else if (g.steep < 1.3) {
+      const thicket = noise2(g.x / 55 + 3, g.z / 55 - 8) > 0.15;
+      // (small at the road's edge: nothing reaches over the kerb)
+      const reach = off - track.width[clamp(Math.round(s), 0, track.count - 1)] / 2 - SHOULDER;
+      put(cover, coverIds, thicket && r() < 0.7 ? 'sasa' : 'yabu', g, clamp(reach / 3.5, 0.45, 1), 0.04 + g.steep * 0.12);
+    }
+  }
+
+  // the undergrowth: strips beside the road, metre by metre
+  const u = opts.undergrowth;
+  if (u > 0 && underIds.length) {
+    for (let s = 0; s < track.length; s += 1) {
+      const e0 = track.width[clamp(Math.round(s), 0, track.count - 1)] / 2 + SHOULDER + 0.85;
+      for (const side of [-1, 1]) {
+        const at = (n: number, from: number, to: number, pow: number, pick: (g: { x: number; y: number; z: number; steep: number }, d: number) => string | null) => {
+          for (let k = Math.floor(n * u + r()); k > 0; k--) {
+            const d = from + (to - from) * r() ** pow;
+            const g = spot(s + r(), side * (e0 + d), false);
+            if (!g || g.steep > 1.25) continue;
+            const id = pick(g, d);
+            // (a little into the ground: a sprite's foot is not quite at its card's edge, and the ground slopes)
+            if (id) put(under, underIds, id, g, 1, (id === 'susuki' ? 0.14 : 0.06) + g.steep * 0.08);
+          }
+        };
+        // the verge: grass, and tall grass in patches and right behind the rail
+        at(14, 0, 5, 1, (g, d) => {
+          const tall = g.steep < 0.6 && noise2(g.x / 23 + 40, g.z / 23) > (d < 1.2 ? 0.0 : 0.35);
+          return tall && r() < 0.55 ? 'susuki' : 'kusa';
+        });
+        // further in: thinner, with ferns and bamboo grass where the forest begins
+        at(7, 5, 17, 1.3, (g) => {
+          if (!touge) return noise2(g.x / 30, g.z / 30 + 9) > 0.1 ? 'kusa' : r() < 0.2 ? 'susuki' : null;
+          const k = r();
+          const thicket = noise2(g.x / 55 + 3, g.z / 55 - 8) > 0.15;
+          return thicket && k < 0.5 ? 'sasa' : k < 0.45 ? 'kusa' : k < 0.85 ? 'shida' : 'sasa';
+        });
+        // the forest floor
+        if (touge) at(3.5, 8, 34, 1, () => (r() < 0.65 ? 'shida' : 'sasa'));
+      }
+    }
+  }
+  return { cover, under };
 }

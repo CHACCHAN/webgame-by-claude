@@ -14,6 +14,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import numpy as np  # noqa: E402
 
 import nature_kit as K  # noqa: E402
+from barks import strips  # noqa: E402
 from twigs import Twig, along, curve, srgb  # noqa: E402
 
 GREEN, TIP, OLD, WOOD = srgb('#27421d'), srgb('#4f7030'), srgb('#5a4a26'), srgb('#4a3423')
@@ -48,25 +49,6 @@ def twig(rng):
     return tw.result()
 
 
-def bark_height(rng, h, w):
-    """long fibrous strips that run along the trunk and peel at their edges"""
-    strips = K.fft_noise((h, w), 1.25, rng, stretch=(0.07, 5.0))
-    fibre = K.fft_noise((h, w), 0.7, rng, stretch=(0.05, 10.0))
-    ridged = 1 - np.abs(strips) / 2.0
-    hgt = np.clip(ridged, 0, 1) ** 1.6 * 0.75 + fibre * 0.09 + 0.1
-    return np.clip(hgt, 0, 1)
-
-
-def bark_colour(rng, hgt):
-    crevice, ridge, grey = srgb('#2a1f18'), srgb('#5b4535'), srgb('#6f665c')
-    weather = np.clip(K.fft_noise(hgt.shape, 1.8, rng, stretch=(1.0, 3.0)) * 0.5 + 0.3, 0, 1)[..., None]
-    c = crevice + (ridge - crevice) * (hgt[..., None] ** 1.3)
-    c = c + (grey - c) * weather * 0.5 * hgt[..., None]
-    # a breath of green on the damp side
-    moss = np.clip(K.fft_noise(hgt.shape, 2.2, rng) - 0.9, 0, 1)[..., None]
-    return c + (srgb('#3a4a24') - c) * moss * 0.5
-
-
 def crown(f):
     """bough length by its place up the crown (0 = lowest bough … 1 = the tip)"""
     low = 0.72 + 0.28 * min(1.0, f / 0.14)
@@ -90,8 +72,10 @@ RECIPE = {
     'inner_dark': 0.34, 'volume_normal': 0.72,
 }
 
+BARK = strips('#2a1f18', '#5b4535', '#6f665c')
+
 SPECIES = dict(id='sugi', seed=11, variants=3, recipe=RECIPE, twigs={'twig0': twig, 'twig1': twig}, twig_ao=0.02, alpha_gain=1.6,
-               bark_height=bark_height, bark_colour=bark_colour, bark_relief=2.2, impostor=(128, 384))
+               bark_height=BARK[0], bark_colour=BARK[1], bark_relief=2.2, impostor=(128, 384))
 
 if __name__ == '__main__':
     K.run(SPECIES)
