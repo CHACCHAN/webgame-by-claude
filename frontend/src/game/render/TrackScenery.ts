@@ -959,7 +959,9 @@ export function buildTrees(
     const full = veg.tier === 'full';
     const forest = new Forest(set.species, plantTrees(terrain, density, opts.style ?? 'touge', set.ids, opts), {
       ranges: [full ? 28 * veg.range : 0, (full ? 80 : 60) * veg.range, (full ? 190 : 160) * veg.range],
-      shadows: 100,
+      // (the shadow map is a square of 120 m around the car)
+      shadows: 80,
+      prepass: true,
     });
     group.add(forest.group);
     group.userData.lods = forest;
@@ -1198,7 +1200,7 @@ export function buildClutter(
     const forests = [
       new Forest(coverSet.species, planted.cover, {
         ranges: [full ? 16 * veg.range : 0, 42 * veg.range, 120 * veg.range],
-        shadows: 45,
+        shadows: 30,
         impostors: false,
         capacity: [200, 800, 3000, 800],
       }),
@@ -1207,11 +1209,12 @@ export function buildClutter(
       forests.push(
         new Forest(underSet.species, planted.under, {
           // (what is this small is not seen further away; the density is the quality's, not the reach)
-          ranges: [full ? 9 : 0, 24, 62 * Math.min(veg.range, 1.1)],
+          // two levels only (a draw call costs more than these few triangles): the modelled blades, then crossed cards
+          ranges: [full ? 24 : 0, 24, 62 * Math.min(veg.range, 1.1)],
           shadows: 0,
           impostors: false,
-          capacity: [600, 3000, 12000, 1],
-          strides: [2, 3, 6, 8],
+          capacity: [3000, 3000, 12000, 1],
+          strides: [3, 3, 6, 8],
         }),
       );
     }

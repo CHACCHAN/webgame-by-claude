@@ -12,7 +12,7 @@ import { buildScenery, vendingSpot, type SceneryResult } from './render/TrackSce
 import { buildEnvironment, PRESETS, type EnvironmentRig, type TimeOfDay } from './render/Environment';
 import { CarVisual } from './render/CarVisual';
 import { clearing } from './render/instancing';
-import { loadVegetation, SHADOW_LAYER, vegetationHold, vegetationWeather, type VegetationQuality } from './render/vegetation';
+import { loadVegetation, SHADOW_LAYER, vegetationHold, vegetationLights, vegetationWeather, type VegetationQuality } from './render/vegetation';
 import { vegetationFiles } from './render/vegetationPlanting';
 import { volume, volumeSpot } from './render/volumetricLights';
 import { gpuBytes } from './render/gpuBytes';
@@ -366,6 +366,7 @@ export class Game {
     this.lights = new LightRig(this.quality);
     // (the trees' shadow meshes are drawn into this light's shadow map only)
     this.lights.key.shadow.camera.layers.enable(SHADOW_LAYER);
+    vegetationLights(this.lights.key, this.lights.hemi);
     this.root.add(this.lights.group);
     this.scene.fog = this.lights.fog;
     for (let i = 0; i < this.lights.lamps.length; i++) this.lampSlots.push(-1);

@@ -34,7 +34,7 @@ export const SPECIES: Record<string, SpeciesDef> = {
   // Fichte (Norway spruce): the autobahn's forests
   fichte: { look: { tint: [1, 1, 1], translucency: 0.6 }, scale: [0.75, 1.2], bare: 2 },
   // Birke: the edges of those forests and the copses in the fields
-  birke: { look: { tint: [1, 1, 1], translucency: 1.4 }, scale: [0.7, 1.1], bare: 4 },
+  birke: { look: { tint: [0.78, 0.84, 0.74], translucency: 1.1 }, scale: [0.7, 1.1], bare: 4 },
   // 藪: the bushes of the roadside
   yabu: { look: { translucency: 0.9, wind: 0.5 }, scale: [0.55, 1.25], bare: 0 },
   // 笹: bamboo grass, as thickets among the bushes and as undergrowth
@@ -56,7 +56,7 @@ export const TREE_SETS: Record<CourseStyle, string[]> = {
 };
 
 /** bushes and rocks beside the road (`buildClutter`), by the course's style */
-export const COVER_SETS: Record<CourseStyle, string[]> = { touge: ['yabu', 'sasa', 'iwa'], autobahn: ['yabu', 'sasa'] };
+export const COVER_SETS: Record<CourseStyle, string[]> = { touge: ['yabu', 'sasa', 'iwa'], autobahn: ['yabu'] };
 /** what grows on the ground near the road */
 export const UNDER_SETS: Record<CourseStyle, string[]> = { touge: ['kusa', 'susuki', 'shida', 'sasa'], autobahn: ['kusa', 'susuki'] };
 
@@ -86,6 +86,8 @@ export function cityWeight(lf: Landform, x: number, z: number) {
 
 /** a tree further than this from the road (m) never comes within the mesh levels' reach: an impostor only */
 const FAR = 330;
+/** a tree further than this from the road (m) throws no shadow: it would fall deep inside the forest, unseen (nearer, the forest shades itself: its inside is dark) */
+const SHADE = 60;
 
 export interface TreeOptions {
   /** nearest a trunk stands to the centreline (m; default the mountain road's 10.5) */
@@ -145,8 +147,9 @@ export function plantTrees(terrain: TerrainData, density: number, style: CourseS
     if (opts.keep && !opts.keep(x, z)) return;
     const y = terrain.heightAt(x, z);
     if (lf.waterLevel !== null && y < lf.waterLevel + 3) return;
-    // thinning out towards the tree line, none above it
-    if (y > lf.treeLine + noise2(x / 90, z / 90) * 40) return;
+    // thinning out towards the tree line (over 70 m of height, in patches), none above it
+    const above = y - (lf.treeLine + noise2(x / 90, z / 90) * 40);
+    if (above > 0 || (above > -70 && r() < ((above + 70) / 70) ** 1.5 * 0.9)) return;
     if (lf.relief(x, z) < 0.25 || cityWeight(lf, x, z) > 0.2) return;
     const dx = terrain.heightAt(x + 3, z) - terrain.heightAt(x - 3, z);
     const dz = terrain.heightAt(x, z + 3) - terrain.heightAt(x, z - 3);
@@ -168,8 +171,14 @@ export function plantTrees(terrain: TerrainData, density: number, style: CourseS
       scale,
       girth: 0.88 + r() * 0.26,
       tint: clamp(0.5 + noise2(x / 60, z / 60) * 0.5 + (r() - 0.5) * 0.5, 0, 1),
+      // (the hillside's normal: a forest on the side away from the sun is in the mountain's shade)
+      nx: -dx / 6 / Math.hypot(dx / 6, dz / 6, 1),
+      nz: -dz / 6 / Math.hypot(dx / 6, dz / 6, 1),
       seed: r(),
       far: d > FAR,
+      // (a tree's shadow is seen where it falls on the road and the verge)
+      casts: d < SHADE,
+      order: Math.min(d, 1e5),
     });
   };
   /** (beyond the road's reach the terrain has no distance: far away) */
@@ -263,7 +272,7 @@ export function plantCover(
     const gz = (terrain.heightAt(x, z + 1.5) - terrain.heightAt(x, z - 1.5)) / 3;
     return { x, y, z, steep: Math.hypot(gx, gz) };
   };
-  const put = (list: Planted[], ids: string[], id: string, g: { x: number; y: number; z: number; steep: number }, size: number, sink: number) => {
+  const put = (list: Planted[], ids: string[], id: string, g: { x: number; y: number; z: number; steep: number }, size: number, sink: number, casts = false) => {
     const species = ids.indexOf(id);
     if (species < 0) return;
     const def = SPECIES[id];
@@ -279,6 +288,7 @@ export function plantCover(
       girth: 0.85 + r() * 0.4,
       tint: clamp(0.5 + noise2(g.x / 40, g.z / 40) * 0.45 + (r() - 0.5) * 0.5, 0, 1),
       seed: r(),
+      casts,
     });
   };
 
@@ -291,15 +301,17 @@ export function plantCover(
     const g = spot(s, side * off, true);
     if (!g) continue;
     const rock = touge && (g.steep > 0.9 || r() < 0.18);
+    // (how far from the road's edge: only the first rows' shadows are seen)
+    const reach = off - track.width[clamp(Math.round(s), 0, track.count - 1)] / 2 - SHOULDER;
     if (rock) {
       if (opts.rocks === false) continue;
       // boulders are half buried, more so in a slope: on the cuttings they read as outcrops
-      put(cover, coverIds, 'iwa', g, 1, 0.12 + Math.min(g.steep, 1.5) * 0.3);
+      put(cover, coverIds, 'iwa', g, 1, 0.12 + Math.min(g.steep, 1.5) * 0.3, reach < 12);
     } else if (g.steep < 1.3) {
       const thicket = noise2(g.x / 55 + 3, g.z / 55 - 8) > 0.15;
       // (small at the road's edge: nothing reaches over the kerb)
-      const reach = off - track.width[clamp(Math.round(s), 0, track.count - 1)] / 2 - SHOULDER;
-      put(cover, coverIds, thicket && r() < 0.7 ? 'sasa' : 'yabu', g, clamp(reach / 3.5, 0.45, 1), 0.04 + g.steep * 0.12);
+      // (bamboo grass is the Japanese passes')
+      put(cover, coverIds, thicket && r() < 0.7 && coverIds.includes('sasa') ? 'sasa' : 'yabu', g, clamp(reach / 3.5, 0.45, 1), 0.04 + g.steep * 0.12, reach < 8);
     }
   }
 

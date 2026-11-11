@@ -97,7 +97,7 @@ export function qualityProfile(level: QualityLevel, scale: number): QualityProfi
     low: { pixelRatio: 0.75, shadows: false, shadowMapSize: 1024, treeDensity: 0.45, headlightShadows: false, bloom: false, smaa: false, extraFx: false, ao: false, volumetric: false, photoTextures: false, treeLod: 240, surfaceDetail: 0, vegetation: { tier: 'legacy', range: 1, undergrowth: 0 } },
     medium: { pixelRatio: 1, shadows: true, shadowMapSize: 1024, treeDensity: 0.7, headlightShadows: false, bloom: true, smaa: true, extraFx: false, ao: false, volumetric: false, photoTextures: true, treeLod: 380, surfaceDetail: 1, vegetation: { tier: 'lite', range: 0.8, undergrowth: 0.5 } },
     high: { pixelRatio: Math.min(dpr, 1.5), shadows: true, shadowMapSize: 2048, treeDensity: 1, headlightShadows: true, bloom: true, smaa: true, extraFx: true, ao: true, volumetric: true, photoTextures: true, treeLod: 560, surfaceDetail: 2, vegetation: { tier: 'full', range: 1, undergrowth: 1 } },
-    ultra: { pixelRatio: Math.min(dpr, 2), shadows: true, shadowMapSize: 4096, treeDensity: 1.35, headlightShadows: true, bloom: true, smaa: true, extraFx: true, ao: true, volumetric: true, photoTextures: true, treeLod: 720, surfaceDetail: 3, vegetation: { tier: 'full', range: 1.2, undergrowth: 1.4 } },
+    ultra: { pixelRatio: Math.min(dpr, 2), shadows: true, shadowMapSize: 4096, treeDensity: 1.25, headlightShadows: true, bloom: true, smaa: true, extraFx: true, ao: true, volumetric: true, photoTextures: true, treeLod: 720, surfaceDetail: 3, vegetation: { tier: 'full', range: 1.2, undergrowth: 1.4 } },
   };
   const p = base[level];
   return { ...p, pixelRatio: p.pixelRatio * scale };

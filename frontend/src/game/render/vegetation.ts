@@ -3,7 +3,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import { MeshBasicNodeMaterial, MeshSSSNodeMaterial, MeshStandardNodeMaterial } from 'three/webgpu';
 import {
-  Fn, atan, attribute, cameraViewMatrix, cos, float, floor, fract, max, mix, normalLocal, normalViewGeometry, positionLocal, positionPrevious,
+  Fn, atan, attribute, cameraViewMatrix, cos, float, floor, fract, lights, max, mix, normalLocal, normalViewGeometry, positionLocal, positionPrevious,
   positionView, screenCoordinate, sin, smoothstep, step, texture, uniform, uv, varying, vec2, vec3, vec4,
 } from 'three/tsl';
 import { clearing } from './instancing';
@@ -22,6 +22,22 @@ import { clearing } from './instancing';
  *
  * Draw calls: one per variant and level that has trees in range, one per species for the impostors, and one per
  * variant in the moon's / sun's shadow map only (the lod2 mesh on `SHADOW_LAYER`: the detailed levels throw none).
+ *
+ * What the forest costs is the pixels, not the triangles (measured on the RX 5700 XT: hiding the 2.4 million
+ * triangles of the nearest level changed nothing, the trees behind them were shaded instead): cards over cards,
+ * each pixel lit by every light of the scene. So the vegetation is drawn before everything else and from the
+ * viewer outwards (`renderOrder` by level, the plants of a level nearest first, the impostors by their distance
+ * from the road, where the viewer is), which lets the depth test throw the hidden layers away unshaded; the far
+ * levels take no shadows, the impostors only the sun / moon and the sky; and only the plants that stand near the
+ * road throw shadows (`Planted.casts`), the trees as a closed hull of their crown with holes from a noise (no
+ * texture, one layer): a shadow map full of cutout cards cost 10 ms.
+ *
+ * And the trees are drawn twice (`ForestOptions.prepass`). A fragment that the cutout throws away still runs its
+ * whole shader (WebGPU's `discard` only marks it), so every transparent corner of every card in front of a leaf paid
+ * for the scene's twelve lights: 5.6 ms of a 11 ms scene. The first pass draws the cutout with the leaf's colour under
+ * the sky's light alone (cheap, and it writes the depth and the motion vectors); the second draws the same triangles
+ * lit, without a cutout, where the depth is equal: exactly the pixels that are seen. Where a driver rounds the two
+ * shaders' depths differently a pixel keeps the first pass' flat colour: no holes.
  */
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -78,6 +94,25 @@ export function vegetationHold(on: boolean) {
   held = on;
 }
 
+/** the sun / moon and the sky's light (`LightRig`): all that the impostors are lit by (unset: every light of the scene) */
+let farLights: THREE.Light[] | null = null;
+/** the sky's light as a colour, for the first of the trees' two passes */
+const skyColor = new THREE.Color(0.02, 0.02, 0.02);
+const skyLight = (uniform(skyColor) as N).onFrameUpdate(() => {
+  const sky = farLights?.[1];
+  // (a surface under a hemisphere light gets its colour × intensity / π at most: a crown's inside about half of that)
+  return sky ? skyColor.copy(sky.color).multiplyScalar(sky.intensity * 0.16) : skyColor;
+});
+/** where the sun / moon stands (the direction towards it), for the shade of a hillside that faces away from it */
+const keyAt = new THREE.Vector3(0, 1, 0);
+const keyDir = (uniform(keyAt) as N).onFrameUpdate(() => {
+  const key = farLights?.[0] as THREE.DirectionalLight | undefined;
+  return key ? keyAt.copy(key.position).sub(key.target.position).normalize() : keyAt;
+});
+export function vegetationLights(key: THREE.DirectionalLight, sky: THREE.Light) {
+  farLights = [key, sky];
+}
+
 export function vegetationWeather(rain: number) {
   wet.value = rain;
   windPower.value = 0.55 + 0.8 * rain;
@@ -98,6 +133,8 @@ interface Variant {
   /** lod0 (null in the lite set), lod1, lod2 */
   lods: (THREE.BufferGeometry | null)[];
   impostor: ImpostorFrame | null;
+  /** trees: the crown and trunk as one closed shape, for the shadow map */
+  hull: THREE.BufferGeometry | null;
 }
 
 export interface PlantModel {
@@ -165,7 +202,7 @@ function parse(id: string, scene: THREE.Object3D): PlantModel {
     const m = /^v(\d+)_(lod(\d)|imp)/.exec(name);
     if (!m) return;
     const k = +m[1];
-    const variant = (model.variants[k] ??= { lods: [null, null, null], impostor: null });
+    const variant = (model.variants[k] ??= { lods: [null, null, null], impostor: null, hull: null });
     const mat = mesh.material as THREE.MeshStandardMaterial;
     if (m[2] === 'imp') {
       const g = plain(mesh);
@@ -189,7 +226,58 @@ function parse(id: string, scene: THREE.Object3D): PlantModel {
     }
   });
   if (!model.variants.length || !model.leaf) throw new Error(`vegetation model ${id}: no variants`);
+  // (what has an impostor is a tree)
+  for (const v of model.variants) if (v.impostor && (v.lods[1] ?? v.lods[2])) v.hull = hullOf((v.lods[1] ?? v.lods[2])!);
   return model;
+}
+
+/**
+ * A tree's shadow shape: rings around the trunk's axis, each as wide as the tree reaches at that height in that
+ * direction (a little less: the cards' corners are air). `veg.a` says where it is crown (the shadow material cuts
+ * its holes there), the other channels as the wind wants them for a stiff part.
+ */
+function hullOf(src: THREE.BufferGeometry) {
+  const BANDS = 9, SECTORS = 7;
+  const pos = src.getAttribute('position');
+  let top = 0.1;
+  for (let i = 0; i < pos.count; i++) top = Math.max(top, pos.getY(i));
+  const reach = new Float32Array(BANDS * SECTORS);
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
+    if (y < 0) continue;
+    const b = Math.min(BANDS - 1, Math.floor((y / top) * BANDS));
+    const sec = Math.min(SECTORS - 1, Math.floor((Math.atan2(z, x) / (2 * Math.PI) + 0.5) * SECTORS));
+    reach[b * SECTORS + sec] = Math.max(reach[b * SECTORS + sec], Math.hypot(x, z));
+  }
+  const p: number[] = [], veg: number[] = [], index: number[] = [];
+  // rings: one on the ground, one in the middle of every band; then the tip
+  for (let ring = 0; ring <= BANDS; ring++) {
+    const b = Math.max(0, ring - 1);
+    let mean = 0;
+    for (let k = 0; k < SECTORS; k++) mean += reach[b * SECTORS + k] / SECTORS;
+    for (let k = 0; k < SECTORS; k++) {
+      // (a direction the tree does not reach into at this height: no deeper a notch than half the ring)
+      const r = Math.max(reach[b * SECTORS + k], mean * 0.5, 0.12) * 0.8;
+      const a = ((k + 0.5) / SECTORS - 0.5) * 2 * Math.PI;
+      p.push(Math.cos(a) * r, ring === 0 ? 0 : ((b + 0.5) / BANDS) * top, Math.sin(a) * r);
+      veg.push(255, 0, 0, r > 0.7 ? 255 : 0);
+    }
+  }
+  p.push(0, top, 0);
+  veg.push(255, 0, 0, 0);
+  for (let ring = 0; ring < BANDS; ring++) {
+    for (let k = 0; k < SECTORS; k++) {
+      const a = ring * SECTORS + k, b = ring * SECTORS + ((k + 1) % SECTORS);
+      index.push(a, a + SECTORS, b, b, a + SECTORS, b + SECTORS);
+    }
+  }
+  for (let k = 0; k < SECTORS; k++) index.push(BANDS * SECTORS + k, (BANDS + 1) * SECTORS, BANDS * SECTORS + ((k + 1) % SECTORS));
+  const out = new THREE.BufferGeometry();
+  out.setAttribute('position', new THREE.BufferAttribute(new Float32Array(p), 3));
+  out.setAttribute('uv', new THREE.BufferAttribute(new Float32Array((p.length / 3) * 2), 2));
+  out.setAttribute('veg', new THREE.BufferAttribute(new Uint8Array(veg), 4, true));
+  out.setIndex(index);
+  return out;
 }
 
 /**
@@ -266,11 +354,26 @@ interface InstanceNodes {
   open: N;
   tint: N;
   seed: N;
+  /**
+   * How much of the sun's / moon's light the plant keeps on its hillside (0.4, an impostor 0.28, on a slope that faces away from a low
+   * sun … 1): the shadow map reaches 60 m, and beyond it a forest on the dark side of a mountain shone like the one
+   * on the lit side (`far`: from where on it counts; nearer, the shadow map and the lamps do the work).
+   */
+  shade: (far: boolean) => N;
 }
 
-/** the instance's two attributes (instA: x, y, z, yaw; instB: height scale, girth, tint, seed) as shader nodes */
+/**
+ * The instance's two attributes as shader nodes. instA: x, y, z, yaw; instB: height scale, girth, the ground's
+ * slope and the tint in one number (`packLook`), variant + seed.
+ */
 function instanceNodes(): InstanceNodes {
   const A: N = attribute('instA', 'vec4'), B: N = attribute('instB', 'vec4');
+  const packed: N = floor(B.z);
+  const sz: N = floor(packed.div(64));
+  // the ground's normal, its horizontal part (6 bits each way)
+  const slope: N = vec2(packed.sub(sz.mul(64)), sz).div(31.5).sub(1);
+  // (how far the slope leans away from the light, as seen from above)
+  const away: N = slope.dot((keyDir as N).xz).negate();
   const foot: N = A.xyz;
   const c: N = cos(A.w), s: N = sin(A.w);
   const turn = (v: N): N => vec3(v.x.mul(c).add(v.z.mul(s)), v.y, v.z.mul(c).sub(v.x.mul(s)));
@@ -281,9 +384,19 @@ function instanceNodes(): InstanceNodes {
     turn,
     place: (v: N) => v.mul(vec3(girth, B.x, girth)),
     open: smoothstep((clearing as N).z.sub(3), (clearing as N).z, foot.xz.sub((clearing as N).xy).length()),
-    tint: B.z,
+    tint: fract(B.z),
     seed: fract(B.w),
+    shade: (far: boolean) => {
+      const dim: N = smoothstep(0.05, 0.45, away).mul(far ? 0.72 : 0.6);
+      return float(1).sub(far ? dim : dim.mul(smoothstep(55, 110, foot.sub(viewer).length())));
+    },
   };
+}
+
+/** the ground's slope under a plant (the normal's x and z) and its tint (0…1) in one float: see `instanceNodes` */
+function packLook(nx: number, nz: number, tint: number) {
+  const q = (v: number) => Math.round((Math.min(1, Math.max(-1, v)) + 1) * 31.5);
+  return q(nx) + q(nz) * 64 + Math.min(0.999, Math.max(0, tint));
 }
 
 /** what a species looks like beyond its textures */
@@ -300,53 +413,86 @@ export interface PlantLook {
   moss?: number;
 }
 
-/** the material of a level's meshes: bark and foliage from the species' one texture pair */
-function plantMaterial(model: PlantModel, look: PlantLook, span: Span) {
-  const mat = new MeshSSSNodeMaterial();
-  mat.side = THREE.DoubleSide;
-  mat.metalness = 0;
-  mat.envMapIntensity = 0.3;
+/** what the picture's material and the depth-only one share: where a vertex goes and the cutout */
+function plantNodes(model: PlantModel, look: PlantLook, span: Span) {
   const I = instanceNodes();
   const veg: N = attribute('veg', 'vec4');
   const S: N = span;
   const windK = look.wind ?? 1;
-  mat.positionNode = Fn(() => {
-    // outside the level's span (and inside the garage's clearing) the instance is drawn at no size, at its foot
-    const size: N = I.open.mul(step(S.x.sub(S.y), I.dist)).mul(step(I.dist, S.z));
-    const lp: N = I.place(positionLocal).toVar();
-    const at: N = I.foot.add(I.turn(lp)).toVar();
-    (normalLocal as N).assign(I.turn(normalLocal));
-    (positionPrevious as N).assign(mix(I.foot, at.add(windPush(lp, veg, I.foot, I.seed, windBefore).mul(windK)), size));
-    return mix(I.foot, at.add(windPush(lp, veg, I.foot, I.seed, windNow).mul(windK)), size);
-  })();
+  const position = (motion: boolean): N =>
+    Fn(() => {
+      // outside the level's span (and inside the garage's clearing) the instance is drawn at no size, at its foot
+      const size: N = I.open.mul(step(S.x.sub(S.y), I.dist)).mul(step(I.dist, S.z));
+      const lp: N = I.place(positionLocal).toVar();
+      const at: N = I.foot.add(I.turn(lp)).toVar();
+      (normalLocal as N).assign(I.turn(normalLocal));
+      if (motion) (positionPrevious as N).assign(mix(I.foot, at.add(windPush(lp, veg, I.foot, I.seed, windBefore).mul(windK)), size));
+      return mix(I.foot, at.add(windPush(lp, veg, I.foot, I.seed, windNow).mul(windK)), size);
+    })();
   // per instance, worked out in the vertex stage: the dither's two thresholds and the cutout's (far cards keep
   // their thin twigs: a mip's alpha is the coverage, and half of it would leave the crown bald)
   const fade: N = varying(
     vec3(float(1).sub(smoothstep(S.x.sub(S.y), S.x, I.dist)), float(1).sub(smoothstep(S.z.sub(S.w), S.z, I.dist)), mix(0.5, 0.26, smoothstep(5, 50, I.dist))),
   );
   const tex: N = texture(model.leaf, uv());
-  const texN: N = model.leafN ? texture(model.leafN, uv()) : vec4(0.5, 0.5, 1, 1);
   const d: N = dither();
-  mat.maskNode = tex.a.greaterThan(fade.z).and(d.lessThan(fade.y)).and(d.greaterThanEqual(fade.x));
+  const mask: N = tex.a.greaterThan(fade.z).and(d.lessThan(fade.y)).and(d.greaterThanEqual(fade.x));
+  // x: the hillside's shade; y: 0 near … 1 beyond the shadow map's reach, where nothing stands between a tree and
+  // the sun in this picture: there the light through the leaves and the wet shine are taken back (a whole forest
+  // glowed against a low sun, and glittered under the moon in the rain)
+  const lit: N = varying(vec2(I.shade(false), smoothstep(50, 110, I.dist)));
+  return { I, veg, position, mask, tex, shade: lit.x, far: lit.y };
+}
+
+/**
+ * The material of a level's meshes: bark and foliage from the species' one texture pair. `second`: the lit pass of
+ * two (see the file's header): no cutout, only where the first pass left this very depth.
+ */
+function plantMaterial(model: PlantModel, look: PlantLook, span: Span, second = false) {
+  const mat = new MeshSSSNodeMaterial();
+  mat.side = THREE.DoubleSide;
+  mat.metalness = 0;
+  mat.envMapIntensity = 0.3;
+  const { I, veg, position, mask, tex, shade, far } = plantNodes(model, look, span);
+  mat.positionNode = position(true);
+  const texN: N = model.leafN ? texture(model.leafN, uv()) : vec4(0.5, 0.5, 1, 1);
+  if (second) {
+    mat.depthFunc = THREE.EqualDepth;
+    mat.depthWrite = false;
+  } else mat.maskNode = mask;
   const leaf: N = texN.a;
   const hue: N = mix(vec3(0.8, 0.9, 0.74), vec3(1.14, 1.06, 0.9), I.tint).mul(vec3(...(look.tint ?? [1, 1, 1])));
   const ao: N = veg.r;
   const albedo: N = tex.rgb
     .mul(mix(vec3(1), hue, leaf.mul(0.75).add(0.25)))
     .mul(ao.mul(0.6).add(0.4))
-    .mul(mix(1, 0.68, wet));
+    .mul(mix(1, 0.68, wet))
+    .mul(shade);
   mat.colorNode = vec4(albedo, 1);
-  mat.roughnessNode = mix(mix(0.92, 0.72, leaf), 0.3, wet.mul(0.85));
+  // (wet leaves shine, but not as mirrors: at 0.3 a forest in the rain glittered white under the moon)
+  mat.roughnessNode = mix(mix(0.92, 0.72, leaf), 0.46, wet.mul(0.85).mul(float(1).sub(far)));
   mat.aoNode = ao;
   const n: N = texN.rgb.mul(2).sub(1);
   mat.normalNode = perturb(normalViewGeometry, vec3(n.xy.mul(1.2), n.z), uv());
   // light through the leaves: the crown's rim glows against the sun, a lamp, headlights
-  mat.thicknessColorNode = albedo.mul(leaf).mul((look.translucency ?? 1) * 1.6);
+  mat.thicknessColorNode = albedo.mul(leaf).mul((look.translucency ?? 1) * 1.6).mul(mix(1, 0.2, far));
   mat.thicknessDistortionNode = float(0.4);
   mat.thicknessAmbientNode = float(0);
   mat.thicknessAttenuationNode = float(1);
   mat.thicknessPowerNode = float(3);
   mat.thicknessScaleNode = float(2);
+  return mat;
+}
+
+/** The first of a tree level's two passes: the cutout, the depth, the motion vectors, and the colour under the sky's light. */
+function firstMaterial(model: PlantModel, look: PlantLook, span: Span) {
+  const mat = new MeshBasicNodeMaterial();
+  mat.side = THREE.DoubleSide;
+  const { I, veg, position, mask, tex, shade } = plantNodes(model, look, span);
+  mat.positionNode = position(true);
+  mat.maskNode = mask;
+  const hue: N = mix(vec3(0.8, 0.9, 0.74), vec3(1.14, 1.06, 0.9), I.tint).mul(vec3(...(look.tint ?? [1, 1, 1])));
+  mat.colorNode = vec4(tex.rgb.mul(hue).mul(veg.r.mul(0.6).add(0.4)).mul(mix(1, 0.68, wet)).mul(shade).mul(skyLight), 1);
   return mat;
 }
 
@@ -380,10 +526,14 @@ function rockMaterial(model: PlantModel, look: PlantLook, span: Span) {
   return mat;
 }
 
-/** the material of the shadow meshes: only where the vertex goes and the cutout */
-function shadowMaterial(model: PlantModel, look: PlantLook, reach: Reach) {
+/**
+ * The material of the shadow meshes: only where the vertex goes and the cutout. `hull`: a tree's closed shape
+ * (`hullOf`), one side of it, with holes where a noise in the tree's own space says so (the light that falls through
+ * a crown, without a texture to read per texel).
+ */
+function shadowMaterial(model: PlantModel, look: PlantLook, reach: Reach, hull: boolean) {
   const mat = new MeshBasicNodeMaterial();
-  mat.side = THREE.DoubleSide;
+  mat.side = hull ? THREE.FrontSide : THREE.DoubleSide;
   const I = instanceNodes();
   const veg: N = attribute('veg', 'vec4');
   mat.positionNode = Fn(() => {
@@ -391,7 +541,13 @@ function shadowMaterial(model: PlantModel, look: PlantLook, reach: Reach) {
     const lp: N = I.place(positionLocal).toVar();
     return mix(I.foot, I.foot.add(I.turn(lp)).add(windPush(lp, veg, I.foot, I.seed, windNow).mul(look.wind ?? 1)), size);
   })();
-  mat.maskShadowNode = (texture(model.leaf, uv()) as N).a.greaterThan(0.4);
+  if (hull) {
+    const q: N = varying(positionLocal), crown: N = varying(veg.a);
+    const gaps: N = sin(q.x.mul(4.1).add(q.y.mul(1.3)))
+      .mul(sin(q.z.mul(3.7).sub(q.y.mul(1.9))))
+      .add(sin(q.y.mul(5.3).add(q.x.mul(2.2)).add(q.z.mul(1.7))).mul(0.5));
+    mat.maskShadowNode = gaps.lessThan(mix(9, 0.3, crown));
+  } else mat.maskShadowNode = (texture(model.leaf, uv()) as N).a.greaterThan(0.4);
   return mat;
 }
 
@@ -438,15 +594,18 @@ function impostorMaterial(model: PlantModel, look: PlantLook, span: Span) {
   const tex: N = texture(model.imp!, coord);
   mat.maskNode = tex.a.greaterThan(fade.y).and(dither().greaterThanEqual(fade.x)).and(uv().y.lessThan(fade.z));
   const hue: N = mix(vec3(0.8, 0.9, 0.74), vec3(1.14, 1.06, 0.9), I.tint).mul(vec3(...(look.tint ?? [1, 1, 1])));
-  const albedo: N = tex.rgb.mul(mix(vec3(1), hue, 0.85)).mul(mix(1, 0.68, wet));
+  const albedo: N = tex.rgb.mul(mix(vec3(1), hue, 0.85)).mul(mix(1, 0.68, wet)).mul(varying(I.shade(true)));
   mat.colorNode = vec4(albedo, 1);
-  mat.roughnessNode = mix(0.7, 0.3, wet.mul(0.85));
+  mat.roughnessNode = float(0.8);
   // the baked normal is in the view's frame: right, up, towards the viewer
   const basis: N = varying(vec4(right.x, right.z, dir.x, dir.y));
   const n: N = model.impN ? (texture(model.impN, coord) as N).rgb.mul(2).sub(1) : vec3(0, 0, 1);
   const world: N = vec3(basis.x.mul(n.x).add(basis.z.mul(n.z)), n.y, basis.y.mul(n.x).add(basis.w.mul(n.z)));
   mat.normalNode = (cameraViewMatrix as N).mul(vec4(world, 0)).xyz.normalize();
-  mat.thicknessColorNode = albedo.mul((look.translucency ?? 1) * 1.2);
+  // (a tree this far away is out of the lamps' and the headlights' reach)
+  if (farLights) mat.lightsNode = lights(farLights) as N;
+  // (little: see `plantNodes` on the far trees)
+  mat.thicknessColorNode = albedo.mul((look.translucency ?? 1) * 0.3);
   mat.thicknessDistortionNode = float(0.4);
   mat.thicknessAmbientNode = float(0);
   mat.thicknessAttenuationNode = float(1);
@@ -486,9 +645,16 @@ export interface Planted {
   girth: number;
   /** 0 … 1 across the species' range of leaf colour */
   tint: number;
+  /** the ground's normal under it, x and z (default: level ground) */
+  nx?: number;
+  nz?: number;
   seed: number;
   /** it never comes near the viewer (far from the road): an impostor only */
   far?: boolean;
+  /** it throws a shadow (default: it does). Only what stands by the road should: the others' shadows fall in the forest, unseen */
+  casts?: boolean;
+  /** how far from the road it stands (m): the impostors are drawn in this order, nearest first (see the file's header) */
+  order?: number;
 }
 
 export interface ForestSpecies {
@@ -509,6 +675,8 @@ export interface ForestOptions {
   capacity?: [number, number, number, number];
   /** how far the viewer moves before a level's instances are picked again (m; lod0, lod1, lod2, shadow) */
   strides?: [number, number, number, number];
+  /** the mesh levels are drawn in two passes, the cutout first and the lighting where it is seen (trees: see the file's header) */
+  prepass?: boolean;
 }
 
 interface Chunk {
@@ -517,10 +685,16 @@ interface Chunk {
   radius: number;
   /** per species × variant: the instances' data */
   sets: Map<number, Float32Array>;
+  /** the same of those that throw shadows */
+  casters: Map<number, Float32Array>;
+  /** distance to the viewer at the pick under way */
+  d: number;
 }
 
 interface LevelMesh {
   mesh: THREE.Mesh;
+  /** the first pass' twin (`ForestOptions.prepass`) */
+  pre: THREE.Mesh | null;
   geo: THREE.InstancedBufferGeometry;
   data: THREE.InstancedInterleavedBuffer;
   capacity: number;
@@ -540,6 +714,11 @@ interface Level {
 }
 
 const MAX_VARIANTS = 8;
+/**
+ * The nearest level's place in the drawing order: before everything else in the scene (see the file's header) but
+ * the sky, which is at -10 and does not test the depth (it would paint over the forest).
+ */
+const FIRST = -8;
 /** most instances a mesh of each level holds (lod0, lod1, lod2, shadow) */
 const CAPACITY = [400, 1600, 6000, 3000];
 /** how far the viewer moves before a level's instances are picked again (lod0, lod1, lod2, shadow) */
@@ -560,12 +739,16 @@ export class Forest {
   private materials = new Map<number, THREE.Material>();
   /** every mesh is in the scene, empty or not (see `vegetationHold`) */
   private showingAll = true;
+  private inReach: Chunk[] = [];
   count = 0;
 
   constructor(private readonly species: ForestSpecies[], plants: Planted[], opts: ForestOptions) {
     const size = opts.chunk ?? 32;
     const lists = new Map<string, Map<number, number[]>>();
-    const total = new Map<number, number>();
+    const castLists = new Map<string, Map<number, number[]>>();
+    const total = new Map<number, number>(), totalCast = new Map<number, number>();
+    // (stable: plants without an order stay as they were planted)
+    plants = [...plants].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
     /** per species: every plant's data, for the impostors */
     const all: number[][] = species.map(() => []);
     for (const p of plants) {
@@ -573,7 +756,7 @@ export class Forest {
       if (!sp) continue;
       const variant = p.variant % sp.model.variants.length;
       const k = p.species * MAX_VARIANTS + variant;
-      const row = [p.x, p.y, p.z, p.yaw, p.scale, p.girth, p.tint, variant + Math.min(0.999, Math.max(0, p.seed))];
+      const row = [p.x, p.y, p.z, p.yaw, p.scale, p.girth, packLook(p.nx ?? 0, p.nz ?? 0, p.tint), variant + Math.min(0.999, Math.max(0, p.seed))];
       const list0 = all[p.species];
       for (const v of row) list0.push(v);
       this.count++;
@@ -585,10 +768,17 @@ export class Forest {
       if (!list) sets.set(k, (list = []));
       for (const v of row) list.push(v);
       total.set(k, (total.get(k) ?? 0) + 1);
+      if (p.casts === false || !(opts.shadows > 0)) continue;
+      let cast = castLists.get(ck);
+      if (!cast) castLists.set(ck, (cast = new Map()));
+      let clist = cast.get(k);
+      if (!clist) cast.set(k, (clist = []));
+      for (const v of row) clist.push(v);
+      totalCast.set(k, (totalCast.get(k) ?? 0) + 1);
     }
-    for (const sets of lists.values()) {
+    for (const [ck, sets] of lists) {
       let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
-      const out = new Map<number, Float32Array>();
+      const out = new Map<number, Float32Array>(), casters = new Map<number, Float32Array>();
       for (const [k, list] of sets) {
         out.set(k, new Float32Array(list));
         for (let i = 0; i < list.length; i += STRIDE) {
@@ -596,7 +786,8 @@ export class Forest {
           z0 = Math.min(z0, list[i + 2]), z1 = Math.max(z1, list[i + 2]);
         }
       }
-      this.chunks.push({ x: (x0 + x1) / 2, z: (z0 + z1) / 2, radius: Math.hypot(x1 - x0, z1 - z0) / 2, sets: out });
+      for (const [k, list] of castLists.get(ck) ?? []) casters.set(k, new Float32Array(list));
+      this.chunks.push({ x: (x0 + x1) / 2, z: (z0 + z1) / 2, radius: Math.hypot(x1 - x0, z1 - z0) / 2, sets: out, casters, d: 0 });
     }
 
     // the mesh levels and the shadow level (index 3)
@@ -615,21 +806,35 @@ export class Forest {
       species.forEach((sp, si) => {
         sp.model.variants.forEach((variant, vi) => {
           const k = si * MAX_VARIANTS + vi;
-          const n = total.get(k) ?? 0;
-          const base = variant.lods[shadow ? 2 : l];
+          const n = (shadow ? totalCast : total).get(k) ?? 0;
+          const base = shadow ? (variant.hull ?? variant.lods[2]) : variant.lods[l];
           if (!n || !base) return;
           const capacity = Math.min(n, (opts.capacity ?? CAPACITY)[l]);
           const { geo, data } = instanced(base, capacity);
-          const mat = shadow ? shadowMaterial(sp.model, sp.look, this.reach) : this.material(si, l, span);
+          const prepass = !shadow && !!opts.prepass && sp.look.kind !== 'rock';
+          const mat = shadow ? this.material(si, 4 + (variant.hull ? 1 : 0), span) : this.material(si, l, span, prepass);
           const mesh = new THREE.Mesh(geo, mat as unknown as THREE.Material);
           mesh.frustumCulled = false;
           mesh.name = `${sp.model.id}-v${vi}-${shadow ? 'shadow' : `lod${l}`}`;
           if (shadow) {
             mesh.castShadow = true;
             mesh.layers.set(SHADOW_LAYER);
-          } else mesh.receiveShadow = opts.receiveShadow !== false;
+          } else {
+            // (the last level is beyond the shadow map's reach, or all but)
+            mesh.receiveShadow = opts.receiveShadow !== false && l < 2;
+            mesh.renderOrder = FIRST + l;
+          }
           this.group.add(mesh);
-          level.meshes.push({ mesh, geo, data, capacity, key: k, tris: sp.model.tris[vi]?.[shadow ? 2 : l] ?? 0, n: 0 });
+          let pre: THREE.Mesh | null = null;
+          if (prepass) {
+            pre = new THREE.Mesh(geo, this.material(si, 8 + l, span));
+            pre.frustumCulled = false;
+            pre.name = `${sp.model.id}-v${vi}-first${l}`;
+            pre.renderOrder = FIRST - 1.5 + l * 0.1;
+            this.group.add(pre);
+          }
+          const tris = shadow ? (geo.index ? geo.index.count / 3 : 0) : (sp.model.tris[vi]?.[l] ?? 0);
+          level.meshes.push({ mesh, pre, geo, data, capacity, key: k, tris, n: 0 });
         });
       });
     }
@@ -657,19 +862,22 @@ export class Forest {
         const mesh = new THREE.Mesh(geo, impostorMaterial(sp.model, sp.look, span) as unknown as THREE.Material);
         mesh.frustumCulled = false;
         mesh.name = `${sp.model.id}-impostors`;
+        mesh.renderOrder = FIRST + 3;
         this.group.add(mesh);
         this.impostorMeshes.push({ mesh, count: n });
       });
     }
   }
 
-  /** one material per species and level (its span differs) */
-  private material(species: number, level: number, span: Span) {
-    const key = species * 4 + level;
+  /** one material per species and level (its span differs); `level` 4 / 5: the shadows' (cards / hull), 8…: the depth pass of level − 8 */
+  private material(species: number, level: number, span: Span, prepass = false) {
+    const key = species * 16 + level;
     let m = this.materials.get(key);
     if (!m) {
       const sp = this.species[species];
-      m = (sp.look.kind === 'rock' ? rockMaterial : plantMaterial)(sp.model, sp.look, span) as unknown as THREE.Material;
+      if (level >= 8) m = firstMaterial(sp.model, sp.look, span) as unknown as THREE.Material;
+      else if (level >= 4) m = shadowMaterial(sp.model, sp.look, this.reach, level === 5) as unknown as THREE.Material;
+      else m = (sp.look.kind === 'rock' ? rockMaterial(sp.model, sp.look, span) : plantMaterial(sp.model, sp.look, span, prepass)) as unknown as THREE.Material;
       this.materials.set(key, m);
     }
     return m;
@@ -678,7 +886,7 @@ export class Forest {
   update(camera: THREE.Vector3) {
     if (this.showingAll && !held) {
       this.showingAll = false;
-      for (const lv of this.levels) for (const lm of lv.meshes) lm.mesh.visible = lm.n > 0;
+      for (const lv of this.levels) for (const lm of lv.meshes) lm.mesh.visible = lm.n > 0, lm.pre && (lm.pre.visible = lm.n > 0);
     }
     for (const lv of this.levels) {
       if (!lv.meshes.length || lv.at.distanceToSquared(camera) < lv.stride * lv.stride) continue;
@@ -687,12 +895,19 @@ export class Forest {
       const margin = lv.stride + 1.5;
       const lo = Math.max(0, lv.near - margin), hi = lv.far + margin;
       const lo2 = lo * lo, hi2 = hi * hi;
+      const shadow = lv === this.levels[3];
       for (const lm of lv.meshes) lm.n = 0;
+      // the chunks in reach, nearest first: what is drawn first hides what comes after it
+      const near = this.inReach;
+      near.length = 0;
       for (const c of this.chunks) {
-        const d = Math.hypot(c.x - camera.x, c.z - camera.z);
-        if (d - c.radius > hi) continue;
+        c.d = Math.hypot(c.x - camera.x, c.z - camera.z);
+        if (c.d - c.radius <= hi) near.push(c);
+      }
+      near.sort((a, b) => a.d - b.d);
+      for (const c of near) {
         for (const lm of lv.meshes) {
-          const set = c.sets.get(lm.key);
+          const set = (shadow ? c.casters : c.sets).get(lm.key);
           if (!set) continue;
           const arr = lm.data.array as Float32Array;
           for (let i = 0; i < set.length && lm.n < lm.capacity; i += STRIDE) {
@@ -707,6 +922,7 @@ export class Forest {
       for (const lm of lv.meshes) {
         lm.geo.instanceCount = lm.n;
         lm.mesh.visible = lm.n > 0 || this.showingAll;
+        if (lm.pre) lm.pre.visible = lm.mesh.visible;
         if (!lm.n) continue;
         lm.data.clearUpdateRanges();
         lm.data.addUpdateRange(0, lm.n * STRIDE);
@@ -721,7 +937,7 @@ export class Forest {
       let draws = 0, instances = 0, triangles = 0;
       for (const lm of lv.meshes) {
         if (!lm.mesh.visible || !lm.geo.instanceCount) continue;
-        draws++;
+        draws += lm.pre ? 2 : 1;
         instances += lm.geo.instanceCount;
         triangles += lm.geo.instanceCount * lm.tris;
       }
