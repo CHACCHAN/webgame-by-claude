@@ -426,6 +426,37 @@ proposed freeing the oldest first when it runs short.
   Not measured: how much memory the kept shaders hold over a long sitting (a few hundred small objects; nothing
   frees them before the page is left).
 
+### Accounts come from Authentik; everyone else is a guest (11-11, owner's request)
+Owner: members of their platform log in with the Authentik they host and go on with their own save data; keeping
+an account in the browser (the token in `localStorage`) is abolished; whoever cannot log in is a guest, asked for a
+name whenever a record is kept. Later the same day: the account's key should be Authentik's `sub`.
+
+- **Server**: `AuthController` (login → Authentik with PKCE and a state bound to the browser by a cookie; callback →
+  code for token, userinfo, the member by `oidc_sub`, name taken from Authentik each time), `MemberSession` (cookie
+  `touge_session`, HttpOnly / Lax / Secure over https, hash in `player_sessions`, 30 days from the last visit; a
+  change by cookie only with the header `X-Touge-Client`), `AuthenticatePlayer` (a guest's pass with an end date, or
+  the cookie), guests by `POST /players` (24 h; those without a record are removed two days after), claim of a
+  guest's records by a member, save data with a revision (`players.save`, 64 kB), `is_member` on the ranking,
+  `auth.enabled` in `/api/content`. Migration `2026_11_11_000001_members_and_guests`.
+- **Client**: `api/client.ts` (member = cookie, guest = pass in `sessionStorage`; the old `touge-player` only for
+  the claim), `store/account.ts` (who am I at start; at a login the guest's and the old player's records are
+  claimed, the save of server and machine merged — better time, larger battle count, favourites three-way — and
+  the best runs' ghosts fetched; sent 1.5 s after a change), the main menu's row メンバーログイン / ログアウト (only when
+  the server has a login), PLAYER / GUEST in the top bar, a notice for what the login came back with, the results
+  ask a guest for the name every time, the online lobby takes a member in at once, MEMBER marks in the ranking.
+- **Decided here** (the owner can change them): the login itself lives in a cookie of our own (the account is
+  Authentik's; nothing a script can read); a member's name is Authentik's `preferred_username` (cut to the game's
+  16 characters and letters), not editable in the game; guests keep their medals and times on the machine as before
+  (not an account: the server knows nothing of it), and what is on the machine at a login goes into the member's
+  save; a logout clears it from the machine; device settings (graphics, sound, controls) stay per machine.
+- Verified: backend tests 40 passed (12 new: the whole trip with Authentik faked, PKCE, state from another browser,
+  refusal, the same subject = the same player, the cookie without the header, expiry, guests, the old tokens and
+  the claim, the save's revisions); the migration on a copy of the live database (32 players, 71 runs: all kept,
+  the board unchanged); frontend tsc + vitest (8 in `client.test.ts`); Authentik's authorize endpoint knows the
+  client id from `.env` (it answers "redirect URI" for an address not registered, as it should).
+  **Not verified: a real login** (it needs the redirect URI `https://<public host>/api/auth/callback` registered
+  in the provider and a member's own credentials), the save across two real machines.
+
 ## Session 8 (2026-11-10) — new vehicles: Cybertruck, Yangwang U9 Xtreme, three motorcycles, the L0 maglev
 
 Owner: 「テスラのサイバートラック、バイクを3台、リニアモータ新幹線を実装してください」 (bikes chosen: Honda NSR250R,
