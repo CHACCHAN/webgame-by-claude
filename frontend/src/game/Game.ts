@@ -7,6 +7,7 @@ import { VehicleSim, emptyInput, type AssistLevel, type VehicleInput } from './v
 import { CAR_ORDER, CAR_SPECS, VEHICLE_ORDER, type CarId } from './vehicle/carSpecs';
 import { RacingLine } from './ai/RacingLine';
 import { AIDriver, AI_PROFILES, type AILevel } from './ai/AIDriver';
+import type { VoiceId } from './audio/speech/text';
 import { RivalMind, cornerAhead, type Horn, type Moment, type RivalBrain, type Situation } from './ai/RivalMind';
 import { buildScenery, vendingSpot, type SceneryResult } from './render/TrackScenery';
 import { buildEnvironment, PRESETS, type EnvironmentRig, type TimeOfDay } from './render/Environment';
@@ -170,6 +171,8 @@ const LAMP_LIGHT_DROP = 0.9;
 export const WET_GRIP = 0.8;
 const _zero = new THREE.Vector3();
 /** car states go out this often (s): every other frame of a 60 Hz screen, so the peers get them evenly spaced */
+/** how long a rival's line waits for its voice before it is shown without it, ms */
+const VOICE_WAIT = 700;
 const NET_SEND_INTERVAL = 1 / 30;
 /** the acceleration sent with a state is smoothed over about this long (s): suspension chatter and wall hits are not a trend */
 const NET_ACC_TAU = 0.06;
@@ -225,6 +228,11 @@ export class Game {
    * server's language model, set by the UI). Empty: the game's own lines and rules. Nobody asked ever drives.
    */
   rivalBrains: RivalBrain[] = [];
+  /**
+   * The rivals' voice, given by the interface like the brains (audio/speech: a model on the GPU, there only when
+   * the player wanted it and WebGPU exists): a line as sound, or nothing — then the line is only shown.
+   */
+  rivalVoice: ((text: string, voice: VoiceId) => Promise<{ pcm: Float32Array<ArrayBuffer>; rate: number } | null>) | null = null;
   private mind: RivalMind | null = null;
   private lineSeq = 0;
   /** game time at which the line on the HUD is taken away */
@@ -673,6 +681,7 @@ export class Game {
     this.removeRacer(this.attractCar);
     this.player = this.rival = this.attractCar = null;
     this.mind = null;
+    this.audio?.hush();
     this.hud.rivalLine = null;
     if (this.ghost) {
       this.root.remove(this.ghost.visual.root);
@@ -1521,10 +1530,28 @@ export class Game {
       .taunt({ course: this.course.id, tod: this.timeOfDay, player_car: cfg.carId, rival_car: r.sim.spec.id, ...record, moment, gap_s: gap })
       .then((text) => {
         if (this.mind !== mind || !text) return;
-        if (moment === 'before' && !(this.phase === 'countdown' || (this.phase === 'racing' && this.raceClock() < 3))) return;
-        this.hud.rivalLine = { text, moment, seq: ++this.lineSeq };
-        this.lineUntil = moment === 'before' ? this.time + 5.5 * this.timeScale : Infinity;
-        this.emit({ type: 'rivalLine', moment, text });
+        const show = () => {
+          if (this.mind !== mind) return 0;
+          if (moment === 'before' && !(this.phase === 'countdown' || (this.phase === 'racing' && this.raceClock() < 3))) return 0;
+          this.hud.rivalLine = { text, moment, seq: ++this.lineSeq };
+          this.lineUntil = moment === 'before' ? this.time + 5.5 * this.timeScale : Infinity;
+          this.emit({ type: 'rivalLine', moment, text });
+          return this.lineSeq;
+        };
+        const sound = this.rivalVoice?.(text, this.course.rivals[cfg.rivalLevel ?? 'rookie'].voice).catch(() => null);
+        if (!sound) return void show();
+        // The line and its voice come together when the voice is quick (a quarter of a second on a desktop GPU);
+        // a slow one joins the line that is already shown, as long as it still is.
+        let seq = -1;
+        const late = setTimeout(() => (seq = show()), VOICE_WAIT);
+        void sound.then((s) => {
+          clearTimeout(late);
+          if (seq < 0) seq = show();
+          if (!s || !seq || this.hud.rivalLine?.seq !== seq || !this.audio) return;
+          const seconds = this.audio.say(s.pcm, s.rate);
+          // (a line before the start stays until it has been said)
+          if (moment === 'before') this.lineUntil = Math.max(this.lineUntil, this.time + (seconds + 0.8) * this.timeScale);
+        });
       });
   }
 

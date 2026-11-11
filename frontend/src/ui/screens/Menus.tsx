@@ -18,6 +18,8 @@ import { COLORS } from './Cars';
 import { FocusFrame, Hint, Notice, ScreenHead } from '../kit';
 import { login, logout, useAccount } from '../../store/account';
 import { useOnline } from '../../store/online';
+import { useSpeech } from '../../store/voice';
+import { VoiceOffer, VoiceStatus } from './VoiceOffer';
 
 const TIPS = [
   'ブレーキで荷重を前に移し、ステアを切りながらアクセルを踏むとリアが流れ出します。',
@@ -211,6 +213,11 @@ export function RivalsScreen() {
   const levels: AILevel[] = ['rookie', 'ace', 'legend'];
   const [i, setI] = useState(levels.indexOf(rivalLevel));
   const course = COURSES[currentCourseId()];
+  // the rivals' voice is offered once (where it can exist at all); "not now" asks again at the next visit
+  const speech = useSpeech();
+  const asked = useSettings((s) => s.rivalVoice) !== 'ask';
+  const [later, setLater] = useState(false);
+  const offer = !asked && !later && speech.state === 'idle';
   const start = (level: AILevel = levels[i]) => {
     set({ rivalLevel: level });
     sfx.confirm();
@@ -221,7 +228,7 @@ export function RivalsScreen() {
     if (a === 'right' || a === 'down') { setI((x) => (x + 1) % 3); sfx.move(); }
     if (a === 'confirm') start();
     if (a === 'back') { sfx.back(); go(singleRatio(CAR_SPECS[useApp.getState().carId]) ? 'garage' : 'transmission'); }
-  });
+  }, !offer);
   return (
     <div className="screen rivals">
       <ScreenHead jp="ライバル選択" en="CHOOSE YOUR RIVAL" note={`${course.name}の走り屋`} />
@@ -249,6 +256,8 @@ export function RivalsScreen() {
         })}
         <FocusFrame on=".rival-card.active" deps={[i]} kind="magenta" pad={5} />
       </div>
+      <VoiceStatus />
+      {offer && <VoiceOffer onClose={() => setLater(true)} />}
       <Hint items={[['lr', '選択'], ['ok', 'バトル開始']]} />
     </div>
   );

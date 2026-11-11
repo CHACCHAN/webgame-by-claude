@@ -33,6 +33,11 @@ export interface Settings {
   backend: BackendPref;
   /** the rivals' lines and moves may come from the server's language model (off: the game's own) */
   rivalAi: boolean;
+  /**
+   * the rivals' lines are spoken (a speech model of ~400 MB on the GPU, fetched once): `ask` until the player has
+   * said yes or no at their first rival battle
+   */
+  rivalVoice: 'ask' | 'on' | 'off';
   controlsGuide: boolean;
   showFps: boolean;
   /** the interface's motion: wipes between screens, counting numbers, the title's idle life (off: plain fades) */
@@ -60,6 +65,7 @@ export const useSettings = create<Settings>()(
       cornerGuide: true,
       backend: 'auto',
       rivalAi: true,
+      rivalVoice: 'ask',
       controlsGuide: true,
       showFps: false,
       uiMotion: true,

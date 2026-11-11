@@ -190,6 +190,10 @@ export class AudioEngine {
   readonly master: GainNode;
   readonly sfx: GainNode;
   readonly music: GainNode;
+  /** everything but a spoken line: it steps back while one is said */
+  private bed: GainNode;
+  private voice: GainNode;
+  private speaking: AudioBufferSourceNode | null = null;
   private noise: AudioBuffer;
   private squeal: { src: AudioBufferSourceNode; gain: GainNode; filter: BiquadFilterNode };
   private wind: { gain: GainNode; filter: BiquadFilterNode };
@@ -204,11 +208,24 @@ export class AudioEngine {
     comp.threshold.value = -14;
     comp.ratio.value = 4;
     this.master.connect(comp).connect(this.ctx.destination);
+    this.bed = this.ctx.createGain();
+    this.bed.connect(this.master);
     this.sfx = this.ctx.createGain();
-    this.sfx.connect(this.master);
+    this.sfx.connect(this.bed);
     this.music = this.ctx.createGain();
     this.music.gain.value = 0.5;
-    this.music.connect(this.master);
+    this.music.connect(this.bed);
+    // a spoken line: without the rumble below a voice, a little presence so that it stands over an engine
+    this.voice = this.ctx.createGain();
+    const cut = this.ctx.createBiquadFilter();
+    cut.type = 'highpass';
+    cut.frequency.value = 110;
+    const presence = this.ctx.createBiquadFilter();
+    presence.type = 'peaking';
+    presence.frequency.value = 3200;
+    presence.Q.value = 0.8;
+    presence.gain.value = 3;
+    this.voice.connect(cut).connect(presence).connect(this.master);
     this.noise = this.makeNoise();
 
     const src = this.ctx.createBufferSource();
@@ -257,6 +274,51 @@ export class AudioEngine {
     this.master.gain.value = master;
     this.sfx.gain.value = sfx;
     this.music.gain.value = music;
+    this.voice.gain.value = sfx;
+  }
+
+  /**
+   * A spoken line (the rival's voice, audio/speech): played over the rest, which steps back for as long as it lasts.
+   * The samples are brought to one level (the model's lines come out at very different ones). Returns its length in seconds.
+   */
+  say(pcm: Float32Array<ArrayBuffer>, rate: number): number {
+    if (!pcm.length) return 0;
+    let peak = 1e-3;
+    for (let i = 0; i < pcm.length; i++) peak = Math.max(peak, Math.abs(pcm[i]));
+    const buf = this.ctx.createBuffer(1, pcm.length, rate);
+    buf.copyToChannel(pcm, 0);
+    this.hush();
+    const src = this.ctx.createBufferSource();
+    src.buffer = buf;
+    const level = this.ctx.createGain();
+    level.gain.value = Math.min(4, 0.8 / peak);
+    src.connect(level).connect(this.voice);
+    const t = this.ctx.currentTime;
+    this.bed.gain.cancelScheduledValues(t);
+    this.bed.gain.setTargetAtTime(0.4, t, 0.06);
+    this.bed.gain.setTargetAtTime(1, t + buf.duration, 0.3);
+    src.onended = () => {
+      if (this.speaking === src) this.speaking = null;
+    };
+    src.start(t + 0.03);
+    this.speaking = src;
+    return buf.duration;
+  }
+
+  /** Cut a spoken line short (a new race, a new line). */
+  hush() {
+    const src = this.speaking;
+    if (!src) return;
+    this.speaking = null;
+    src.onended = null;
+    try {
+      src.stop();
+    } catch {
+      // (never started)
+    }
+    const t = this.ctx.currentTime;
+    this.bed.gain.cancelScheduledValues(t);
+    this.bed.gain.setTargetAtTime(1, t, 0.15);
   }
 
   /** The running sound of a vehicle: a synthesised engine or electric drive, a train's traction equipment or a creature's legs. */
