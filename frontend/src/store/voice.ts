@@ -9,6 +9,9 @@ import { useSettings } from './settings';
 // for probes, as `__app` and `__game` are
 (window as unknown as { __speech?: unknown }).__speech = speech;
 
+// the voice's model runs on WebGPU only next to a game that is drawn with WebGPU (Speech.usable)
+speech.usable = () => useApp.getState().renderer?.backend === 'webgpu';
+
 let version = 0;
 speech.subscribe(() => void version++);
 /** the voice's state, for a component that shows it */

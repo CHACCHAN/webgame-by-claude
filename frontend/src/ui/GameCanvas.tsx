@@ -20,6 +20,8 @@ declare global {
 
 /** the renderer of the single game (kept with it: React may mount the canvas component twice in development) */
 const hostHolder: { host: RenderHost | null; starting: Promise<RenderHost> | null } = { host: null, starting: null };
+/** the renderer that is up (null before it is): its backend and device, for what else draws on the page */
+export const renderHost = () => hostHolder.host;
 
 function startGame(host: RenderHost) {
   {

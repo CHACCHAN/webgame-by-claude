@@ -56,7 +56,7 @@ export function SettingsScreen() {
     : !voiceOn ? 'オフ'
     : speech.state === 'loading' ? (speech.building || speech.progress >= 1 ? '準備中' : `取得中 ${Math.round(speech.progress * 100)}%`)
     : speech.state === 'failed' ? '失敗' : 'オン';
-  const voiceNote = speech.state === 'unsupported' ? 'この環境では WebGPU が使えないため、ライバルのセリフは文字だけで表示します'
+  const voiceNote = speech.state === 'unsupported' ? 'WebGPU で描画していないため（非対応、または描画方式が WebGL 2）、ライバルのセリフは文字だけで表示します'
     : speech.state === 'absent' ? 'このサーバーには音声モデルがありません。ライバルのセリフは文字だけで表示します'
     : voiceOn && speech.state === 'failed' ? '音声モデルを準備できませんでした（セリフは文字で出ます）。もう一度オンにすると再試行します'
     : 'ライバルのセリフを音声で喋らせます。音声合成モデル（約 400 MB）を一度だけ取得してこのブラウザに保存し、GPU（WebGPU）で動かします';

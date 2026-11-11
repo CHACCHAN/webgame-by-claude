@@ -17,7 +17,7 @@ import { toggleFullscreen } from './ui/fullscreen';
 import { AccountNotice, BusyMark, ShellNav, ShellTop } from './ui/Shell';
 import { useScreenWipe } from './ui/motion';
 import { noteInput } from './ui/inputDevice';
-import { Grains } from './ui/fx/Grains';
+import { Cloud } from './ui/fx/Cloud';
 
 declare global {
   interface Window {
@@ -135,7 +135,7 @@ export function App() {
         {(shelled || screen === 'title') && <ShellNav screen={screen} back={shelled} />}
       </div>
       {/* the grains over the menus: not in a race (the HUD has the frame's time), not when motion is off */}
-      {!calm && screen !== 'race' && screen !== 'replay' && screen !== 'boot' && <Grains />}
+      {!calm && screen !== 'race' && screen !== 'replay' && screen !== 'boot' && <Cloud />}
       <BusyMark />
       <AccountNotice />
       {touch && (

@@ -36,6 +36,12 @@ export class Speech {
   private seq = 0;
   private listeners = new Set<() => void>();
   private probing: Promise<SpeechState> | null = null;
+  /**
+   * May the model use WebGPU on this page at all? The interface says no while the game is drawn with WebGL 2:
+   * the two APIs are not mixed on one page (a WebGL context made next to a WebGPU device lost that device,
+   * RX 5700 XT 11-11), and a game that fell back from WebGPU has shown that WebGPU does not hold there.
+   */
+  usable: () => boolean = () => true;
 
   subscribe = (fn: () => void) => {
     this.listeners.add(fn);
@@ -49,7 +55,7 @@ export class Speech {
   /** Can this browser, with this server, speak at all? (asked once) */
   probe(): Promise<SpeechState> {
     return (this.probing ??= (async () => {
-      const gpu = (navigator as Navigator & { gpu?: { requestAdapter(): Promise<unknown> } }).gpu;
+      const gpu = this.usable() ? (navigator as Navigator & { gpu?: { requestAdapter(): Promise<unknown> } }).gpu : undefined;
       const adapter = gpu && typeof Worker !== 'undefined' && typeof caches !== 'undefined' ? await gpu.requestAdapter().catch(() => null) : null;
       if (!adapter) return this.settle('unsupported');
       // (a server without the model answers with the app's page: it must be the model's own description)

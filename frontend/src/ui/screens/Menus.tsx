@@ -109,7 +109,7 @@ export function TitleScreen() {
       <div className="title-logo">
         <div className="title-small">{COURSES[currentCourseId()].nameEn} ・ {COURSE_ORDER.length} COURSES</div>
         <h1>
-          <span className="kanji" data-text="峠">峠</span>
+          <span className="kanji" data-text="峠" data-cloud="glyph">峠</span>
           <span className="en">TOUGE<br />NOCTURNE</span>
         </h1>
         <div className="title-jp">朧 峠 夜 想 曲</div>
@@ -376,6 +376,8 @@ export function CoursesScreen() {
         })}
         <FocusFrame on=".course-card.active" deps={[i]} pad={5} />
       </div>
+      {/* the selected course as a relief of grains, turning under the cards (ui/fx/Cloud.tsx) */}
+      <div className="course-relief" data-cloud={`course:${COURSE_ORDER[i]}`} aria-hidden />
       <Hint items={[['lr', 'コース'], ['ok', '決定']]} />
     </div>
   );
@@ -384,9 +386,12 @@ export function CoursesScreen() {
 /** Shown while a different course is being built. */
 export function CourseLoadingScreen() {
   const c = COURSES[currentCourseId()];
+  const progress = useApp((s) => s.loading?.progress ?? 0);
   return (
     <div className="screen boot course-loading">
       <div className="boot-art" style={{ backgroundImage: `url(${c.art}), url(/img/keyart.webp)` }} />
+      {/* the course gathers out of grains as it is built (ui/fx/Cloud.tsx) */}
+      <div className="cl-relief" data-cloud={`course:${c.id}`} data-cloud-fill={(0.15 + 0.85 * progress).toFixed(2)} aria-hidden />
       <div className="boot-mark">
         <div className="cl-en">{c.nameEn}</div>
         <div className="cl-name">{c.name}</div>
