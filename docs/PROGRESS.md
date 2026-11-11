@@ -604,6 +604,18 @@ over the menus" describes what replaced it.
   grains, 3.8–3.9 ms a frame of their own, frame gaps median 16.7 ms, no page errors). A 42 s recording of the
   final build went to the owner.
 
+### Trees, bushes, undergrowth, rocks remade: a branch with pictures, not merged (11-11)
+- The `nature` package's branch `worktree-agent-a93b5dfec501746d9` (tip `2621c03`): twelve own species (Blender
+  scripts, three levels + impostor each), forests planted by altitude and slope, on medium and up; low keeps the old
+  trees. Its own numbers, all taken under load (2–18): GPU time a frame at 1080p high 5.0 → 7.8 ms, ultra 8.0 →
+  9.5 ms, 1440p ultra with upscaling Quality 6.7 → 11.6 ms; frame-rate pairs contradict each other; the plan's
+  targets are **not shown met**. Downloads per course: 9.6 MB (high / ultra), 2.7 MB (medium).
+- Reviewed by me on its sheets (oboro dawn / night, kirifuri dawn pairs, close-ups, quality levels, one species):
+  a large step up, but **not ready**: the forest closes the views the courses are named for (the sea and the town
+  from oboro, the lake from kirifuri), one artefact on a retaining wall at night, far hillsides as dots. Sent back
+  for one more round (views open by a planting rule, the artefact, far hills, frustum culling, timings on a quiet
+  machine). Five sheets went to the owner; nothing of it is in the game.
+
 ### The rivals speak (11-11, owner's request): a speech model on the player's GPU
 Request: a TTS model, Supertonic 3, WebGPU assumed; the language model's lines are spoken; without WebGPU no TTS
 model, text only. My plan (the ~400 MB model only after the player's yes, served from our own server, a voice per
