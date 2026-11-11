@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { MeshStandardNodeMaterial } from 'three/webgpu';
-import { Fn, attribute, mat4, materialColor, normalLocal, positionLocal, positionPrevious, texture, transformNormal, uv, vec4 } from 'three/tsl';
+import { Fn, attribute, mat4, materialColor, mix, normalLocal, positionLocal, positionPrevious, smoothstep, texture, transformNormal, uniform, uv, vec4 } from 'three/tsl';
 import type { Vec3, Vec4 } from './tslNoise';
 
 /**
@@ -40,6 +40,13 @@ export function cutout(src: THREE.MeshStandardMaterial): THREE.MeshStandardMater
 }
 
 /**
+ * A round clearing among the chunked instances (the trees): x, z of its centre and its radius (m; negative: none).
+ * Instances standing inside shrink to nothing, with their shadows, over the last three metres of the radius. The
+ * garage and the waiting room open one around what they show: their camera stands off the road, where the trees are.
+ */
+export const clearing = uniform(new THREE.Vector3(0, 0, -10));
+
+/**
  * The material that draws `staticInstances` like `src` (a twin per source material): each vertex goes through its
  * instance's matrix and the colour is multiplied by the instance's tint.
  */
@@ -51,9 +58,12 @@ export function instancedMaterial(src: THREE.MeshStandardMaterial): MeshStandard
   const matrix = mat4(col(0), col(1), col(2), col(3));
   mat.positionNode = Fn(() => {
     normalLocal.assign(transformNormal(normalLocal, matrix));
+    // an instance inside the clearing is drawn at no size, at its foot
+    const foot = col(3).xyz;
+    const size = smoothstep(clearing.z.sub(3), clearing.z, foot.xz.sub(clearing.xy).length());
     // (the motion vectors' side: where the vertex was a frame ago, which for fixed instances is where it is)
-    positionPrevious.assign(matrix.mul(vec4(positionPrevious, 1)).xyz);
-    return matrix.mul(vec4(positionLocal, 1)).xyz;
+    positionPrevious.assign(mix(foot, matrix.mul(vec4(positionPrevious, 1)).xyz, size));
+    return mix(foot, matrix.mul(vec4(positionLocal, 1)).xyz, size);
   })();
   // (the map is part of the material's colour; the vertex colours are multiplied in by the material itself)
   const base = materialColor as unknown as Vec4;

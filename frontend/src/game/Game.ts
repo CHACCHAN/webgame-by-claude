@@ -10,6 +10,7 @@ import { AIDriver, AI_PROFILES, type AILevel } from './ai/AIDriver';
 import { buildScenery, type SceneryResult } from './render/TrackScenery';
 import { buildEnvironment, PRESETS, type EnvironmentRig, type TimeOfDay } from './render/Environment';
 import { CarVisual } from './render/CarVisual';
+import { clearing } from './render/instancing';
 import { volume, volumeSpot } from './render/volumetricLights';
 import { loadCarTemplates } from './render/carAssets';
 import { loadTrafficModels } from './render/trafficModels';
@@ -219,7 +220,7 @@ export class Game {
   /** the online waiting room's vehicles, in place of the garage's single car (`showLobby`) */
   private lobby: LobbyLineup | null = null;
   /** where the line-up's camera is heading (the framing follows the members as they come, go and change vehicles) */
-  private lobbyView = { focus: new THREE.Vector3(), scale: 1 };
+  private lobbyView = { focus: new THREE.Vector3(), scale: 1, ends: [new THREE.Vector3(), new THREE.Vector3()] as const };
   private lampLights: THREE.PointLight[] = [];
   /** lamp index each pooled light is attached to (-1 = free) */
   private lampSlots: number[] = [];
@@ -592,7 +593,7 @@ export class Game {
    * background is the valley and not the cutting. `turn` (rad) brings it round towards the front of what stands
    * there; `k` is the view's scale (the camera's distance).
    */
-  private garageSide(p: THREE.Vector3, s: number, turn = 0, k = 1) {
+  private garageSide(p: THREE.Vector3, s: number, turn = 0, k = 1, lineup?: { swing: number; see: readonly THREE.Vector3[] }) {
     const r = this.track.getRight(Math.round(s), new THREE.Vector3());
     const up = this.terrain.heightAt(p.x + r.x * 14, p.z + r.z * 14) > this.terrain.heightAt(p.x - r.x * 14, p.z - r.z * 14) ? 1 : -1;
     const ahead = this.track.headingAt(s);
@@ -608,6 +609,17 @@ export class Game {
           // garageCamera() may lift the camera spot itself a little, but not onto a bank
           const sight = d >= 8.6 ? p.y + (this.garageLift - 0.4) * k : p.y + (0.6 + (this.garageLift - 0.6) * (d / 8.6)) * k;
           if (this.terrain.heightAt(p.x + Math.sin(a) * d * k, p.z + Math.cos(a) * d * k) > sight) return false;
+        }
+      }
+      // a line-up is long: the camera has to see its two ends as well (half a metre above the road there)
+      for (const t of lineup?.see ?? []) {
+        for (let j = -2; j <= 2; j++) {
+          const a = yaw + (j / 2) * lineup!.swing;
+          const cx = p.x + Math.sin(a) * 8.6 * k, cz = p.z + Math.cos(a) * 8.6 * k, cy = p.y + this.garageLift * k;
+          for (let i = 1; i < 12; i++) {
+            const f = i / 12;
+            if (this.terrain.heightAt(cx + (t.x - cx) * f, cz + (t.z - cz) * f) > cy + (t.y + 0.5 - cy) * f) return false;
+          }
         }
       }
       return true;
@@ -631,7 +643,7 @@ export class Game {
     }
     this.lobby.set(entries);
     const view = this.lobbyView;
-    const { s, scale, radius } = this.lobby.frame(view.focus);
+    const { s, scale, radius } = this.lobby.frame(view.focus, view.ends[0], view.ends[1]);
     view.scale = scale;
     // one key light over them all: wide enough for the rows, as bright on the road as the garage's
     const h = Math.max(8, radius * 1.15);
@@ -644,11 +656,16 @@ export class Game {
     light.intensity = 8 * Math.pow(h, light.decay);
     light.castShadow = this.quality.shadows;
     if (!light.parent) this.root.add(light, light.target);
+    this.garageLift = LINEUP_VIEW.lift;
+    // the side the camera stands on, again with every change of the room: a longer line-up moves it further out,
+    // where a bank that was out of its way may stand between it and the front row
+    const was = this.garageViewYaw;
+    this.garageViewYaw = this.garageSide(view.focus, s, LINEUP_VIEW.turn, view.scale, { swing: LINEUP_VIEW.swing, see: view.ends });
+    // (a camera the player has dragged stays where they put it)
+    if (!fresh && this.garageOrbit) this.garageOrbit.yaw += was - this.garageViewYaw;
     if (!fresh) return;
     this.garageFocus.copy(view.focus);
     this.garageScale = view.scale;
-    this.garageLift = LINEUP_VIEW.lift;
-    this.garageViewYaw = this.garageSide(view.focus, s, LINEUP_VIEW.turn, view.scale);
     this.garageAngle = 0.6;
     this.garageOrbit = null;
     // the attract car's lamps are gone: every material's shader changes with the lights
@@ -1285,6 +1302,8 @@ export class Game {
     if (this.phase === 'attract' && this.attractCar) this.cinematicCamera(dt, this.attractCar.visual.root, this.attractCar.proj.s);
     else if (this.phase === 'replay' && this.replay) this.updateReplay(dt);
     else if (this.phase === 'garage' && (this.garageCar || this.lobby)) this.garageCamera(dt);
+    // (the garage's clearing among the trees closes with any other view)
+    if (this.phase !== 'garage') clearing.value.z = -10;
     else if (this.player) {
       const sim = this.player.sim;
       const v = this.player.visual.root;
@@ -1546,6 +1565,9 @@ export class Game {
       if (zoom <= 1 || this.terrain.heightAt(_v.x, _v.z) + 1.4 <= _v.y + 0.12 * dist) break;
       zoom = Math.max(1, zoom - 0.1);
     }
+    // no tree between the camera and what it shows, wherever it swings or is dragged: a clearing as wide as the
+    // camera stands off, and a tree's crown more (the trees keep 10.5 m from the road: a car's view loses none)
+    clearing.value.set(car.x, car.z, Math.hypot(_v.x - car.x, _v.z - car.z) + 5);
     // steep cuttings (ridge courses) would swallow the camera: keep it, and its glide in, above ground
     _v.y = Math.max(_v.y, this.terrain.heightAt(_v.x, _v.z) + 1.4);
     cam.position.lerp(_v, 1 - Math.exp(-dt * (o ? 14 : 3)));

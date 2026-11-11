@@ -166,10 +166,13 @@ export class LobbyLineup {
    * What the camera frames: a point of the line-up (on the road, into `focus`), its distance along the course, the
    * scale of the view (1 = the garage's single car) and the radius around the point the key light has to cover (m).
    */
-  frame(focus: THREE.Vector3): { s: number; scale: number; radius: number } {
+  frame(focus: THREE.Vector3, front?: THREE.Vector3, back?: THREE.Vector3): { s: number; scale: number; radius: number } {
     const { s0, s1, l0, l1 } = this.span;
     const s = focusOf(this.span);
     this.track.pointAt(s, (l0 + l1) / 2, focus);
+    // (the two ends of the stretch of road the vehicles take)
+    if (front) this.track.pointAt(s1, (l0 + l1) / 2, front);
+    if (back) this.track.pointAt(s0, (l0 + l1) / 2, back);
     return { s, scale: this.scale, radius: Math.hypot(Math.max(s1 - s, s - s0), (l1 - l0) / 2) };
   }
 
