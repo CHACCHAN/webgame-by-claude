@@ -269,6 +269,17 @@ What a deploy or a bad hour could break, found by reading the stack, and changed
      Not seen on the GPU (the garage and line-up changes there were checked by the packages' own GPU runs).
   Result of the run after that: see the end of this section's next entry.
 
+### Found on the first deploy of all this: the race camera stayed at the garage (11-11)
+- My own bug in `31c6a03` (the clearing among the trees): the line that closes the clearing was written into the
+  camera's `if / else` chain and cut the chase camera off in every phase but the garage. In a race started through
+  the menus the car drove away from a camera that stayed where the car select had left it.
+- Nothing had seen it: E2E and `tools/gpu-errors.cjs` look at states and errors, the contact sheets of that round
+  were of the garage and the waiting room. I saw it on the screenshots of the rival check, **after** the deploy:
+  the live site had it for about ten minutes (05:54 → 06:05), then the fix was deployed and checked on the live
+  build (camera 9 m behind the car at 6 s and 16 s of a race started through the menus).
+- Guards: the E2E time attack and rival tests and `tools/gpu-errors.cjs` now check that the camera is with the car.
+  Lesson kept: look at a picture of a **race** before every deploy, whatever the change was about.
+
 ### Generated assets: ChatGPT (images) and Gemini (music) through the owner's browser (11-11)
 - Owner (11-11): generate what is needed, images with ChatGPT, music / video with Gemini, both in the browser.
 - In the game: the autobahn's three rival portraits (it had none: silhouettes), its course art (was a screenshot) and
@@ -293,8 +304,17 @@ What a deploy or a bad hour could break, found by reading the stack, and changed
     header, models by env, first that answers; decisions as real tool calls, clamped). `/api/content` → `ai.enabled`.
   - UI: the line under the versus plate (countdown and first seconds), the line on the results, the setting
     ライバルAI, the player's record against each rival (localStorage `touge-rivals:<course>`) as a fact for the line.
-- Verified: backend tests 27 passed (7 new: no key → 503 and nothing sent, key header, next model on failure, empty
-  answers → 503, tool calls clamped, a model that calls nothing, only facts accepted; they found a real bug: `trim()`
+- In the browser on the GPU, a stack with the key, through the menus (`~/.local/opt/quality/rivalmind.cjs`): the line
+  before the start came from the model in 1.5–2.0 s and stood under the versus plate; with the player put 9 m behind
+  the rival, the model called `block_player` (4 s) in 0.5–0.6 s and the rival blocked; put in front, it called the
+  horn (double); a decision that took longer than 1.5 s was dropped, the game's rules took over for 30 s and the
+  model again after that; the line after the finish stood on the results. Deployed: `/api/content` says
+  `ai.enabled`, a real `/api/ai/taunt` on the live stack answered in 1.9 s.
+- Fixed on the way: a rival that is behind was offered the blocking tool and used it (now only the horn is offered
+  there); without a gap the prompt said "0 s" and the model spoke of a dead heat (a rival still on its way gives an
+  estimate, and no gap says nothing).
+- Verified: backend tests 28 passed (8 new: no key → 503 and nothing sent, key header, next model on failure, empty
+  answers → 503, tool calls clamped, the horn only from behind, a model that calls nothing, only facts accepted; they found a real bug: `trim()`
   with 「」 in its list cut the 。 off a line byte-wise → invalid UTF-8 → 500). Frontend: tsc, vitest 138 passed (5 new for RivalMind),
   build. The block in the duel sim (`BLOCK=4 npx tsx tools/sim-duel.ts`): Oboro and the autobahn, three pairings: no
   respawn, no flip, the blocker never off the road, in front of the chaser 82–90 % of the blocked time on Oboro.
