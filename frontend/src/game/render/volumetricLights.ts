@@ -27,7 +27,9 @@ const LAMP_GAIN = 0.4;
 /** steps along the view ray per headlight cone */
 const STEPS = 6;
 /** how far a headlight's glow reaches (m), and its light in the air against the SpotLight's on surfaces */
-const SPOT_REACH = 50, SPOT_GAIN = 0.5;
+const SPOT_REACH = 50, SPOT_GAIN = 0.32;
+/** the size of a headlamp for the light in the air (m): softens the cone's tip */
+const SPOT_SIZE = 1.6;
 /** the ray is not followed further than this (m): the sky has no depth */
 const FAR = 400;
 /** how much more the haze scatters forward than sideways (Henyey–Greenstein g) */
@@ -169,7 +171,9 @@ export function volumetricLights(depth: TextureNode, camera: THREE.PerspectiveCa
         const reach = far.div(SPOT_REACH * SPOT_REACH).oneMinus().saturate();
         lit.addAssign(cone.mul(reach.mul(reach)).mul(phase(dir, ray)));
       }
-      glow.addAssign(colour.rgb.mul(lit.mul(span).div(h.mul(STEPS)).mul(S.w)));
+      // (1/(d² + a²) instead of 1/d²: a lamp is not a point, and a view ray grazing it must not turn white —
+      // the garage looks across a bike's beam from two metres)
+      glow.addAssign(colour.rgb.mul(lit.mul(span).div(h.mul(h).add(SPOT_SIZE * SPOT_SIZE).sqrt().mul(STEPS)).mul(S.w)));
     }
     return vec4(glow.mul(uDensity), 1);
   })();
