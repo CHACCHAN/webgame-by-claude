@@ -1,0 +1,243 @@
+/* The race: instruments (hud/Hud.tsx), the pause menu, the touch controls. Tokens: tokens.css.
+   Rules of this file: nothing here animates layout, nothing blurs the scene behind (no backdrop-filter over the
+   canvas), what moves per frame is a transform, an opacity or one dash offset on a small element; text keeps
+   readable on any sky by its own dark edge (--hud-edge) and by fixed dark plates, not by the scene. */
+.hud { position: absolute; inset: 0; font-family: var(--font-display); font-stretch: var(--w-cond); color: var(--text); text-shadow: var(--hud-edge); transition: opacity 0.4s linear; }
+.overlay > .hud { pointer-events: none; }
+/* the results take the screen: the instruments go dark behind them */
+.screen-results .hud, .screen-onlineResults .hud { opacity: 0; }
+
+/* ------------------------------------------------------------- top left: clock, live order, sector times */
+.hud-tl { position: absolute; left: 2.2vw; top: 2.6vh; display: flex; flex-direction: column; align-items: flex-start; gap: 0.55rem; }
+.hud-clock { position: relative; isolation: isolate; min-width: 15.5rem; padding: 0.3rem 1.6rem 0.55rem 0.9rem; }
+.hud-clock::before { content: ''; position: absolute; inset: 0; z-index: -1; border-left: 3px solid var(--cyan); background: linear-gradient(90deg, rgb(var(--c-void) / 0.66), rgb(var(--c-void) / 0.36) 68%, rgb(var(--c-void) / 0)); }
+.hud-label { font-stretch: var(--w-norm); font-weight: 500; font-size: var(--fs-xs); letter-spacing: 0.34em; color: var(--cyan); }
+.hud-time { font-stretch: var(--w-tight); font-weight: 700; font-size: 3.4rem; line-height: 1; letter-spacing: 0.02em; font-variant-numeric: tabular-nums; }
+/* the way along the course, with the sector lines */
+.hud-prog { position: relative; height: 4px; margin-top: 0.5rem; background: rgb(var(--c-steel) / 0.32); }
+.hud-prog i { position: absolute; inset: 0; background: var(--cyan); transform-origin: left; transform: scaleX(0); }
+.hud-prog u { position: absolute; top: -3px; bottom: -3px; width: 2px; margin-left: -1px; background: var(--text); }
+.hud-splits { display: grid; gap: 0.1rem; padding-left: 0.95rem; }
+.split { display: flex; align-items: baseline; gap: 0.7rem; font-size: var(--fs-l); font-weight: 600; font-variant-numeric: tabular-nums; }
+.split:last-child { animation: var(--kf-slide) var(--t-enter) var(--e-out) both; }
+.split span { width: 1.6rem; font-stretch: var(--w-norm); font-weight: 500; font-size: var(--fs-xs); letter-spacing: 0.16em; color: var(--muted); }
+.split em, .split-flash em { font-style: normal; }
+.split em.faster, .split-flash.faster em, .split-flash.faster i { color: var(--green); }
+.split em.slower, .split-flash.slower em, .split-flash.slower i { color: var(--magenta); }
+
+/* online: the live order (a tap or N shows the connections' numbers under it) */
+.online-standings { --c: var(--cut-s); list-style: none; margin: 0; padding: 0.3rem 0.5rem 0.3rem 0.4rem; width: 17rem; font-family: var(--font-jp); text-shadow: none; cursor: pointer; }
+.hud .online-standings { pointer-events: auto; }
+.online-standings:empty, .net-stats:empty { display: none; }
+.online-standings li { display: grid; grid-template-columns: 1.2rem 0.55rem 1fr auto; align-items: center; gap: 0.5rem; padding: 0.14rem 0.3rem; font-size: var(--fs-s); line-height: 1.4; }
+.online-standings .pos { font-family: var(--font-display); font-stretch: var(--w-cond); font-weight: 700; font-size: var(--fs-l); line-height: 1; text-align: center; font-variant-numeric: tabular-nums; }
+.online-standings i { width: 0.55rem; height: 0.55rem; transform: rotate(45deg); }
+.online-standings b { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.online-standings em { font-style: normal; font-family: var(--font-display); font-stretch: var(--w-norm); font-size: var(--fs-xs); font-variant-numeric: tabular-nums; color: var(--muted); white-space: nowrap; }
+.online-standings li.me { color: var(--cyan); background: linear-gradient(90deg, rgb(var(--c-cyan) / 0.18), rgb(var(--c-cyan) / 0)); }
+.online-standings li.lost { opacity: 0.5; }
+.online-standings li.lost em { color: var(--magenta); }
+.net-stats { --c: var(--cut-s); margin: 0; padding: 0.4rem 0.7rem; font-family: var(--font-mono); font-size: max(10px, 0.7rem); line-height: 1.5; color: var(--text-2); text-shadow: none; white-space: pre; }
+
+/* ------------------------------------------------------------- top centre: the rival, the ghost, a sector's time */
+.hud-tc { position: absolute; left: 50%; top: 2.2vh; translate: -50% 0; display: flex; flex-direction: column; align-items: center; gap: 0.5rem; }
+.versus { --c: var(--cut-s); --edge: rgb(var(--c-magenta) / 0.6); display: flex; align-items: center; gap: 0.8rem; padding: 0.3rem 1.2rem 0.3rem 0.7rem; text-shadow: none; }
+.versus .pos { min-width: 4.4rem; font-stretch: var(--w-tight); font-weight: 800; font-size: 2.6rem; line-height: 1; text-align: center; }
+.versus .pos.lead { color: var(--cyan); text-shadow: var(--glow-cyan-text); }
+.versus .pos.chase { color: var(--magenta); text-shadow: var(--glow-magenta-text); }
+.vs-info { line-height: 1.2; }
+.vs-info small { display: block; font-stretch: var(--w-norm); font-size: var(--fs-2xs); letter-spacing: 0.2em; color: var(--magenta); }
+.vs-info b { display: block; font-family: var(--font-jp); font-size: var(--fs-m); white-space: nowrap; }
+.vs-info span { font-weight: 600; font-size: var(--fs-l); font-variant-numeric: tabular-nums; }
+/* the rival's line before the start: a transmission under their plate, typed out (Hud.tsx, per frame) */
+.vs-radio { display: none; align-items: center; gap: 0.6rem; max-width: min(42rem, 84vw); }
+.vs-radio.show { display: flex; animation: var(--kf-drop) var(--t-enter) var(--e-out) both; }
+.vs-radio small { flex: none; display: inline-flex; align-items: center; gap: 0.4rem; font-family: var(--font-jp); font-size: var(--fs-xs); letter-spacing: 0.08em; color: var(--magenta); white-space: nowrap; }
+.vs-radio small::before { content: ''; width: 0.5rem; height: 0.5rem; border-radius: 50%; background: var(--magenta); animation: kf-blink 0.8s steps(2) infinite; animation-play-state: var(--kf-idle); }
+.vs-line { --c: 5px; --edge: rgb(var(--c-magenta) / 0.6); min-height: 2em; padding: 0.25rem 0.9rem; font-family: var(--font-jp); font-size: var(--fs-m); text-shadow: none; }
+.ghost-tag { --c: 5px; display: flex; align-items: baseline; gap: 0.6rem; padding: 0.25rem 0.9rem; font-family: var(--font-jp); font-size: var(--fs-s); text-shadow: none; white-space: nowrap; }
+.ghost-tag small { font-family: var(--font-display); font-stretch: var(--w-norm); font-size: var(--fs-2xs); letter-spacing: 0.26em; color: var(--muted); }
+.ghost-tag b { font-family: var(--font-display); font-stretch: var(--w-cond); font-size: var(--fs-l); font-variant-numeric: tabular-nums; }
+/* a sector crossed: its time and the gap to the best, called out for a moment */
+.split-flash { display: flex; align-items: baseline; gap: 0.9rem; padding: 0.1rem 3rem; opacity: 0; white-space: nowrap; background: linear-gradient(90deg, rgb(var(--c-void) / 0), rgb(var(--c-void) / 0.6) 22% 78%, rgb(var(--c-void) / 0)); }
+.split-flash.show { animation: split-flash 2.8s var(--e-out) both; }
+.motion-off .split-flash.show { animation-name: split-flash-plain; }
+@keyframes split-flash { 0% { opacity: 0; transform: scaleX(1.5); } 7% { opacity: 1; transform: none; } 84% { opacity: 1; transform: none; } 100% { opacity: 0; transform: translateY(-0.5rem); } }
+@keyframes split-flash-plain { 0% { opacity: 0; } 7% { opacity: 1; } 84% { opacity: 1; } 100% { opacity: 0; } }
+.split-flash small { font-stretch: var(--w-norm); font-size: var(--fs-xs); letter-spacing: 0.3em; color: var(--cyan); }
+.split-flash b { font-stretch: var(--w-tight); font-weight: 700; font-size: 2.3rem; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.split-flash em { font-weight: 700; font-size: 1.7rem; font-variant-numeric: tabular-nums; }
+.split-flash i { font-style: normal; font-stretch: var(--w-norm); font-size: var(--fs-xs); letter-spacing: 0.26em; }
+
+/* ------------------------------------------------------------- top right: the course map */
+.hud-tr { position: absolute; right: 2.2vw; top: 2.6vh; display: flex; flex-direction: column; align-items: flex-end; gap: 0.4rem; }
+.minimap-box { --c: var(--cut-m); --fill: rgb(var(--c-ink) / 0.46); --tex: none; padding: 0.15rem; line-height: 0; }
+.minimap { display: block; width: 13.75rem; height: 8.75rem; }
+.fps { font-family: var(--font-mono); font-size: var(--fs-xs); color: var(--text-2); }
+
+/* ------------------------------------------------------------- the start: READY, 3, 2, 1, GO */
+.countdown { position: absolute; left: 0; right: 0; top: 23vh; display: grid; justify-items: center; gap: 0.7rem; opacity: 0; }
+.countdown.show { opacity: 1; }
+.countdown b { font-stretch: var(--w-tight); font-weight: 800; font-size: 13rem; line-height: 0.9;
+  text-shadow: 0.035em 0 0 rgb(var(--c-cyan) / 0.85), -0.035em 0 0 rgb(var(--c-magenta) / 0.85), 0 0 2.5rem rgb(var(--c-void) / 0.7); }
+.countdown.pop b { animation: cd-pop 0.42s var(--e-out) both; }
+.countdown[data-n='READY'] b { font-weight: 600; font-size: 4.6rem; line-height: 2.5; letter-spacing: 0.5em; padding-left: 0.5em; text-shadow: var(--hud-edge); animation: cd-ready 1s steps(2) infinite; }
+.countdown[data-n='GO'] b { color: var(--cyan); text-shadow: 0 0 3rem rgb(var(--c-cyan) / 0.8), var(--hud-edge); animation: cd-go 0.9s var(--e-out) both; }
+.motion-off .countdown b { animation-name: kf-fade; }
+@keyframes cd-pop { from { opacity: 0; transform: scale(1.9); } 55% { opacity: 1; } }
+@keyframes cd-ready { 50% { opacity: 0.4; } }
+@keyframes cd-go { 0% { opacity: 0; transform: scale(0.6); } 16% { opacity: 1; transform: scale(1.12); } 62% { opacity: 1; transform: scale(1.22); } 100% { opacity: 0; transform: scale(2.3); } }
+/* the second running out under the numeral */
+.countdown > i { width: 16rem; height: 4px; background: rgb(var(--c-steel) / 0.32); }
+.countdown > i > i { display: block; height: 100%; background: var(--text); transform: scaleX(0); }
+.countdown[data-n='GO'] > i, .countdown[data-n='READY'] > i { visibility: hidden; }
+
+/* ------------------------------------------------------------- warnings: the bend ahead, the wrong way */
+.corner-note { position: absolute; left: 50%; top: calc(2.2vh + 7.8rem); translate: -50% 0; display: flex; align-items: center; gap: 0.8rem; opacity: 0; white-space: nowrap; }
+.corner-note.show { opacity: 1; animation: cn-in 0.3s var(--e-out) both; }
+.motion-off .corner-note.show { animation-name: kf-fade; }
+@keyframes cn-in { from { opacity: 0; transform: scale(1.5); } }
+.cn-sign { flex: none; width: 4.4rem; height: 4.4rem; filter: drop-shadow(0 0 0.4rem rgb(var(--c-void) / 0.85)); }
+.cn-plate { fill: var(--amber); }
+.cn-rim { fill: none; stroke: var(--void); stroke-width: 2.5; }
+.cn-arrow { display: none; }
+.cn-arrow path { fill: none; stroke: var(--void); stroke-width: 8; stroke-linejoin: round; }
+.cn-arrow polygon { fill: var(--void); }
+.corner-note[data-kind='hairpin'] .cn-hairpin, .corner-note[data-kind='tight'] .cn-tight, .corner-note[data-kind='medium'] .cn-medium { display: block; }
+/* (drawn for a left bend; mirrored in the sign's own units) */
+.corner-note[data-dir='right'] .cn-arrow { transform: translateX(100px) scaleX(-1); }
+.cn-text b { display: block; font-family: var(--font-jp); font-weight: 700; font-size: 1.5rem; line-height: 1.25; color: var(--amber); }
+.cn-text small { display: block; font-stretch: var(--w-norm); font-size: var(--fs-xs); letter-spacing: 0.24em; }
+.cn-dist { min-width: 4.6rem; font-stretch: var(--w-tight); font-weight: 700; font-size: 2.3rem; font-variant-numeric: tabular-nums; }
+.wrong-way { position: absolute; left: 50%; top: calc(2.2vh + 13.4rem); translate: -50% 0; display: none; justify-items: center; padding: 0.4rem 2.6rem 0.5rem; color: var(--void); text-shadow: none; white-space: nowrap;
+  background: var(--magenta); clip-path: polygon(1.1rem 0, 100% 0, calc(100% - 1.1rem) 100%, 0 100%); }
+.wrong-way.show { display: grid; animation: kf-blink 0.7s steps(2) infinite; }
+.wrong-way b { font-family: var(--font-jp); font-weight: 700; font-size: 1.9rem; line-height: 1.2; letter-spacing: 0.2em; padding-left: 0.2em; }
+.wrong-way small { font-weight: 700; font-size: var(--fs-xs); letter-spacing: 0.4em; padding-left: 0.4em; }
+
+/* ------------------------------------------------------------- the keys, shown at the start */
+.start-guide { --c: var(--cut-s); position: absolute; left: 2.2vw; bottom: 2.6vh; display: grid; gap: 0.3rem; padding: 0.7rem 1rem; font-family: var(--font-jp); font-size: var(--fs-s); text-shadow: none; opacity: 0; transition: opacity 0.6s linear; }
+.start-guide.show { opacity: 1; }
+.start-guide > div { display: flex; align-items: center; gap: 0.7rem; }
+.start-guide kbd { min-width: 5.5rem; }
+/* (keys or pad by what is plugged in during the race, not by the device used last in the menus) */
+.start-guide .k-key { display: inline-flex; }
+.start-guide .k-pad, .start-guide.pad .k-key { display: none; }
+.start-guide.pad .k-pad { display: inline-flex; }
+
+/* ------------------------------------------------------------- drift score */
+.drift { position: absolute; right: 2.4vw; bottom: calc(2.4vh + 13.5rem); display: grid; justify-items: end; opacity: 0; transition: opacity 0.25s linear; }
+.drift.show { opacity: 1; }
+.drift span { font-weight: 600; font-size: var(--fs-s); letter-spacing: 0.4em; color: var(--cyan); }
+.drift b { font-stretch: var(--w-tight); font-weight: 800; font-size: 3.2rem; line-height: 1; font-variant-numeric: tabular-nums; }
+.drift small { font-stretch: var(--w-norm); font-size: var(--fs-xs); letter-spacing: 0.2em; color: var(--text-2); }
+.drift i { font-style: normal; font-variant-numeric: tabular-nums; }
+
+/* ------------------------------------------------------------- bottom right: revs, gear, speed
+   The cluster is its own container: every size inside is a share of its width (cqw), so the phone's narrower
+   cluster is the same drawing. */
+.hud-br { position: absolute; right: 2.2vw; bottom: 2.4vh; width: 25rem; container-type: inline-size; isolation: isolate; }
+.hud-br::before { content: ''; position: absolute; inset: 6% -7% -9% -7%; z-index: -1; background: radial-gradient(ellipse at 50% 60%, rgb(var(--c-void) / 0.66), rgb(var(--c-void) / 0.3) 48%, rgb(var(--c-void) / 0) 72%); }
+.tach { display: block; width: 100%; height: auto; overflow: visible; }
+/* the band: a dark bed, the unlit segments, the lit part over them, then the cuts between the segments */
+.tach-bg { fill: none; stroke: rgb(var(--c-void) / 0.78); stroke-width: 17; }
+.tach-off { fill: none; stroke: rgb(var(--c-steel) / 0.34); stroke-width: 13; }
+.tach-fill { fill: none; stroke: var(--cyan); stroke-width: 13; stroke-dasharray: 100; stroke-dashoffset: 100; }
+.tach-comb { fill: none; stroke: rgb(var(--c-void)); stroke-width: 17; stroke-dasharray: 0.55 1.95; }
+.tach-red { fill: none; stroke: var(--magenta); stroke-width: 3; }
+.tick { stroke: rgb(var(--c-text) / 0.85); stroke-width: 1.4; }
+.tick-label { fill: var(--text); font-family: var(--font-display); font-stretch: var(--w-norm); font-weight: 600; font-size: 9px; text-anchor: middle; paint-order: stroke; stroke: rgb(var(--c-void) / 0.85); stroke-width: 2.4px; }
+.red .tick { stroke: var(--magenta); }
+.red .tick-label { fill: var(--magenta); }
+.tach-shift { fill: var(--text); }
+/* the shift point: just before the red the band and the gear turn hot */
+.hud-br.hot .tach-fill { stroke: var(--magenta); }
+.hud-br.hot .tach-shift { fill: var(--magenta); }
+.speedo { display: flex; align-items: flex-end; justify-content: center; gap: 4cqw; margin-top: -1.5cqw; }
+.gear-box { display: grid; justify-items: center; gap: 0.6cqw; padding-bottom: 1cqw; }
+.gear-box small, .boost small { font-stretch: var(--w-norm); font-weight: 500; font-size: max(8px, 2.6cqw); letter-spacing: 0.3em; padding-left: 0.3em; color: var(--cyan); }
+.gear { width: 13cqw; height: 15cqw; display: grid; place-items: center; font-stretch: var(--w-tight); font-weight: 800; font-size: 13cqw; line-height: 1; border: 1px solid var(--line-hot); background: rgb(var(--c-ink) / 0.62);
+  clip-path: polygon(2cqw 0, 100% 0, 100% calc(100% - 2cqw), calc(100% - 2cqw) 100%, 0 100%, 0 2cqw); }
+.hud-br.hot .gear { color: var(--void); text-shadow: none; background: var(--magenta); border-color: var(--magenta); animation: kf-blink 0.16s steps(2) infinite; }
+.speed-box { display: flex; align-items: baseline; gap: 1.6cqw; }
+.speed { min-width: 1.32em; font-stretch: var(--w-tight); font-weight: 800; font-size: 25cqw; line-height: 0.86; text-align: right; font-variant-numeric: tabular-nums; }
+.speed.wide { font-size: 19cqw; line-height: 1.1; }
+.unit { font-stretch: var(--w-norm); font-weight: 500; font-size: max(9px, 3.6cqw); letter-spacing: 0.12em; color: var(--text-2); }
+.boost { width: 15cqw; display: grid; gap: 1cqw; padding-bottom: 2.4cqw; }
+.boost small { color: var(--text-2); letter-spacing: 0.22em; padding: 0; }
+.boost > div { height: max(3px, 1.5cqw); background: var(--well); outline: 1px solid var(--line); overflow: hidden; }
+.boost > div > div { height: 100%; background: var(--cyan); transform-origin: left; transform: scaleX(0); }
+
+/* ------------------------------------------------------------- the grid: the instruments power on (Hud.tsx sets
+   `.power-up` once per start) */
+.hud.power-up .hud-tl { animation: var(--kf-slide) 0.5s var(--e-out) both; }
+.hud.power-up .hud-tr { animation: var(--kf-flicker) 0.7s 0.15s linear both; }
+.hud.power-up .hud-br { animation: var(--kf-flicker) 0.8s 0.3s linear both; }
+.hud.power-up .hud-tc { animation: var(--kf-drop) 0.5s 0.45s var(--e-out) both; }
+/* the band sweeps to the red and back (an animation overrides the dash offset the frame loop writes; it must not
+   keep its last frame, or the band would stay empty) */
+.hud.power-up .tach-fill { animation: tach-sweep 1.3s 0.35s var(--e-inout) backwards; }
+.motion-off .hud.power-up .tach-fill { animation: none; }
+@keyframes tach-sweep { 0% { stroke-dashoffset: 100; } 55% { stroke-dashoffset: 0; } 100% { stroke-dashoffset: 100; } }
+
+/* ------------------------------------------------------------- pause */
+.pause { display: grid; place-content: center; justify-items: center; gap: 0.9rem; background: var(--veil); }
+/* (its hints under the box: the foot of the screen belongs to the instruments behind) */
+.pause .hint-bar { position: static; height: auto; }
+.pause-box { --c: var(--cut-l); width: min(27rem, 90vw); padding: 1.5rem 1.4rem 1.2rem; animation: var(--kf-rise) var(--t-enter) var(--e-out) both; }
+.pause-title { font-family: var(--font-display); font-stretch: var(--w-tight); font-weight: 800; font-size: 3.6rem; line-height: 1; letter-spacing: 0.34em; padding-left: 0.34em; text-align: center;
+  text-shadow: 0.04em 0 0 rgb(var(--c-cyan) / 0.8), -0.04em 0 0 rgb(var(--c-magenta) / 0.8); }
+.pause-sub { margin: 0.4rem 0 1rem; text-align: center; font-size: var(--fs-s); letter-spacing: 0.2em; color: var(--muted); }
+
+/* ------------------------------------------------------------- touch controls (hud/TouchControls.tsx) */
+.touch-controls { position: absolute; inset: 0; z-index: 5; }
+.overlay > .touch-controls { pointer-events: none; }
+.touch-controls > * { position: absolute; pointer-events: auto; touch-action: none; }
+.tc-top { top: max(10px, env(safe-area-inset-top)); right: max(12px, env(safe-area-inset-right)); display: flex; gap: 6px; }
+.tc-btn { --c: 6px; --tex: none; --fill: rgb(var(--c-ink) / 0.55); min-width: 54px; min-height: 44px; padding: 0 12px; display: grid; place-items: center; font-family: var(--font-display); font-stretch: var(--w-norm); font-weight: 600; font-size: 15px; color: var(--text); }
+.tc-btn:active { --edge: var(--cyan); --fill: rgb(var(--c-cyan) / 0.4); }
+.tc-steer { left: max(14px, env(safe-area-inset-left)); bottom: max(14px, env(safe-area-inset-bottom)); width: min(38vw, 330px); height: min(36vh, 170px); display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.tc-half, .tc-pedal { --c: var(--cut-m); --tex: none; --fill: rgb(var(--c-ink) / 0.36); display: grid; place-items: center; color: rgb(var(--c-text) / 0.7); }
+.tc-half { font-size: 26px; pointer-events: none; }
+.tc-half.on, .tc-pedal.on { --edge: var(--cyan); --fill: rgb(var(--c-cyan) / 0.36); color: var(--text); }
+.tc-pedals { right: max(14px, env(safe-area-inset-right)); bottom: max(14px, env(safe-area-inset-bottom)); display: flex; align-items: flex-end; gap: 8px; }
+.tc-shift, .tc-col { display: flex; flex-direction: column; gap: 8px; }
+.tc-pedal { width: min(15vw, 120px); font-family: var(--font-jp); font-weight: 700; font-size: 14px; }
+.tc-pedal.gas { height: min(46vh, 210px); }
+.tc-pedal.brake { height: min(26vh, 120px); --edge: rgb(var(--c-magenta) / 0.5); }
+.tc-pedal.brake.on { --edge: var(--magenta); --fill: rgb(var(--c-magenta) / 0.36); }
+.tc-pedal.side { height: min(15vh, 70px); }
+
+/* ------------------------------------------------------------- touch screens: the cluster between the steering pad
+   and the pedals, the map under the buttons */
+.touch .start-guide { display: none; }
+.touch .hud-tr { top: calc(max(10px, env(safe-area-inset-top)) + 54px); right: max(12px, env(safe-area-inset-right)); }
+.touch .hud-br { left: calc(max(14px, env(safe-area-inset-left)) + min(38vw, 330px) + 10px); right: calc(max(14px, env(safe-area-inset-right)) + 2 * min(15vw, 120px) + 18px); bottom: max(8px, env(safe-area-inset-bottom));
+  width: auto; max-width: 25rem; margin: 0 auto; }
+/* (MT: the shift buttons stand left of the pedals) */
+.touch .overlay:has(.tc-shift) .hud-br { right: calc(max(14px, env(safe-area-inset-right)) + 2 * min(15vw, 120px) + 80px); }
+.touch .drift { top: calc(max(10px, env(safe-area-inset-top)) + 64px + 8.75rem + 1rem); right: max(12px, env(safe-area-inset-right)); bottom: auto; }
+
+/* landscape phones (short screens) */
+@media (max-height: 500px) {
+  .hud-tl { top: 8px; gap: 5px; }
+  .hud-clock { min-width: 150px; padding: 2px 16px 5px 9px; }
+  .hud-time { font-size: 34px; }
+  .hud-prog { margin-top: 4px; }
+  .online-standings { width: 190px; padding: 2px 5px 2px 4px; }
+  .online-standings li { padding: 0 3px; gap: 5px; font-size: 11px; }
+  .online-standings .pos { font-size: 13px; }
+  .split { font-size: 13px; }
+  .hud-tc { top: 6px; }
+  .versus .pos { font-size: 26px; min-width: 44px; }
+  .minimap { width: 132px; height: 84px; }
+  .touch .drift { top: calc(max(10px, env(safe-area-inset-top)) + 64px + 84px + 4px); }
+  .touch .drift b { font-size: 26px; }
+  .touch .drift small { display: none; }
+  .countdown b { font-size: 120px; }
+  .countdown[data-n='READY'] b { font-size: 40px; }
+  .pause-box { padding: 12px 14px 10px; width: min(360px, 90vw); }
+  .pause-title { font-size: 30px; }
+  .pause-sub { margin: 2px 0 6px; }
+  .pause .menu-list.compact li { padding: 7px 14px; }
+}

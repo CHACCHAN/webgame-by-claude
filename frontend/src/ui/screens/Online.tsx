@@ -10,7 +10,7 @@ import { loadPlayer, type RoomMember, type RoomState } from '../../api/client';
 import { SLOT_COLORS } from '../../game/net/RemoteRacers';
 import { formatTime } from '../format';
 import { sfx } from '../sfx';
-import { Hint } from './Menus';
+import { Hint, Notice, ScreenHead } from '../kit';
 import { chooseCar, createRoom, joinRoom, leaveRoom, registerName, rematch, startOnlineRace, takeBackReady, toggleReady, useOnline } from '../../store/online';
 import { showRoomLineup, useLobby } from '../../store/lobby';
 import { CONDITIONS } from './RaceSetup';
@@ -70,11 +70,12 @@ export function OnlineLobbyScreen() {
   }, !picking);
   return (
     <div className="screen online-lobby">
-      <div className="crumb center">ONLINE BATTLE ― オンライン対戦（最大{MAX_PLAYERS}人）</div>
-      <div className="ol-panel">
+      <ScreenHead jp="オンライン対戦" en="ONLINE BATTLE" note={`最大${MAX_PLAYERS}人・ルームコードで集まる`} />
+      <div className="ol-panel stagger">
         {!player ? (
           <form className="ol-section" onSubmit={(e) => { e.preventDefault(); sfx.confirm(); void registerName(name); }}>
             <label>走り屋ネーム（16文字まで）</label>
+            <p className="ol-help">ルームとランキングに表示される名前です。</p>
             <div className="ol-row">
               <input className="ol-name" autoFocus maxLength={16} value={name} placeholder="名無しの走り屋" onChange={(e) => setName(e.target.value)} />
               <button className="cta small" type="submit" disabled={busy}>決定</button>
@@ -119,9 +120,47 @@ export function OnlineLobbyScreen() {
             </div>
           </>
         )}
-        {error && <div className="ol-error">{error}</div>}
+        {error && <OnlineError message={error} />}
       </div>
-      <Hint items={[['←→', '車両選択'], ['Esc', '戻る']]} />
+      <Hint items={[['lr', '車両選択']]} />
+    </div>
+  );
+}
+
+/** What went wrong with the server or the room, and what can be done about it. */
+function OnlineError({ message }: { message: string }) {
+  // (no answer, or the proxy answering for a server that is down)
+  const offline = message.includes('接続できません') || /^HTTP 5\d\d$/.test(message);
+  // the server's own words (a status, a validation message in English): the detail under a line of ours
+  const raw = /^[\x20-\x7e]+$/.test(message);
+  return (
+    <Notice className="ol-error" title={offline ? 'サーバーに接続できません' : raw ? '操作を完了できませんでした' : message}>
+      {offline ? '通信状態を確かめて、もう一度お試しください。ひとりで走るモードはそのまま遊べます。' : null}
+      {raw && <code className="notice-code">{message}</code>}
+    </Notice>
+  );
+}
+
+/** The room is gone under the player (closed by its host, or lost with the connection): say so, and the way out. */
+function RoomGone() {
+  const go = useApp((s) => s.go);
+  const error = useOnline((s) => s.error);
+  const leave = () => {
+    sfx.back();
+    go('online');
+  };
+  useMenuInput((a) => {
+    if (a === 'back' || a === 'confirm') leave();
+  });
+  return (
+    <div className="screen online-room room-gone">
+      <ScreenHead jp="オンライン対戦" en="ONLINE BATTLE" />
+      <div className="ol-panel">
+        <Notice title={error ?? 'ルームが閉じられました'}>ホストが退出したか、通信が切れました。ロビーから新しいルームを作るか、別のコードで参加できます。</Notice>
+        <div className="ol-actions">
+          <button className="cta" onClick={leave}>ロビーに戻る</button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -129,7 +168,8 @@ export function OnlineLobbyScreen() {
 function RealtimeBadge() {
   const realtime = useOnline((s) => s.realtime);
   const label = { off: 'OFFLINE', connecting: '接続中…', live: 'LIVE', failed: '通信: ポーリング' }[realtime];
-  return <span className={`rt-badge ${realtime}`}>{label}</span>;
+  const title = { off: 'リアルタイム通信は切れています', connecting: 'リアルタイム通信に接続しています', live: 'リアルタイム通信中', failed: 'リアルタイム通信に接続できません。ルームの状態は数秒おきに取得しています' }[realtime];
+  return <span className={`rt-badge ${realtime}`} title={title}>{label}</span>;
 }
 
 /**
@@ -260,7 +300,8 @@ export function OnlineRoomScreen() {
   const unready = room ? room.players.filter((p) => p.id !== room.host_id && !p.ready).length : 0;
   const canStart = waiting && enough && !loading && !unready;
   const start = () => {
-    if (busy || !canStart) return;
+    if (busy) return;
+    if (!canStart) return void sfx.deny();
     sfx.confirm();
     void startOnlineRace();
   };
@@ -278,13 +319,14 @@ export function OnlineRoomScreen() {
       setPicking(neighbourVehicle(room.track_id, carId, a === 'left' ? -1 : 1));
       sfx.move();
     }
-  }, !picking);
-  if (!room || !player) return null;
+  }, !picking && !!room);
+  if (!player) return null;
+  if (!room) return <RoomGone />;
   const course = COURSES[room.track_id as CourseId];
   return (
     <div className={`screen online-room ${dragging ? 'orbiting' : ''}`} {...orbit}>
       {!picking && <LobbyTags room={room} playerId={player.id} choosing={choosing} />}
-      <div className="crumb center">ONLINE ROOM ― {course?.name ?? room.track_id} ・ {CONDITIONS.find((c) => c.id === room.time_of_day)?.jp ?? ''} <RealtimeBadge /></div>
+      <ScreenHead jp="ルーム" en="ONLINE ROOM" note={<>{course?.name ?? room.track_id}・{CONDITIONS.find((c) => c.id === room.time_of_day)?.jp ?? ''} <RealtimeBadge /></>} />
       <div className="ol-panel">
         <div className="ol-code-big">
           <small>ROOM CODE</small>
@@ -329,9 +371,9 @@ export function OnlineRoomScreen() {
           )}
           <button className="cta small ghost ol-leave" onClick={exit}>退出</button>
         </div>
-        {error && <div className="ol-error">{error}</div>}
+        {error && <OnlineError message={error} />}
       </div>
-      <Hint items={[['←→', '車両選択'], ['ドラッグ', '視点'], ['Enter', isHost ? 'スタート' : me?.ready ? '準備完了を取り消す' : '準備完了'], ['Esc', '退出']]} />
+      <Hint items={[['lr', '車両選択'], ['drag', '視点'], ['ok', isHost ? 'スタート' : me?.ready ? '準備完了を取り消す' : '準備完了']]} />
     </div>
   );
 }
@@ -347,17 +389,20 @@ export function OnlineResultsScreen() {
   }, []);
   useMenuInput((a) => {
     if (a === 'back') { sfx.back(); void leaveRoom(); go('modes'); }
-  });
-  if (!room || !player) return null;
+    // the host's Enter is the rematch button
+    if (a === 'confirm' && room && player && room.host_id === player.id && !busy) { sfx.confirm(); void rematch(); }
+  }, !!room);
+  if (!player) return null;
+  if (!room) return <RoomGone />;
   const isHost = room.host_id === player.id;
   const rows = [...room.players].sort((a, b) => (a.finish_ms ?? Infinity) - (b.finish_ms ?? Infinity));
   const winner = rows[0]?.finish_ms !== null ? rows[0] : null;
   return (
-    <div className="screen online-results">
-      <div className="crumb center">ONLINE BATTLE RESULT ― {COURSES[room.track_id as CourseId]?.name}</div>
+    <div className="screen online-results" data-wipe="none">
+      <ScreenHead jp="リザルト" en="ONLINE BATTLE RESULT" note={COURSES[room.track_id as CourseId]?.name} />
       <div className="ol-panel">
-        <div className="ol-headline">{winner ? (winner.id === player.id ? 'WINNER!' : `${winner.name} の勝利`) : '集計中…'}</div>
-        <ol className="ol-standings">
+        <div className={`ol-headline${winner?.id === player.id ? ' mine' : ''}`}>{winner ? (winner.id === player.id ? 'WINNER!' : `${winner.name} の勝利`) : '集計中…'}</div>
+        <ol className="ol-standings stagger">
           {rows.map((p, k) => (
             <li key={p.id} className={p.id === player.id ? 'me' : ''}>
               <span className="pos">{p.finish_ms !== null ? k + 1 : '-'}</span>
@@ -377,8 +422,9 @@ export function OnlineResultsScreen() {
           )}
           <button className="cta small ghost" onClick={() => { sfx.back(); void leaveRoom(); go('modes'); }}>ルームを出る</button>
         </div>
-        {error && <div className="ol-error">{error}</div>}
+        {error && <OnlineError message={error} />}
       </div>
+      {isHost && <Hint items={[['ok', 'もう一度走る']]} />}
     </div>
   );
 }

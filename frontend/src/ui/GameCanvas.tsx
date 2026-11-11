@@ -109,7 +109,6 @@ export function GameCanvas() {
   const upscaleMode = useSettings((s) => s.upscaleMode);
   const sharpness = useSettings((s) => s.sharpness);
   const canvas = useRef<HTMLCanvasElement>(null);
-  const busy = useApp((s) => s.busy);
   /** 0: the planned backend; 1: WebGL 2 on a new canvas, after WebGPU came up and the renderer could not be built */
   const [attempt, setAttempt] = useState(0);
   const [failed, setFailed] = useState<null | 'none' | 'lost'>(null);
@@ -159,26 +158,27 @@ export function GameCanvas() {
     <div className="game-canvas">
       {/* (a new element per attempt: a canvas that has given a WebGPU context gives no WebGL 2 one) */}
       <canvas key={attempt} ref={canvas} />
-      {busy && (
-        <div className="busy-mark">
-          <i />
-          {busy}
-        </div>
-      )}
-      {failed === 'none' && (
-        <div className="no-webgl">
-          このブラウザでは WebGPU / WebGL2 が利用できないため、ゲームを表示できません。
-          <br />
-          最新の Chrome / Edge / Firefox で、ハードウェアアクセラレーションを有効にしてお試しください。
-        </div>
-      )}
-      {failed === 'lost' && (
-        <div className="no-webgl">
-          グラフィックスデバイスとの接続が繰り返し失われたため、描画を停止しました。
-          <br />
-          ほかの重いアプリやタブを閉じてから再読み込みしてください。
-          <br />
-          <button className="mini" onClick={() => location.reload()}>再読み込み</button>
+      {/* (the mark for `busy` is the shell's: ui/Shell.tsx `BusyMark`, above every screen) */}
+      {failed && (
+        <div className="no-webgl" role="alert">
+          <div className="fault">
+            <div className="fault-code">{failed === 'none' ? 'RENDER / NO DEVICE' : 'RENDER / DEVICE LOST'}</div>
+            <h2>{failed === 'none' ? '描画を開始できません' : '描画を停止しました'}</h2>
+            {failed === 'none' ? (
+              <p>
+                このブラウザでは WebGPU / WebGL2 が利用できないため、ゲームを表示できません。
+                <br />
+                最新の Chrome / Edge / Firefox で、ハードウェアアクセラレーションを有効にしてお試しください。
+              </p>
+            ) : (
+              <p>
+                グラフィックスデバイスとの接続が繰り返し失われたため、描画を停止しました。
+                <br />
+                ほかの重いアプリやタブを閉じてから再読み込みしてください。
+              </p>
+            )}
+            <button className="mini" onClick={() => location.reload()}>再読み込み</button>
+          </div>
         </div>
       )}
     </div>

@@ -35,6 +35,8 @@ export interface Settings {
   rivalAi: boolean;
   controlsGuide: boolean;
   showFps: boolean;
+  /** the interface's motion: wipes between screens, counting numbers, the title's idle life (off: plain fades) */
+  uiMotion: boolean;
   courseId: CourseId;
   set: (patch: Partial<Omit<Settings, 'set'>>) => void;
 }
@@ -60,6 +62,7 @@ export const useSettings = create<Settings>()(
       rivalAi: true,
       controlsGuide: true,
       showFps: false,
+      uiMotion: true,
       courseId: DEFAULT_COURSE,
       set: (patch) => set(patch),
     }),
