@@ -407,7 +407,9 @@ proposed freeing the oldest first when it runs short.
   first dawn on a course, and the first visit of a course (the terrain is built on the main thread: frames of 1–1.4 s
   behind the loading screen).
 - Verified: tsc, vitest (147), the build; `gpu-errors.cjs` 0 on WebGPU and WebGL 2; `backend-fallback.cjs`;
-  before / after pictures of the attract run, garage, grid, rain, dawn and waiting room (same look); E2E (below).
+  before / after pictures of the attract run, garage, grid, rain, dawn and waiting room (same look); E2E on an
+  isolated stack: 13 of 13 (the phone test failed first: it read a tab's place while the car select was still
+  sliding in, which the old freeze had hidden; its taps now wait until the target stands still).
   Not verified: phones on a device; a slow network (the mark and the waits were only seen locally); the hitch numbers
   on WebGL 2 and on medium / low; a real GPU out-of-memory.
 
