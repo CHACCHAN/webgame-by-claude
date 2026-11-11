@@ -589,6 +589,14 @@ rival) was approved by the owner the same day. CLAUDE.md "The rivals' voice"; do
     menu navigation, rival battle, course select, phone: 5 passed (10.6 min). The whole suite was not run.
   - `tsc`, 164 unit tests, build (the worker is 126 kB, the runtime's WebAssembly 28.7 MB, both fetched only when
     the voice is loaded).
+- **Live** (11-11, main `27efc93` + this note, bundle `index-3tF9oDyG.js`): deployed, the model fetched into the live
+  `tts` volume (`tts-fetch`, 383 MB, checksums right). Checked: the bundle and the leaderboard locally and through
+  the public address; the model's files through the public address (36 MB in 0.8 s from this machine, the 257 MB
+  file's headers, the licence as text; Cloudflare does not cache them: `DYNAMIC`); `gpu-errors.cjs` 0 on WebGPU and
+  WebGL 2; `voicecheck.cjs` against the live site: the language model's own line (「免許取り立てだけど、この峠じゃ負け
+  ないからな！」) came up with its voice 0.35 s after the text, 3.5 s of speech. In that run a line synthesised every
+  1.5 s **during** the race gave 10 frames over 40 ms (worst 67 ms; the two runs before gave none, the machine was
+  busier): the game itself speaks only before the start and after the finish.
 - **Not verified**: how it sounds (I cannot hear: the owner got a sample of the ten voices on 11-11; which rival
   gets which voice was assigned from names and portraits, to be changed by ear), whether names and kanji are read
   right, other GPUs and browsers (Safari, Firefox, phones: the download alone is 400 MB), the download through the
