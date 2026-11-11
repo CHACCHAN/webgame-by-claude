@@ -47,7 +47,10 @@ pending. `docs/PLAN.md` holds the design.
 ## Environment notes (owner's PC `ubuntu-dev`, when the owner opens a session there)
 - The live stack (compose project `touge-nocturne` + cloudflared) runs on this machine. Deploy finished changes with
   `docker compose up -d --build` without asking (owner's standing permission; nobody else uses the site yet), then
-  check that the new build is served. Other compose projects on the host are unrelated: leave them alone.
+  check that the new build is served. Before a deploy: `node tools/gpu-errors.cjs` on the build (GPU errors over the
+  garage / race paths, and that the race camera is with the car) and look at one picture of a race: tests look at
+  states, and a build whose camera stayed at the garage passed them all (11-11).
+  Other compose projects on the host are unrelated: leave them alone.
 - `vite preview` inherits the dev proxy (`/api` → localhost:8080 = the live server): always serve with
   `API_PROXY=http://127.0.0.1:9 npx vite preview …` so test runs cannot create players or submit runs.
 - No Node on the host: use a user-space Node 24 tarball (nodejs.org) and `npm i playwright-core` outside the repo
