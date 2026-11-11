@@ -166,7 +166,7 @@ export function roadMaterial(look: RoadLook, detail: 1 | 2 | 3): MeshStandardNod
   const puddle = smoothstep(0.585, 0.66, hollow).mul(wet).mul(float(1).sub(iron)) as Float;
   col = col.mul(mix(float(1), mix(float(0.5), float(0.62), paint), wet)) as unknown as Vec3;
   col = mix(col, col.mul(0.72), puddle) as unknown as Vec3;
-  rough = mix(mix(rough, rough.mul(0.42).add(0.06), wet), float(0.03), puddle) as Float;
+  rough = mix(mix(rough, rough.mul(0.3).add(0.02), wet), float(0.03), puddle) as Float;
 
   mat.colorNode = vec4(col, 1);
   mat.roughnessNode = clamp(rough, 0.03, 1);
