@@ -140,8 +140,17 @@ test('online battle: five in one room (three games, two more through the API), e
   await expect(b.page.locator('.ol-slots li.me em.ready')).toHaveText('準備完了 ✓');
   await expect(start).toHaveText('準備完了待ち… あと1人', { timeout: 30_000 });
   await expect(host.page.locator('.ol-slots em.ready')).toHaveCount(3);
-  // another car takes the ready back; Enter gives it again
-  await b.page.locator('.ol-cars .chip', { hasText: 'RX-7 (FD3S)' }).click();
+  // looking around in the car select enters nothing (the ready stays); the car confirmed there takes the ready
+  // back; Enter gives it again
+  await b.page.locator('.ol-vehicle').click();
+  await b.page.locator('.vp-tile[data-id="shiden"]').click();
+  await expect(b.page.locator('.vp .car-name')).toHaveText('RX-7 (FD3S)');
+  expect(await b.page.evaluate(() => (window as any).__game.garageCar.spec.id)).toBe('shiden');
+  await b.page.waitForTimeout(1500);
+  await expect(host.page.locator('.ol-slots em.ready')).toHaveCount(3);
+  await b.page.locator('.vp .cta', { hasText: 'この車でエントリー' }).click();
+  await expect(b.page.locator('.vp')).toHaveCount(0);
+  await expect(b.page.locator('.ol-vehicle')).toContainText('RX-7 (FD3S)');
   await expect(b.page.locator('.ol-ready')).toHaveText('準備完了', { timeout: 30_000 });
   await expect(start).toHaveText('準備完了待ち… あと2人', { timeout: 30_000 });
   await expect(b.page.locator('.ol-ready')).toBeEnabled();

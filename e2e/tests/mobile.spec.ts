@@ -26,8 +26,17 @@ test('phone: menus by taps, back button, a race driven with the touch controls',
   await tap('.course-card');
   await expect(page.locator('.choice-card').first()).toBeVisible({ timeout: 120_000 });
   await tap('.choice-card');
-  // the car select's button is in view without scrolling
+  // the car select: a tab and a tile by taps (a tap on another tile only highlights it), and its button is in view
+  // without scrolling
   await expect(page.locator('.cta', { hasText: 'この車に決定' })).toBeInViewport({ timeout: 60_000 });
+  await tap('.vp-tab[data-tab="car"]');
+  await expect(page.locator('.vp-tab.on')).toHaveAttribute('data-tab', 'car');
+  await tap('.vp-tile[data-id="s15"]');
+  await expect(page.locator('.car-name')).toHaveText('SILVIA spec-R (S15)');
+  await tap('.vp-tile[data-id="hayate"]');
+  await expect(page.locator('.car-name')).toHaveText('SPRINTER TRUENO AE86');
+  await expect(page.locator('.vp-tabs')).toBeInViewport();
+  await expect(page.locator('.cta', { hasText: 'この車に決定' })).toBeInViewport();
   await tap('.cta', 'この車に決定');
   await tap('.choice-card');
   await page.waitForFunction(() => (window as any).__game.phase === 'racing', null, { timeout: 120_000 });
