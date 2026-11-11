@@ -8,5 +8,18 @@ import '@fontsource/shippori-mincho/800.css';
 import './ui/styles.css';
 import { App } from './App';
 
+// A deploy replaces the hashed files: a game opened before it then asks for a chunk (a model loader, the audio) that
+// is gone. Load the new build instead of failing; not twice within a minute (a second failure is something else).
+window.addEventListener('vite:preloadError', (e) => {
+  try {
+    if (Date.now() - Number(sessionStorage.getItem('touge-reloaded') ?? 0) < 60_000) return;
+    sessionStorage.setItem('touge-reloaded', String(Date.now()));
+  } catch {
+    return;
+  }
+  e.preventDefault();
+  location.reload();
+});
+
 // StrictMode is intentionally not used: the 3D world is a heavyweight singleton.
 createRoot(document.getElementById('root')!).render(<App />);

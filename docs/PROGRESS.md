@@ -180,6 +180,83 @@ Plan: `docs/FABLE_PLAN.md`. Commits `2074c02` (renderer), `0c79c61` + merge `a4c
   lights; 252 `no buffer is bound to enabled attribute` per run; WebGPU makes the buffer again). Sprites keep their
   quad now. `tools/gpu-errors.cjs` walks these paths and counts the GPU's errors: 0 on both backends.
 
+### F2 / F3 / G1–G3 merged (11-11): car select, waiting room, netcode — three agents in worktrees
+Each worked on its own branch with its own stack; reports kept in the session, numbers below are theirs unless it
+says "checked here". The account's usage limit cut all three off twice; they resumed from their worktrees.
+
+- **Car select (F2)**: `ui/garage/VehiclePicker` for single player and online: tabs by kind, a grid of thumbnails,
+  five bars (acceleration, top speed, cornering, power, weight) from figures measured by the headless sim
+  (`tools/vehicle-stats.ts` → `vehicleStats.json`: 0–100, top speed, skid-circle g; e.g. roach 0.88 s / 1226 km/h,
+  E5 320 km/h, Cybertruck 209.5), sorting, favourites, grid keys (Q/E tabs, R sort, C colour, X favourite).
+  Thumbnails are drawn by the game itself on the GPU (`tools/thumbs.cjs`), redrawn here with the current look (18).
+  Checked here on the GPU: the picker at 1600×900 and on the phone layout (all / cars / bikes / trains / other),
+  0 errors; the keyboard path title → race still starts the race.
+- **Waiting room (F3)**: the members' vehicles stand on the course in the start grid's rows; the vehicle someone is
+  looking at shows in their seat on everyone's screen (選択中), confirmed only by the select's button. Merged with
+  the picker here: opening the select in a room is the browsing (the game's `'garage'` event), closing it brings
+  the line-up back (`showRoomLineup(keep)`). Checked here on the GPU (WebGPU, five members, 1080p high): 87–108 fps;
+  a member joining or swapping costs one long frame while the model is built (E5 0.6–0.9 s, a bike 0.25 s, cars
+  50–140 ms): not hitch-free.
+- **Netcode (G1–G3)**: 30 Hz compact states with velocity / acceleration / turn rate, a clock per peer, peers drawn
+  in the present with eased corrections, link statistics (N key), `?netsim`. Replay tool (RTT 100 ms, jitter ±20,
+  loss 2 %, 60 fps): position error of a car 1.26 m mean / 2.35 max before → 0.03 / 0.14 after (autobahn at 240
+  km/h: 1.83 → 0.05); two solid cars touch 17 ms apart on the two screens (before: 21 s apart, or never on one).
+  Reverb `tcp_nodelay`: relay delay with five players 23–30 ms → 2.7 ms mean (localhost). A train's rear cars are
+  up to 0.78 m off for a moment after it hits a wall; at 30 fps one 39 cm jump there.
+- **Found while merging, fixed here**: the waiting room's and the garage's camera could stand inside a tree (it
+  depended on where the slow swing was when you looked): a round clearing among the trees follows the camera's
+  circle (`clearing`, the trees inside shrink to nothing with their shadows). A long line-up (a Shinkansen in the
+  room) moved the camera behind a bank that hid the front row: the camera's side is chosen again with every change
+  of the room and has to see both ends of the line-up. A bike's or the cockroach's headlight was a white cone
+  across the garage picture (the camera looks across the beam from two metres): a lamp has a size now
+  (`SPOT_SIZE`), gain 0.5 → 0.32.
+- Checked here: tsc, vitest 133 (11 files), build; backend tests 20 (304 assertions) on the merged tree;
+  `tools/gpu-errors.cjs` 0 on both backends.
+- **Not verified** (theirs and mine): smoothness of the peers judged by eye at a normal frame rate with two real
+  players (numbers only); contact in the browser; the netcode over the Cloudflare tunnel; mouse / touch / pad in
+  the picker beyond what the E2E clicks; the lobby on other courses and times of day (unit test only); bikes, the
+  cockroach and the L0 through the replay tool; one WebGPU message seen once and not again ("sampler type …
+  Comparison" for a train's material while four members joined at once; the picture was right).
+
+### System base: stability (11-11)
+What a deploy or a bad hour could break, found by reading the stack, and changed:
+- nginx resolved `app` once at start: after the backend alone was rebuilt it answered 502 until it was restarted
+  too. It asks Docker's DNS as requests come in now (`resolver` + `$app`).
+- `app` has a health check (PHP-FPM and Reverb both listen), `web` one too and starts only when `app` is healthy.
+- The Reverb key was made anew by every container, so every deploy cut the open games off from their rooms until a
+  reload. Keys that `.env` does not give are made once and kept in the `secrets` volume.
+- Reverb can stop answering while its port still accepts connections: every room then falls back to polling, and
+  the process ignores SIGTERM. Seen once, made on purpose three times: by taking the container's network away and
+  giving it back (a test of the nginx change; not something a deploy does). A watchdog in the entrypoint asks it
+  every 10 s and ends it (SIGKILL) after three silent checks, the loop that was there starts another; the health
+  check asks Reverb over HTTP now, not just its port.
+- PHP-FPM ran Ubuntu's default of 5 workers (a five-player room polls and reports through them): 16, a hung
+  request ends after 30 s, a worker is replaced after 2000 requests.
+- Container logs had no size limit: 3 × 10 MB each.
+- No copy of the database existed (players, runs, ghosts): the `backup` service dumps it once a day into the
+  `backups` volume, one file per day of the month; how to restore is written in `docker/backup/backup.sh`.
+- A game opened before a deploy asked for files of the old build that were gone (a model loader, the audio):
+  it reloads itself once (`vite:preloadError`).
+- Verified on the isolated stack (`touge-wt-merge`): both containers report healthy; the key is the same after the
+  app container is made anew; with the app container moved to another address the API and the WebSocket path answer
+  at once (200 / 101) without touching nginx; the worker settings are in the running pool; the dump is written
+  (672 kB, 11 tables) and restoring it brought back five deleted runs (25 of 25), leaderboard 200 afterwards.
+  The watchdog: Reverb hung by the network change answered again 45 s later (log: "does not answer, ending it",
+  "Starting server"), a WebSocket handshake with the room key then got `connection_established`.
+- **Not verified**: the reload on a missing chunk in a browser (it needs a deploy between two page loads); the
+  backup on the day after (the loop's second round); 16 workers under a real load.
+- Not done, candidates: `cloudflared:latest` is not pinned to a version; rooms are tidied up only when a room is
+  made; a copy of the backups outside this machine.
+
+### E2E on the merged tree (11-11)
+- Whole suite (13 tests, isolated stack): 11 passed, 2 failed by time: the time attack (the lap was at 1:41 of
+  1:54 when the 4 minutes ran out) and the five-player battle (the second game was still loading after 3 minutes).
+- Not the merge: the build that passed the same time attack in 3.0 min on 11-10 (`588ddb3`) failed it today in the
+  same way on the same machine, built and run next to it. The software renderer is slower today, by about 1.3–1.6×
+  in every test (boot 47 → 55 s, rival 1.7 → 2.3 min, phone 1.6 → 2.6 min); the machine was idle (no steal time).
+  Why: not found. On the host's Chrome with SwiftShader the merged build is not slower than the old one.
+- The two tests wait longer now (the lap up to 8 min, a game's loading up to 7 min).
+
 ## Session 8 (2026-11-10) — new vehicles: Cybertruck, Yangwang U9 Xtreme, three motorcycles, the L0 maglev
 
 Owner: 「テスラのサイバートラック、バイクを3台、リニアモータ新幹線を実装してください」 (bikes chosen: Honda NSR250R,

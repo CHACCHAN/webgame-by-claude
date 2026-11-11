@@ -127,15 +127,50 @@ pending. `docs/PLAN.md` holds the design.
   instanced parts (paint / gloss / matte / lamps), simplified with meshoptimizer at load; a new car GLB shows up there
   without further work.
 - Online battle (≤5 players, `game.online.max_players`): lobby/start/results via `RoomController`; car states are presence-channel client events
-  (`client-state`, ~12 Hz) relayed by Reverb, which runs inside the `app` container (entrypoint, `START_REVERB`), proxied by
-  nginx at `/app/`. Reverb key/secret are generated per container; never commit them. Client: `store/online.ts`,
-  engine side `game/net/RemoteRacers.ts`. Online race time = max(physics clock, wall clock since the shared green light).
+  (`client-state`) relayed by Reverb, which runs inside the `app` container (entrypoint, `START_REVERB`), proxied by
+  nginx at `/app/`. Reverb key/secret are generated once and kept in the `secrets` volume (see Stack); never commit them. Client: `store/online.ts`,
+  engine side `game/net/` (`game.net`). Online race time = max(physics clock, wall clock since the shared green light).
+  Car states: arrays of whole numbers at 30 Hz, at once on an impact (`net/codec.ts`: pose, velocity, acceleration,
+  turn rate, sequence, respawn epoch; Reverb re-encodes JSON in PHP, so whole numbers only), sent and received by
+  `NetLink` on a `NetTransport` (`store/online.ts` `relay`: the seam a WebRTC DataChannel will take). A clock per peer
+  (`net/clock.ts`, NTP-style echo on the state stream: Reverb has no time source). Peers are drawn in the present
+  (`PeerTrack`: the newest packet carried on, corrections eased, a snap above 8 m or on a respawn), not in an
+  interpolation buffer: the buffered mode (`?netmode=buffered`) shows a car metres behind where it is, and solid cars
+  then touch at different moments on the two screens. Link numbers per peer: N key in a race, `?netstats=1`,
+  `game.net.stats()`; a bad link for tests: `?netsim=<one-way ms>,<jitter ms>,<loss %>` or `game.net.impair(…)`.
+  Check a change with `npx tsx tools/net-replay.ts <vehicles>` (error against the true path under delay, jitter, loss;
+  `duel=1`: when two solid cars touch on each screen). Reverb: rate limiting must stay off
+  (`REVERB_APP_RATE_LIMITING_ENABLED`: 60 messages a minute), `tcp_nodelay` is on (`config/reverb.php`: without it
+  three players and more waited 23–30 ms per relay), messages ≤ 10 kB.
+  Waiting room: every member's vehicle stands on the course in the start grid's rows (`Game.showLobby`,
+  `net/LobbyLineup.ts`, `net/lineup.ts`; `window.__game.lobbyState`), under the garage's camera. The vehicle a member
+  is looking at in the car select is told to the others (`client-browse`, ≤ 2 Hz, only changes: `net/browse.ts`,
+  `store/lobby.ts`, which hears the game's `'garage'` event) and stands in their seat as 選択中; only the select's
+  confirm calls `chooseCar` (the server takes the ready back). Closing the select: `showRoomLineup()`.
   Start grid: `game/net/grid.ts` `onlineGrid(room, startS)`, a pure function of the room (slot + vehicle of everyone) used
   for the local car and the peers alike: rows of up to three in the narrowest start road (9.5 m), trains behind the
   others, rows as far apart as the vehicles in them are long (`grid.test.ts` checks every course and vehicle).
   One paint per slot: `SLOT_COLORS` (five).
+- Stack (`docker-compose.yml`): nginx looks `app` up per request (`resolver 127.0.0.11` + `$app` in `docker/web/nginx.conf`:
+  a name written straight into `fastcgi_pass` / `proxy_pass` is resolved once at start and answers 502 after the
+  backend alone is rebuilt); `app` is healthy when PHP-FPM listens and Reverb answers over HTTP, `web` starts after that;
+  a watchdog in `docker/php/entrypoint.sh` ends a Reverb that stops answering (it can hang with its port open and
+  ignore SIGTERM: seen after `docker network disconnect` / `connect` on the running container, so do not do that). Keys that
+  `.env` does not give (APP_KEY, Reverb key / secret) are generated once into the `secrets` volume
+  (`docker/php/entrypoint.sh`), so the games that are open reconnect after a deploy. `backup` dumps the database once a
+  day into the `backups` volume (`docker/backup/backup.sh`, one file per day of the month). Logs are capped (`x-logging`).
+  The client reloads itself once when a chunk of an older build is gone (`vite:preloadError` in `main.tsx`).
 - Public access: Cloudflare Tunnel, started by plain `docker compose up` when `.env` has `COMPOSE_PROFILES=tunnel` and `CLOUDFLARE_TUNNEL_TOKEN` (dashboard route → `http://web:80`); an explicit `--profile dev|test` replaces it.
   nginx restores the visitor IP from `CF-Connecting-IP`, trusting only cloudflared's fixed address `172.30.77.10`: keep `docker-compose.yml` and `docker/web/nginx.conf` in sync.
+- Car select (`ui/garage/`: `VehiclePicker` is the one component: single player's `GarageScreen`, online's
+  `OnlineVehicle`): tabs by kind (`KIND_ORDER`, `KindTraits.label`), a grid of thumbnails, bars from measured figures,
+  sorting, favourites (`store/garage.ts`, localStorage `touge-garage`). A new or changed vehicle needs
+  `npx tsx tools/vehicle-stats.ts <id>` (the headless sim: 0–100, top speed, skid-circle g →
+  `vehicle/vehicleStats.json`; a vitest fails without an entry) and `node tools/thumbs.cjs <id>` (the game's own
+  garage on the GPU → `public/img/vehicles/<id>.webp`; run them all again after a change of the look). The garage's
+  camera is aimed by `game.garageFraming` (the picker puts the vehicle in the free part of the screen) and a kind's
+  `garage.middle` / `garage.span`. Trees inside the camera's circle are shrunk away (`clearing` in
+  `render/instancing.ts`, set by `Game.garageCamera`), in the waiting room too.
 - Race setup order (single player): mode → course → time & weather (`ConditionsScreen`) → car (`GarageScreen`) → AT/MT
   (`TransmissionScreen`) → rival (rival mode) → race; ghost battles pick the ghost between conditions and car. The last
   choices persist in settings (`timeOfDay`, `autoShift`) but are no longer in the settings screen. Online rooms carry the
@@ -209,8 +244,9 @@ pending. `docs/PLAN.md` holds the design.
   grip assist keeps flat-out corners from sliding. The AI drives as `gripDriver` and skips both. Check feel with
   `npx tsx tools/handling-feel.ts` (ordinary corners should stay under ~15° of slip).
 - Cars are solid (collision groups in `PhysicsWorld.ts`: GROUND, WALL, CAR, PROXY). Online peers become `net/ProxyCar`
-  bodies (group PROXY, collide with CAR only) steered toward the extrapolated network pose; after a teleport or the local
-  player's respawn they are ghosted (collider off) until clear. `Game.detectCarContact` → thud/shake/scrape. The AI
+  bodies (group PROXY, collide with CAR only) that follow the peer's path (`net/steer.ts`; `net/RemoteBody.ts` is the
+  body shared with the replay tool); after a teleport or the local player's respawn they are ghosted (collider off)
+  until clear, and a peer not heard for 2 s stops being solid. `Game.detectCarContact` → thud/shake/scrape. The AI
   never rear-ends (speed cap from `opponent.speed`), defends its line (`AIProfile.defend`), and a finished rival pulls
   over and parks (`AIDriver.pullOver`). Check AI-vs-AI contact with `npx tsx tools/sim-duel.ts`.
 

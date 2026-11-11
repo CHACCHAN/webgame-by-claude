@@ -18,7 +18,10 @@ RUN apt-get update \
  && sed -i 's|^listen = .*|listen = 9000|; s|^;clear_env = no|clear_env = no|; s|^;catch_workers_output = yes|catch_workers_output = yes|' /etc/php/8.3/fpm/pool.d/www.conf \
  && sed -i 's|^;*error_log = .*|error_log = /proc/self/fd/2|' /etc/php/8.3/fpm/php-fpm.conf \
  && sed -i 's|^post_max_size = .*|post_max_size = 8M|' /etc/php/8.3/fpm/php.ini \
- && mkdir -p /run/php
+ # workers: Ubuntu's default of 5 is one room's worth of polling next to a slow request; a worker that hangs is
+ # ended after 30 s (nginx has given up on it by then) and each is replaced after 2000 requests
+ && sed -i 's|^pm.max_children = .*|pm.max_children = 16|; s|^pm.start_servers = .*|pm.start_servers = 4|; s|^pm.min_spare_servers = .*|pm.min_spare_servers = 2|; s|^pm.max_spare_servers = .*|pm.max_spare_servers = 6|; s|^;pm.max_requests = .*|pm.max_requests = 2000|; s|^;request_terminate_timeout = .*|request_terminate_timeout = 30s|' /etc/php/8.3/fpm/pool.d/www.conf \
+ && mkdir -p /run/php /var/lib/touge
 
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 

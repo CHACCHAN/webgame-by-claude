@@ -1,10 +1,18 @@
 name: touge-nocturne
 
+# the containers' logs stay small (Docker keeps them without a limit otherwise)
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
   db:
     image: postgres:16-alpine
     # the live stack comes back by itself after the VM restarts (the GPU's recovery needs a cold VM restart)
     restart: unless-stopped
+    logging: *logging
     environment:
       POSTGRES_DB: ${DB_DATABASE:-touge}
       POSTGRES_USER: ${DB_USERNAME:-touge}
@@ -22,6 +30,17 @@ services:
       context: .
       dockerfile: docker/php/Dockerfile
     restart: unless-stopped
+    logging: *logging
+    # PHP-FPM listens and Reverb answers (after the migrations): nginx starts, and a deploy goes on, only then
+    healthcheck:
+      test: ["CMD-SHELL", "php -r 'exit(@fsockopen(\"127.0.0.1\", 9000) ? 0 : 1);' && curl -s -m 3 -o /dev/null http://127.0.0.1:8080/"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 90s
+    volumes:
+      # generated keys (docker/php/entrypoint.sh): kept across deploys
+      - secrets:/var/lib/touge
     environment:
       APP_NAME: "Touge Nocturne"
       APP_ENV: ${APP_ENV:-production}
@@ -59,13 +78,41 @@ services:
       context: .
       dockerfile: docker/web/Dockerfile
     restart: unless-stopped
+    logging: *logging
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/api/health"]
+      interval: 10s
+      timeout: 4s
+      retries: 3
+      start_period: 20s
     ports:
       - "${WEB_PORT:-8080}:80"
     networks:
       - default
       - edge
     depends_on:
-      - app
+      app:
+        condition: service_healthy
+
+  # --- a dump of the database every day (players, runs, ghosts: the only data that cannot be rebuilt) into the
+  # `backups` volume, one file per day of the month (a month of days, each written over a month later: nothing to
+  # tidy up). Restoring: see docker/backup/backup.sh
+  backup:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    logging: *logging
+    environment:
+      PGHOST: db
+      PGDATABASE: ${DB_DATABASE:-touge}
+      PGUSER: ${DB_USERNAME:-touge}
+      PGPASSWORD: ${DB_PASSWORD:-touge}
+    volumes:
+      - backups:/backups
+      - ./docker/backup/backup.sh:/usr/local/bin/backup.sh:ro
+    entrypoint: ["/bin/sh", "/usr/local/bin/backup.sh"]
+    depends_on:
+      db:
+        condition: service_healthy
 
   # --- public access: Cloudflare Tunnel, started by `docker compose up` when .env has COMPOSE_PROFILES=tunnel
   # Hostname → service mapping lives in the Cloudflare dashboard: point it at http://web:80.
@@ -83,6 +130,7 @@ services:
     depends_on:
       - web
     restart: unless-stopped
+    logging: *logging
 
   # --- development: Vite dev server with hot reload (docker compose --profile dev up)
   vite:
@@ -141,5 +189,7 @@ networks:
 
 volumes:
   pgdata:
+  secrets:
+  backups:
   vite_node_modules:
   e2e_node_modules:
