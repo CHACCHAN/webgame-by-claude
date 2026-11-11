@@ -73,7 +73,7 @@ services:
       LLM_API_KEY: ${LLM_API_KEY:-}
       LLM_BASE_URL: ${LLM_BASE_URL:-https://llm-gateway.invalid/gateway/litellm/v1}
       LLM_TAUNT_MODELS: ${LLM_TAUNT_MODELS:-gemini-3.5-flash-lite,sarashina-3-mini}
-      LLM_DECIDE_MODELS: ${LLM_DECIDE_MODELS:-sarashina-3-mini,qwen-3.8-27b}
+      LLM_DECIDE_MODELS: ${LLM_DECIDE_MODELS:-sarashina-3-mini,gemini-3.5-flash-lite}
     depends_on:
       db:
         condition: service_healthy

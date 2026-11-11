@@ -17,7 +17,7 @@ return [
     // tried in this order; the next one when a model fails or takes too long (measured 2026-11-11: taunts
     // 2.0 s / 0.3 s, decisions with tool calls 0.15–0.5 s)
     'taunt_models' => $models('LLM_TAUNT_MODELS', 'gemini-3.5-flash-lite,sarashina-3-mini'),
-    'decide_models' => $models('LLM_DECIDE_MODELS', 'sarashina-3-mini,qwen-3.8-27b'),
+    'decide_models' => $models('LLM_DECIDE_MODELS', 'sarashina-3-mini,gemini-3.5-flash-lite'),
     'taunt_timeout' => (float) env('LLM_TAUNT_TIMEOUT', 6),
     // a decision that comes later than this is about a situation that is gone
     'decide_timeout' => (float) env('LLM_DECIDE_TIMEOUT', 2.5),
