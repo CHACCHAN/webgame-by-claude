@@ -114,14 +114,16 @@ export interface ViewPoint {
  * Where the road looks out. A course is known for what is seen from it (the sea and the town below, the lake, the
  * sea of clouds under the ridge): a direction is open where an eye over the road sees one of them below it, over
  * all the land in between. That
- * is the valley side, and straight ahead where the road runs down towards the view; the mountain side and the
- * stretches that face nothing (or see it through one gap only) stay closed, and the forest stands over the road there.
+ * is the valley side, and straight ahead where the road runs down towards the view (one direction is enough: the
+ * lake at the end of a straight); the mountain side and the stretches that face nothing stay closed, and the forest
+ * stands over the road there.
  */
 export function roadViews(track: Track, terrain: TerrainData): ViewPoint[] {
   const lf = terrain.landform;
   const f = terrain.far;
   const fx1 = f.x0 + (f.nx - 1) * f.cell, fz1 = f.z0 + (f.nz - 1) * f.cell;
-  const REACH = [40, 90, 160, 260, 400, 600, 900, 1300, 1800, 2400];
+  // (close enough together that a lake a few hundred metres across is not stepped over)
+  const REACH = [40, 65, 90, 125, 160, 210, 260, 330, 400, 500, 600, 750, 900, 1100, 1300, 1550, 1800, 2100, 2400];
   /** [how steeply the eye looks down on the nearest thing it sees, how far away that is] or null */
   const sees = (x: number, y: number, z: number, dx: number, dz: number, town: number): [number, number] | null => {
     const eye = y + VIEW_EYE;
@@ -180,8 +182,6 @@ export function roadViews(track: Track, terrain: TerrainData): ViewPoint[] {
         if (Math.abs(Math.atan2(Math.sin(off), Math.cos(off))) < w + Math.PI / VIEW_SECTORS) look(k, seen);
       }
     }
-    // (one direction alone is a glimpse through a gap: the forest stays, and the road runs through it as a tunnel)
-    if (!(open & (open - 1))) open = 0;
     pts.push({ x: p.x, y: p.y, z: p.z, open, drop, reach });
   }
   return pts;
@@ -310,7 +310,7 @@ export function plantTrees(terrain: TerrainData, density: number, style: CourseS
       // the fewer the less room there is (all of them grown up to the line, they stood there as a clipped hedge)
       const room = (limit(x, z) - y) / (def.tall ?? 18);
       if (room < scale) {
-        if (room < 0.32 || r() > (room / scale) ** 1.5 + 0.1) return;
+        if (room < 0.32 || r() > (room / scale) ** 2 * 0.7) return;
         scale = Math.max(0.3, room * (0.5 + 0.5 * r()));
       }
     }

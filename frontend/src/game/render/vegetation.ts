@@ -516,7 +516,7 @@ function plantMaterial(model: PlantModel, look: PlantLook, span: Span, second = 
   const n: N = texN.rgb.mul(2).sub(1);
   mat.normalNode = (mix(perturb(normalViewGeometry, vec3(n.xy.mul(1.2), n.z), uv()), ground.xyz, ground.w) as N).normalize();
   // light through the leaves: the crown's rim glows against the sun, a lamp, headlights
-  mat.thicknessColorNode = albedo.mul(leaf).mul((look.translucency ?? 1) * 1.6).mul(mix(1, 0.2, far));
+  mat.thicknessColorNode = albedo.mul(leaf).mul((look.translucency ?? 1) * 1.6).mul(mix(1, 0.08, far));
   mat.thicknessDistortionNode = float(0.4);
   mat.thicknessAmbientNode = float(0);
   mat.thicknessAttenuationNode = float(1);
@@ -664,7 +664,8 @@ function impostorMaterial(model: PlantModel, look: PlantLook, span: Span) {
   // (a tree this far away is out of the lamps' and the headlights' reach)
   if (farLights) mat.lightsNode = lights(farLights) as N;
   // (little: see `plantNodes` on the far trees)
-  mat.thicknessColorNode = albedo.mul((look.translucency ?? 1) * 0.3);
+  // (hardly any: against a low sun a far slope's trees glowed pale, one by one, on ground that the same sun barely lit)
+  mat.thicknessColorNode = albedo.mul((look.translucency ?? 1) * 0.06);
   mat.thicknessDistortionNode = float(0.4);
   mat.thicknessAmbientNode = float(0);
   mat.thicknessAttenuationNode = float(1);
