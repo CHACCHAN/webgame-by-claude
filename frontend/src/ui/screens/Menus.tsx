@@ -112,7 +112,7 @@ export function TitleScreen() {
         </h1>
         <div className="title-jp">朧 峠 夜 想 曲</div>
       </div>
-      <div className="press-start">{isTouchDevice() ? 'TAP TO START' : 'PRESS ENTER / CLICK TO START'}</div>
+      <div className="press-start" data-grains="line">{isTouchDevice() ? 'TAP TO START' : 'PRESS ENTER / CLICK TO START'}</div>
       <div className="title-ticker" aria-hidden>
         <div>
           {[0, 1].map((k) => (
