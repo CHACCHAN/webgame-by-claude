@@ -129,10 +129,14 @@ export function OnlineLobbyScreen() {
 
 /** What went wrong with the server or the room, and what can be done about it. */
 function OnlineError({ message }: { message: string }) {
-  const offline = message.includes('接続できません');
+  // (no answer, or the proxy answering for a server that is down)
+  const offline = message.includes('接続できません') || /^HTTP 5\d\d$/.test(message);
+  // the server's own words (a status, a validation message in English): the detail under a line of ours
+  const raw = /^[\x20-\x7e]+$/.test(message);
   return (
-    <Notice className="ol-error" title={message}>
+    <Notice className="ol-error" title={offline ? 'サーバーに接続できません' : raw ? '操作を完了できませんでした' : message}>
       {offline ? '通信状態を確かめて、もう一度お試しください。ひとりで走るモードはそのまま遊べます。' : null}
+      {raw && <code className="notice-code">{message}</code>}
     </Notice>
   );
 }

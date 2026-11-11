@@ -186,6 +186,7 @@ input::placeholder { color: var(--faint); }
 .notice { --c: var(--cut-s); --edge: rgb(var(--c-magenta) / 0.55); --fill: rgb(var(--c-magenta) / 0.08); display: flex; align-items: flex-start; gap: var(--s-3); padding: 0.7rem 1rem; text-align: left; font-size: var(--fs-s); line-height: 1.6; color: var(--text-2); animation: var(--kf-rise) var(--t-enter) var(--e-out) both; }
 .notice::before { content: '!'; flex: none; width: 1.5em; height: 1.5em; display: grid; place-items: center; font-family: var(--font-display); font-weight: 700; color: var(--void); background: var(--magenta); clip-path: polygon(50% 0, 100% 100%, 0 100%); padding-top: 0.25em; font-size: 0.95em; }
 .notice b { display: block; color: var(--text); font-size: var(--fs-m); }
+.notice-code { display: block; margin-top: 0.15rem; font-family: var(--font-mono); font-size: var(--fs-xs); color: var(--faint); letter-spacing: 0.02em; user-select: text; }
 .notice.info { --edge: rgb(var(--c-cyan) / 0.45); --fill: rgb(var(--c-cyan) / 0.06); }
 .notice.info::before { content: 'i'; background: var(--cyan); clip-path: none; border-radius: 50%; padding-top: 0; }
 .notice .mini { margin-left: auto; align-self: center; flex: none; }
