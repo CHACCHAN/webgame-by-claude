@@ -213,9 +213,10 @@ export class RenderHost {
   /**
    * Compiles the shaders of everything in the scene, for the buffers the scene pass draws into (their formats and,
    * with the upscaler, the motion vectors' target are part of each pipeline): ahead of the first frame that shows
-   * a thing, not as a hitch in it. `hold`: no frame is drawn until it is done (the loading screen is up).
+   * a thing, not as a hitch in it. `hold`: no frame is drawn until it is done (the loading screen is up). `what`: one
+   * object that is not in the scene yet (a model about to be shown), compiled under the scene's lights.
    */
-  precompile(hold = false): Promise<void> {
+  precompile(hold = false, what: THREE.Object3D = this.scene): Promise<void> {
     // The renderer builds each shader for the target (and motion-vector outputs) it has *when that shader's turn
     // comes*, and that is spread over many frames: the scene pass' target stays set between the frames while a
     // compile runs (`aim`), the frame loop draws to the canvas and sets it again. One compile at a time, or the
@@ -225,7 +226,7 @@ export class RenderHost {
       this.holding = hold;
       this.aim();
       try {
-        await this.renderer.compileAsync(this.scene, this.camera);
+        await this.renderer.compileAsync(what, this.camera, this.scene);
       } finally {
         this.compiling = false;
         this.holding = false;
