@@ -6,8 +6,17 @@ test.use({ viewport: { width: 844, height: 390 }, hasTouch: true, isMobile: true
 
 test('phone: menus by taps, back button, a race driven with the touch controls', async ({ page }) => {
   const errors = await prepare(page);
+  // (a screen's parts slide in: the place to tap is the one that has stopped moving)
   const tap = async (sel: string, text?: string) => {
-    const box = (await page.locator(sel, text ? { hasText: text } : {}).first().boundingBox())!;
+    const target = page.locator(sel, text ? { hasText: text } : {}).first();
+    let box = (await target.boundingBox())!;
+    for (let i = 0; i < 40; i++) {
+      await page.waitForTimeout(100);
+      const next = (await target.boundingBox())!;
+      const still = Math.abs(next.x - box.x) < 0.5 && Math.abs(next.y - box.y) < 0.5;
+      box = next;
+      if (still) break;
+    }
     await page.touchscreen.tap(box.x + box.width / 2, box.y + box.height / 2);
   };
   await page.goto('/');

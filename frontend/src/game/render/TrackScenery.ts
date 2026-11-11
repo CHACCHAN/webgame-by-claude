@@ -772,12 +772,13 @@ export function curveMirrorSpots(track: Track) {
 }
 
 const nightEmissiveSigns: THREE.MeshStandardMaterial[] = [];
-const vendingLight = new THREE.PointLight('#e8f4ff', 9, 14, 1.6);
+/** where the vending machine's glow belongs on the course built last (the light itself: `LightRig.vending`); `on` = there is one */
+export const vendingSpot = { position: new THREE.Vector3(), on: false };
 
 function buildSigns(track: Track, sides: ReturnType<typeof classifySides>, group: THREE.Group) {
   // module-level list: only this course's materials (it used to keep every earlier course's)
   nightEmissiveSigns.length = 0;
-  group.add(vendingLight);
+  vendingSpot.on = false;
   const postMat = new THREE.MeshStandardMaterial({ color: '#9aa0a6', metalness: 0.6, roughness: 0.4 });
   const mats = {
     chevronL: new THREE.MeshStandardMaterial({ map: makeSignTexture('chevronL'), roughness: 0.35, emissive: '#ffffff', emissiveIntensity: 0.06 }),
@@ -853,7 +854,8 @@ function buildSigns(track: Track, sides: ReturnType<typeof classifySides>, group
     }
     // the machines light their surroundings
     track.pointAt(i + 1, side * (track.width[i] / 2 + SHOULDER), p);
-    vendingLight.position.set(p.x, p.y + 1.4, p.z);
+    vendingSpot.position.set(p.x, p.y + 1.4, p.z);
+    vendingSpot.on = true;
   }
 
   // start & finish gantries

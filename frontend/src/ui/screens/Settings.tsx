@@ -4,6 +4,7 @@ import { useApp } from '../../store/app';
 import { UPSCALE_SCALE, useSettings, type QualityLevel, type UpscaleMode } from '../../store/settings';
 import { useMenuInput, hoverSelect } from '../useMenuInput';
 import { gameHolder } from '../GameCanvas';
+import { forgetFailures, planBackend, type BackendPref, type FallbackReason } from '../../game/render/backendChoice';
 import { Hint } from './Menus';
 import { sfx } from '../sfx';
 import { fullscreenSupported, toggleFullscreen, useFullscreen } from '../fullscreen';
@@ -21,6 +22,7 @@ export function SettingsScreen() {
   const s = useSettings();
   const [sel, setSel] = useState(0);
   const [needsReload, setNeedsReload] = useState(false);
+  const [backendReload, setBackendReload] = useState(false);
   const qualities: QualityLevel[] = ['low', 'medium', 'high', 'ultra'];
   const qLabel: Record<QualityLevel, string> = { low: '低', medium: '中', high: '高', ultra: '最高' };
   const upscaleModes: UpscaleMode[] = ['native', 'ultra', 'quality', 'balanced', 'performance'];
@@ -29,6 +31,14 @@ export function SettingsScreen() {
   const pct = (v: number) => `${Math.round(v * 100)}%`;
   const step = (v: number, dir: number, st = 0.1, lo = 0, hi = 1) => Math.round(Math.min(hi, Math.max(lo, v + dir * st)) * 100) / 100;
   const game = gameHolder.game;
+  // the renderer's backend: what runs (and why WebGL 2, when it does), and what the next load would start
+  const running = useApp((a) => a.renderer);
+  const backends: BackendPref[] = ['auto', 'webgpu', 'webgl2'];
+  const backendLabel: Record<BackendPref, string> = { auto: '自動', webgpu: 'WebGPU', webgl2: 'WebGL 2' };
+  const fallbackNote: Record<FallbackReason, string> = { query: 'URLの指定', setting: '設定', unsupported: 'このブラウザ・GPUはWebGPU非対応のため自動で切り替え', failed: 'WebGPUで問題が起きたため自動で切り替え' };
+  const pref = s.backend ?? 'auto';
+  const backendNote = !running ? 'WebGPUが使えない環境では自動でWebGL 2に切り替わります'
+    : `現在: ${running.backend === 'webgpu' ? 'WebGPU' : `WebGL 2（${fallbackNote[running.reason ?? 'unsupported']}）`}`;
   const fullscreen = useFullscreen();
   const rows: Row[] = [
     { label: 'グラフィック品質', value: qLabel[s.quality], note: '影・木の密度・ポストエフェクト', change: (d) => { s.set({ quality: cycle(qualities, s.quality, d) }); setNeedsReload(true); } },
@@ -48,6 +58,14 @@ export function SettingsScreen() {
     { label: 'マスター音量', value: pct(s.masterVolume), change: (d) => s.set({ masterVolume: step(s.masterVolume, d) }) },
     { label: '効果音', value: pct(s.sfxVolume), change: (d) => s.set({ sfxVolume: step(s.sfxVolume, d) }) },
     { label: '音楽', value: pct(s.musicVolume), change: (d) => s.set({ musicVolume: step(s.musicVolume, d) }) },
+    { label: '描画方式', value: backendLabel[pref], note: backendNote, change: (d) => {
+      const v = cycle(backends, pref, d);
+      s.set({ backend: v });
+      // a choice by hand starts from a clean slate (what was remembered about WebGPU failing no longer counts)
+      forgetFailures();
+      const plan = planBackend(v, location.search);
+      setBackendReload(!!running && plan.forceWebGL !== (running.backend === 'webgl2') && running.reason !== 'unsupported');
+    } },
     { label: 'FPS表示', value: s.showFps ? 'オン' : 'オフ', change: () => s.set({ showFps: !s.showFps }) },
     { label: '全画面表示', value: !fullscreenSupported() ? '非対応' : fullscreen ? 'オン' : 'オフ', note: 'F キーでも切り替えられます', change: () => fullscreenSupported() && toggleFullscreen() },
   ];
@@ -77,6 +95,12 @@ export function SettingsScreen() {
             </li>
           ))}
         </ul>
+        {backendReload && (
+          <div className="reload-note">
+            描画方式は再読み込み後に切り替わります。
+            <button className="mini" onClick={() => location.reload()}>今すぐ再読み込み</button>
+          </div>
+        )}
         {needsReload && (
           <div className="reload-note">
             グラフィック品質の一部（影・木の密度）は再読み込み後に反映されます。

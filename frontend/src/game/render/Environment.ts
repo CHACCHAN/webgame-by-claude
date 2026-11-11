@@ -10,6 +10,7 @@ import type { TerrainData } from '../track/terrain';
 import { rng } from '../util/math';
 import { setGrade, type Grade } from './grade';
 import { makeGlowTexture } from './textures';
+import type { LightRig } from './LightRig';
 
 export type TimeOfDay = 'night' | 'rain' | 'dawn';
 
@@ -202,16 +203,18 @@ export interface EnvironmentRig {
   preset: Preset;
   apply(tod: TimeOfDay, scene: THREE.Scene, renderer: GameRenderer): void;
   update(time: number, focus: THREE.Vector3): void;
+  /** draws the reflection environment of the time of day last applied into the game's one target, and returns it */
   buildEnvMap(renderer: GameRenderer): THREE.Texture;
-  /** frees the reflection environment's render target */
+  /** frees what the reflection environment was drawn from */
   dispose(): void;
 }
 
-export function buildEnvironment(terrain: TerrainData): EnvironmentRig {
+export function buildEnvironment(terrain: TerrainData, lights: LightRig): EnvironmentRig {
   const group = new THREE.Group();
   group.name = 'environment';
 
-  let envRT: THREE.RenderTarget | null = null;
+  // what the reflection environment is drawn from (made when first needed, then kept)
+  let envScene: { scene: THREE.Scene; lampMat: THREE.MeshBasicMaterial; groundMat: THREE.MeshBasicMaterial } | null = null;
 
   // ---- sky dome (drawn first and without depth: everything else covers it)
   const skyParts = skyMaterial(new THREE.Vector3(...terrain.landform.cityGlowDir).normalize());
@@ -221,23 +224,8 @@ export function buildEnvironment(terrain: TerrainData): EnvironmentRig {
   sky.renderOrder = -10;
   group.add(sky);
 
-  // ---- lights
-  const key = new THREE.DirectionalLight('#ffffff', 1);
-  key.castShadow = true;
-  key.shadow.mapSize.set(2048, 2048);
-  key.shadow.camera.left = -60;
-  key.shadow.camera.right = 60;
-  key.shadow.camera.top = 60;
-  key.shadow.camera.bottom = -60;
-  key.shadow.camera.near = 1;
-  key.shadow.camera.far = 600;
-  key.shadow.bias = -0.0004;
-  key.shadow.normalBias = 0.04;
-  group.add(key);
-  group.add(key.target);
-  const hemi = new THREE.HemisphereLight('#ffffff', '#000000', 1);
-  group.add(hemi);
-  const fog = new THREE.FogExp2('#000000', 0.0005);
+  // ---- lights and haze: the game's one set (render/LightRig.ts), given this course's values by `apply`
+  const { key, hemi, fog } = lights;
 
   // ---- sea
   const seaNormal = makeWaveNormal();
@@ -368,41 +356,46 @@ export function buildEnvironment(terrain: TerrainData): EnvironmentRig {
       key.target.position.copy(focus);
     },
     buildEnvMap(renderer) {
-      // environment for reflections: the sky plus a ring of warm lights
-      const envScene = new THREE.Scene();
-      const skyClone = new THREE.Mesh(sky.geometry, sky.material);
-      // (a tenth of the dome's size: on the WebGL 2 backend the generator's camera keeps its own far plane, 2 km,
-      // whatever is asked, and the sky was cut out of the reflections there; the dome's colour is by direction only)
-      skyClone.scale.setScalar(0.1);
-      envScene.add(skyClone);
-      const lampMat = new THREE.MeshBasicMaterial({ color: new THREE.Color('#ffb070').multiplyScalar(4 * rig.preset.lampsOn + 0.2) });
-      const r = rng(3);
-      for (let i = 0; i < 14; i++) {
-        const a = (i / 14) * Math.PI * 2 + r() * 0.3;
-        const m = new THREE.Mesh(new THREE.PlaneGeometry(30, 6), lampMat);
-        m.position.set(Math.cos(a) * 200, 60 + r() * 50, Math.sin(a) * 200);
-        m.lookAt(0, 0, 0);
-        envScene.add(m);
+      // environment for reflections: the sky plus a ring of warm lights, drawn into the game's one target (the
+      // texture stays the same object: a new one would have every material's shader built again)
+      if (!envScene) {
+        const scene = new THREE.Scene();
+        const skyClone = new THREE.Mesh(sky.geometry, sky.material);
+        // (a tenth of the dome's size: on the WebGL 2 backend the generator's camera keeps its own far plane, 2 km,
+        // whatever is asked, and the sky was cut out of the reflections there; the dome's colour is by direction only)
+        skyClone.scale.setScalar(0.1);
+        scene.add(skyClone);
+        const lampMat = new THREE.MeshBasicMaterial();
+        const r = rng(3);
+        for (let i = 0; i < 14; i++) {
+          const a = (i / 14) * Math.PI * 2 + r() * 0.3;
+          const m = new THREE.Mesh(new THREE.PlaneGeometry(30, 6), lampMat);
+          m.position.set(Math.cos(a) * 200, 60 + r() * 50, Math.sin(a) * 200);
+          m.lookAt(0, 0, 0);
+          scene.add(m);
+        }
+        const groundMat = new THREE.MeshBasicMaterial();
+        const ground = new THREE.Mesh(new THREE.PlaneGeometry(2000, 2000).rotateX(-Math.PI / 2), groundMat);
+        ground.position.y = -20;
+        scene.add(ground);
+        envScene = { scene, lampMat, groundMat };
       }
-      const ground = new THREE.Mesh(new THREE.PlaneGeometry(2000, 2000).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: new THREE.Color(rig.preset.hemiGround) }));
-      ground.position.y = -20;
-      envScene.add(ground);
-      const pmrem = new PMREMGenerator(renderer);
-      const rt = pmrem.fromScene(envScene, 0.02, 1, 12000);
-      pmrem.dispose();
-      envScene.traverse((o) => {
-        if (o === skyClone || !(o as THREE.Mesh).isMesh) return;
-        (o as THREE.Mesh).geometry.dispose();
-      });
-      lampMat.dispose();
-      (ground.material as THREE.Material).dispose();
-      envRT?.dispose();
-      envRT = rt;
-      return rt.texture;
+      envScene.lampMat.color.set('#ffb070').multiplyScalar(4 * rig.preset.lampsOn + 0.2);
+      envScene.groundMat.color.set(rig.preset.hemiGround);
+      lights.pmrem ??= new PMREMGenerator(renderer);
+      lights.envTarget = lights.pmrem.fromScene(envScene.scene, 0.02, 1, 12000, lights.envTarget ? { renderTarget: lights.envTarget } : {});
+      return lights.envTarget.texture;
     },
     dispose() {
-      envRT?.dispose();
-      envRT = null;
+      if (!envScene) return;
+      envScene.scene.traverse((o) => {
+        const m = o as THREE.Mesh;
+        // (the sky's own geometry and material go with the course's group)
+        if (m.isMesh && m.geometry !== sky.geometry) m.geometry.dispose();
+      });
+      envScene.lampMat.dispose();
+      envScene.groundMat.dispose();
+      envScene = null;
     },
   };
   return rig;
