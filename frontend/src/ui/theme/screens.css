@@ -233,6 +233,7 @@
 .lb-table .time { font-family: var(--font-display); font-stretch: var(--w-cond); font-weight: 600; font-size: var(--fs-l); font-variant-numeric: tabular-nums; }
 .lb-table .sectors { font-family: var(--font-display); font-stretch: var(--w-norm); font-variant-numeric: tabular-nums; color: var(--muted); font-size: var(--fs-s); }
 .lb-table .bot { font-family: var(--font-display); font-size: var(--fs-2xs); letter-spacing: 0.12em; margin-left: 0.5rem; padding: 0 0.4rem; border: 1px solid var(--line); color: var(--muted); }
+.lb-table .bot.member { border-color: rgb(var(--c-cyan) / 0.5); color: var(--cyan); }
 .lb-msg { padding: 2rem; text-align: center; color: var(--muted); }
 .lb-msg.notice { margin: 1rem 0; text-align: left; padding: 0.9rem 1.1rem; }
 /* waiting for the server: rows that are not there yet */
@@ -350,6 +351,7 @@
 .online-msg.ok em { display: block; font-style: normal; font-family: var(--font-jp); font-size: var(--fs-s); letter-spacing: 0; color: var(--green); }
 .online-msg.err { color: var(--text-2); width: 100%; }
 .name-form label { display: block; font-size: var(--fs-s); color: var(--muted); margin-bottom: 0.4rem; }
+.name-form .name-note { margin: -0.15rem 0 0.5rem; font-size: var(--fs-xs); color: var(--faint); }
 .name-form > div { display: flex; gap: 0.5rem; justify-content: center; }
 .name-form input { width: 15rem; }
 .results-actions { display: flex; gap: 0.6rem; justify-content: center; flex-wrap: wrap; padding: 0.4rem; }

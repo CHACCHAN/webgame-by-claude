@@ -1,11 +1,12 @@
-import { useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useApp, type Screen } from '../store/app';
 import { currentCourseId, useSettings } from '../store/settings';
 import { useOnline } from '../store/online';
 import { COURSES } from '../game/track/courses';
 import { CAR_SPECS } from '../game/vehicle/carSpecs';
 import { fullscreenSupported, toggleFullscreen, useFullscreen } from './fullscreen';
-import { PadKey } from './kit';
+import { Notice, PadKey } from './kit';
+import { dismissNotice, useAccount } from '../store/account';
 
 /**
  * The shell around every menu screen: the trail at the top (where you are, and what was chosen on the way), back
@@ -69,6 +70,7 @@ export function ShellTop() {
   const trail = useTrail();
   const course = COURSES[currentCourseId()];
   useSettings((s) => s.courseId);
+  const account = useAccount();
   return (
     <header className="shell-top">
       <span className="shell-mark">峠</span>
@@ -81,6 +83,11 @@ export function ShellTop() {
         ))}
       </ol>
       <div className="shell-meta">
+        {account.known && account.enabled && (
+          <span className={`shell-who${account.member ? ' member' : ''}`}>
+            {account.member ? <>PLAYER <b>{account.member.name}</b></> : 'GUEST'}
+          </span>
+        )}
         COURSE <b>{course.nameEn}</b>
       </div>
     </header>
@@ -158,6 +165,39 @@ export function BusyMark() {
     <div className={`busy-mark${on ? '' : ' out'}`} role="status" aria-live="polite">
       <i className="busy-glyph" aria-hidden />
       <span>{label.current}</span>
+    </div>
+  );
+}
+
+/** how long the word about a login stays */
+const NOTICE_MS = 8000;
+
+/**
+ * What the trip to Authentik came back with, said once over whatever screen the game opened on (a tap sends it
+ * away; it goes by itself).
+ */
+export function AccountNotice() {
+  const { notice, member, claimed } = useAccount();
+  useEffect(() => {
+    if (!notice) return;
+    const t = setTimeout(dismissNotice, NOTICE_MS);
+    return () => clearTimeout(t);
+  }, [notice]);
+  if (!notice || (notice === 'ok' && !member)) return null;
+  return (
+    <div className="account-notice" onClick={dismissNotice}>
+      {notice === 'ok' ? (
+        <Notice kind="info" title={`ログインしました：${member!.name}`}>
+          記録とセーブデータはアカウントに保存されます。
+          {claimed > 0 && ` ゲストのときの記録 ${claimed} 件を引き継ぎました。`}
+        </Notice>
+      ) : notice === 'denied' ? (
+        <Notice kind="info" title="ログインを取りやめました">ゲストのまま遊べます。</Notice>
+      ) : notice === 'off' ? (
+        <Notice title="ログインは現在利用できません">ゲストのまま遊べます。</Notice>
+      ) : (
+        <Notice title="ログインできませんでした">時間をおいてもう一度お試しください。ゲストのままでも遊べます。</Notice>
+      )}
     </div>
   );
 }

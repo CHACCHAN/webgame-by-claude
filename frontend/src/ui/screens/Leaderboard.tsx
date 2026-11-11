@@ -131,7 +131,7 @@ export function LeaderboardScreen() {
                     return (
                       <tr key={e.run_id} className={`${active ? 'active' : ''} ${me && e.player_id === me.id ? 'me' : ''} rank-${e.rank}`} {...hoverSelect(() => idx >= 0 && setSel(idx))}>
                         <td className="rank">{e.rank}</td>
-                        <td className="name">{e.player_name}{e.is_bot && <span className="bot">CPU</span>}</td>
+                        <td className="name">{e.player_name}{e.is_bot && <span className="bot">CPU</span>}{e.is_member && <span className="bot member">MEMBER</span>}</td>
                         <td>{CAR_SPECS[e.car_id]?.name ?? e.car_id}</td>
                         <td className="time">{formatTime(e.time_ms)}</td>
                         <td className="sectors hide-sm">{e.sector_ms.map((s, i) => formatTime(s - (i ? e.sector_ms[i - 1] : 0)).replace(/^0:/, '')).join(' / ')}</td>

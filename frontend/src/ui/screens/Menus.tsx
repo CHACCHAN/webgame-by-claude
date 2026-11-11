@@ -16,6 +16,8 @@ import { formatTime } from '../format';
 import { sfx } from '../sfx';
 import { COLORS } from './Cars';
 import { FocusFrame, Hint, Notice, ScreenHead } from '../kit';
+import { login, logout, useAccount } from '../../store/account';
+import { useOnline } from '../../store/online';
 
 const TIPS = [
   'ブレーキで荷重を前に移し、ステアを切りながらアクセルを踏むとリアが流れ出します。',
@@ -148,7 +150,12 @@ let menuRow = 0;
 
 export function ModesScreen() {
   const { go, set } = useApp();
-  const [idx, setIdx] = useState(menuRow);
+  const account = useAccount();
+  const [row, setIdx] = useState(menuRow);
+  // members of the owner's platform log in (Authentik); the row is there only when the server has a login
+  const accountRow: MenuItem[] = !account.known || !account.enabled ? [] : account.member
+    ? [{ id: 'account', group: 'アカウント', label: 'LOGOUT', jp: 'ログアウト', desc: `${account.member.name} としてログイン中。記録とセーブデータはアカウントに保存されています。ログアウトすると、この端末はゲストに戻ります。`, action: () => { void logout().then(() => useOnline.getState().set({ player: null })); } }]
+    : [{ id: 'account', group: 'アカウント', label: 'LOGIN', jp: 'メンバーログイン', desc: 'メンバーはログインすると、記録とセーブデータ（ベストタイム・メダル・ライバル戦績・お気に入り）がアカウントに残り、どの端末でも続きから走れます。ゲストのままでも遊べます（記録を残すたびに名前を入力）。', action: login }];
   const items: MenuItem[] = [
     { id: 'ta', group: '走る', label: 'TIME ATTACK', jp: 'タイムアタック', desc: '峠を全開で駆け下り、自己ベストとメダル、オンラインランキング上位を狙う。', action: () => { set({ mode: 'time_attack', ghostChoice: null, afterLoad: 'garage' }); go('courses'); } },
     { id: 'rival', label: 'RIVAL BATTLE', jp: 'ライバルバトル', desc: '峠に棲む走り屋と1対1のダウンヒルバトル。先にゴールした方が勝ち。', action: () => { set({ mode: 'rival', ghostChoice: null, afterLoad: 'garage' }); go('courses'); } },
@@ -158,7 +165,10 @@ export function ModesScreen() {
     { id: 'rank', label: 'RANKING', jp: 'ランキング', desc: 'コースごとのオンラインランキングを確認する。', action: () => { set({ mode: 'time_attack' }); go('leaderboard'); } },
     { id: 'settings', group: '整える', label: 'SETTINGS', jp: '設定', desc: 'グラフィック品質、サウンド、運転アシスト、表示。', action: () => go('settings') },
     { id: 'controls', label: 'CONTROLS', jp: '操作方法', desc: 'キーボード / ゲームパッド / スマホの操作を確認する。', action: () => go('controls') },
+    ...accountRow,
   ];
+  // (the account row comes once the server has answered, and can go: the focus never points past the list)
+  const idx = Math.min(row, items.length - 1);
   useMenuInput((a) => {
     if (a === 'up') { setIdx((i) => (i + items.length - 1) % items.length); sfx.move(); }
     if (a === 'down') { setIdx((i) => (i + 1) % items.length); sfx.move(); }

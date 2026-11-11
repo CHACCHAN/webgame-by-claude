@@ -56,7 +56,7 @@ export function OnlineLobbyScreen() {
   }, [course]);
   useEffect(() => {
     const stored = loadPlayer();
-    if (stored && !useOnline.getState().player) useOnline.getState().set({ player: stored });
+    if (stored?.member && !useOnline.getState().player) useOnline.getState().set({ player: stored });
     gameHolder.game?.showGarage(useOnline.getState().carId);
     void gameHolder.game?.audio?.playMusic('bgm_online');
   }, []);

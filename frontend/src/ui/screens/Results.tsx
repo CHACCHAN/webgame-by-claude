@@ -10,6 +10,7 @@ import { CAR_SPECS } from '../../game/vehicle/carSpecs';
 import { COURSES } from '../../game/track/courses';
 import { formatTime } from '../format';
 import { Portrait, startRaceFromState } from './Menus';
+import { useAccount } from '../../store/account';
 import { sfx } from '../sfx';
 import { Count, FocusFrame, Notice, Typed } from '../kit';
 import { motionOn } from '../motion';
@@ -34,6 +35,7 @@ export function ResultsScreen() {
   const { result, go, set, ghostChoice, rivalLine } = useApp();
   const [submit, setSubmit] = useState<SubmitState>({ kind: 'idle' });
   const [name, setName] = useState(() => loadPlayer()?.name ?? '');
+  const accountOn = useAccount((s) => s.enabled);
   const [localPB, setLocalPB] = useState<{ isNew: boolean; prev: number | null }>({ isNew: false, prev: null });
   const [sel, setSel] = useState(0);
   const encoded = useRef<Promise<EncodedGhost> | null>(null);
@@ -214,6 +216,7 @@ export function ResultsScreen() {
               }}
             >
               <label>ランキング登録名（16文字まで）</label>
+              {accountOn && <p className="name-note">ゲストとして記録します。メンバーはメインメニューの「メンバーログイン」から。</p>}
               <div>
                 <input autoFocus maxLength={16} value={name} placeholder="名無しの走り屋" onChange={(e) => setName(e.target.value)} />
                 <button className="mini" type="submit">登録</button>
