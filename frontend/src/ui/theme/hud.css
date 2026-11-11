@@ -169,15 +169,15 @@
 .boost > div > div { height: 100%; background: var(--cyan); transform-origin: left; transform: scaleX(0); }
 
 /* ------------------------------------------------------------- the grid: the instruments power on (Hud.tsx sets
-   `.boot` once per start) */
-.hud.boot .hud-tl { animation: var(--kf-slide) 0.5s var(--e-out) both; }
-.hud.boot .hud-tr { animation: var(--kf-flicker) 0.7s 0.15s linear both; }
-.hud.boot .hud-br { animation: var(--kf-flicker) 0.8s 0.3s linear both; }
-.hud.boot .hud-tc { animation: var(--kf-drop) 0.5s 0.45s var(--e-out) both; }
+   `.power-up` once per start) */
+.hud.power-up .hud-tl { animation: var(--kf-slide) 0.5s var(--e-out) both; }
+.hud.power-up .hud-tr { animation: var(--kf-flicker) 0.7s 0.15s linear both; }
+.hud.power-up .hud-br { animation: var(--kf-flicker) 0.8s 0.3s linear both; }
+.hud.power-up .hud-tc { animation: var(--kf-drop) 0.5s 0.45s var(--e-out) both; }
 /* the band sweeps to the red and back (an animation overrides the dash offset the frame loop writes; it must not
    keep its last frame, or the band would stay empty) */
-.hud.boot .tach-fill { animation: tach-sweep 1.3s 0.35s var(--e-inout) backwards; }
-.motion-off .hud.boot .tach-fill { animation: none; }
+.hud.power-up .tach-fill { animation: tach-sweep 1.3s 0.35s var(--e-inout) backwards; }
+.motion-off .hud.power-up .tach-fill { animation: none; }
 @keyframes tach-sweep { 0% { stroke-dashoffset: 100; } 55% { stroke-dashoffset: 0; } 100% { stroke-dashoffset: 100; } }
 
 /* ------------------------------------------------------------- pause */

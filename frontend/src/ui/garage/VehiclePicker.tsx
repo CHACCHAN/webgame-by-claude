@@ -121,8 +121,9 @@ export function VehiclePicker({ title, titleEn, vehicles, initial, initialColor 
     const before = game.garageFraming;
     const frame = () => {
       const view = { w: el.clientWidth, h: el.clientHeight };
-      // (the places in the layout: both slide in, and a place read while that runs would be off)
-      game.garageFraming = garageFramingFor(view, { left: list.offsetLeft + list.offsetWidth, right: view.w, top: 0, bottom: card.offsetTop }, view3d);
+      // (the places in the layout: both slide in, and a place read while that runs would be off; the top is the
+      // list's, under the shell's bar)
+      game.garageFraming = garageFramingFor(view, { left: list.offsetLeft + list.offsetWidth, right: view.w, top: list.offsetTop, bottom: card.offsetTop }, view3d);
     };
     frame();
     const watch = new ResizeObserver(frame);

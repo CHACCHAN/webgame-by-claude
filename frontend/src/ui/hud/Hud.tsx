@@ -247,9 +247,9 @@ export function Hud() {
         booted = true;
         const root = r.root.current;
         if (root) {
-          root.classList.remove('boot');
+          root.classList.remove('power-up');
           void root.offsetWidth;
-          root.classList.add('boot');
+          root.classList.add('power-up');
         }
         if (motionOn()) sfx.boot();
       }

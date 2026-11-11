@@ -43,10 +43,25 @@ test('menu navigation, settings persistence and controls screen', async ({ page 
   await expect(corner).toContainText('オフ');
   const stored = await page.evaluate(() => JSON.parse(localStorage.getItem('touge-settings')!).state.cornerGuide);
   expect(stored).toBe(false);
-  await page.keyboard.press('Escape');
+  // the interface's motion can be switched off: the app then only fades (and takes it back on again)
+  const motion = page.locator('.settings-list li', { hasText: 'UI アニメーション' });
+  await expect(motion).toContainText('オン');
+  await expect(page.locator('.app')).not.toHaveClass(/motion-off/);
+  await motion.locator('button[aria-label="increase"]').click();
+  await expect(motion).toContainText('オフ');
+  await expect(page.locator('.app')).toHaveClass(/motion-off/);
+  await motion.locator('button[aria-label="increase"]').click();
+  await expect(page.locator('.app')).not.toHaveClass(/motion-off/);
+  // the shell: the trail says where this is, its back button is the Esc key
+  await expect(page.locator('.shell-top .trail li.now')).toContainText('設定');
+  await page.locator('.shell-nav .touch-back').click();
+  await expect(page.locator('.menu-list')).toBeVisible();
+  await expect(page.locator('.shell-top .trail li.now')).toContainText('メインメニュー');
   await page.locator('.menu-list li', { hasText: 'CONTROLS' }).click();
   await expect(page.locator('.controls-table')).toContainText('サイドブレーキ');
+  // (a screen on its way out is not in the document any more: one screen at a time for every selector)
   await page.keyboard.press('Escape');
+  await expect(page.locator('.overlay > .screen')).toHaveCount(1);
 
   // car list: figures of every car, dragging turns the camera around it
   await page.locator('.menu-list li', { hasText: 'CAR LIST' }).click();
@@ -84,6 +99,21 @@ test('ranking shows the seeded CPU drivers from the Laravel API', async ({ page 
   await expect(page.locator('.lb-table')).toContainText('朧');
   await page.locator('.tabs button', { hasText: 'IMPREZA WRX STI' }).click();
   await expect(page.locator('.lb-table tbody tr td:nth-child(3)').first()).toHaveText('IMPREZA WRX STI');
+});
+
+test('ranking without the server: says what happened, and a retry brings the list back', async ({ page }) => {
+  await prepare(page);
+  await page.route('**/leaderboard**', (route) => route.abort());
+  await page.goto('/');
+  await waitForTitle(page);
+  await page.keyboard.press('Enter');
+  await page.locator('.menu-list li', { hasText: 'RANKING' }).click();
+  await expect(page.locator('.lb-msg.error')).toContainText('ランキングを取得できませんでした');
+  await expect(page.locator('.lb-table')).toHaveCount(0);
+  await page.unroute('**/leaderboard**');
+  await page.locator('.lb-msg.error button', { hasText: '再試行' }).click();
+  await expect(page.locator('.lb-table tbody tr').first()).toBeVisible();
+  await expect(page.locator('.lb-msg.error')).toHaveCount(0);
 });
 
 test('time attack: full autodriven run, results and online submission', async ({ page }) => {
