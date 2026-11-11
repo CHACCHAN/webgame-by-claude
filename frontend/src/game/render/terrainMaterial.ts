@@ -117,7 +117,8 @@ export function groundMaterial(look: GroundLook, detail: GroundDetail, far = fal
   }
   // moss creeps over rock that is not too steep; the cutting's rock is fresh and bare
   const mossy = smoothstep(0.55, 0.3, slope).mul(smoothstep(0.35, 0.7, m1.a)).mul(float(1).sub(cut)).mul(0.6) as Float;
-  const rockCol = mix(rockC.rgb.mul(vec3(...TINT.rock)), rockC.rgb.mul(vec3(0.5, 0.74, 0.34)), mossy) as unknown as Vec3;
+  // (far away the pale rock of a whole mountainside read as snow under the moon)
+  const rockCol = mix(rockC.rgb.mul(vec3(...TINT.rock)).mul(far ? 0.72 : 1), rockC.rgb.mul(vec3(0.5, 0.74, 0.34)), mossy) as unknown as Vec3;
   const rockH = heightOf(rockC).mul(0.7).add(0.3) as Float;
   const tRock = over(rockW, height, rockH);
   col = mix(col, rockCol, tRock) as unknown as Vec3;

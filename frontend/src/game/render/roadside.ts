@@ -520,7 +520,8 @@ export function layRoadside(rs: Roadside, sides: Sides) {
     for (const [a2, b2] of stretches(a, b, (i) => !bridge[i])) {
       rs.sweep(rs.cast, rowsOf(a2, Math.min(b2 + 1, last)), side, GUTTER);
       if (b2 - a2 >= 6) {
-        if (parts.gutter_grate) for (let s = Math.ceil((a2 + 3) / 24) * 24 + 7; s <= b2 - 3; s += 24) rs.bake(parts.gutter_grate, steelSink(s), s, side, 1, 0.39, 0.012);
+        // (the grating's model has its top 0.06 m above its origin)
+        if (parts.gutter_grate) for (let s = Math.ceil((a2 + 3) / 24) * 24 + 7; s <= b2 - 3; s += 24) rs.bake(parts.gutter_grate, steelSink(s), s, side, 1, 0.39, 0.012 - 0.06);
         for (let s = Math.ceil((a2 + 2) / 40) * 40 + 20; s <= b2 - 2; s += 40) delineator(s, side, 0.71);
       }
       // under a rock shed its back wall stands behind the gutter

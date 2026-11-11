@@ -58,7 +58,7 @@ export function roadMaterial(look: RoadLook, detail: 1 | 2 | 3): MeshStandardNod
     col = (texture(m.atlas, (uv() as unknown as Vec2).mul(vec2(m.scale[0], m.scale[1]))) as unknown as Vec4).rgb as unknown as Vec3;
   }
   let rough = touge ? (clamp((texture(layerTexture('asphalt_rough'), tile) as unknown as Vec4).r, 0.45, 1) as Float) : (float(0.8) as Float);
-  col = col.mul(mA.r.mul(0.3).add(0.85)) as unknown as Vec3;
+  col = col.mul(mA.r.mul(0.2).add(0.9)) as unknown as Vec3;
 
   // sections laid in different years, a tar joint across the road where they meet
   const sec = s.div(47).add(mB.r.mul(0.4)) as Float;
