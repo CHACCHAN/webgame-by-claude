@@ -413,6 +413,35 @@ proposed freeing the oldest first when it runs short.
   Not verified: phones on a device; a slow network (the mark and the waits were only seen locally); the hitch numbers
   on WebGL 2 and on medium / low; a real GPU out-of-memory.
 
+### Ground, road and roadside remade (11-11, the owner's request to re-model everything; package `terrain`)
+An agent's package (six commits, `46041ec` … `6a1854a`), merged with the freeze work on its branch and checked there
+by the main session. **Not in the live game yet**: it brings new models (guardrail, terminal, delineator, gutter
+grating, rockfall fence), and the owner sees a model's sheet first.
+- What it is: the ground as one layered TSL material (rock on steep faces from its two sides, forest floor, moss or
+  grass, gravel at the verge, shoreline; wet and pooled in rain), the road's wear in one material (patches, seams,
+  cracks, tar lines, polished wheel tracks, worn markings, puddles), a modelled roadside (guardrail spans with
+  terminals, delineators that answer the headlights, U-gutters with gratings, block walls, sprayed slopes with their
+  frames and rockfall fences, rock shed, bridge), spurs and gullies on the hillsides away from the road. Quality
+  `low` keeps the old path. Textures: seven ambientCG CC0 sets + our own tiles (docs/ASSETS.md).
+- The drivable surface did not move (agent's proof: heights under road and shoulder, road and wall colliders
+  identical; `sim-run.ts hayate rookie` gives the same time on all four courses).
+- Checked on the merged tree by the main session: tsc, vitest 147, build; `gpu-errors.cjs` 0 on WebGPU and WebGL 2;
+  `hitch.cjs`: the freeze work holds (time / weather: no frame over 40 ms but the first dawn, kept courses 16–40 ms);
+  the before / after sheets of all four courses and close-ups looked at.
+- Cost. GPU time of the scene pass, before → after (`perf-pass.cjs`): 1080p high 3.06 → 4.91 ms, 1080p medium
+  2.65 → 3.04, 1440p ultra 5.63 → 7.23, 1440p ultra with the upscaler at Quality 3.33 → 4.32, 4K ultra 11.7 → 13.3
+  (whole frame 16.5 → 17.8 ms: native 4K ultra no longer fits 60 fps on the RX 5700 XT, with the upscaler it does).
+  Main thread: the CPU profile's make-up is the same (264 → 273 draw calls). Download before the title:
+  10.9 → 20.5 MB at high / ultra (the 1024 px layers), +2.7 MB at medium, nothing at low.
+- **Frame rates were not settled**: uncapped runs gave 105–116 → 66–73 fps (high) and 86–104 → 51–52 (ultra) in
+  one hour and 78 / 47 → 103 / 100 in the next: another project's session was running a six-process test job on the
+  machine (load average 6–7). The numbers above are the ones that do not depend on it.
+- Not done by the package: the autobahn's guardrails, barriers and gantries (new concrete material only), signs.
+  Known: under the upscaler the nearest rockfall-net panels flicker a little more than the base (99.9th percentile
+  8–9 against 5–7 of 255); the wear pattern's repeat shows from ~26 m above the road.
+- Not verified: frame rates on a quiet machine; low / medium / high on every course by eye (ultra everywhere);
+  phones (low: the old path).
+
 ## Session 8 (2026-11-10) — new vehicles: Cybertruck, Yangwang U9 Xtreme, three motorcycles, the L0 maglev
 
 Owner: 「テスラのサイバートラック、バイクを3台、リニアモータ新幹線を実装してください」 (bikes chosen: Honda NSR250R,
