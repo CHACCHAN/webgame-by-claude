@@ -178,12 +178,14 @@ const NOTICE_MS = 8000;
  */
 export function AccountNotice() {
   const { notice, member, claimed } = useAccount();
+  // (the game is still loading when the answer comes: the word waits for the title, and its time counts from there)
+  const booting = useApp((s) => s.screen === 'boot');
   useEffect(() => {
-    if (!notice) return;
+    if (!notice || booting) return;
     const t = setTimeout(dismissNotice, NOTICE_MS);
     return () => clearTimeout(t);
-  }, [notice]);
-  if (!notice || (notice === 'ok' && !member)) return null;
+  }, [notice, booting]);
+  if (!notice || booting || (notice === 'ok' && !member)) return null;
   return (
     <div className="account-notice" onClick={dismissNotice}>
       {notice === 'ok' ? (
