@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { vegetationFrame } from './vegetation';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { Track } from '../track/Track';
 import type { TerrainData } from '../track/terrain';
@@ -912,6 +913,8 @@ export function buildAutobahnScenery(track: Track, terrain: TerrainData, quality
   const inForest = (s: number) => inRanges(s, forests);
   const clear = (x: number, z: number) => !keepOut.some((k) => (x - k.x) ** 2 + (z - k.z) ** 2 < k.r * k.r);
   const trees = buildTrees(terrain, quality.treeDensity, quality.treeLod, {
+    vegetation: quality.vegetation,
+    style: 'autobahn',
     clearance: -OUT + 5,
     keep: clear,
     // the land around is wide and mostly far forest: big chunks (draw calls) where only the far mesh ever shows
@@ -965,6 +968,7 @@ export function buildAutobahnScenery(track: Track, terrain: TerrainData, quality
     lightmapMats: [roadMaterial, terrainMat],
     covers: new Float32Array(covers),
     update(time, cameraPos) {
+      vegetationFrame(time, cameraPos);
       updateTreeLods(trees, cameraPos);
       turbines.update(time);
       traffic.update(time, cameraPos);

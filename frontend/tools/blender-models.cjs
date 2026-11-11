@@ -4,6 +4,7 @@
 //   node tools/blender-models.cjs bikes [ids]    tools/blender/bikes/<id>.py  → public/models/bikes/<id>.glb
 //   node tools/blender-models.cjs props [ids]    tools/blender/props/<id>.py  → public/models/props/<id>.glb
 //   node tools/blender-models.cjs creatures      tools/blender/creatures/roach.py → public/models/roach/roach.glb
+//   node tools/blender-models.cjs nature [ids]   tools/blender/nature/<id>.py → public/models/nature/<id>.glb + <id>.lite.glb
 //   … --render [dir]   also renders each model's check views with its script (default dir: /tmp/<id>-render)
 // A train's line variants (`variants`: the same model painted and signed for another line, `Livery.variant` in
 // vehicle/trains.ts) are built by the same script with `--variant <name>` → <id>-<name>.glb.
@@ -40,6 +41,16 @@ const KINDS = {
     ],
   },
   creatures: { dir: 'tools/blender/creatures', out: 'public/models/roach', palette: false, textureSize: 1024, big: {}, resample: true, ids: ['roach'] },
+  // trees, bushes, undergrowth, rocks (tools/blender/nature/nature_kit.py): the script writes the geometry (every level
+  // of detail a node) and its textures as PNG files next to it, which `textures` puts into the materials by name
+  // (`<id>_<file>.png`; the normal maps carry a mask in their alpha, which Blender's exporter would drop). `lite`:
+  // a second GLB for the medium quality without the nodes matching `drop` and with the textures at half size.
+  nature: {
+    dir: 'tools/blender/nature', out: 'public/models/nature', palette: false, textureSize: 2048, big: {},
+    textures: { foliage: { base: 'leaf', normal: 'leaf_n', mask: true }, impostor: { base: 'imp', normal: 'imp_n', mask: true }, rock: { base: 'rock', normal: 'rock_n' } },
+    lite: { drop: /_lod0$/, scale: 0.5 },
+    ids: ['sugi'],
+  },
 };
 
 const args = process.argv.slice(2);
@@ -94,7 +105,39 @@ function sortTriangles(prim) {
   acc.setArray(out);
 }
 
-async function optimise(raw, out) {
+/** the PNG files a nature script left next to its GLB, into the materials that are named for them */
+function addTextures(doc, raw, id) {
+  const dir = path.dirname(raw);
+  for (const mat of doc.getRoot().listMaterials()) {
+    const def = kind.textures[mat.getName()];
+    if (!def) continue;
+    const tex = (name) => {
+      const file = path.join(dir, `${id}_${name}.png`);
+      if (!fs.existsSync(file)) throw new Error(`no ${file} for the material ${mat.getName()}`);
+      return doc.createTexture(`${id}_${name}`).setImage(fs.readFileSync(file)).setMimeType('image/png');
+    };
+    mat.setBaseColorTexture(tex(def.base)).setBaseColorFactor([1, 1, 1, 1]).setMetallicFactor(0).setRoughnessFactor(0.8);
+    if (def.normal) mat.setNormalTexture(tex(def.normal));
+    if (def.mask) mat.setAlphaMode('MASK').setAlphaCutoff(0.5).setDoubleSided(true);
+  }
+}
+
+/** the same model for the medium quality: without the heaviest level of detail, textures at `scale` */
+async function writeLite(io, doc, out) {
+  const sharp = require('sharp');
+  const F = require('@gltf-transform/functions');
+  const { MeshoptEncoder } = require('meshoptimizer');
+  for (const node of doc.getRoot().listNodes()) if (kind.lite.drop.test(node.getName())) node.dispose();
+  for (const tex of doc.getRoot().listTextures()) {
+    const [w, h] = tex.getSize();
+    const buf = await sharp(Buffer.from(tex.getImage())).resize(Math.round(w * kind.lite.scale), Math.round(h * kind.lite.scale)).webp({ quality: 88 }).toBuffer();
+    tex.setImage(buf).setMimeType('image/webp');
+  }
+  await doc.transform(F.prune({ keepAttributes: true }), F.meshopt({ encoder: MeshoptEncoder, level: 'high' }));
+  await io.write(out, doc);
+}
+
+async function optimise(raw, out, id) {
   const { NodeIO } = require('@gltf-transform/core');
   const { ALL_EXTENSIONS } = require('@gltf-transform/extensions');
   const F = require('@gltf-transform/functions');
@@ -104,6 +147,7 @@ async function optimise(raw, out) {
   const io = new NodeIO().registerExtensions(ALL_EXTENSIONS).registerDependencies({ 'meshopt.encoder': MeshoptEncoder });
   const doc = await io.read(raw);
   sortByMaterial(doc);
+  if (kind.textures) addTextures(doc, raw, id);
   // no accessor dedup before quantisation: two parts of identical geometry (a train's two end cars) would become one
   // mesh shared by both nodes, and join + quantize then distort it (the L0's end cars came out squashed). meshopt's
   // own cleanup still shares identical buffers once they are quantised.
@@ -111,7 +155,7 @@ async function optimise(raw, out) {
   const steps = [F.dedup({ propertyTypes: [PropertyType.MESH, PropertyType.TEXTURE, PropertyType.MATERIAL, PropertyType.SKIN] })];
   if (kind.resample) steps.push(F.resample());
   if (kind.palette) steps.push(F.palette({ min: 5 }));
-  steps.push(F.join({ keepNamed: !kind.joinNamed }), F.weld(), F.prune(), F.sparse());
+  steps.push(F.join({ keepNamed: !kind.joinNamed }), F.weld(), F.prune(kind.textures ? { keepAttributes: true } : {}), F.sparse());
   // the palettes lossless (lossy WebP smears neighbouring colour blocks into each other), the rest as good-quality WebP
   // (a pattern is tried on the name and on the URI, which is empty for embedded images: never match an empty string)
   const big = Object.keys(kind.big);
@@ -124,6 +168,11 @@ async function optimise(raw, out) {
   steps.push(F.meshopt({ encoder: MeshoptEncoder, level: 'high' }));
   await doc.transform(...steps);
   await io.write(out, doc);
+  if (kind.lite) {
+    const lite = out.replace(/\.glb$/, '.lite.glb');
+    await writeLite(io, doc, lite);
+    console.log(lite, fs.statSync(lite).size, 'bytes');
+  }
 }
 
 (async () => {
@@ -135,15 +184,17 @@ async function optimise(raw, out) {
       const name = variant ? `${id}-${variant}` : id;
       const tmp = fs.mkdtempSync(path.join(os.tmpdir(), `${name}-`));
       const raw = kind.outDir ? path.join(tmp, `${id}.glb`) : path.join(tmp, `${name}.raw.glb`);
-      const log = build(script, [...(variant ? ['--variant', variant] : []), '--out', kind.outDir ? tmp : raw]).toString();
-      for (const line of log.split('\n')) if (/^(TRIS|MATERIALS|PROP)/.test(line)) console.log(`  ${line}`);
+      // (a nature script renders its sheet from what it has just built: in the same run)
+      const sheet = kind.textures && renderDir !== null ? ['--render', path.resolve(renderDir || path.join(os.tmpdir(), `${id}-render`))] : [];
+      const log = build(script, [...(variant ? ['--variant', variant] : []), '--out', kind.outDir ? tmp : raw, ...sheet]).toString();
+      for (const line of log.split('\n')) if (/^(TRIS|MATERIALS|PROP|NATURE|SHEET)/.test(line)) console.log(`  ${line}`);
       const out = path.join(kind.out, `${name}.glb`);
       fs.mkdirSync(kind.out, { recursive: true });
-      await optimise(raw, out);
+      await optimise(raw, out, id);
       fs.rmSync(tmp, { recursive: true, force: true });
       console.log(out, fs.statSync(out).size, 'bytes');
     }
-    if (renderDir !== null) {
+    if (renderDir !== null && !kind.textures) {
       const dir = path.resolve(renderDir || path.join(os.tmpdir(), `${id}-render`), renderDir ? id : '');
       fs.mkdirSync(dir, { recursive: true });
       build(script, ['--render', dir]);

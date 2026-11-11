@@ -12,6 +12,8 @@ import { buildScenery, type SceneryResult } from './render/TrackScenery';
 import { buildEnvironment, PRESETS, type EnvironmentRig, type TimeOfDay } from './render/Environment';
 import { CarVisual } from './render/CarVisual';
 import { clearing } from './render/instancing';
+import { loadVegetation, SHADOW_LAYER, vegetationWeather, type VegetationQuality } from './render/vegetation';
+import { vegetationFiles } from './render/vegetationPlanting';
 import { volume, volumeSpot } from './render/volumetricLights';
 import { loadCarTemplates } from './render/carAssets';
 import { loadTrafficModels } from './render/trafficModels';
@@ -52,6 +54,8 @@ export interface QualitySettings {
   headlightShadows: boolean;
   photoTextures: boolean;
   treeLod: number;
+  /** the Blender-made vegetation: which set, how far its levels of detail reach, how much undergrowth */
+  vegetation: VegetationQuality;
 }
 
 export interface RaceConfig {
@@ -354,7 +358,8 @@ export class Game {
     this.physics = new PhysicsWorld(this.track);
     // the autobahn's oncoming traffic is the game's own cars (light copies of their models)
     if (course.style === 'autobahn') await loadTrafficModels(CAR_ORDER);
-    this.scenery = buildScenery(this.track, this.terrain, { treeDensity: this.quality.treeDensity, shadows: this.quality.shadows, photoTextures: this.quality.photoTextures, treeLod: this.quality.treeLod, style: course.style });
+    await loadVegetation(vegetationFiles(course.style ?? 'touge'), this.quality.vegetation.tier);
+    this.scenery = buildScenery(this.track, this.terrain, { treeDensity: this.quality.treeDensity, shadows: this.quality.shadows, photoTextures: this.quality.photoTextures, treeLod: this.quality.treeLod, vegetation: this.quality.vegetation, style: course.style });
     // an instanced mesh without instances has an empty matrix buffer, which WebGPU refuses to bind
     const empty: THREE.Object3D[] = [];
     this.scenery.group.traverse((o) => {
@@ -369,6 +374,8 @@ export class Game {
     this.root.add(this.env.group);
     this.env.key.castShadow = this.quality.shadows;
     this.env.key.shadow.mapSize.set(this.quality.shadowMapSize, this.quality.shadowMapSize);
+    // (the trees' shadow meshes are drawn into this light's shadow map only)
+    this.env.key.shadow.camera.layers.enable(SHADOW_LAYER);
     this.dryMaterials = {};
     this.applyTimeOfDay(this.timeOfDay);
     this.chase.reset();
@@ -440,6 +447,7 @@ export class Game {
     this.dryMaterials.terrain ??= terrain.roughness;
     terrain.roughness = lerp(this.dryMaterials.terrain, 0.62, wet);
     this.rain.setIntensity(wet);
+    vegetationWeather(wet);
     this.weatherGrip = lerp(1, WET_GRIP, wet);
     this.audio?.setRain(wet);
     this.lobby?.setLamps(lamps > 0.5 ? 1 : 0.5);

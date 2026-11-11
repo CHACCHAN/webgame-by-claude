@@ -2,7 +2,6 @@ import * as THREE from 'three';
 import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { Track } from '../track/Track';
 import type { TerrainData, HeightGrid } from '../track/terrain';
-import type { Landform } from '../track/landforms';
 import { buildRoadGeometry, classifySides, SHOULDER } from '../track/roadGeometry';
 import { clamp, fbm, lerp, noise2, rng, smoothstep } from '../util/math';
 import {
@@ -20,6 +19,8 @@ import { findCorners } from '../track/corners';
 import { placeProp, prop, type PropModel } from './props';
 import type { CourseStyle } from '../track/courses';
 import { ChunkedLods, cutout } from './instancing';
+import { Forest, vegetationFrame, type VegetationQuality } from './vegetation';
+import { cityWeight, loadedSpecies, plantTrees, TREE_SETS } from './vegetationPlanting';
 import { buildAutobahnScenery } from './autobahnScenery';
 
 export interface Lamp {
@@ -55,6 +56,8 @@ export interface SceneryQuality {
   shadows: boolean;
   photoTextures: boolean;
   treeLod: number;
+  /** the Blender-made vegetation (render/vegetation.ts); without it, or as `legacy`, the old procedural cedar and lumps */
+  vegetation?: VegetationQuality;
   /** 'autobahn': the motorway's own scenery (render/autobahnScenery.ts) instead of the mountain road's */
   style?: CourseStyle;
 }
@@ -221,7 +224,7 @@ export function buildScenery(track: Track, terrain: TerrainData, quality: Scener
   const keepOut = buildLandmarks(track, terrain, sides, group, lamps);
 
   // ------------------------------------------------------------- trees
-  const trees = buildTrees(terrain, quality.treeDensity, quality.treeLod);
+  const trees = buildTrees(terrain, quality.treeDensity, quality.treeLod, { vegetation: quality.vegetation });
   group.add(trees);
   group.add(buildClutter(track, terrain, quality.treeDensity, surfaceTexture, keepOut));
   const turbines = buildTurbines(terrain);
@@ -235,6 +238,7 @@ export function buildScenery(track: Track, terrain: TerrainData, quality: Scener
     lightmapMats,
     covers: new Float32Array(covers),
     update(time, cameraPos) {
+      vegetationFrame(time, cameraPos);
       updateTreeLods(trees, cameraPos);
       turbines.update(time);
     },
@@ -839,20 +843,6 @@ function buildSigns(track: Track, sides: ReturnType<typeof classifySides>, group
   }
 }
 
-/** Japanese cedar style conifers, instanced in spatial chunks for culling. */
-/** 0..1 how much (x, z) lies inside one of the landform's towns. */
-function cityWeight(lf: Landform, x: number, z: number) {
-  let w = 0;
-  for (const c of lf.cities) {
-    const ca = Math.cos(c.angle), sa = Math.sin(c.angle);
-    const dx = x - c.x, dz = z - c.z;
-    const ax = dx * ca + dz * sa, az = -dx * sa + dz * ca;
-    const d = Math.sqrt((ax / c.rx) ** 2 + (az / c.rz) ** 2);
-    w = Math.max(w, smoothstep(1.05, 0.8, d));
-  }
-  return w;
-}
-
 /**
  * `opts` (the autobahn's): `clearance` from the centreline instead of the mountain road's 10.5 m, `keep` rejects a
  * spot, `extra` places more trees through `add` after the scattered ones.
@@ -868,10 +858,26 @@ export function buildTrees(
     /** chunk size (m) of the trees in the near grid (default 320 m: a chunk changes its level of detail as a whole) and outside it */
     chunk?: number;
     farChunk?: number;
+    /** the Blender-made species (see `SceneryQuality.vegetation`) and whose course they are for */
+    vegetation?: VegetationQuality;
+    style?: CourseStyle;
   } = {},
 ) {
   const group = new THREE.Group();
   group.name = 'trees';
+  const veg = opts.vegetation;
+  const set = veg && veg.tier !== 'legacy' ? loadedSpecies(TREE_SETS[opts.style ?? 'touge']) : null;
+  if (veg && set?.ids.length) {
+    // levels of detail: the twig cards up close, bough cards, a few big cards, then the impostors
+    const full = veg.tier === 'full';
+    const forest = new Forest(set.species, plantTrees(terrain, density, opts.style ?? 'touge', set.ids, opts), {
+      ranges: [full ? 28 * veg.range : 0, (full ? 80 : 60) * veg.range, (full ? 190 : 160) * veg.range],
+      shadows: 100,
+    });
+    group.add(forest.group);
+    group.userData.lods = forest;
+    return group;
+  }
   const geo = treeGeometry();
   const mat = new THREE.MeshStandardMaterial({
     vertexColors: true,
@@ -944,7 +950,7 @@ export function buildTrees(
 
 /** Switch tree chunks between the detailed and the impostor mesh. */
 export function updateTreeLods(trees: THREE.Object3D, camera: THREE.Vector3) {
-  (trees.userData.lods as ChunkedLods).update(camera);
+  (trees.userData.lods as ChunkedLods | Forest).update(camera);
 }
 
 /** Builds an indexed mesh from vertex streams (position, soft "volume" normal, colour, uv). */
