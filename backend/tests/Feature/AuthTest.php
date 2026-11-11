@@ -181,6 +181,10 @@ class AuthTest extends TestCase
         // the cookie alone (a form on another site) changes nothing
         $this->asMember($callback)->postJson('/api/runs', $this->runPayload(150_000))->assertUnauthorized();
         $this->asMember($callback)->postJson('/api/runs', $this->runPayload(150_000), self::HEADER)->assertCreated();
+        $this->asMember($callback)->postJson('/api/runs', $this->runPayload(160_000), self::HEADER)->assertCreated();
+        $this->asMember($callback)->getJson('/api/players/me')->assertOk()->assertJsonCount(1, 'best_runs')
+            ->assertJsonPath('best_runs.0.track_id', 'oboro-downhill')->assertJsonPath('best_runs.0.time_ms', 150_000)
+            ->assertJsonPath('best_runs.0.has_ghost', false);
         $this->getJson('/api/tracks/oboro-downhill/leaderboard')->assertOk()
             ->assertJsonPath('entries.0.player_name', 'ryo')->assertJsonPath('entries.0.is_member', true);
         // a member is named in Authentik

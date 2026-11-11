@@ -43,6 +43,16 @@ class PlayerController extends Controller
             'name' => $player->name,
             'member' => $player->isMember(),
             'bests' => $bests,
+            // the best run per course, with its ghost if it has one (a member on a new machine fetches these)
+            'best_runs' => collect(array_keys(config('game.tracks')))->map(fn (string $track) => Run::query()
+                ->where('player_id', $player->id)->where('track_id', $track)
+                ->whereIn('car_id', array_keys(config('game.cars')))
+                ->withExists('ghost')->orderBy('time_ms')->orderBy('id')->first())
+                ->filter()->map(fn (Run $run) => [
+                    'run_id' => $run->id, 'track_id' => $run->track_id, 'car_id' => $run->car_id,
+                    'time_ms' => $run->time_ms, 'sector_ms' => $run->sector_ms, 'has_ghost' => (bool) $run->ghost_exists,
+                    'created_at' => $run->created_at?->toIso8601String(),
+                ])->values(),
         ]);
     }
 

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useApp } from '../../store/app';
 import { useMenuInput, hoverSelect } from '../useMenuInput';
 import { gameHolder } from '../GameCanvas';
-import { api, loadLocalBest, loadPlayer, saveCarBest, saveLocalBest, saveRivalResult, type SubmitResult } from '../../api/client';
+import { api, currentMember, loadLocalBest, loadPlayer, saveCarBest, saveLocalBest, saveRivalResult, type SubmitResult } from '../../api/client';
 import { MEDAL_LABEL, medalFor } from '../../game/race/medals';
 import { encodeGhost, type EncodedGhost } from '../../game/race/Ghost';
 import type { RaceResult } from '../../game/Game';
@@ -58,7 +58,8 @@ export function ResultsScreen() {
         saveLocalBest(result.trackId, { carId: result.carId, timeMs: result.timeMs, splits: result.splitsMs, ghost, date: new Date().toISOString() }),
       );
     }
-    if (loadPlayer()) void send(loadPlayer()!.name);
+    // a member's record goes to their account; a guest is asked for the name every time (the last one typed is filled in)
+    if (currentMember()) void send(currentMember()!.name);
     else setSubmit({ kind: 'need-name' });
     // the finish jingle is playing (a longer one for beating the rival): a new medal or record gets its own
     // sting as it ends, then the results music

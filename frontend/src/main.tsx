@@ -7,6 +7,7 @@ import '@fontsource/shippori-mincho/700.css';
 import '@fontsource/shippori-mincho/800.css';
 import './ui/styles.css';
 import { App } from './App';
+import { initAccount } from './store/account';
 
 // A deploy replaces the hashed files: a game opened before it then asks for a chunk (a model loader, the audio) that
 // is gone. Load the new build instead of failing; not twice within a minute (a second failure is something else).
@@ -20,6 +21,9 @@ window.addEventListener('vite:preloadError', (e) => {
   e.preventDefault();
   location.reload();
 });
+
+// who plays (a member logged in through Authentik, or a guest): asked while the game loads
+void initAccount();
 
 // StrictMode is intentionally not used: the 3D world is a heavyweight singleton.
 createRoot(document.getElementById('root')!).render(<App />);
