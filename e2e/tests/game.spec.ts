@@ -191,3 +191,77 @@ test('course select switches to another mountain and its own rivals', async ({ p
   expect(stored).toBe('kirifuri-lakeside');
   expect(errors).toEqual([]);
 });
+
+test('car select: tabs by kind, pictures, sorting, favourites, grid keys', async ({ page }) => {
+  const errors = await prepare(page);
+  await page.goto('/');
+  await waitForTitle(page);
+  await page.keyboard.press('Enter');
+  await page.keyboard.press('Enter'); // TIME ATTACK
+  await expect(page.locator('.course-card.active')).toContainText('OBORO PASS');
+  await page.keyboard.press('Enter');
+  await expect(page.locator('.choice-card.active')).toContainText('深夜・晴れ');
+  await page.keyboard.press('Enter');
+  // every vehicle on the first tab, each with its picture (no fallback tile)
+  await expect(page.locator('.vp-tab.on')).toHaveAttribute('data-tab', 'all');
+  const all = await page.locator('.vp-tile').count();
+  expect(all).toBeGreaterThanOrEqual(18);
+  await expect(page.locator('.vp-tab.on i')).toHaveText(String(all));
+  await page.waitForFunction(() => [...document.querySelectorAll<HTMLImageElement>('.vp-thumb img')].every((i) => i.complete && i.naturalWidth > 0));
+  await expect(page.locator('.vp-thumb img')).toHaveCount(all);
+  await expect(page.locator('.vp-thumb-none')).toHaveCount(0);
+  // measured figures of the highlighted car
+  await expect(page.locator('.vp-tile.on')).toHaveAttribute('data-id', 'hayate');
+  await expect(page.locator('.vp-bar')).toHaveCount(5);
+  await expect(page.locator('.vp-bar').first()).toContainText('秒');
+  // ← → step through the list as the old car select did, ↓ ↑ by a row; the garage shows the highlighted one
+  await page.keyboard.press('ArrowRight');
+  await expect(page.locator('.car-name')).toHaveText('SILVIA spec-R (S15)');
+  expect(await page.evaluate(() => (window as any).__game.garageCar.spec.id)).toBe('s15');
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('ArrowUp');
+  await expect(page.locator('.vp-tile.on')).toHaveAttribute('data-id', 's15');
+  await page.keyboard.press('ArrowLeft');
+  await page.keyboard.press('ArrowLeft');
+  await expect(page.locator('.car-name')).toHaveText('ゴキブリ');
+  // E / Q change the tab: the next one holds the cars only, and the cursor goes to its first
+  await page.keyboard.press('KeyE');
+  await expect(page.locator('.vp-tab.on')).toHaveAttribute('data-tab', 'car');
+  await expect(page.locator('.car-name')).toHaveText('SPRINTER TRUENO AE86');
+  await expect(page.locator('.vp-tile[data-id="e5"]')).toHaveCount(0);
+  await page.locator('.vp-tab[data-tab="train"]').click();
+  await expect(page.locator('.vp-tile').first()).toHaveAttribute('data-id', 'e231');
+  await expect(page.locator('.vp-badge')).toBeVisible();
+  // sorted by top speed: the maglev first, its figure on the tile
+  await page.locator('.vp-sort[data-sort="speed"]').click();
+  await expect(page.locator('.vp-tile').first()).toHaveAttribute('data-id', 'l0');
+  await expect(page.locator('.vp-tile[data-id="l0"] .vp-tile-fig')).toHaveText('500 km/h');
+  await page.keyboard.press('KeyR'); // the next order
+  await expect(page.locator('.vp-sort.on')).toHaveAttribute('data-sort', 'corner');
+  await page.locator('.vp-sort[data-sort="default"]').click();
+  // favourites: X stars the highlighted vehicle, a tile's star another; they are kept and have their own tab
+  await page.keyboard.press('KeyX');
+  await page.locator('.vp-tile[data-id="e5"] .vp-star').click();
+  await expect(page.locator('.vp-star.on')).toHaveCount(2);
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('touge-garage')!).state.favourites)).toEqual(['e231', 'e5']);
+  await page.keyboard.press('KeyE');
+  await page.keyboard.press('KeyE'); // その他 → ★
+  await expect(page.locator('.vp-tab.on')).toHaveAttribute('data-tab', 'fav');
+  await expect(page.locator('.vp-tile')).toHaveCount(2);
+  await page.locator('.vp-tile[data-id="e5"] .vp-star').click();
+  await expect(page.locator('.vp-tile')).toHaveCount(1);
+  // a click highlights, a second one on the same tile confirms
+  await page.locator('.vp-tab[data-tab="car"]').click();
+  await page.locator('.vp-tile[data-id="shiden"]').click();
+  await expect(page.locator('.car-name')).toHaveText('RX-7 (FD3S)');
+  await page.locator('.vp-tile[data-id="shiden"]').click();
+  await expect(page.locator('.choice-card.active')).toContainText('AT');
+  expect(await page.evaluate(() => (window as any).__game.garageCar.spec.id)).toBe('shiden');
+  // Esc from the gearbox: back in the car select, on the tab and the car left
+  await page.keyboard.press('Escape');
+  await expect(page.locator('.vp-tab.on')).toHaveAttribute('data-tab', 'car');
+  await expect(page.locator('.vp-tile.on')).toHaveAttribute('data-id', 'shiden');
+  await page.keyboard.press('Escape');
+  await expect(page.locator('.choice-card.active')).toContainText('深夜・晴れ');
+  expect(errors).toEqual([]);
+});

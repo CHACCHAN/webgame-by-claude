@@ -203,6 +203,12 @@ export class Game {
   /** garage camera distance factor (a train is far longer than a car) and the point it frames */
   private garageScale = 1;
   private garageFocus = new THREE.Vector3();
+  /**
+   * Where the garage camera puts the vehicle on the screen: it aims this far to its right of and above the vehicle
+   * (m at a car's distance; the default leaves the car left of centre, beside the card on the right; the car select
+   * has its list on the left and the thumbnail tool wants it in the middle), with a factor on the distance.
+   */
+  garageFraming = { right: 2.4, up: 0, zoom: 1 };
   private garageLight = new THREE.SpotLight('#fff1e0', 0, 30, 0.55, 0.8, 1.2);
   private lampLights: THREE.PointLight[] = [];
   /** lamp index each pooled light is attached to (-1 = free) */
@@ -558,14 +564,18 @@ export class Game {
     const ahead = this.track.headingAt(s);
     // too steep a bank on that side (ridge courses) hides the car: take the first direction whose whole
     // camera swing stays clear of the terrain (other side, then along the road)
+    // (distances and heights at the kind's scale, around the point the camera circles: a train's camera stands
+    // 22 m out, and a bank there used to carry it 15 m up, looking down on the roof)
+    const c = this.garageFocus;
+    const m = view.scale;
     const clear = (yaw: number) => {
       for (let k = -3; k <= 3; k++) {
         const a = yaw + (k / 3) * 0.75;
         for (const d of [2.5, 4, 5.5, 7, 8.6]) {
           // the sight line from the camera (1.7 m up at 8.6 m) to the car body (0.6 m); the ground clamp in
           // garageCamera() may lift the camera spot itself a little, but not onto a bank
-          const sight = d >= 8.6 ? p.y + 1.3 : p.y + 0.6 + 1.1 * (d / 8.6);
-          if (this.terrain.heightAt(p.x + Math.sin(a) * d, p.z + Math.cos(a) * d) > sight) return false;
+          const sight = c.y + (d >= 8.6 ? 1.3 : 0.6 + 1.1 * (d / 8.6)) * m;
+          if (this.terrain.heightAt(c.x + Math.sin(a) * d * m, c.z + Math.cos(a) * d * m) > sight) return false;
         }
       }
       return true;
@@ -1422,15 +1432,27 @@ export class Game {
     const a = this.garageViewYaw + (o ? o.yaw : Math.sin(this.garageAngle) * 0.75);
     const cam = this.camera;
     const k = this.garageScale;
-    const flat = o ? Math.cos(o.pitch) * o.dist : 8.6 * k;
-    _v.set(car.x + Math.sin(a) * flat, car.y + (o ? 0.6 * k + Math.sin(o.pitch) * o.dist : 1.7 * k), car.z + Math.cos(a) * flat);
+    const frame = this.garageFraming;
+    let zoom = frame.zoom;
+    let dist = 0;
+    for (;;) {
+      dist = (o ? o.dist : 8.6 * k) * zoom;
+      const flat = o ? Math.cos(o.pitch) * dist : dist;
+      _v.set(car.x + Math.sin(a) * flat, car.y + (o ? 0.6 * k + Math.sin(o.pitch) * dist : 1.7 * k * zoom), car.z + Math.cos(a) * flat);
+      // stepping back further than the standard spot (the car select) must not carry the camera up a bank, from
+      // where it would look down on the roof (the ground clamp below may lift it a little, some 7° more of a
+      // downward look): it stays as much nearer as it has to
+      if (zoom <= 1 || this.terrain.heightAt(_v.x, _v.z) + 1.4 <= _v.y + 0.12 * dist) break;
+      zoom = Math.max(1, zoom - 0.1);
+    }
     // steep cuttings (ridge courses) would swallow the camera: keep it, and its glide in, above ground
     _v.y = Math.max(_v.y, this.terrain.heightAt(_v.x, _v.z) + 1.4);
     cam.position.lerp(_v, 1 - Math.exp(-dt * (o ? 14 : 3)));
     cam.position.y = Math.max(cam.position.y, this.terrain.heightAt(cam.position.x, cam.position.z) + 1.2);
-    // aim to the right of the car so it is framed in the left part of the screen
-    _f.set(-Math.cos(a), 0, Math.sin(a)).multiplyScalar(-2.4 * (o ? o.dist / 8.6 : k));
-    cam.lookAt(car.x + _f.x, car.y + 0.6 * k, car.z + _f.z);
+    // aim beside the car (to the camera's right by default, so the car is framed in the left part of the screen)
+    const reach = dist / 8.6;
+    _f.set(Math.cos(a), 0, -Math.sin(a)).multiplyScalar(frame.right * reach);
+    cam.lookAt(car.x + _f.x, car.y + 0.6 * k + frame.up * reach, car.z + _f.z);
     if (Math.abs(cam.fov - 38) > 0.01) {
       cam.fov = damp(cam.fov, 38, 3, dt);
       cam.updateProjectionMatrix();
