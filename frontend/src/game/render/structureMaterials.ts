@@ -31,12 +31,13 @@ const LAYER: Record<ConcreteKind, { c: LayerName; n: LayerName; tile: number; ti
   block: { c: 'blockwall_c', n: 'blockwall_n', tile: 2, tint: [0.7, 0.7, 0.68], rough: 0.9, bump: 1.2 },
 };
 
-export function concreteMaterial(kind: ConcreteKind, opts: { doubleSide?: boolean; brightness?: number } = {}): MeshStandardNodeMaterial {
+export function concreteMaterial(kind: ConcreteKind, opts: { doubleSide?: boolean; brightness?: number; uvScale?: number } = {}): MeshStandardNodeMaterial {
   const L = LAYER[kind];
   const mat = new MeshStandardNodeMaterial({ metalness: 0, roughness: 1, side: opts.doubleSide ? THREE.DoubleSide : THREE.FrontSide });
   mat.name = `concrete-${kind}`;
   mat.envMapIntensity = 0.35;
-  const at = uv() as unknown as Vec2;
+  // (`uvScale`: for geometry whose uv is not in metres, the metres one unit of it stands for)
+  const at = (opts.uvScale ? uv().mul(opts.uvScale) : uv()) as unknown as Vec2;
   const wet = wetness as unknown as Float;
   const macro = layerTexture('macro');
   const tile = at.div(L.tile) as Vec2;

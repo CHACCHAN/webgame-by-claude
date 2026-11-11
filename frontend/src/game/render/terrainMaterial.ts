@@ -142,7 +142,7 @@ export function groundMaterial(look: GroundLook, detail: GroundDetail, far = fal
   // ---- rain: darker, glossier, and water standing in flat hollows
   const pool = wet.mul(smoothstep(0.02, 0.4, convex.negate())).mul(smoothstep(0.16, 0.04, slope)).mul(smoothstep(0.45, 0.75, m1.r)).mul(smoothstep(0.55, 0.2, height)) as Float;
   col = col.mul(mix(float(1), soak, wet)) as unknown as Vec3;
-  rough = mix(mix(rough, rough.mul(0.52), wet), float(0.08), pool) as Float;
+  rough = mix(mix(rough, rough.mul(0.74), wet), float(0.08), pool) as Float;
 
   mat.colorNode = vec4(col, 1);
   mat.roughnessNode = rough;

@@ -18,6 +18,7 @@ import {
   buildTurbines,
   gridGeometry,
   lampPool,
+  surfaceDetailOf,
   updateTreeLods,
   type Lamp,
   type SceneryQuality,
@@ -25,6 +26,9 @@ import {
 } from './TrackScenery';
 import { AutobahnTraffic } from './autobahnTraffic';
 import { cutout } from './instancing';
+import { groundMaterial, type GroundLook } from './terrainMaterial';
+import { roadMaterial as roadSurface } from './roadMaterial';
+import { concreteMaterial } from './structureMaterials';
 
 /*
  * AUTOBAHN scenery (CourseInfo.style 'autobahn'): a German motorway at night, all procedural or our own models.
@@ -137,6 +141,7 @@ function faces(polys: THREE.Vector3[][]) {
 function asphalt(rows: { pts: THREE.Vector3[]; u: number[]; v: number; lm: [number, number][] }[]) {
   const n = rows[0].pts.length, R = rows.length;
   const pos = new Float32Array(n * R * 3), nor = new Float32Array(n * R * 3), uv = new Float32Array(n * R * 2), uv1 = new Float32Array(n * R * 2);
+  const road = new Float32Array(n * R * 2);
   rows.forEach((row, r) =>
     row.pts.forEach((p, k) => {
       const o = r * n + k;
@@ -144,6 +149,9 @@ function asphalt(rows: { pts: THREE.Vector3[]; u: number[]; v: number; lm: [numb
       nor.set([0, 1, 0], o * 3);
       uv.set([row.u[k] / ATLAS_W, row.v], o * 2);
       uv1.set(row.lm[k], o * 2);
+      // (metres from the strip's middle, half its width between the skirts: what render/roadMaterial.ts paints by)
+      const half = row.pts[1].distanceTo(row.pts[n - 2]) / 2;
+      road.set([row.pts[1].distanceTo(p) * (k === 0 ? -1 : 1) - half, half], o * 2);
     }),
   );
   // which winding faces up
@@ -161,6 +169,7 @@ function asphalt(rows: { pts: THREE.Vector3[]; u: number[]; v: number; lm: [numb
   g.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
   g.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
   g.setAttribute('uv1', new THREE.BufferAttribute(uv1, 2));
+  g.setAttribute('road', new THREE.BufferAttribute(road, 2));
   g.setIndex(idx);
   return g;
 }
@@ -350,7 +359,11 @@ export function buildAutobahnScenery(track: Track, terrain: TerrainData, quality
   // ---------------------------------------------------------------- materials
   const steel = new THREE.MeshStandardMaterial({ color: '#e1e4e1', metalness: 0.55, roughness: 0.38, side: THREE.DoubleSide });
   const galvanised = new THREE.MeshStandardMaterial({ color: '#b9bdba', metalness: 0.5, roughness: 0.5 });
-  const concrete = new THREE.MeshStandardMaterial({ map: makeConcreteTexture(false, null), roughness: 0.9, side: THREE.DoubleSide });
+  // the layered look (quality medium and up): the ground, the road's wear and the concrete of render/structureMaterials.ts
+  const detail = surfaceDetailOf(quality);
+  const concrete = detail
+    ? (concreteMaterial('formed', { doubleSide: true, uvScale: 4 }) as unknown as THREE.MeshStandardMaterial)
+    : new THREE.MeshStandardMaterial({ map: makeConcreteTexture(false, null), roughness: 0.9, side: THREE.DoubleSide });
   const grass = new THREE.MeshStandardMaterial({ color: '#33452a', roughness: 0.97, side: THREE.DoubleSide, envMapIntensity: 0.3 });
   const reflMat = new THREE.MeshStandardMaterial({ color: '#f4f1e8', emissive: '#fff1d0', emissiveIntensity: 0.55, roughness: 0.3 });
   nightEmissive.push(reflMat);
@@ -829,14 +842,17 @@ export function buildAutobahnScenery(track: Track, terrain: TerrainData, quality
   roadTex.repeat.set(1, 1 / ATLAS_L);
   const asphaltN = makeAsphaltNormal();
   asphaltN.repeat.set(18, 1 / 2.4);
-  const roadMaterial = new THREE.MeshStandardMaterial({
-    map: roadTex,
-    normalMap: asphaltN,
-    normalScale: new THREE.Vector2(0.55, 0.55),
-    roughness: 0.8,
-    metalness: 0,
-    envMapIntensity: 0.6,
-  });
+  const laneCentres = [3.225, 6.975, 10.725].map((u) => -E + u);
+  const roadMaterial = detail
+    ? (roadSurface({ markings: { atlas: roadTex, scale: [1, 1 / ATLAS_L] }, lanes: laneCentres }, detail) as unknown as THREE.MeshStandardMaterial)
+    : new THREE.MeshStandardMaterial({
+        map: roadTex,
+        normalMap: asphaltN,
+        normalScale: new THREE.Vector2(0.55, 0.55),
+        roughness: 0.8,
+        metalness: 0,
+        envMapIntensity: 0.6,
+      });
   const road = new THREE.Mesh(mergeGeometries(roadGeos), roadMaterial);
   road.receiveShadow = true;
   road.name = 'road';
@@ -869,26 +885,29 @@ export function buildAutobahnScenery(track: Track, terrain: TerrainData, quality
   }
 
   // ---------------------------------------------------------------- terrain
-  const terrainMat = new THREE.MeshStandardMaterial({
-    vertexColors: true,
-    map: makeGroundDetail(),
-    normalMap: makeGroundNormal(),
-    normalScale: new THREE.Vector2(0.8, 0.8),
-    roughness: 0.95,
-    metalness: 0,
-    envMapIntensity: 0.3,
-  });
-  // moonlit mown grass read as snow at the mountain roads' brightness
-  terrainMat.color.setScalar(0.72);
-  const nearTiles = tiles(gridGeometry(terrain.near, terrain, true), terrain.near.nx, terrain.near.nz, 16, 2, terrainMat, 'terrain-near');
+  // (moonlit mown grass read as snow at the mountain roads' brightness: the plain material's 0.72, the layered one's look)
+  const look: GroundLook = { grass: 'grass', waterLevel: terrain.landform.waterLevel, brightness: 0.8 };
+  const terrainMat = detail
+    ? (groundMaterial(look, detail) as unknown as THREE.MeshStandardMaterial)
+    : new THREE.MeshStandardMaterial({
+        vertexColors: true,
+        map: makeGroundDetail(),
+        normalMap: makeGroundNormal(),
+        normalScale: new THREE.Vector2(0.8, 0.8),
+        roughness: 0.95,
+        metalness: 0,
+        envMapIntensity: 0.3,
+      });
+  if (!detail) terrainMat.color.setScalar(0.72);
+  const nearTiles = tiles(gridGeometry(terrain.near, terrain, true, !!detail), terrain.near.nx, terrain.near.nz, 16, 2, terrainMat, 'terrain-near');
   nearTiles.traverse((o) => (o.receiveShadow = true));
   group.add(nearTiles);
-  const farMat = terrainMat.clone();
-  farMat.normalMap = null;
+  const farMat = detail ? (groundMaterial(look, detail, true) as unknown as THREE.MeshStandardMaterial) : terrainMat.clone();
+  if (!detail) farMat.normalMap = null;
   farMat.polygonOffset = true;
   farMat.polygonOffsetFactor = 2;
   farMat.polygonOffsetUnits = 4;
-  group.add(tiles(gridGeometry(terrain.far, terrain, false), terrain.far.nx, terrain.far.nz, 8, 4, farMat, 'terrain-far'));
+  group.add(tiles(gridGeometry(terrain.far, terrain, false, !!detail), terrain.far.nx, terrain.far.nz, 8, 4, farMat, 'terrain-far'));
 
   // ---------------------------------------------------------------- baked lamp light
   roadMaterial.lightMap = bakeLightmap(lmRows, lamps, (r, c, out) => {
