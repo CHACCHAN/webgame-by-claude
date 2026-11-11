@@ -69,8 +69,10 @@ describe('trains', () => {
       // the leading car: first car of the consist (the container that cancels the rig's own transform)
       const car = visual.rig.root.children.find((c) => !c.matrixAutoUpdate && c.children.length === TRAIN.cars)!.children[0];
       const fwd = new THREE.Vector3(0, 0, 1).transformDirection(car.matrixWorld).setY(0).normalize();
-      const spot = visual.headlights[0];
-      const beam = new THREE.Vector3().setFromMatrixPosition(spot.target.matrixWorld).sub(new THREE.Vector3().setFromMatrixPosition(spot.matrixWorld)).setY(0).normalize();
+      const from = new THREE.Vector3(), to = new THREE.Vector3();
+      visual.setHeadlights(1, true);
+      expect(visual.headlight(from, to)).toBeGreaterThan(0);
+      const beam = to.sub(from).setY(0).normalize();
       worst = Math.max(worst, fwd.angleTo(beam));
     }
     expect(worst).toBeLessThan(0.01);

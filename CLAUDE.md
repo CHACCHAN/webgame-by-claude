@@ -95,6 +95,16 @@ pending. `docs/PLAN.md` holds the design.
   material, `CarVisual` lets only shell / glass / wheels throw shadows, only the followed car's headlights throw
   any); a `DynamicDrawUsage` attribute is uploaded every frame, changed or not. A material's nodes (`materialColor`…)
   read the material being drawn, which in a shadow map is the shadow material: name the texture itself there.
+  What makes the picture stand still (all materials rebuilt in one frame, 1–2.6 s): the shaders are built for the
+  scene's set of lights (ids + `castShadow`, in scene order), the fog object and the environment texture object.
+  So every light lives in `render/LightRig.ts`, made once: never add, remove or re-parent a light, never make a
+  second fog or PMREM target; change intensity / colour / position (a car's headlights are `CarVisual.headlight()`
+  → the rig's three spots via `Game.updateBeams`; the vending machine's light is `vendingSpot`). Measure with
+  `~/.local/opt/quality/hitch.cjs` (frame gaps over 40 ms per action).
+  Courses stay built after leaving them (`Game.leaveWorld` / `enterWorld`, `keepCourses`, `keepBudget` in MB of
+  `gpuBytes`, oldest freed first, all on a GPU out-of-memory: `releaseKept`); `disposeWorld` frees only what no
+  other built course uses. Vehicle models load in stages (`render/vehicleModels.ts`: one car before the title, the
+  rest behind the menus): whatever shows a vehicle first waits with `Game.needs` / `ensureVehicleModels`.
 - Upscaler (settings アップスケーリング, off by default; `RenderHost` + `render/TemporalUpscaler.ts`): WebGPU draws the
   scene at 50–100 % with a jittered camera into three targets (colour, `velocity`, `reactive`) and gathers the frames
   at the output's size (three.js' `TAAUNode` with our resolve; SMAA off, RCAS after); the WebGL 2 backend uses FSR 1.

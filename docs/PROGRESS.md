@@ -363,6 +363,54 @@ What a deploy or a bad hour could break, found by reading the stack, and changed
   before the page loads: a real driver failure was not available to test with.
 - Not verified: a real browser without WebGPU (Firefox, Safari, a phone) by hand; a real device loss.
 
+### The freezes at a change of weather, car or course (11-11, owner's request)
+Owner: the screen stands still when the weather is switched; keep what was loaded, open the game as soon as what it
+needs is there and fetch the rest behind it, show that something is loading; asked also whether VRAM is used, and
+proposed freeing the oldest first when it runs short.
+
+- **Cause, measured** (`~/.local/opt/quality/hitch.cjs`: every frame gap over 40 ms after each action, with a CPU
+  profile): the renderer builds a material's shader for the scene's set of lights (each light's id and whether it
+  throws a shadow, in the scene graph's order), the fog object and the environment texture object. Every switch
+  changed one of them: a car brought two `SpotLight`s, the garage added its own, each time of day made a new PMREM
+  target, each course its own sun and fog. All materials were then rebuilt in one frame: 1.2–2.6 s, every time.
+- **`render/LightRig.ts`**: every light of the game is made once and never added, removed or re-parented (sun,
+  sky fill, fog, six lamp points, the vending machine's, three headlight spots; spot 0 is also the showroom's);
+  what changes is intensity, colour and position. `CarVisual` carries no lights any more (`headlight()`,
+  `beamInto()`), `Game.updateBeams` gives the three spots to the followed car and the nearest others each frame.
+  One environment target, drawn again in place at a change of time.
+- **Courses stay built** (`Game.leaveWorld` / `enterWorld`): up to three besides the shown one, within a budget of
+  GPU memory (`keepBudget`: 2000 MB, 500 MB under 8 GB of RAM, 0 on phones / quality low / under 4 GB); the one
+  left longest ago is freed first, and all of them when the GPU reports it is out of memory. Freeing a course keeps
+  what another built course still uses.
+- **Models in stages** (`render/vehicleModels.ts`): the title needs one car; the others load one at a time behind
+  the menus (paused in a race). The garage, a race and the waiting room wait for exactly the models they need
+  (`Game.needs`, `prepareRace`), with a mark in the corner (`busy` event → `.busy-mark`, an animation the compositor
+  runs, so it moves while the main thread works).
+- **Numbers** (RX 5700 XT, 1080p high, WebGPU, worst frame after the action; before = `d4fd3b5`):
+
+  | action | before | after |
+  |---|---|---|
+  | time / weather switched | 1.2–1.8 s every time | no frame over 40 ms (the first switch to dawn on a course: 0.5 s) |
+  | the garage shows another car | 1.3–1.6 s | 0.34–0.6 s |
+  | race start | 2.6 s (5.6 s of slow frames) | 0.65 s (0.75 s) |
+  | restart | 2.5 s | 0.59 s |
+  | back to a course shown before | 9.5–12.5 s | 15–32 ms |
+  | bytes fetched before the title | 31.0 MB | 10.9 MB |
+
+  A course's first visit is as before (3.5–14 s behind the loading screen). VRAM of the whole machine: 0.92 GB with
+  one course, 1.34 GB with four built (80–108 MB a course by our own count); JS heap ~170 → ~310 MB.
+  Cost of the fixed set of lights: scene pass 2.96 → 3.12 ms, GPU total 4.25 → 4.44 ms (`perf-pass.cjs`, two pairs);
+  `perf-frame.cjs` pairs are within their scatter.
+- **Tried and dropped**: compiling a car before it is shown (`compileObject`: several 110 ms frames and then the
+  same long one); building every time of day's shaders at course load (the first dawn stood still all the same).
+- **What still stands still**: ~0.5 s when a car is drawn for the first time (its materials' shaders), ~0.5 s at the
+  first dawn on a course, and the first visit of a course (the terrain is built on the main thread: frames of 1–1.4 s
+  behind the loading screen).
+- Verified: tsc, vitest (147), the build; `gpu-errors.cjs` 0 on WebGPU and WebGL 2; `backend-fallback.cjs`;
+  before / after pictures of the attract run, garage, grid, rain, dawn and waiting room (same look); E2E (below).
+  Not verified: phones on a device; a slow network (the mark and the waits were only seen locally); the hitch numbers
+  on WebGL 2 and on medium / low; a real GPU out-of-memory.
+
 ## Session 8 (2026-11-10) — new vehicles: Cybertruck, Yangwang U9 Xtreme, three motorcycles, the L0 maglev
 
 Owner: 「テスラのサイバートラック、バイクを3台、リニアモータ新幹線を実装してください」 (bikes chosen: Honda NSR250R,

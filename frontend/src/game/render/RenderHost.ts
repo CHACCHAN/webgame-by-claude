@@ -90,7 +90,7 @@ const VOLUME_SCALE = 0.4;
 export type RenderBackend = 'webgpu' | 'webgl2';
 
 /** what `RenderHost.create`'s `onTrouble` reports */
-export type RenderTrouble = 'lost' | 'errors';
+export type RenderTrouble = 'lost' | 'errors' | 'memory';
 
 /**
  * Owns the canvas' renderer, the scene, the camera and the post-processing chain, and drives the frame loop:
@@ -125,7 +125,7 @@ export class RenderHost {
    * could not be built: on WebGPU the caller tries again with `forceWebGL` on a new canvas (one that has given a
    * `webgpu` context gives no `webgl2` one). `onTrouble`: the running renderer stopped being usable
    * (`render/backendChoice.ts` decides what follows): the device or context is lost (nothing is drawn any more), or
-   * the WebGPU device reports errors in a burst.
+   * the WebGPU device reports errors in a burst, or that it is out of memory.
    */
   static async create(canvas: HTMLCanvasElement, options: RenderOptions, forceWebGL = false, onTrouble?: (kind: RenderTrouble, message: string) => void) {
     // (`?gputime`: the passes' GPU times, for tools/perf-pass.cjs)
@@ -173,7 +173,9 @@ export class RenderHost {
     const count = (what: string) => burst.add(performance.now() / 1000) && onTrouble('errors', what);
     r.onError = (info) => {
       report.call(r, info);
-      count(`${info?.type ?? 'GPUError'}: ${info?.message ?? ''}`);
+      // out of video memory is not a broken backend: the game gives back what it only keeps (`Game.releaseKept`)
+      if (/OutOfMemory/i.test(info?.type ?? '')) onTrouble('memory', String(info?.message ?? ''));
+      else count(`${info?.type ?? 'GPUError'}: ${info?.message ?? ''}`);
     };
     this.renderThrew = (err) => count(String(err));
   }

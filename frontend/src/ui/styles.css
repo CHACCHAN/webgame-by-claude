@@ -744,3 +744,10 @@ kbd {
   .corner-note { top: 70px; }
   .start-guide { font-size: 11px; padding: 6px 10px; gap: 3px; }
 }
+
+/* work in the background the player waits for (a model on its way): moves by transform alone, so it keeps turning
+   while the page's main thread is busy; shown only when the wait lasts */
+.busy-mark { position: fixed; right: 18px; bottom: 16px; z-index: 60; display: flex; align-items: center; gap: 10px; padding: 7px 14px 7px 10px; font-size: 13px; letter-spacing: 0.06em; color: var(--text); background: rgba(8, 11, 18, 0.78); border: 1px solid rgba(255, 255, 255, 0.14); border-radius: 999px; pointer-events: none; opacity: 0; animation: busy-in 0.25s 0.15s forwards; }
+.busy-mark i { width: 14px; height: 14px; border-radius: 50%; border: 2px solid rgba(255, 255, 255, 0.22); border-top-color: var(--accent, #ff8a2a); animation: busy-turn 0.8s linear infinite; will-change: transform; }
+@keyframes busy-in { to { opacity: 1; } }
+@keyframes busy-turn { to { transform: rotate(360deg); } }

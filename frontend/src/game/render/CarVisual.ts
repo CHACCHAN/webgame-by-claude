@@ -8,6 +8,7 @@ import type { VehicleSim } from '../vehicle/VehicleSim';
 import { buildCar, paintFinish, type CarRig } from './CarModel';
 import { clamp, damp } from '../util/math';
 import { beamCones, type VolumeSpot } from './volumetricLights';
+import { HEADLIGHT } from './LightRig';
 
 const _q = new THREE.Quaternion(), _p = new THREE.Vector3();
 const AXIS_Y = new THREE.Vector3(0, 1, 0), AXIS_X = new THREE.Vector3(1, 0, 0);
@@ -40,7 +41,10 @@ export class CarVisual {
   readonly spec: CarSpec;
   /** the body colour (a train's or the cockroach's livery swatch) */
   color: string | undefined;
-  readonly headlights: THREE.SpotLight[] = [];
+  /** where the headlights' real light starts and what it is aimed at; the light itself is one of the game's pooled spots (render/LightRig.ts) */
+  private lampOrigin: THREE.Object3D | null = null;
+  private lampAim: THREE.Object3D | null = null;
+  private beamIntensity = 0;
   private beams: THREE.Mesh[] = [];
   /** brightness of the beam cones (shared by this car's cones) */
   private beamLevel = uniform(0);
@@ -91,18 +95,13 @@ export class CarVisual {
     if (opts.headlights && !opts.ghost) {
       // a train's lamps can sit back on a long nose: its light starts at the tip, clear of the body's shadow
       const front = spec.train ? trainNoseZ(spec.train) + 0.2 : (this.rig.anchors.headlights[0]?.z ?? 2);
-      const spot = new THREE.SpotLight('#fff1dc', 260, 140, 0.48, 0.55, 1.4);
-      spot.position.set(0, traitsOf(spec).lampHeight, front + 0.1);
-      spot.target.position.set(0, -0.4, front + 30);
-      spot.castShadow = opts.shadows;
-      spot.shadow.mapSize.set(1024, 1024);
-      spot.shadow.camera.near = 0.5;
-      spot.shadow.camera.far = 140;
-      spot.shadow.bias = -0.0006;
       // a train's lamps sit on its leading car, which follows the path and not the simulated bogie's yaw
       const lamps = this.rig.lampParent ?? this.rig.root;
-      lamps.add(spot, spot.target);
-      this.headlights.push(spot);
+      const origin = (this.lampOrigin = new THREE.Object3D());
+      const aim = (this.lampAim = new THREE.Object3D());
+      origin.position.set(0, traitsOf(spec).lampHeight, front + 0.1);
+      aim.position.set(0, -0.4, front + 30);
+      lamps.add(origin, aim);
       // volumetric-ish beam cones
       const beamMat = new MeshBasicNodeMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, fog: false });
       {
@@ -116,7 +115,7 @@ export class CarVisual {
       }
       // the beams come out of the raised pods on pop-up cars
       const sources = this.pods.length ? this.pods.map((h) => new THREE.Vector3(h.position.x, h.position.y + POD.h * 0.55, h.position.z + POD.d)) : this.rig.anchors.headlights;
-      if (this.pods.length) spot.position.y = sources[0].y;
+      if (this.pods.length) origin.position.y = sources[0].y;
       for (const hl of sources) {
         const cone = new THREE.Mesh(new THREE.ConeGeometry(3.2, 22, 24, 1, true), beamMat);
         // apex at the lamp, dipping towards the road 22 m ahead (more from high lamps, e.g. a train's roof lamps)
@@ -153,19 +152,26 @@ export class CarVisual {
 
   /** The headlights' cone, for the glow in the haze (render/volumetricLights.ts): false when the car has none or they are off. */
   beamInto(out: VolumeSpot): boolean {
-    const spot = this.headlights[0];
-    if (!spot || !(spot.intensity > 0) || !this.root.visible) return false;
-    spot.getWorldPosition(out.position);
-    spot.target.getWorldPosition(out.direction).sub(out.position).normalize();
-    out.color.copy(spot.color);
-    out.intensity = spot.intensity;
-    out.angle = spot.angle;
-    out.penumbra = spot.penumbra;
+    if (!this.lampOrigin || !(this.beamIntensity > 0) || !this.root.visible) return false;
+    this.lampOrigin.getWorldPosition(out.position);
+    this.lampAim!.getWorldPosition(out.direction).sub(out.position).normalize();
+    out.color.set(HEADLIGHT.color);
+    out.intensity = this.beamIntensity;
+    out.angle = HEADLIGHT.angle;
+    out.penumbra = HEADLIGHT.penumbra;
     return true;
   }
 
+  /** The headlights as a real light, for one of the game's pooled spots (`LightRig.beams`): 0 when dark or absent. */
+  headlight(position: THREE.Vector3, target: THREE.Vector3): number {
+    if (!this.lampOrigin || !(this.beamIntensity > 0) || !this.root.visible) return 0;
+    this.lampOrigin.getWorldPosition(position);
+    this.lampAim!.getWorldPosition(target);
+    return this.beamIntensity;
+  }
+
   private applyBeams(level: number) {
-    for (const s of this.headlights) s.intensity = 260 * level;
+    this.beamIntensity = this.lampOrigin ? HEADLIGHT.intensity * level : 0;
     this.beamLevel.value = 0.05 * level;
     for (const b of this.beams) {
       b.visible = level > 0.05;

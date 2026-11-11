@@ -29,6 +29,8 @@ interface AppState {
   result: RaceResult | null;
   /** the renderer that came up, and why it is WebGL 2 when it is (null until it is up) */
   renderer: { backend: RenderBackend; reason: FallbackReason | null } | null;
+  /** work in the background the player waits for: a short label, null when idle */
+  busy: string | null;
   /** what the rival said last (before the start, after the finish) */
   rivalLine: { moment: 'before' | 'won' | 'lost'; text: string } | null;
   paused: boolean;
@@ -49,6 +51,7 @@ export const useApp = create<AppState>((set, get) => ({
   afterLoad: 'garage',
   result: null,
   renderer: null,
+  busy: null,
   rivalLine: null,
   paused: false,
   go: (s) => set({ prevScreen: get().screen, screen: s }),
