@@ -83,6 +83,9 @@ kbd.pad.wide { border-radius: 0.45em; padding: 0.05em 0.55em; }
 .cta:disabled { --edge: var(--line); --fill: var(--glass); color: var(--muted); cursor: default; }
 .cta.small { --edge: var(--line); --fill: rgb(var(--c-ink-2) / 0.72); padding: 0.55rem 1.2rem; font-size: var(--fs-m); color: var(--text); }
 .cta.small:hover:not(:disabled), .cta.small.focus { --edge: var(--cyan); --fill: var(--cyan); color: var(--on-cyan); }
+/* in a list the keys walk, hovering moves the selection: a pointer left resting on another button (a screen that
+   came back under it) lights that button's edge only, so one button is filled, the selected one */
+.focus-box .cta.small:hover:not(.focus):not(:disabled) { --fill: rgb(var(--c-ink-2) / 0.72); color: var(--text); }
 .cta.ghost { --fill: transparent; color: var(--muted); }
 .mini { --c: 5px; --fill: rgb(var(--c-ink-2) / 0.7); --tex: none; padding: 0.28rem 0.8rem; font-size: var(--fs-s); font-weight: 700; white-space: nowrap; transition: color var(--t-fast); }
 .mini:hover { --edge: var(--cyan); color: var(--cyan); }
@@ -230,7 +233,7 @@ input::placeholder { color: var(--faint); }
   /* (the room's note carries the link's state) */
   .online-room .screen-head .sh-note { display: inline; font-size: 11px; }
   /* back and fullscreen as a column in the bottom-left corner: the screens keep 98 px clear there */
-  .shell-nav, .touch .shell-nav { left: max(10px, env(safe-area-inset-left)); bottom: max(4px, env(safe-area-inset-bottom)); width: 88px; height: auto; flex-direction: column-reverse; align-items: stretch; gap: 4px; }
+  .shell-nav, .touch .shell-nav { left: max(10px, env(safe-area-inset-left)); bottom: max(4px, env(safe-area-inset-bottom)); min-width: 88px; height: auto; flex-direction: column-reverse; align-items: stretch; gap: 4px; }
   .touch-back, .fs-toggle, .touch .touch-back, .touch .fs-toggle { justify-content: center; padding: 9px 4px; font-size: 12px; }
   .shell-nav .touch-back kbd { display: none !important; }
   .shell-foot { display: none; }
