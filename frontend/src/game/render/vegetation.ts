@@ -478,6 +478,9 @@ function plantMaterial(model: PlantModel, look: PlantLook, span: Span, second = 
   mat.colorNode = vec4(albedo, 1);
   // (wet leaves shine, but not as mirrors: at 0.3 a forest in the rain glittered white under the moon)
   mat.roughnessNode = mix(mix(0.92, 0.72, leaf), 0.46, wet.mul(0.85).mul(float(1).sub(far)));
+  // (far foliage is dark, and against a low sun or the moon its surface shine was more light than its colour: a
+  // hillside of pale dots, whatever the leaves' colour was set to)
+  mat.specularIntensityNode = mix(1, 0.1, far);
   mat.aoNode = ao;
   const n: N = texN.rgb.mul(2).sub(1);
   mat.normalNode = perturb(normalViewGeometry, vec3(n.xy.mul(1.2), n.z), uv());
@@ -585,7 +588,7 @@ function impostorMaterial(model: PlantModel, look: PlantLook, span: Span) {
     const size: N = I.open.mul(step(S.x.sub(S.y), I.dist));
     // (far away the cards are drawn wider: the crowns of a hillside close into a canopy, where trees a few pixels
     // wide with the dark ground between them were a grain)
-    const wide: N = mix(1, 1.7, smoothstep(250, 800, I.dist));
+    const wide: N = mix(1, 1.8, smoothstep(S.x, S.x.add(350), I.dist));
     const at: N = I.foot
       .add(right.mul(corner.x.mul(F.x).mul(B.x).mul(B.y).mul(wide)))
       .add(vec3(0, 1, 0).mul(corner.y.mul(F.y).add(F.z).mul(B.x)))
@@ -608,10 +611,13 @@ function impostorMaterial(model: PlantModel, look: PlantLook, span: Span) {
   const hue: N = mix(vec3(0.8, 0.9, 0.74), vec3(1.14, 1.06, 0.9), I.tint).mul(vec3(...(look.tint ?? [1, 1, 1])));
   // (a far hillside is a canopy: its trees stand in each other's shade. Lit one by one as if each stood alone they
   // were bright dots on the darker ground, a grain over the whole mountain at dawn)
-  const canopy: N = mix(1, 0.55, smoothstep(250, 800, I.dist));
+  // (from where the impostors begin, so that the last mesh level hands over at the same brightness)
+  const canopy: N = mix(1, 0.45, smoothstep(S.x, S.x.add(350), I.dist));
   const albedo: N = tex.rgb.mul(mix(vec3(1), hue, 0.85)).mul(mix(1, 0.68, wet)).mul(varying(I.shade(true).mul(canopy)));
   mat.colorNode = vec4(albedo, 1);
   mat.roughnessNode = float(0.8);
+  // (see `plantMaterial` on the shine of far foliage)
+  mat.specularIntensityNode = float(0.1);
   // the baked normal is in the view's frame: right, up, towards the viewer
   const basis: N = varying(vec4(right.x, right.z, dir.x, dir.y));
   const n: N = model.impN ? (texture(model.impN, coord) as N).rgb.mul(2).sub(1) : vec3(0, 0, 1);
