@@ -278,7 +278,7 @@ export class Roadside {
         const o = clamp(Math.round(s), 0, tr.count - 1) * 3;
         const nx = nor.getX(v) * side, ny = nor.getY(v), nz = nor.getZ(v) * dz;
         n.set(tr.right[o] * nx + tr.fwd[o] * nz, tr.right[o + 1] * nx + ny + tr.fwd[o + 1] * nz, tr.right[o + 2] * nx + tr.fwd[o + 2] * nz).normalize();
-        // (the optimiser drops the uv of a model without textures: the net's tiles of 0.5 m come from the module's own frame)
+        // (the optimiser drops the uv of a model without textures: uv in units of 0.5 m from the module's own frame)
         shape.vertex(p, n, pos.getZ(v) * 2, pos.getY(v) * 2);
       }
       // (right, up, forward) is a left-handed frame: a module keeps its winding on the left side, forwards

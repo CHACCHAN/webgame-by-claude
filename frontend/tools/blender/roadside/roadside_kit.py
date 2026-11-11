@@ -5,7 +5,8 @@ lays along the road (render/roadside.ts maps every vertex through the road's own
 Module frame (game frame of props/prop_kit.py): z = metres along the road from the module's start, x = metres outwards
 from the line the module stands on (negative = towards the traffic), y = up from the road's edge.
 Materials are found by name in the game and swapped for its own (render/roadsideModels.ts): `galvanised`, `grating`,
-`post_white`, `reflector`, `rust`, `pit`, `net` (the wire mesh, cut out by the game's texture: uv in units of 0.5 m).
+`post_white`, `reflector`, `rust`, `pit`, `rope` (weathered wire rope: dark, or a line thinner than a pixel
+flickers bright under the upscaler), `net` (the wire mesh, cut out by the game's texture: uv in units of 0.5 m).
 """
 import os
 import sys
@@ -25,6 +26,7 @@ def mats():
         rust=K.material('rust', '#6b4a35', metallic=0.3, roughness=0.8),
         pit=K.material('pit', '#050505', roughness=1.0),
         net=K.material('net', '#8f9492', metallic=0.6, roughness=0.5),
+        rope=K.material('rope', '#4c4e4d', metallic=0.6, roughness=0.6),
     )
 
 

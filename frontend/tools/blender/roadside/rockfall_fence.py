@@ -19,7 +19,7 @@ H = 2.0
 
 def build(out):
     mt = R.mats()
-    g, rust = mt['galvanised'], mt['rust']
+    g, rust, rope = mt['galvanised'], mt['rust'], mt['rope']
     m = K.M('rockfall_fence')
     # H-150 post: two flanges and the web, a base plate with four anchor bolts
     for x0, x1 in ((-0.075, -0.068), (0.068, 0.075)):
@@ -32,7 +32,7 @@ def build(out):
     # wire ropes on the mountain side of the post, their clips on the flange
     for k in range(5):
         y = 0.25 + k * 0.4
-        m.tube(g, [(0.085, y, 0.0), (0.085, y, 1.5), (0.085, y, 3.0)], 0.007, seg=5, cap0=False, cap1=False)
+        m.tube(rope, [(0.085, y, 0.0), (0.085, y, 1.5), (0.085, y, 3.0)], 0.007, seg=5, cap0=False, cap1=False)
         m.box(g, 0.075, 0.1, y - 0.02, y + 0.02, 1.47, 1.53)
     # the net: one sheet behind the ropes
     net = mt['net']

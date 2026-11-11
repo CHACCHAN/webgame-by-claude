@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { MeshStandardNodeMaterial } from 'three/webgpu';
 import {
-  abs, attribute, cameraPosition, clamp, float, fract, materialEmissive, max, min, mix, normalMap, normalize, normalWorldGeometry, positionView, positionWorld,
+  abs, attribute, cameraPosition, clamp, float, fract, fwidth, materialEmissive, max, min, mix, normalMap, normalize, normalWorldGeometry, positionView, positionWorld,
   smoothstep, texture, uv, vec2, vec3, vec4,
 } from 'three/tsl';
 import { layerTexture, type LayerName } from './surfaceTextures';
@@ -91,6 +91,8 @@ export const METAL: Record<string, [number, number, number, number, number]> = {
   grating: [0.1, 0.105, 0.11, 0.8, 0.5],
   post_white: [0.74, 0.74, 0.7, 0, 0.5],
   rust: [0.12, 0.062, 0.036, 0.3, 0.85],
+  // weathered wire rope: dark, so that a rope thinner than a pixel does not flicker bright under the upscaler
+  rope: [0.15, 0.155, 0.15, 0.5, 0.65],
   pit: [0.003, 0.003, 0.003, 0, 1],
   blue: [0.02, 0.09, 0.3, 0, 0.5],
 };
@@ -145,9 +147,17 @@ export function reflectorMaterial(): MeshStandardNodeMaterial {
 export function netMaterial(): MeshStandardNodeMaterial {
   const mat = new MeshStandardNodeMaterial({ metalness: 0.6, roughness: 0.55, side: THREE.DoubleSide });
   mat.name = 'roadside-net';
-  const a = (texture(layerTexture('wiremesh'), uv()) as unknown as Vec4).a as Float;
+  // (the modules' UVs run 2 per metre: the tile over 1 m, a rope net's 12 cm diamonds)
+  const st = uv().mul(0.5) as unknown as Vec2;
+  const a = (texture(layerTexture('wiremesh'), st) as unknown as Vec4).a as Float;
   mat.colorNode = vec4(0.3, 0.31, 0.3, 1);
+  // Diamonds per pixel. A wire thinner than a pixel flickers under the upscaler's jitter (a still picture's net was
+  // the one thing that moved): the wires are drawn fatter as they shrink towards a pixel, and past that the net is
+  // left out, as a real one is lost to the eye at that distance.
+  const w = fwidth(st) as unknown as Vec2;
+  const fine = max(w.x, w.y).mul(8) as Float;
+  const level = mix(mix(float(0.3), float(0.16), smoothstep(0.08, 0.2, fine)), float(1.01), smoothstep(0.2, 0.3, fine));
   // (a mask, not alphaTest: see render/instancing.ts `cutOut`)
-  mat.maskNode = a.greaterThan(0.3);
+  mat.maskNode = a.greaterThan(level);
   return mat;
 }

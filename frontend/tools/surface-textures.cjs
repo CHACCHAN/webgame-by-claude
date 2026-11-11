@@ -278,7 +278,7 @@ async function roadMarks(size) {
   return fs.statSync(file).size;
 }
 
-/** chain-link / rockfall net: diamonds of 5 cm wire mesh over a 0.5 m tile, alpha = wire */
+/** rockfall net: eight diamonds of wire across the tile (laid over 1 m by `netMaterial`), alpha = wire */
 async function wireMesh() {
   const size = 256, n = 8;
   const rgba = Buffer.alloc(size * size * 4);
