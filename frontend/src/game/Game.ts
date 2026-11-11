@@ -162,7 +162,7 @@ interface Racer {
   exhaust: ExhaustState;
 }
 
-const _v = new THREE.Vector3(), _q = new THREE.Quaternion(), _f = new THREE.Vector3();
+const _v = new THREE.Vector3(), _w = new THREE.Vector3(), _q = new THREE.Quaternion(), _f = new THREE.Vector3();
 const _tip = new THREE.Vector3(), _back = new THREE.Vector3();
 /** real-time lamp lights hang this far (m) below the lamp fixture */
 const LAMP_LIGHT_DROP = 0.9;
@@ -246,7 +246,7 @@ export class Game {
   private topSpeed = 0;
   private driftT = 0;
   private bestSplits: number[] | null = null;
-  private cinematic = { shot: 0, t: 0, anchor: new THREE.Vector3(), pos: new THREE.Vector3() };
+  private cinematic = { shot: 0, t: 0, anchor: new THREE.Vector3(), anchorS: 0, pos: new THREE.Vector3() };
   private garageCar: CarVisual | null = null;
   /** counts what was asked to be shown: a show that waited for a model goes ahead only if nothing came after it */
   private asked = 0;
@@ -1719,53 +1719,70 @@ export class Game {
     return this.replay?.t ?? 0;
   }
 
+  /**
+   * The camera of the title and of the replay: four shots in turn. Every one of them stands over the road or where
+   * the ground lets it see the road: a camera placed by an offset from the car alone ended up inside a slope, behind
+   * a mound or with a post of the roadside across the picture.
+   */
   private cinematicCamera(dt: number, root: THREE.Object3D, trackS: number) {
     const c = this.cinematic;
     c.t += dt;
     const car = root.position;
-    const fwd = _f.set(0, 0, 1).applyQuaternion(root.quaternion);
+    const track = this.track;
     const shots = 4;
     if (c.t > 7) {
       c.t = 0;
       c.shot = (c.shot + 1) % shots;
-      // trackside anchor for the static shot: ahead of the car
-      const s = trackS + 70;
-      this.track.pointAt(s, (this.track.widthAt(s) / 2 + 4) * (c.shot % 2 ? 1 : -1), c.anchor);
-      c.anchor.y += 2.2;
+      // the standing camera of the pan: ahead of the car
+      if (c.shot === 1) this.tracksideAnchor(trackS + 70, c.anchor);
     }
+    // how far from the centre line a camera may stand and still be on the road, inside the rails
+    const inside = (s: number) => Math.max(1.2, track.widthAt(s) / 2 - 0.7);
     const cam = this.camera;
     let fov = 45;
     switch (c.shot) {
       case 0: {
-        // slow orbit
+        // slow orbit, drawn along the road: wide ahead and behind, as wide as the road to the sides
         const a = this.time * 0.25;
-        c.pos.set(car.x + Math.sin(a) * 9, car.y + 2.6, car.z + Math.cos(a) * 9);
+        const s = trackS + Math.cos(a) * 9;
+        track.pointAt(s, Math.sin(a) * inside(s), c.pos);
+        // (beside the car it is only half a road away: higher there, so that the whole car is in the picture)
+        c.pos.y = Math.max(c.pos.y, car.y) + 1.7 + 2.6 * Math.abs(Math.sin(a));
         cam.position.lerp(c.pos, 1 - Math.exp(-dt * 6));
         cam.lookAt(car.x, car.y + 0.6, car.z);
-        fov = 42;
+        fov = 52;
         break;
       }
       case 1: {
         // trackside pan
-        if (c.anchor.lengthSq() === 0) this.track.pointAt(trackS + 70, 8, c.anchor);
+        if (c.anchor.lengthSq() === 0) this.tracksideAnchor(trackS + 70, c.anchor);
         cam.position.copy(c.anchor);
         cam.lookAt(car.x, car.y + 0.6, car.z);
         fov = clamp(40 - c.anchor.distanceTo(car) * 0.1, 18, 40);
+        // the car went behind the hill, or far down the road (small, and behind the trees): on to the next shot
+        if (c.t > 1.5 && (trackS > c.anchorS + 80 || !this.groundClear(c.anchor.x, c.anchor.y, c.anchor.z, car.x, car.y + 0.8, car.z))) c.t = 7;
         break;
       }
       case 2: {
-        // low front tracking shot
-        c.pos.copy(car).addScaledVector(fwd, 7).setY(car.y + 0.7);
+        // low front tracking shot: on the road ahead, in the car's own lane
+        track.pointAt(trackS, 0, _v);
+        track.pointAt(trackS, 1, _w);
+        const lateral = (car.x - _v.x) * (_w.x - _v.x) + (car.z - _v.z) * (_w.z - _v.z);
+        const s = trackS + 7.5;
+        track.pointAt(s, clamp(lateral, -inside(s), inside(s)), c.pos);
+        // (above the headlights' cones: inside them their glow in the haze whitens the picture)
+        c.pos.y = Math.max(c.pos.y + 0.45, car.y) + 0.7;
         cam.position.lerp(c.pos, 1 - Math.exp(-dt * 8));
         cam.lookAt(car.x, car.y + 0.5, car.z);
         fov = 50;
         break;
       }
       default: {
-        // high wide shot showing the valley and the city
-        c.pos.copy(car).addScaledVector(fwd, -24).setY(car.y + 16);
+        // high wide shot showing the valley and the city: over the road behind the car
+        track.pointAt(trackS - 24, 0, c.pos);
+        c.pos.y = Math.max(c.pos.y, car.y) + 16;
         cam.position.lerp(c.pos, 1 - Math.exp(-dt * 2));
-        _v.copy(car).addScaledVector(fwd, 40);
+        track.pointAt(trackS + 40, 0, _v);
         _v.z += 30;
         cam.lookAt(_v);
         fov = 58;
@@ -1777,6 +1794,48 @@ export class Game {
       cam.fov = damp(cam.fov, fov, 2, dt);
       cam.updateProjectionMatrix();
     }
+  }
+
+  /**
+   * Where a camera stands beside the road at `s` to watch a car come past: of a few places on either side (out on
+   * the verge, nearer and higher, at last on the shoulder) the one from which the ground hides least of the road
+   * before and after it.
+   */
+  private tracksideAnchor(s: number, out: THREE.Vector3) {
+    const track = this.track;
+    this.cinematic.anchorS = s;
+    const half = track.widthAt(s) / 2;
+    let best = -Infinity;
+    for (const side of [1, -1]) {
+      // (high enough to look over the bushes of the verge, which the ground's heights do not know)
+      for (const [off, up, liked] of [[4, 3.3, 0], [2.4, 4.2, -1], [-0.5, 1.6, -4]]) {
+        track.pointAt(s, (half + off) * side, _v);
+        const x = _v.x, z = _v.z;
+        const want = _v.y + up;
+        const y = Math.max(want, this.terrain.heightAt(x, z) + 1.3);
+        let seen = 0;
+        for (let ds = -70; ds <= 90; ds += 10) {
+          track.pointAt(s + ds, 0, _w);
+          if (this.groundClear(x, y, z, _w.x, _w.y + 0.6, _w.z)) seen++;
+        }
+        // (a camera the ground had to lift far above its place looks down a slope: less liked)
+        const score = seen + liked - (y - want) * 0.3;
+        if (score > best) {
+          best = score;
+          out.set(x, y, z);
+        }
+      }
+    }
+  }
+
+  /** Does the ground leave the line between two points free? (the terrain only: walls and posts are not asked) */
+  private groundClear(ax: number, ay: number, az: number, bx: number, by: number, bz: number) {
+    const steps = Math.max(4, Math.ceil(Math.hypot(bx - ax, bz - az) / 3));
+    for (let k = 1; k < steps; k++) {
+      const f = k / steps;
+      if (this.terrain.heightAt(ax + (bx - ax) * f, az + (bz - az) * f) > ay + (by - ay) * f - 0.25) return false;
+    }
+    return true;
   }
 
   /** Drag the garage camera around the car (pixels); it stays where it is left until the garage reopens. */
