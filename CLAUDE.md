@@ -70,7 +70,9 @@ pending. `docs/PLAN.md` holds the design.
 ## Gotchas
 - Rendering (`render/RenderHost.ts`, created by `ui/GameCanvas.tsx`; no react-three-fiber): `WebGPURenderer` + a TSL
   `RenderPipeline` (scene → ambient occlusion → the lights' glow in the haze → bloom → tone mapping (AgX) + the time of
-  day's grade → SMAA → lens). `?webgl=1` forces the WebGL 2 backend. Custom
+  day's grade → SMAA → lens). `?webgl=1` forces the WebGL 2 backend; without WebGPU, or when it fails while running
+  (errors in a burst, a lost device), the game goes to WebGL 2 by itself (`render/backendChoice.ts`, settings 描画方式;
+  check with `node tools/backend-fallback.cjs` on the GPU). Custom
   shaders are TSL node materials only: no `ShaderMaterial`, no `onBeforeCompile`, no `THREE.Points` with a size
   (WebGPU points are 1 px: particles and lamps are instanced `Sprite`s, `fx/SpritePool.ts`). Plain three.js materials
   (GLB, `MeshStandardMaterial`) still work: the renderer makes their node twins. An `InstancedMesh` with no instances

@@ -343,6 +343,26 @@ What a deploy or a bad hour could break, found by reading the stack, and changed
   (c) stay with the server. The seam is there: one more `RivalBrain` in `game.rivalBrains`, before the server's.
   No experiment in the browser has been run yet.
 
+### The renderer falls back from WebGPU to WebGL 2 by itself (11-11, owner's request; `d4fd3b5`)
+- What was there: three.js takes its WebGL 2 backend when the browser gives no WebGPU device. What was missing:
+  everything after that moment. Now (`render/backendChoice.ts`, `RenderHost.create`'s `onTrouble`, `ui/GameCanvas.tsx`):
+  - the renderer cannot be built although WebGPU came up, or three's own fallback cannot take the canvas (one that has
+    given a `webgpu` context gives no `webgl2` one) → started again on a new canvas with WebGL 2, remembered;
+  - the WebGPU device reports errors in a burst (12 in 10 s), or a frame throws that often → remembered for a week,
+    one reload, WebGL 2 (then WebGPU is tried again: a browser or driver update may have fixed it);
+  - the device is lost → one reload on WebGPU (a crashed GPU process is back), WebGL 2 from the second loss in a
+    session, a message with a reload button instead of a third reload in a row;
+  - settings row 描画方式 (自動 / WebGPU / WebGL 2): shows what runs and why; a choice by hand forgets what was
+    remembered, and an explicit WebGPU is not left on errors.
+- **Verified** on the RX 5700 XT (headless Chrome, `node tools/backend-fallback.cjs`: 14 cases, each a fresh browser
+  context, "up" = the title reached and frames drawn): WebGPU as it is; `?webgl=1`; the setting; no `navigator.gpu`;
+  no adapter; the device refused; no device with the canvas already taken; drawing throws on WebGPU; errors in a
+  burst (→ WebGL 2 after the reload, remembered); a few stray errors (stays); a burst with WebGPU chosen by hand
+  (stays); the device lost once (WebGPU again), twice (WebGL 2), a third time at once (message, no reload).
+  The losses and errors are simulated by calling the renderer's own handlers or by replacing browser functions
+  before the page loads: a real driver failure was not available to test with.
+- Not verified: a real browser without WebGPU (Firefox, Safari, a phone) by hand; a real device loss.
+
 ## Session 8 (2026-11-10) — new vehicles: Cybertruck, Yangwang U9 Xtreme, three motorcycles, the L0 maglev
 
 Owner: 「テスラのサイバートラック、バイクを3台、リニアモータ新幹線を実装してください」 (bikes chosen: Honda NSR250R,
