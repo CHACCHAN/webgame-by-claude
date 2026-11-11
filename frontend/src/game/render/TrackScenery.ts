@@ -1039,7 +1039,8 @@ export function buildTrees(
 
 /** Switch tree chunks between the detailed and the impostor mesh. */
 export function updateTreeLods(trees: THREE.Object3D, camera: THREE.Vector3) {
-  (trees.userData.lods as ChunkedLods | Forest).update(camera);
+  // (the old lumps of quality low have no levels: nothing to pick)
+  (trees.userData.lods as ChunkedLods | Forest | undefined)?.update(camera);
 }
 
 /** Builds an indexed mesh from vertex streams (position, soft "volume" normal, colour, uv). */

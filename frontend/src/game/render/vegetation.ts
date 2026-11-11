@@ -820,8 +820,8 @@ export class Forest {
             mesh.castShadow = true;
             mesh.layers.set(SHADOW_LAYER);
           } else {
-            // (the last level is beyond the shadow map's reach, or all but)
-            mesh.receiveShadow = opts.receiveShadow !== false && l < 2;
+            // (a level that begins beyond the shadow map's reach, 60 m, takes no shadows: one texture read less)
+            mesh.receiveShadow = opts.receiveShadow !== false && near < 60;
             mesh.renderOrder = FIRST + l;
           }
           this.group.add(mesh);
