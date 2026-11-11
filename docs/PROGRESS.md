@@ -427,7 +427,7 @@ grating, rockfall fence), and the owner sees a model's sheet first.
   identical; `sim-run.ts hayate rookie` gives the same time on all four courses).
 - Checked on the merged tree by the main session: tsc, vitest 147, build; `gpu-errors.cjs` 0 on WebGPU and WebGL 2;
   `hitch.cjs`: the freeze work holds (time / weather: no frame over 40 ms but the first dawn, kept courses 16–40 ms);
-  the before / after sheets of all four courses and close-ups looked at.
+  the before / after sheets of all four courses and close-ups looked at; E2E on an isolated stack: 13 of 13.
 - Cost. GPU time of the scene pass, before → after (`perf-pass.cjs`): 1080p high 3.06 → 4.91 ms, 1080p medium
   2.65 → 3.04, 1440p ultra 5.63 → 7.23, 1440p ultra with the upscaler at Quality 3.33 → 4.32, 4K ultra 11.7 → 13.3
   (whole frame 16.5 → 17.8 ms: native 4K ultra no longer fits 60 fps on the RX 5700 XT, with the upscaler it does).
