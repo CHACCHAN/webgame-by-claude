@@ -290,6 +290,27 @@ pending. `docs/PLAN.md` holds the design.
   nobody to ask. The decision is real tool calls (`block_player`, `sound_horn`), clamped by the server. The models are
   `LLM_TAUNT_MODELS` / `LLM_DECIDE_MODELS` (first that answers). Check the block with
   `BLOCK=4 npx tsx tools/sim-duel.ts <lead:level> <chase:level>`.
+- The rivals' voice (owner 11-11; `game/audio/speech/`): a rival's line is spoken by a speech model on the player's
+  GPU: Supertonic 3 (four ONNX graphs, 398 MB, OpenRAIL-M) through `onnxruntime-web/webgpu` in a module worker
+  (`speech.worker.ts`; `Speech.ts` is its controller, `text.ts` the publisher's text preparation: NFKD, `<ja>…</ja>`,
+  only the sound tags `<laugh>` `<breath>` `<sigh>` pass, so a language model cannot write tags). **Text is the rule,
+  the voice an extra**: no WebGPU adapter, no model on the server (`/tts/supertonic-3/onnx/tts.json` must be the
+  model's own JSON), a failed download or set-up, a slow answer: the line is shown and nothing else changes. No CPU
+  fallback (it would take the game's frames). The model is fetched only after a yes (setting `rivalVoice`:
+  `ask` → the offer on the rivals screen, `ui/screens/VoiceOffer.tsx`; `on` / `off`; settings rows ライバルの声 and
+  音声モデルのデータ), kept in Cache Storage (`touge-tts-supertonic-3`), brought up on the way to a rival battle and
+  released when another kind of race starts (`store/voice.ts`: its weights are ~400 MB of video memory).
+  `Game.rivalVoice` is injected like `rivalBrains`; `rivalSays` waits `VOICE_WAIT` (0.7 s) for the sound so that line
+  and voice come together; `AudioEngine.say` plays it at one level over the `bed` (everything else, turned down
+  meanwhile). A voice per rival: `RivalInfo.voice` (`F1`–`F5`, `M1`–`M5`). Server: the model is not in the
+  repository; `docker compose --profile tts run --rm tts-fetch` puts it into the `tts` volume once (pinned revision,
+  SHA-256 per file, `docker/tts/fetch.sh`), nginx serves it at `/tts/` (404 without it, never the app's page); the
+  test stacks have none, so E2E never meets the offer. The model's files are the publisher's, unchanged, with its
+  LICENSE next to them (linked from the offer and the settings: the licence asks that its use restrictions reach
+  whoever gets the model). Local check: `~/.local/opt/tts/proto/ttsserve.cjs` + `TTS_PROXY=http://127.0.0.1:4191
+  npx vite preview`, then `~/.local/opt/quality/voicecheck.cjs` on the GPU (offer, download, a spoken line in a rival
+  battle, frame gaps with the model busy, the second visit from the cache); `window.__speech` for probes.
+  The vite build makes ES-module workers (`worker.format: 'es'`): the audio worklets are built that way too.
 - Interface (redesigned 11-11: a telemetry terminal over the live scene; `ui/theme/`: `tokens.css`, `base.css`,
   `screens.css`, `picker.css`, `online.css`, `hud.css`; parts in `ui/kit.tsx`, the shell around every menu in
   `ui/Shell.tsx`). Colour: tokens only, as rgb triplets (`rgb(var(--c-cyan) / 0.3)`); cyan = focus and live data,

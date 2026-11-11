@@ -229,6 +229,17 @@ The other YAML files in `frontend/tools/vvvf/` (JRE_E231 kept as a port test ref
 
 Credits also in the settings screen.
 
+### The rivals' voice: a speech model (2026-11-11, owner's request)
+Not in the repository and not in the build: fetched once per server into the `tts` volume
+(`docker compose --profile tts run --rm tts-fetch`, `docker/tts/fetch.sh`) and served at `/tts/supertonic-3/`; a
+player's browser downloads it only after they said yes.
+
+| What | Source | Licence | Notes |
+|---|---|---|---|
+| **Supertonic 3** text-to-speech model: `onnx/{duration_predictor,text_encoder,vector_estimator,vocoder}.onnx` (398 MB), `onnx/tts.json`, `onnx/unicode_indexer.json`, `voice_styles/{F1…F5,M1…M5}.json` | Supertone Inc., https://huggingface.co/Supertone/supertonic-3 at revision `3cadd1ee6394adea1bd021217a0e650ede09a323` (SHA-256 of every file in `docker/tts/fetch.sh`) | **OpenRAIL-M** (the model; its `LICENSE` is served next to it and linked from the game: the use restrictions go to whoever receives the model) | Files unchanged. Ten preset voices; which rival speaks with which: `RivalInfo.voice` in `track/courses.ts` |
+| The steps that run it (`game/audio/speech/speech.worker.ts`, `text.ts`) | written after the publisher's browser example (`web/helper.js`, repository `supertone-oss-archive/supertonic`) | MIT (the sample code) | not a copy: the same normalisation, tags and order of the four graphs |
+| `onnxruntime-web` 1.31.1 (the runtime, with its WebAssembly part in the build) | Microsoft, npm | MIT | |
+
 ### Cockroach model (joke entry; own, Blender)
 Our own model since 2026-11-04 (`frontend/tools/blender/creatures/roach.py`: body, legs and antennae from numbers,
 skinned, with a scuttle cycle; the texture painted by the script) built by `node tools/blender-models.cjs creatures`

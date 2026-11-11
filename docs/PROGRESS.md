@@ -549,6 +549,51 @@ by the main session. Live since the release of 11-11 (below): the owner saw the 
 - The condition cards as looping video (owner's idea): Gemini's video generation failed three times in a row
   ("Sorry, something went wrong"); asked the owner.
 
+### Second release the same day (11-11): the grains, the cinematic camera
+- Main `4e8f88b` deployed (bundle `index-B6xGEdHc.js`): the grains over the menus, the medal's grains, the title's and
+  the replay's camera. **Verified**: the bundle served locally and through the public address, leaderboard 200,
+  `tools/gpu-errors.cjs` 0 on WebGPU and WebGL 2, title frames and a race picture looked at. E2E on an isolated
+  stack: only a subset (boot, menu navigation, click during a wipe, car select, rival battle, time attack, phone:
+  all passed after the boot test was pointed at the game's canvas); the whole suite was **not** run again.
+- Seen in the live database afterwards (counts only): one member row (`oidc_sub` set), one session, one save: a real
+  Authentik login has happened. How it felt (name shown, the save on another device, logout) is the owner's to say.
+- **The owner on the grains (11-11, after seeing them live): not what they had in mind.** They want far finer
+  grains, close to 3D particles, that depict things and emphasise things by themselves: "the part in charge of
+  beautiful expression". The 2D layer (`ui/fx/`) is to be remade on that brief.
+
+### The rivals speak (11-11, owner's request): a speech model on the player's GPU
+Request: a TTS model, Supertonic 3, WebGPU assumed; the language model's lines are spoken; without WebGPU no TTS
+model, text only. My plan (the ~400 MB model only after the player's yes, served from our own server, a voice per
+rival) was approved by the owner the same day. CLAUDE.md "The rivals' voice"; docs/ASSETS.md for the model.
+
+- `game/audio/speech/`: `text.ts` (the publisher's text preparation; tags other than the three sound tags are taken
+  out of a line), `speech.worker.ts` (onnxruntime-web 1.31.1 on WebGPU in a module worker; the model's files into
+  Cache Storage with progress; a warm-up line so that the first real one is quick), `Speech.ts` (states:
+  unsupported / absent / idle / loading / ready / failed). `Game.rivalSays` waits up to 0.7 s for the sound;
+  `AudioEngine.say` plays it over the rest, turned down to 40 % meanwhile. The offer once on the rivals screen, two
+  settings rows (on / off with the state, delete the browser's copy), the licence linked from both.
+- Server: volume `tts` + `docker compose --profile tts run --rm tts-fetch` (revision pinned, SHA-256 per file),
+  nginx `/tts/` (404 without the model).
+- **Verified** on the RX 5700 XT in headless Chrome (WebGPU), `~/.local/opt/quality/voicecheck.cjs`, against a
+  preview and against an isolated stack that got the model through `tts-fetch` (26 s for 383 MB):
+  - the offer appears, a yes fetches and sets the model up: 8–10 s from a local server (no network to speak of);
+    a second visit from the browser's copy 5–13 s (the machine was shared: load 2–3), no model file asked of the
+    network again, no offer;
+  - a rival battle: the line before the start came with its voice (the sound took 0.42–0.59 s after the text;
+    2.6 s of speech), the rest stepped back to 0.4 and returned to 1;
+  - frames in the race (720p, quality high, vsync 60): no gap over 40 ms in 8 s without the model and in ~9 s with
+    a line synthesised every 1.5 s (0.3–0.7 s per line of 6–17 characters; worst frame 33 ms, one dropped);
+  - in the menus the set-up costs frames while it runs (8–27 gaps over 40 ms, worst 0.2–0.7 s): it is started on
+    the way to a rival battle, where the course loads anyway.
+  - E2E on that stack (the model in its volume; headless Chromium there has no WebGPU adapter, so no offer): boot,
+    menu navigation, rival battle, course select, phone: 5 passed (10.6 min). The whole suite was not run.
+  - `tsc`, 164 unit tests, build (the worker is 126 kB, the runtime's WebAssembly 28.7 MB, both fetched only when
+    the voice is loaded).
+- **Not verified**: how it sounds (I cannot hear: the owner got a sample of the ten voices on 11-11; which rival
+  gets which voice was assigned from names and portraits, to be changed by ear), whether names and kanji are read
+  right, other GPUs and browsers (Safari, Firefox, phones: the download alone is 400 MB), the download through the
+  public tunnel, video memory next to the game at 4K / ultra (the model's weights are ~400 MB there).
+
 ## Session 8 (2026-11-10) — new vehicles: Cybertruck, Yangwang U9 Xtreme, three motorcycles, the L0 maglev
 
 Owner: 「テスラのサイバートラック、バイクを3台、リニアモータ新幹線を実装してください」 (bikes chosen: Honda NSR250R,
