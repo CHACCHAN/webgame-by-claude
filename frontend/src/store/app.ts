@@ -2,6 +2,8 @@ import { create } from 'zustand';
 import type { CarId } from '../game/vehicle/carSpecs';
 import type { AILevel } from '../game/ai/AIDriver';
 import type { GamePhase, RaceMode, RaceResult } from '../game/Game';
+import type { RenderBackend } from '../game/render/RenderHost';
+import type { FallbackReason } from '../game/render/backendChoice';
 
 export type Screen = 'boot' | 'title' | 'modes' | 'conditions' | 'garage' | 'transmission' | 'cars' | 'rivals' | 'leaderboard' | 'settings' | 'controls' | 'race' | 'results' | 'replay' | 'courses' | 'loading' | 'online' | 'onlineRoom' | 'onlineResults';
 
@@ -25,6 +27,8 @@ interface AppState {
   /** screen after the race conditions (car select, or the ghost list in ghost battles) */
   afterLoad: Screen;
   result: RaceResult | null;
+  /** the renderer that came up, and why it is WebGL 2 when it is (null until it is up) */
+  renderer: { backend: RenderBackend; reason: FallbackReason | null } | null;
   /** what the rival said last (before the start, after the finish) */
   rivalLine: { moment: 'before' | 'won' | 'lost'; text: string } | null;
   paused: boolean;
@@ -44,6 +48,7 @@ export const useApp = create<AppState>((set, get) => ({
   ghostChoice: null,
   afterLoad: 'garage',
   result: null,
+  renderer: null,
   rivalLine: null,
   paused: false,
   go: (s) => set({ prevScreen: get().screen, screen: s }),
