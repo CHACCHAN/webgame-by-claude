@@ -290,6 +290,20 @@ pending. `docs/PLAN.md` holds the design.
   nobody to ask. The decision is real tool calls (`block_player`, `sound_horn`), clamped by the server. The models are
   `LLM_TAUNT_MODELS` / `LLM_DECIDE_MODELS` (first that answers). Check the block with
   `BLOCK=4 npx tsx tools/sim-duel.ts <lead:level> <chase:level>`.
+- Interface (redesigned 11-11: a telemetry terminal over the live scene; `ui/theme/`: `tokens.css`, `base.css`,
+  `screens.css`, `picker.css`, `online.css`, `hud.css`; parts in `ui/kit.tsx`, the shell around every menu in
+  `ui/Shell.tsx`). Colour: tokens only, as rgb triplets (`rgb(var(--c-cyan) / 0.3)`); cyan = focus and live data,
+  magenta = rivals, others online, alerts, amber = medals and warnings, green = ready; no literal colour outside
+  `tokens.css`. Shape: a cut panel is one shared rule in `base.css` (`--c` cut, `--edge`, `--fill`): add a new
+  panel's class to that selector list. Type: Saira Variable for Latin and figures (width axis `--w-tight` /
+  `--w-cond` / `--w-norm`, tabular figures), Zen Kaku Gothic New, Shippori Mincho for place names; 1rem follows the
+  screen's height. Motion: durations and easings are tokens; entrances use `var(--kf-*)` so that `.motion-off` (the
+  setting UI アニメーション, or reduced motion) swaps them for fades; screen changes go through `ui/motion.ts`
+  `useScreenWipe` (the incoming screen is uncovered by a **mask, never a clip path**: a clip path takes the pointer
+  away for the wipe's 240 ms); figures count through `data-count`; `FocusFrame` is the moving focus marker; what must
+  move while the main thread is blocked (the busy mark, the boot bar) is a CSS transform / opacity animation only.
+  Lists the keys walk: hover moves the selection (`hoverSelect`), inside `.focus-box` only the selected button is
+  filled. `window.__app` is the app's store for probes (as `__game` is the game).
 - Who plays (owner 11-11: accounts come from Authentik; nothing in the browser keeps an account any more). **Members**
   log in through the owner's Authentik (`AuthController`: authorization code + PKCE, the code is exchanged on the
   server; `config/authentik.php`, `AUTHENTIK_*` in `.env` only: never to the browser, a log or a commit). The account

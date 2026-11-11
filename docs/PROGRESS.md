@@ -426,6 +426,18 @@ proposed freeing the oldest first when it runs short.
   Not measured: how much memory the kept shaders hold over a long sitting (a few hundred small objects; nothing
   frees them before the page is left).
 
+### The interface, redesigned (11-11, owner's brief: all-new cyber UI with animation; package `ui`, an agent in a worktree)
+- Every screen and the HUD on one design system (`ui/theme/` tokens, `ui/kit.tsx`, `ui/Shell.tsx`: the trail at the
+  top, back and fullscreen bottom left, the hint bar in the glyphs of the device used last), a screen wipe, figures
+  that count, a moving focus marker, a setting to turn the motion off (CLAUDE.md "Interface").
+- Found and fixed on the way: a screen wipe took the pointer away for its 240 ms (clip path → mask); the main menu
+  forgot the row it was left through; two buttons filled at once on the results; the phone's back button clipped.
+- Verified by the agent (its report): tsc, build, vitest; E2E on its stack `game.spec.ts` 10 of 10, `mobile.spec.ts`,
+  the waiting-room and phone tests of `online.spec.ts`; sheets on GPU Chrome in `~/.local/opt/wt/ui/shots/` (shown to
+  the owner). The full suite on the merged tree: below.
+  **Not verified**: the HUD's frame cost (the machine was loaded by other work), the busy mark while the main thread
+  is blocked (built for it, only seen standing), Firefox / Safari, sound, pad glyphs, `prefers-reduced-motion`.
+
 ### Accounts come from Authentik; everyone else is a guest (11-11, owner's request)
 Owner: members of their platform log in with the Authentik they host and go on with their own save data; keeping
 an account in the browser (the token in `localStorage`) is abolished; whoever cannot log in is a guest, asked for a
