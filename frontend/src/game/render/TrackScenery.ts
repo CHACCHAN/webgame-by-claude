@@ -23,7 +23,7 @@ import type { CourseStyle } from '../track/courses';
 import type { Landform } from '../track/landforms';
 import { ChunkedLods, cutout } from './instancing';
 import { Forest, vegetationFrame, type VegetationQuality } from './vegetation';
-import { cityWeight, COVER_SETS, loadedSpecies, plantCover, plantTrees, TREE_SETS, UNDER_SETS } from './vegetationPlanting';
+import { cityWeight, COVER_SETS, loadedSpecies, plantCover, plantTrees, TREE_SETS, UNDER_SETS, viewLimiter } from './vegetationPlanting';
 import { buildAutobahnScenery } from './autobahnScenery';
 import { layBridges, layRoadside, layRocksheds, Roadside } from './roadside';
 
@@ -49,7 +49,8 @@ export interface SceneryResult {
    * order (x, z pairs) and the roof slab's top height
    */
   covers: Float32Array;
-  update(time: number, cameraPos: THREE.Vector3): void;
+  /** `view`: the camera of the picture, when it is one that looks from `cameraPos` (the forest then draws what it sees) */
+  update(time: number, cameraPos: THREE.Vector3, view?: THREE.Camera): void;
 }
 
 export const SODIUM = new THREE.Color('#ffa850');
@@ -138,9 +139,11 @@ export function buildScenery(track: Track, terrain: TerrainData, quality: Scener
   const keepOut = buildLandmarks(track, terrain, sides, group, lamps);
 
   // ------------------------------------------------------------- trees
-  const trees = buildTrees(terrain, quality.treeDensity, quality.treeLod, { vegetation: quality.vegetation });
+  // (what the pass is known for stays in sight: the sea and the town below, the lake)
+  const views = quality.vegetation && quality.vegetation.tier !== 'legacy' ? viewLimiter(track, terrain) : undefined;
+  const trees = buildTrees(terrain, quality.treeDensity, quality.treeLod, { vegetation: quality.vegetation, views });
   group.add(trees);
-  const clutter = buildClutter(track, terrain, quality.treeDensity, surfaceTexture, keepOut, { vegetation: quality.vegetation });
+  const clutter = buildClutter(track, terrain, quality.treeDensity, surfaceTexture, keepOut, { vegetation: quality.vegetation, views });
   group.add(clutter);
   const turbines = buildTurbines(terrain);
   group.add(turbines.group);
@@ -152,10 +155,10 @@ export function buildScenery(track: Track, terrain: TerrainData, quality: Scener
     nightEmissive,
     lightmapMats,
     covers: new Float32Array(covers),
-    update(time, cameraPos) {
+    update(time, cameraPos, view) {
       vegetationFrame(time, cameraPos);
-      updateTreeLods(trees, cameraPos);
-      updateTreeLods(clutter, cameraPos);
+      updateTreeLods(trees, cameraPos, view);
+      updateTreeLods(clutter, cameraPos, view);
       turbines.update(time);
       roadsideUpdate?.(cameraPos);
     },
@@ -947,6 +950,8 @@ export function buildTrees(
     farChunk?: number;
     /** the Blender-made species (see `SceneryQuality.vegetation`) and whose course they are for */
     vegetation?: VegetationQuality;
+    /** the road's views, which the trees keep open (`vegetationPlanting.ts` `viewLimiter`) */
+    views?: (x: number, z: number) => number;
     style?: CourseStyle;
   } = {},
 ) {
@@ -1040,9 +1045,9 @@ export function buildTrees(
 }
 
 /** Switch tree chunks between the detailed and the impostor mesh. */
-export function updateTreeLods(trees: THREE.Object3D, camera: THREE.Vector3) {
+export function updateTreeLods(trees: THREE.Object3D, camera: THREE.Vector3, view?: THREE.Camera) {
   // (the old lumps of quality low have no levels: nothing to pick)
-  (trees.userData.lods as ChunkedLods | Forest | undefined)?.update(camera);
+  (trees.userData.lods as ChunkedLods | Forest | undefined)?.update(camera, view);
 }
 
 /** Builds an indexed mesh from vertex streams (position, soft "volume" normal, colour, uv). */
@@ -1183,7 +1188,7 @@ export function buildClutter(
   surfaceTexture: (n: SurfaceName, srgb: boolean) => THREE.Texture | null,
   keepOut: { x: number; z: number; r: number }[],
   /** the autobahn's: where along / beside the road (+ = right) clutter may go, and no rocks */
-  opts: { accept?: (s: number, lateral: number) => boolean; rocks?: boolean; vegetation?: VegetationQuality; style?: CourseStyle } = {},
+  opts: { accept?: (s: number, lateral: number) => boolean; rocks?: boolean; vegetation?: VegetationQuality; style?: CourseStyle; views?: (x: number, z: number) => number } = {},
 ) {
   const group = new THREE.Group();
   group.name = 'clutter';
@@ -1198,6 +1203,7 @@ export function buildClutter(
       rocks: opts.rocks,
       undergrowth: veg.undergrowth,
       style,
+      views: opts.views,
     });
     const full = veg.tier === 'full';
     const forests = [

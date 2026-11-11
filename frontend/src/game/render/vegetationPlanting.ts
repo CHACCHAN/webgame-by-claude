@@ -19,26 +19,29 @@ export interface SpeciesDef {
   /** the trunk below the crown (m, at scale 1): a tree seen from afar only stands that deep in the ground, since at
    *  that size its trunk is thinner than a pixel and the crown would hang in the air over a ridge */
   bare: number;
+  /** trees and bushes: how tall a grown one stands (m, at scale 1), for the views it must not close */
+  tall?: number;
 }
 
 /** every species the game has a model for (tools/blender/nature/<id>.py) */
 export const SPECIES: Record<string, SpeciesDef> = {
   // 杉: the planted forest of the lower and middle slopes
-  sugi: { look: { tint: [1, 1, 1], translucency: 0.7 }, scale: [0.72, 1.15], bare: 5 },
+  sugi: { look: { tint: [1, 1, 1], translucency: 0.7 }, scale: [0.72, 1.15], bare: 5, tall: 19.5 },
   // 檜: planted too, on the drier slopes
-  hinoki: { look: { tint: [1, 1, 1], translucency: 0.8 }, scale: [0.75, 1.1], bare: 4.5 },
+  hinoki: { look: { tint: [1, 1, 1], translucency: 0.8 }, scale: [0.75, 1.1], bare: 4.5, tall: 17.8 },
   // ブナ: the natural forest higher up, and the edges
-  buna: { look: { tint: [1, 1, 1], translucency: 1.3 }, scale: [0.7, 1.15], bare: 4 },
+  buna: { look: { tint: [1, 1, 1], translucency: 1.3 }, scale: [0.7, 1.15], bare: 4, tall: 19 },
   // 赤松: ridges and rocky, dry places
-  akamatsu: { look: { tint: [1, 1, 1], translucency: 0.7 }, scale: [0.75, 1.15], bare: 6.5 },
+  akamatsu: { look: { tint: [1, 1, 1], translucency: 0.7 }, scale: [0.75, 1.15], bare: 6.5, tall: 18 },
   // Fichte (Norway spruce): the autobahn's forests
-  fichte: { look: { tint: [1, 1, 1], translucency: 0.6 }, scale: [0.75, 1.2], bare: 2 },
+  fichte: { look: { tint: [1, 1, 1], translucency: 0.6 }, scale: [0.75, 1.2], bare: 2, tall: 21 },
   // Birke: the edges of those forests and the copses in the fields
-  birke: { look: { tint: [0.78, 0.84, 0.74], translucency: 1.1 }, scale: [0.7, 1.1], bare: 4 },
+  birke: { look: { tint: [0.78, 0.84, 0.74], translucency: 1.1 }, scale: [0.7, 1.1], bare: 4, tall: 19 },
   // 藪: the bushes of the roadside
-  yabu: { look: { translucency: 0.9, wind: 0.5 }, scale: [0.55, 1.25], bare: 0 },
+  yabu: { look: { tint: [0.8, 0.84, 0.8], translucency: 0.8, wind: 0.5 }, scale: [0.55, 1.25], bare: 0, tall: 2.7 },
   // 笹: bamboo grass, as thickets among the bushes and as undergrowth
-  sasa: { look: { translucency: 1.1, wind: 0.6 }, scale: [0.75, 1.4], bare: 0 },
+  // (its leaves are pale: in a low sun a thicket shone out of the darker forest)
+  sasa: { look: { tint: [0.6, 0.66, 0.62], translucency: 0.8, wind: 0.6 }, scale: [0.75, 1.4], bare: 0, tall: 1.3 },
   // 岩: boulders and stones
   iwa: { look: { kind: 'rock', moss: 1 }, scale: [0.3, 1.25], bare: 0 },
   // 草: grass tufts
@@ -84,6 +87,145 @@ export function cityWeight(lf: Landform, x: number, z: number) {
   return w;
 }
 
+// ------------------------------------------------------------------------------------------------ the views
+
+/** how far apart the road is sampled for its views (m), and how far from it a tree can stand in one */
+const VIEW_STEP = 12, VIEW_REACH = 260;
+const VIEW_CELL = 128;
+/** the directions around a point of the road that are looked into */
+const VIEW_SECTORS = 16;
+/** the eye over the road (m) */
+const VIEW_EYE = 1.5;
+/** how steeply a view looks down, at least and at most (a tree's top stays under that line) */
+const VIEW_DROP = [0.035, 0.09];
+
+/** a point of the road and which directions around it look out: bit k = the azimuth (k + 0.5) / 16 of a turn, from +X towards +Z */
+export interface ViewPoint {
+  x: number;
+  y: number;
+  z: number;
+  open: number;
+  /** per direction: how steeply the view looks down (0: closed), and how far away what is seen begins (m) */
+  drop: Float32Array;
+  reach: Float32Array;
+}
+
+/**
+ * Where the road looks out. A course is known for what is seen from it (the sea and the town below, the lake, the
+ * sea of clouds under the ridge): a direction is open where an eye over the road sees one of them below it, over
+ * all the land in between. That
+ * is the valley side, and straight ahead where the road runs down towards the view; the mountain side and the
+ * stretches that face nothing (or see it through one gap only) stay closed, and the forest stands over the road there.
+ */
+export function roadViews(track: Track, terrain: TerrainData): ViewPoint[] {
+  const lf = terrain.landform;
+  const f = terrain.far;
+  const fx1 = f.x0 + (f.nx - 1) * f.cell, fz1 = f.z0 + (f.nz - 1) * f.cell;
+  const REACH = [40, 90, 160, 260, 400, 600, 900, 1300, 1800, 2400];
+  /** [how steeply the eye looks down on the nearest thing it sees, how far away that is] or null */
+  const sees = (x: number, y: number, z: number, dx: number, dz: number, town: number): [number, number] | null => {
+    const eye = y + VIEW_EYE;
+    // how steeply a line from the eye may look down and still clear the land so far
+    let block = Infinity;
+    let last = Infinity, far = 0;
+    for (const d of REACH) {
+      const px = x + dx * d, pz = z + dz * d;
+      // (a town in this direction, nearer than this sample: its middle is looked at)
+      if (town && town < d) {
+        const h = terrain.heightAt(x + dx * town, z + dz * town);
+        const down = (eye - h) / town;
+        return h < eye - 8 && down > 0.012 && down < block ? [down, town] : null;
+      }
+      if (px <= f.x0 || px >= fx1 || pz <= f.z0 || pz >= fz1) break;
+      const h = terrain.heightAt(px, pz);
+      const water = lf.waterLevel !== null && h <= lf.waterLevel + 0.5;
+      // (the sea of clouds under a ridge: its top is what is seen)
+      const clouds = !water && lf.cloudLevel !== null && h < lf.cloudLevel - 5 && lf.cloudLevel < eye - 20;
+      last = water ? lf.waterLevel! : h;
+      far = d;
+      const down = (eye - (clouds ? lf.cloudLevel! : last)) / d;
+      if (down > 0.012 && down < block && (water || clouds || (last < eye - 8 && cityWeight(lf, px, pz) > 0.2))) return [down, d];
+      block = Math.min(block, (eye - last - 0.3) / d);
+    }
+    // the land ends low, at the shore: the sea beyond it goes on to the horizon, over everything that lies under the eye
+    if (!town && lf.waterLevel !== null && last < lf.waterLevel + 15 && block > 0.012) return [block, far];
+    return null;
+  };
+  const pts: ViewPoint[] = [];
+  const p = new THREE.Vector3();
+  for (let s = 0; s <= track.length; s += VIEW_STEP) {
+    track.pointAt(s, 0, p);
+    let open = 0;
+    const drop = new Float32Array(VIEW_SECTORS), reach = new Float32Array(VIEW_SECTORS);
+    const look = (k: number, seen: [number, number] | null) => {
+      if (!seen || (open >> k) & 1) return;
+      open |= 1 << k;
+      // (under the steepest line that sees it, with room to spare: what is seen is wider than its near edge)
+      drop[k] = clamp(seen[0] * 0.6, VIEW_DROP[0], VIEW_DROP[1]);
+      reach[k] = seen[1];
+    };
+    for (let k = 0; k < VIEW_SECTORS; k++) {
+      const a = ((k + 0.5) / VIEW_SECTORS) * Math.PI * 2;
+      look(k, sees(p.x, p.y, p.z, Math.cos(a), Math.sin(a), 0));
+    }
+    // the towns, each looked at by itself (the rays above pass a small or far one by): the directions it fills
+    for (const c of lf.cities) {
+      const d = Math.hypot(c.x - p.x, c.z - p.z);
+      if (d < 60 || d > 7000) continue;
+      const seen = sees(p.x, p.y, p.z, (c.x - p.x) / d, (c.z - p.z) / d, d);
+      if (!seen) continue;
+      const a = Math.atan2(c.z - p.z, c.x - p.x), w = Math.atan(Math.min(c.rx, c.rz) / d);
+      for (let k = 0; k < VIEW_SECTORS; k++) {
+        const off = ((k + 0.5) / VIEW_SECTORS) * Math.PI * 2 - a;
+        if (Math.abs(Math.atan2(Math.sin(off), Math.cos(off))) < w + Math.PI / VIEW_SECTORS) look(k, seen);
+      }
+    }
+    // (one direction alone is a glimpse through a gap: the forest stays, and the road runs through it as a tunnel)
+    if (!(open & (open - 1))) open = 0;
+    pts.push({ x: p.x, y: p.y, z: p.z, open, drop, reach });
+  }
+  return pts;
+}
+
+/**
+ * How high a tree's top may reach at a spot (the height above the sea; Infinity: as high as it grows): under the
+ * line of sight of every point of the road that looks out past it. What stands beyond the thing seen (the forest on
+ * the lake's far shore) is the view's backdrop, not in its way.
+ */
+export function viewLimiter(track: Track, terrain: TerrainData): (x: number, z: number) => number {
+  const pts = roadViews(track, terrain);
+  const grid = new Map<number, number[]>();
+  const key = (cx: number, cz: number) => (cx + 4096) * 8192 + cz + 4096;
+  pts.forEach((v, i) => {
+    if (!v.open) return;
+    const k = key(Math.floor(v.x / VIEW_CELL), Math.floor(v.z / VIEW_CELL));
+    const list = grid.get(k);
+    if (list) list.push(i);
+    else grid.set(k, [i]);
+  });
+  const n = Math.ceil(VIEW_REACH / VIEW_CELL);
+  return (x, z) => {
+    let limit = Infinity;
+    const cx = Math.floor(x / VIEW_CELL), cz = Math.floor(z / VIEW_CELL);
+    for (let j = -n; j <= n; j++) {
+      for (let i = -n; i <= n; i++) {
+        const list = grid.get(key(cx + i, cz + j));
+        if (!list) continue;
+        for (const at of list) {
+          const v = pts[at];
+          const ex = x - v.x, ez = z - v.z;
+          const out = Math.hypot(ex, ez);
+          if (out < 4 || out > VIEW_REACH) continue;
+          const k = Math.floor((Math.atan2(ez, ex) / (Math.PI * 2) + 1) * VIEW_SECTORS) % VIEW_SECTORS;
+          if (!((v.open >> k) & 1) || out > v.reach[k]) continue;
+          limit = Math.min(limit, v.y + 0.5 - v.drop[k] * out);
+        }
+      }
+    }
+    return limit;
+  };
+}
+
 /** a tree further than this from the road (m) never comes within the mesh levels' reach: an impostor only */
 const FAR = 330;
 /** a tree further than this from the road (m) throws no shadow: it would fall deep inside the forest, unseen (nearer, the forest shades itself: its inside is dark) */
@@ -96,6 +238,8 @@ export interface TreeOptions {
   keep?: (x: number, z: number) => boolean;
   /** places more trees through `add` after the scattered ones (`scale` 1 ≈ a grown tree) */
   extra?: (add: (x: number, z: number, scale: number) => void) => void;
+  /** the road's views (`viewLimiter`): no tree stands between an open stretch and what is seen from it */
+  views?: (x: number, z: number) => number;
 }
 
 /**
@@ -118,6 +262,7 @@ export function plantTrees(terrain: TerrainData, density: number, style: CourseS
   const has = (id: string) => ids.includes(id);
   const of = (id: string) => Math.max(0, ids.indexOf(id));
   const clearance = opts.clearance ?? 10.5;
+  const limit = opts.views ?? null;
 
   /** the species for a spot: [id, size factor] */
   const pick = (x: number, z: number, y: number, slope: number, d: number): [string, number] => {
@@ -148,7 +293,7 @@ export function plantTrees(terrain: TerrainData, density: number, style: CourseS
     const y = terrain.heightAt(x, z);
     if (lf.waterLevel !== null && y < lf.waterLevel + 3) return;
     // thinning out towards the tree line (over 70 m of height, in patches), none above it
-    const above = y - (lf.treeLine + noise2(x / 90, z / 90) * 40);
+    const above = y - (lf.treeLine + noise2(x / 90, z / 90) * 40 + (r() - 0.5) * 24);
     if (above > 0 || (above > -70 && r() < ((above + 70) / 70) ** 1.5 * 0.9)) return;
     if (lf.relief(x, z) < 0.25 || cityWeight(lf, x, z) > 0.2) return;
     const dx = terrain.heightAt(x + 3, z) - terrain.heightAt(x - 3, z);
@@ -159,7 +304,16 @@ export function plantTrees(terrain: TerrainData, density: number, style: CourseS
     const def = SPECIES[id];
     // a stand is of one age: its trees are of a height, give or take
     const age = 0.5 + 0.5 * noise2(x / 300 - 11, z / 300 + 50);
-    const scale = (def.scale[0] + (def.scale[1] - def.scale[0]) * clamp(age * 0.8 + r() * 0.35, 0, 1)) * k * size;
+    let scale = (def.scale[0] + (def.scale[1] - def.scale[0]) * clamp(age * 0.8 + r() * 0.35, 0, 1)) * k * size;
+    if (limit && d < VIEW_REACH + 40) {
+      // young growth where a grown tree would stand in the view: of every height under the line of sight, and
+      // the fewer the less room there is (all of them grown up to the line, they stood there as a clipped hedge)
+      const room = (limit(x, z) - y) / (def.tall ?? 18);
+      if (room < scale) {
+        if (room < 0.32 || r() > (room / scale) ** 1.5 + 0.1) return;
+        scale = Math.max(0.3, room * (0.5 + 0.5 * r()));
+      }
+    }
     out.push({
       species: of(id),
       variant: Math.floor(r() * 8),
@@ -198,21 +352,22 @@ export function plantTrees(terrain: TerrainData, density: number, style: CourseS
     const d = roadDist(x, z);
     if (d < clearance || d >= 85) return;
     // (clearings; the road's edge stays wooded for the tunnel of trees)
-    if (d > 40 && noise2(x / 140, z / 140) < -0.32) return;
+    if (d > 40 && noise2(x / 140, z / 140) < -0.32 + (r() - 0.5) * 0.16) return;
     add(x, z, 1, d);
   });
   // behind them
   scatter(g.x0, g.z0, x1, z1, 7 * k, (x, z) => {
     const d = roadDist(x, z);
     if (d < 85 || d >= 260) return;
-    if (noise2(x / 140, z / 140) < -0.3) return;
+    if (noise2(x / 140, z / 140) < -0.3 + (r() - 0.5) * 0.16) return;
     add(x, z, 1.1, d);
   });
   // the rest of the near terrain: seen from afar only, as fewer and bigger trees
   scatter(g.x0, g.z0, x1, z1, 8.5 * k, (x, z) => {
     const d = roadDist(x, z);
     if (d < 260) return;
-    if (noise2(x / 220, z / 220) < -0.28) return;
+    // (seen from afar a clearing's edge is ragged: cut along the planting grid it was a staircase)
+    if (noise2(x / 220, z / 220) < -0.42 + (r() - 0.5) * 0.24) return;
     add(x, z, 1.25, d);
   });
   // the far mountains, as far as the terrain goes
@@ -220,7 +375,7 @@ export function plantTrees(terrain: TerrainData, density: number, style: CourseS
   const reach = 2200;
   scatter(Math.max(g.x0 - reach, f.x0 + f.cell), Math.max(g.z0 - reach, f.z0 + f.cell), Math.min(x1 + reach, f.x0 + (f.nx - 2) * f.cell), Math.min(z1 + reach, f.z0 + (f.nz - 2) * f.cell), 22 * k, (x, z) => {
     if (x > g.x0 && x < x1 && z > g.z0 && z < z1) return;
-    if (noise2(x / 300, z / 300) < -0.2) return;
+    if (noise2(x / 300, z / 300) < -0.45 + (r() - 0.5) * 0.24) return;
     add(x, z, 1.8, 1e6);
   });
   opts.extra?.((x, z, scale) => add(x, z, scale, roadDist(x, z)));
@@ -234,6 +389,8 @@ export interface CoverOptions {
   /** undergrowth per metre of road, relative (0: none) */
   undergrowth: number;
   style: CourseStyle;
+  /** the road's views (`viewLimiter`): a bush on the valley side's verge stays under the eye */
+  views?: (x: number, z: number) => number;
 }
 
 /**
@@ -276,7 +433,15 @@ export function plantCover(
     const species = ids.indexOf(id);
     if (species < 0) return;
     const def = SPECIES[id];
-    const scale = (def.scale[0] + (def.scale[1] - def.scale[0]) * r()) * size;
+    let scale = (def.scale[0] + (def.scale[1] - def.scale[0]) * r()) * size;
+    if (opts.views && def.tall) {
+      // (a bush may stand a little higher in a view than a tree's top: it is at the road's edge, under the eye)
+      const room = (opts.views(g.x, g.z) + 0.6 - g.y) / def.tall;
+      if (room < scale) {
+        if (room < 0.3) return;
+        scale = room * (0.7 + 0.3 * r());
+      }
+    }
     list.push({
       species,
       variant: Math.floor(r() * 8),

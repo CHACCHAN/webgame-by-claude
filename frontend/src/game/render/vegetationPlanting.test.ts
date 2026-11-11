@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { COURSES } from '../track/courses';
 import { Track } from '../track/Track';
 import { buildTerrain } from '../track/terrain';
-import { COVER_SETS, plantCover, plantTrees, SPECIES, TREE_SETS, UNDER_SETS, vegetationFiles } from './vegetationPlanting';
+import { COVER_SETS, plantCover, plantTrees, roadViews, SPECIES, TREE_SETS, UNDER_SETS, vegetationFiles, viewLimiter } from './vegetationPlanting';
 
 describe('vegetation planting', () => {
   for (const course of Object.values(COURSES)) {
@@ -41,6 +41,44 @@ describe('vegetation planting', () => {
         expect(terrain.roadDistAt(plant.x, plant.z)).toBeGreaterThan(2.5);
       }
       expect(plantCover(track, terrain, 1, [], COVER_SETS[course.style], UNDER_SETS[course.style], { undergrowth: 0, style: course.style }).under.length).toBe(0);
+    });
+  }
+
+  // what each pass is known for: the sea and the harbour town under oboro, the lake of kirifuri
+  for (const course of Object.values(COURSES).filter((c) => ['oboro-downhill', 'kirifuri-lakeside'].includes(c.id))) {
+    it(`${course.id}: the road looks out, and no tree stands in the view`, () => {
+      const track = new Track(course.design);
+      const terrain = buildTerrain(track, course.landform);
+      const ids = TREE_SETS[course.style];
+      const views = roadViews(track, terrain);
+      const open = views.filter((v) => v.open).length / views.length;
+      expect(open).toBeGreaterThan(0.6);
+      // (a view is to one side, but for a causeway in the lake: the mountain side keeps its forest)
+      const bits = (n: number) => n.toString(2).split('1').length - 1;
+      expect(views.reduce((sum, v) => sum + bits(v.open), 0) / views.length).toBeLessThan(7);
+      const limit = viewLimiter(track, terrain);
+      const plants = plantTrees(terrain, 1, course.style, ids, { views: limit });
+      let near = 0;
+      for (const p of plants) {
+        const d = terrain.roadDistAt(p.x, p.z);
+        if (!(d < 40)) continue;
+        near++;
+        // (planted a little into the ground: the top is no higher than this)
+        expect(p.y + SPECIES[ids[p.species]].tall! * p.scale).toBeLessThanOrEqual(limit(p.x, p.z) + 0.01);
+      }
+      // the forest is still there: by the road on the mountain side, and all of it behind
+      const all = plantTrees(terrain, 1, course.style, ids);
+      expect(near).toBeGreaterThan(1200);
+      expect(near).toBeLessThan(all.filter((p) => terrain.roadDistAt(p.x, p.z) < 40).length * 0.8);
+      expect(plants.length).toBeGreaterThan(all.length * 0.9);
+      // the bushes at the road's edge stay under the eye there
+      const coverIds = COVER_SETS[course.style];
+      const c = plantCover(track, terrain, 1, [], coverIds, [], { undergrowth: 0, style: course.style, views: limit });
+      expect(c.cover.length).toBeGreaterThan(1500);
+      for (const p of c.cover) {
+        const tall = SPECIES[coverIds[p.species]].tall;
+        if (tall) expect(p.y + tall * p.scale).toBeLessThanOrEqual(limit(p.x, p.z) + 0.61);
+      }
     });
   }
 

@@ -86,6 +86,30 @@ export function vegetationFrame(time: number, camera: THREE.Vector3) {
   viewer.value.copy(camera);
 }
 
+/** how far the camera turns before the plants in view are picked again (rad), and the margin kept around the picture for it */
+const TURN = 0.1;
+const _dir = new THREE.Vector3();
+/**
+ * The part of the ground a camera sees, from above: its heading and half the angle it spans there (π: all around,
+ * when it looks steeply up or down, or is no perspective camera). The corners of the picture reach furthest to the
+ * sides when the camera is pitched, so the angle is theirs.
+ */
+function groundCone(view: THREE.Camera | undefined, out: { az: number; half: number }) {
+  out.az = 0;
+  out.half = Math.PI;
+  const cam = view as THREE.PerspectiveCamera | undefined;
+  if (!cam?.isPerspectiveCamera) return out;
+  cam.getWorldDirection(_dir);
+  const flat = Math.hypot(_dir.x, _dir.z);
+  if (flat < 0.5) return out;
+  const tv = Math.tan((cam.fov * Math.PI) / 360) / Math.max(cam.zoom, 0.01), th = tv * cam.aspect;
+  const forward = flat - tv * Math.abs(_dir.y);
+  if (forward < 0.15) return out;
+  out.az = Math.atan2(_dir.z, _dir.x);
+  out.half = Math.min(Math.PI, Math.atan(th / forward) + TURN + 0.08);
+  return out;
+}
+
 /** rain (0 … 1): wet leaves and bark are darker and glossier, and the wind is up */
 /**
  * While the world's shaders are compiled every mesh of every forest stays in the scene, also those that hold no
@@ -280,6 +304,8 @@ function hullOf(src: THREE.BufferGeometry) {
   out.setAttribute('uv', new THREE.BufferAttribute(new Float32Array((p.length / 3) * 2), 2));
   out.setAttribute('veg', new THREE.BufferAttribute(new Uint8Array(veg), 4, true));
   out.setIndex(index);
+  // (the shadow material tells the outline as the light sees it by them)
+  out.computeVertexNormals();
   return out;
 }
 
@@ -353,6 +379,8 @@ interface InstanceNodes {
   /** the local point scaled and turned by the instance */
   place: (v: N) => N;
   turn: (v: N) => N;
+  /** the ground's normal under the plant */
+  ground: N;
   /** 0 inside the garage's clearing … 1 */
   open: N;
   tint: N;
@@ -386,6 +414,7 @@ function instanceNodes(): InstanceNodes {
     dist: foot.sub(viewer).length(),
     turn,
     place: (v: N) => v.mul(vec3(girth, B.x, girth)),
+    ground: vec3(slope.x, float(1).sub(slope.dot(slope)).max(0.05).sqrt(), slope.y),
     open: smoothstep((clearing as N).z.sub(3), (clearing as N).z, foot.xz.sub((clearing as N).xy).length()),
     tint: fract(B.z),
     seed: fract(B.w),
@@ -448,7 +477,9 @@ function plantNodes(model: PlantModel, look: PlantLook, span: Span) {
   // the sun in this picture: there the light through the leaves and the wet shine are taken back (a whole forest
   // glowed against a low sun, and glittered under the moon in the rain)
   const lit: N = varying(vec2(I.shade(false), smoothstep(50, 110, I.dist)));
-  return { I, veg, position, mask, tex, shade: lit.x, far: lit.y };
+  // the hillside's normal as the camera sees it, and how much of it the far trees take (as the impostors do)
+  const ground: N = varying(vec4((cameraViewMatrix as N).mul(vec4(I.ground, 0)).xyz, smoothstep(70, 190, I.dist).mul(0.4)));
+  return { I, veg, position, mask, tex, shade: lit.x, far: lit.y, ground };
 }
 
 /**
@@ -460,7 +491,7 @@ function plantMaterial(model: PlantModel, look: PlantLook, span: Span, second = 
   mat.side = THREE.DoubleSide;
   mat.metalness = 0;
   mat.envMapIntensity = 0.3;
-  const { I, veg, position, mask, tex, shade, far } = plantNodes(model, look, span);
+  const { I, veg, position, mask, tex, shade, far, ground } = plantNodes(model, look, span);
   mat.positionNode = position(sway);
   const texN: N = model.leafN ? texture(model.leafN, uv()) : vec4(0.5, 0.5, 1, 1);
   if (second) {
@@ -483,7 +514,7 @@ function plantMaterial(model: PlantModel, look: PlantLook, span: Span, second = 
   mat.specularIntensityNode = mix(1, 0.1, far);
   mat.aoNode = ao;
   const n: N = texN.rgb.mul(2).sub(1);
-  mat.normalNode = perturb(normalViewGeometry, vec3(n.xy.mul(1.2), n.z), uv());
+  mat.normalNode = (mix(perturb(normalViewGeometry, vec3(n.xy.mul(1.2), n.z), uv()), ground.xyz, ground.w) as N).normalize();
   // light through the leaves: the crown's rim glows against the sun, a lamp, headlights
   mat.thicknessColorNode = albedo.mul(leaf).mul((look.translucency ?? 1) * 1.6).mul(mix(1, 0.2, far));
   mat.thicknessDistortionNode = float(0.4);
@@ -539,7 +570,7 @@ function rockMaterial(model: PlantModel, look: PlantLook, span: Span) {
 /**
  * The material of the shadow meshes: only where the vertex goes and the cutout. `hull`: a tree's closed shape
  * (`hullOf`), one side of it, with holes where a noise in the tree's own space says so (the light that falls through
- * a crown, without a texture to read per texel).
+ * a crown, without a texture to read per texel), most of them along its outline.
  */
 function shadowMaterial(model: PlantModel, look: PlantLook, reach: Reach, hull: boolean) {
   const mat = new MeshBasicNodeMaterial();
@@ -553,12 +584,15 @@ function shadowMaterial(model: PlantModel, look: PlantLook, reach: Reach, hull: 
   })();
   if (hull) {
     const q: N = varying(positionLocal), crown: N = varying(veg.a);
-    // (holes under a metre across, each wave bent by another: at 1.5 m they lay on a wall as blots, and straight
-    // waves made a lattice of round spots on the road)
-    const gaps: N = sin(q.x.mul(7.3).add(sin(q.z.mul(2.9).add(q.y.mul(1.7))).mul(2.1)))
-      .mul(sin(q.z.mul(6.1).add(sin(q.x.mul(3.7).sub(q.y.mul(2.3))).mul(2.3))))
-      .add(sin(q.y.mul(9.7).add(sin(q.x.mul(4.3).add(q.z.mul(5.1))).mul(1.9))).mul(0.5));
-    mat.maskShadowNode = gaps.lessThan(mix(9, 0.3, crown));
+    // (each wave bent by another: straight waves made a lattice of round spots on the road)
+    const gaps: N = sin(q.x.mul(11.3).add(sin(q.z.mul(4.9).add(q.y.mul(2.7))).mul(2.1)))
+      .mul(sin(q.z.mul(9.1).add(sin(q.x.mul(5.7).sub(q.y.mul(3.3))).mul(2.3))))
+      .add(sin(q.y.mul(13.7).add(sin(q.x.mul(6.3).add(q.z.mul(7.1))).mul(1.9))).mul(0.5));
+    // A crown's shadow is a dark mass with a ragged outline and a few sparks of light in it. Holes all over it,
+    // as many as shade, lay on a wall in the moonlight as a chequered blot: so they are small (a quarter of a
+    // metre), few where the shape faces the light and many where it turns away from it, which is its outline there.
+    const facing: N = (varying(I.turn(normalLocal)) as N).normalize().dot(keyDir as N).abs();
+    mat.maskShadowNode = gaps.lessThan(mix(9, mix(-0.15, 1.05, smoothstep(0.1, 0.6, facing)), crown));
   } else mat.maskShadowNode = (texture(model.leaf, uv()) as N).a.greaterThan(0.4);
   return mat;
 }
@@ -621,7 +655,11 @@ function impostorMaterial(model: PlantModel, look: PlantLook, span: Span) {
   // the baked normal is in the view's frame: right, up, towards the viewer
   const basis: N = varying(vec4(right.x, right.z, dir.x, dir.y));
   const n: N = model.impN ? (texture(model.impN, coord) as N).rgb.mul(2).sub(1) : vec3(0, 0, 1);
-  const world: N = vec3(basis.x.mul(n.x).add(basis.z.mul(n.z)), n.y, basis.y.mul(n.x).add(basis.w.mul(n.z)));
+  const own: N = vec3(basis.x.mul(n.x).add(basis.z.mul(n.z)), n.y, basis.y.mul(n.x).add(basis.w.mul(n.z)));
+  // (far away a tree is lit as its hillside is: with its own round shape every tree of a sunlit slope had a bright
+  // side and a dark one, a few pixels each, and the slope was a field of dots instead of a canopy)
+  const flat: N = varying(vec4(I.ground, smoothstep(S.x.sub(S.y), S.x.add(140), I.dist).mul(0.45).add(0.4)));
+  const world: N = mix(own, flat.xyz, flat.w);
   mat.normalNode = (cameraViewMatrix as N).mul(vec4(world, 0)).xyz.normalize();
   // (a tree this far away is out of the lamps' and the headlights' reach)
   if (farLights) mat.lightsNode = lights(farLights) as N;
@@ -738,6 +776,9 @@ interface Level {
   /** its instances are picked again when the viewer has moved this far (m) */
   stride: number;
   at: THREE.Vector3;
+  /** the view it was picked for (`groundCone`) */
+  az: number;
+  half: number;
   meshes: LevelMesh[];
 }
 
@@ -773,6 +814,7 @@ export class Forest {
   /** every mesh is in the scene, empty or not (see `vegetationHold`) */
   private showingAll = true;
   private inReach: Chunk[] = [];
+  private cone = { az: 0, half: Math.PI };
   count = 0;
 
   constructor(private readonly species: ForestSpecies[], plants: Planted[], opts: ForestOptions) {
@@ -833,7 +875,7 @@ export class Forest {
       const near = shadow ? 0 : bounds[l], far = shadow ? opts.shadows : bounds[l + 1];
       // (the last mesh level without impostors behind it fades out into nothing over a long band)
       const span = uniform(new THREE.Vector4(near, l === 0 ? 0 : band(near), far, l === 2 && !impostors ? far * 0.3 : band(far)));
-      const level: Level = { near: near - (l === 0 ? 0 : band(near)), far, stride: (opts.strides ?? STRIDES)[l], at: new THREE.Vector3(1e9, 0, 0), meshes: [] };
+      const level: Level = { near: near - (l === 0 ? 0 : band(near)), far, stride: (opts.strides ?? STRIDES)[l], at: new THREE.Vector3(1e9, 0, 0), az: 0, half: Math.PI, meshes: [] };
       this.levels.push(level);
       if (far <= near) continue;
       species.forEach((sp, si) => {
@@ -921,26 +963,44 @@ export class Forest {
     return m;
   }
 
-  update(camera: THREE.Vector3) {
+  /**
+   * `view`: the camera of the picture. The mesh levels then hold only the plants of the chunks it can see (a third of
+   * them: the others were shaded vertex by vertex behind the camera), picked again when it has turned; the shadow
+   * level keeps them all (what stands behind the camera throws its shadow into the picture).
+   */
+  update(camera: THREE.Vector3, view?: THREE.Camera) {
+    const cone = groundCone(view, this.cone);
     if (this.showingAll && !held) {
       this.showingAll = false;
       for (const lv of this.levels) for (const lm of lv.meshes) lm.mesh.visible = lm.n > 0, lm.pre && (lm.pre.visible = lm.n > 0);
     }
     for (const lv of this.levels) {
-      if (!lv.meshes.length || lv.at.distanceToSquared(camera) < lv.stride * lv.stride) continue;
+      if (!lv.meshes.length) continue;
+      const shadow = lv === this.levels[3];
+      const half = shadow ? Math.PI : cone.half;
+      // (turned, or the view grown wider than the margin it was picked with)
+      const turned = half < Math.PI ? Math.abs(Math.atan2(Math.sin(cone.az - lv.az), Math.cos(cone.az - lv.az))) + Math.max(0, half - lv.half) : lv.half < Math.PI ? 9 : 0;
+      if (lv.at.distanceToSquared(camera) < lv.stride * lv.stride && turned < TURN) continue;
       lv.at.copy(camera);
+      lv.az = cone.az;
+      lv.half = half;
+      const fx = Math.cos(cone.az), fz = Math.sin(cone.az);
       // (as wide as the move that comes before the next pick, and a little)
       const margin = lv.stride + 1.5;
       const lo = Math.max(0, lv.near - margin), hi = lv.far + margin;
       const lo2 = lo * lo, hi2 = hi * hi;
-      const shadow = lv === this.levels[3];
       for (const lm of lv.meshes) lm.n = 0;
       // the chunks in reach, nearest first: what is drawn first hides what comes after it
       const near = this.inReach;
       near.length = 0;
       for (const c of this.chunks) {
-        c.d = Math.hypot(c.x - camera.x, c.z - camera.z);
-        if (c.d - c.radius <= hi) near.push(c);
+        const cx = c.x - camera.x, cz = c.z - camera.z;
+        c.d = Math.hypot(cx, cz);
+        if (c.d - c.radius > hi) continue;
+        // (out of the picture: further to the side than the view and the chunk's own width, its crowns' reach included)
+        const wide = c.radius + 9;
+        if (half < Math.PI && c.d > wide + 12 && Math.acos(Math.max(-1, Math.min(1, (cx * fx + cz * fz) / c.d))) > half + Math.asin(wide / c.d)) continue;
+        near.push(c);
       }
       near.sort((a, b) => a.d - b.d);
       for (const c of near) {

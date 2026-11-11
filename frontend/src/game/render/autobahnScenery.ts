@@ -987,10 +987,10 @@ export function buildAutobahnScenery(track: Track, terrain: TerrainData, quality
     nightEmissive,
     lightmapMats: [roadMaterial, terrainMat],
     covers: new Float32Array(covers),
-    update(time, cameraPos) {
+    update(time, cameraPos, view) {
       vegetationFrame(time, cameraPos);
-      updateTreeLods(trees, cameraPos);
-      updateTreeLods(clutter, cameraPos);
+      updateTreeLods(trees, cameraPos, view);
+      updateTreeLods(clutter, cameraPos, view);
       turbines.update(time);
       traffic.update(time, cameraPos);
     },

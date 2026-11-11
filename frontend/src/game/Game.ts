@@ -1023,7 +1023,7 @@ export class Game {
     this.updateVisuals(dt);
     this.env.update(this.time, this.camera.position);
     this.rain.update(this.time, this.camera.position, this.player?.sim.velocity ?? _zero);
-    this.scenery.update(this.time, this.camera.position);
+    this.scenery.update(this.time, this.camera.position, this.camera);
     this.updateLampLights(dt);
     this.updateBeams();
   }
