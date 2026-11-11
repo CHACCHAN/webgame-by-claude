@@ -8,7 +8,7 @@ import { smaa } from 'three/addons/tsl/display/SMAANode.js';
 import { ambientOcclusion } from './ambientOcclusion';
 import { graded } from './grade';
 import { beamCones, updateVolume, volumetricLights } from './volumetricLights';
-import { fixInterleavedDispose } from './threeFixes';
+import { fixInterleavedDispose, keepShaders } from './threeFixes';
 import { ErrorBurst } from './backendChoice';
 import { TemporalUpscaler, biasSceneTextures, sceneTextureBias, temporalUpscale } from './TemporalUpscaler';
 
@@ -133,6 +133,7 @@ export class RenderHost {
     try {
       await renderer.init();
       fixInterleavedDispose(renderer);
+      keepShaders(renderer);
       const host = new RenderHost(renderer, canvas, options);
       renderer.toneMapping = THREE.AgXToneMapping;
       renderer.setClearColor('#05070c');
