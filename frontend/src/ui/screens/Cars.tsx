@@ -3,7 +3,7 @@ import { useApp } from '../../store/app';
 import { useMenuInput } from '../useMenuInput';
 import { gameHolder } from '../GameCanvas';
 import { CAR_SPECS, VEHICLE_ORDER, type CarId, type CarSpec } from '../../game/vehicle/carSpecs';
-import { Hint } from './Menus';
+import { Count, Hint, ScreenHead } from '../kit';
 import { liverySwatch, specForLivery, TRAIN_INFO, TRAIN_ORDER, trainLivery, type TrainId } from '../../game/vehicle/trains';
 import { ROACH_INFO } from '../../game/vehicle/roach';
 import { BIKE_ORDER, BIKE_SPECS, type BikeId } from '../../game/vehicle/bikes';
@@ -67,9 +67,9 @@ function Stat({ label, v }: { label: string; v: number }) {
     <div className="stat">
       <span>{label}</span>
       <div className="stat-bar">
-        <div style={{ width: `${v * 10}%` }} />
+        <div style={{ transform: `scaleX(${v / 10})` }} />
       </div>
-      <b>{v}</b>
+      <Count to={v} ms={350} />
     </div>
   );
 }
@@ -357,10 +357,9 @@ export function CarsScreen() {
   });
   return (
     <div className={`screen garage cars ${orbit.dragging ? 'orbiting' : ''}`} {...orbit.handlers}>
-      <div className="garage-top">
-        <div className="crumb">CAR LIST ― 車両一覧</div>
-      </div>
-      <div className="garage-card">
+      <ScreenHead jp="車両一覧" en="CAR LIST" />
+      {/* (keyed by the vehicle: the sheet comes in anew for each one) */}
+      <div className="garage-card" key={id}>
         <CarSheet spec={CAR_SPECS[id]} index={i} full color={color} />
         <div className="colors">
           {palette.map((col, k) => (
@@ -368,12 +367,11 @@ export function CarsScreen() {
           ))}
           {liveryName(id, color) && <span className="livery-name">{liveryName(id, color)}</span>}
         </div>
-        <button className="cta small ghost" onClick={back}>メニューに戻る</button>
       </div>
-      <button className="arrow left" onClick={() => turn(-1)}>‹</button>
-      <button className="arrow right" onClick={() => turn(1)}>›</button>
-      <div className="orbit-hint">ドラッグで車を見回す ・ ホイールでズーム</div>
-      <Hint items={[['←→', '車両'], ['↑↓', 'カラー'], ['ドラッグ', '視点'], ['Esc', '戻る']]} />
+      <button className="arrow left" onClick={() => turn(-1)} aria-label="前の車両">‹</button>
+      <button className="arrow right" onClick={() => turn(1)} aria-label="次の車両">›</button>
+      <div className="orbit-hint">ドラッグで車を見回す・ホイールでズーム</div>
+      <Hint items={[['lr', '車両'], ['ud', 'カラー'], ['drag', '視点']]} />
     </div>
   );
 }

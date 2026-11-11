@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useApp } from '../../store/app';
 import { useMenuInput, hoverSelect } from '../useMenuInput';
 import { gameHolder } from '../GameCanvas';
-import { api, loadLocalBest, loadPlayer, saveCarBest, saveLocalBest, saveRivalResult, type SubmitResult } from '../../api/client';
+import { api, currentMember, loadLocalBest, loadPlayer, saveCarBest, saveLocalBest, saveRivalResult, type SubmitResult } from '../../api/client';
 import { MEDAL_LABEL, medalFor } from '../../game/race/medals';
 import { encodeGhost, type EncodedGhost } from '../../game/race/Ghost';
 import type { RaceResult } from '../../game/Game';
@@ -10,7 +10,10 @@ import { CAR_SPECS } from '../../game/vehicle/carSpecs';
 import { COURSES } from '../../game/track/courses';
 import { formatTime } from '../format';
 import { Portrait, startRaceFromState } from './Menus';
+import { useAccount } from '../../store/account';
 import { sfx } from '../sfx';
+import { Count, FocusFrame, Notice, Typed } from '../kit';
+import { motionOn } from '../motion';
 
 type SubmitState = { kind: 'idle' } | { kind: 'need-name' } | { kind: 'sending' } | { kind: 'done'; res: SubmitResult } | { kind: 'error'; msg: string };
 
@@ -18,19 +21,32 @@ type SubmitState = { kind: 'idle' } | { kind: 'need-name' } | { kind: 'sending' 
 const memo = new WeakMap<RaceResult, { submit: SubmitState; localPB: { isNew: boolean; prev: number | null }; encoded: Promise<EncodedGhost> }>();
 const medalNew = new WeakMap<RaceResult, boolean>();
 
+/** when the card comes in after the finish (ms): the finish banner has the screen until then */
+const CARD_AT = 900;
+/** how long the time counts up, and when the medal is stamped after the card came in (ms) */
+const COUNT_MS = 1100, STAMP_AT = 1500;
+
+/**
+ * The results build up step by step: the finish banner, then the card with the time counting to its figure, the
+ * difference to the best / the ghost, the medal stamped on, the rival's word, the sectors and the online rank
+ * (the steps are animation delays in screens.css; the buttons take input from the first frame).
+ */
 export function ResultsScreen() {
   const { result, go, set, ghostChoice, rivalLine } = useApp();
   const [submit, setSubmit] = useState<SubmitState>({ kind: 'idle' });
   const [name, setName] = useState(() => loadPlayer()?.name ?? '');
+  const accountOn = useAccount((s) => s.enabled);
   const [localPB, setLocalPB] = useState<{ isNew: boolean; prev: number | null }>({ isNew: false, prev: null });
   const [sel, setSel] = useState(0);
   const encoded = useRef<Promise<EncodedGhost> | null>(null);
   const [visible, setVisible] = useState(false);
+  // back from the replay: the card at once, nothing counted or stamped again
+  const [again] = useState(() => !!result && memo.has(result));
 
   useEffect(() => {
-    const t = setTimeout(() => setVisible(true), 900);
+    const t = setTimeout(() => setVisible(true), again ? 0 : CARD_AT);
     return () => clearTimeout(t);
-  }, []);
+  }, [again]);
 
   useEffect(() => {
     if (!result) return;
@@ -58,7 +74,8 @@ export function ResultsScreen() {
         saveLocalBest(result.trackId, { carId: result.carId, timeMs: result.timeMs, splits: result.splitsMs, ghost, date: new Date().toISOString() }),
       );
     }
-    if (loadPlayer()) void send(loadPlayer()!.name);
+    // a member's record goes to their account; a guest is asked for the name every time (the last one typed is filled in)
+    if (currentMember()) void send(currentMember()!.name);
     else setSubmit({ kind: 'need-name' });
     // the finish jingle is playing (a longer one for beating the rival): a new medal or record gets its own
     // sting as it ends, then the results music
@@ -68,7 +85,12 @@ export function ResultsScreen() {
       const len = audio && sting ? await audio.playJingle(sting) : 0;
       void audio?.playMusic('bgm_results', { delay: Math.max(0, len - 0.5) });
     }, result.rivalLevel && !result.rivalWon ? 6000 : 4300);
-    return () => clearTimeout(t);
+    // the medal's stamp lands as the time stops counting
+    const stamp = now && motionOn() ? setTimeout(() => sfx.stamp(), CARD_AT + STAMP_AT) : undefined;
+    return () => {
+      clearTimeout(t);
+      clearTimeout(stamp);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [result]);
 
@@ -108,8 +130,8 @@ export function ResultsScreen() {
     { label: 'メニュー', action: () => { gameHolder.game?.startAttract(); go('modes'); } },
   ];
   useMenuInput((a) => {
-    if (a === 'left') { setSel((s) => (s + actions.length - 1) % actions.length); sfx.move(); }
-    if (a === 'right') { setSel((s) => (s + 1) % actions.length); sfx.move(); }
+    if (a === 'left' || a === 'up') { setSel((s) => (s + actions.length - 1) % actions.length); sfx.move(); }
+    if (a === 'right' || a === 'down') { setSel((s) => (s + 1) % actions.length); sfx.move(); }
     if (a === 'confirm') { sfx.confirm(); actions[sel].action(); }
   }, submit.kind !== 'need-name');
 
@@ -117,42 +139,54 @@ export function ResultsScreen() {
   const won = result.rivalLevel ? result.rivalWon === false : null;
   const sectors = result.splitsMs.map((s, i) => s - (i ? result.splitsMs[i - 1] : 0));
   const ghostDelta = result.mode === 'ghost' && ghostChoice ? result.timeMs - ghostChoice.timeMs : null;
+  const medal = medalFor(result.trackId, result.carId, result.timeMs);
+  const verdict = won === null ? 'FINISH' : won ? 'YOU WIN' : 'YOU LOSE';
+  const tone = won === null ? 'finish' : won ? 'win' : 'lose';
+  const rival = result.rivalLevel ? COURSES[result.trackId].rivals[result.rivalLevel] : null;
 
   return (
-    <div className={`screen results ${visible ? 'in' : ''}`}>
+    <div className={`screen results ${visible ? 'in' : ''}${again ? ' again' : ''}`} data-wipe="none">
+      {!again && (
+        <div className={`finish-banner ${tone}`} aria-hidden>
+          <i />
+          <b>{verdict}</b>
+          <i />
+        </div>
+      )}
       <div className="results-card">
         <div className="results-head">
-          {result.rivalLevel ? (
-            <div className={`verdict ${won ? 'win' : 'lose'}`}>{won ? 'YOU WIN' : 'YOU LOSE'}</div>
-          ) : (
-            <div className="verdict finish">FINISH</div>
-          )}
+          <div className={`verdict ${tone}`}>{verdict}</div>
           <div className="results-sub">
             {COURSES[result.trackId].name} ・ {CAR_SPECS[result.carId].name}
-            {result.rivalLevel && ` ・ VS ${COURSES[result.trackId].rivals[result.rivalLevel].name}`}
+            {rival && ` ・ VS ${rival.name}`}
           </div>
         </div>
-        <div className="results-time">{formatTime(result.timeMs)}</div>
-        {medalFor(result.trackId, result.carId, result.timeMs) && (
-          <div className={`medal medal-${medalFor(result.trackId, result.carId, result.timeMs)}`}>
-            ● {MEDAL_LABEL[medalFor(result.trackId, result.carId, result.timeMs)!]}
-            {medalNew.get(result) && <em> 獲得！</em>}
-          </div>
-        )}
-        {localPB.isNew && <div className="badge-pb">NEW PERSONAL BEST{localPB.prev !== null && ` (${formatTime(result.timeMs - localPB.prev, { sign: true })})`}</div>}
-        {ghostDelta !== null && (
-          <div className={`ghost-delta ${ghostDelta <= 0 ? 'faster' : 'slower'}`}>
-            👻 {ghostChoice!.label} {ghostDelta <= 0 ? 'に勝利' : 'に届かず'} {formatTime(ghostDelta, { sign: true })}
-          </div>
-        )}
-        {result.rivalTimeMs !== undefined && (
-          <div className="rival-time">ライバル: {formatTime(result.rivalTimeMs)}</div>
-        )}
-        {result.rivalLevel && rivalLine && rivalLine.moment !== 'before' && (
+        <div className="results-main">
+          <Count as="div" className="results-time" to={result.timeMs} format={formatTime} ms={again ? 0 : COUNT_MS} delay={again ? 0 : CARD_AT + 250} tick />
+          {medal && (
+            <div className={`medal medal-${medal}`}>
+              <b>{MEDAL_LABEL[medal]}</b>
+              {medalNew.get(result) && <em>獲得！</em>}
+            </div>
+          )}
+        </div>
+        <div className="results-notes">
+          {localPB.isNew && <div className="badge-pb">NEW PERSONAL BEST{localPB.prev !== null && ` (${formatTime(result.timeMs - localPB.prev, { sign: true })})`}</div>}
+          {ghostDelta !== null && (
+            <div className={`ghost-delta ${ghostDelta <= 0 ? 'faster' : 'slower'}`}>
+              GHOST {ghostChoice!.label} {ghostDelta <= 0 ? 'に勝利' : 'に届かず'} <b>{formatTime(ghostDelta, { sign: true })}</b>
+            </div>
+          )}
+          {result.rivalTimeMs !== undefined && (
+            <div className="rival-time">ライバル <b>{formatTime(result.rivalTimeMs)}</b></div>
+          )}
+        </div>
+        {rival && rivalLine && rivalLine.moment !== 'before' && (
           <div className="rival-line">
-            <Portrait src={COURSES[result.trackId].rivals[result.rivalLevel].portrait} className="vs-portrait" />
+            <Portrait src={rival.portrait} className="vs-portrait" />
             <p>
-              <small>{COURSES[result.trackId].rivals[result.rivalLevel].name}</small>「{rivalLine.text}」
+              <small>{rival.name}</small>
+              <Typed text={rivalLine.text} wrap={['「', '」']} />
             </p>
           </div>
         )}
@@ -182,6 +216,7 @@ export function ResultsScreen() {
               }}
             >
               <label>ランキング登録名（16文字まで）</label>
+              {accountOn && <p className="name-note">ゲストとして記録します。メンバーはメインメニューの「メンバーログイン」から。</p>}
               <div>
                 <input autoFocus maxLength={16} value={name} placeholder="名無しの走り屋" onChange={(e) => setName(e.target.value)} />
                 <button className="mini" type="submit">登録</button>
@@ -189,21 +224,26 @@ export function ResultsScreen() {
               </div>
             </form>
           )}
-          {submit.kind === 'sending' && <div className="online-msg">記録を送信中…</div>}
+          {submit.kind === 'sending' && <div className="online-msg sending">記録を送信中…</div>}
           {submit.kind === 'done' && (
             <div className="online-msg ok">
               ONLINE RANK <b>#{submit.res.rank}</b> / {submit.res.total_players}
               {submit.res.is_personal_best ? <em>オンライン自己ベスト更新！</em> : <em>自己ベスト {formatTime(submit.res.previous_best_ms)}</em>}
             </div>
           )}
-          {submit.kind === 'error' && <div className="online-msg err">送信できませんでした：{submit.msg}（記録はこの端末に保存されています）</div>}
+          {submit.kind === 'error' && (
+            <Notice className="online-msg err" title="記録を送信できませんでした" action={<button className="mini" onClick={() => void send(name)}>再送信</button>}>
+              {submit.msg}。記録はこの端末に保存されています。
+            </Notice>
+          )}
         </div>
-        <div className="results-actions">
+        <div className="results-actions focus-box">
           {actions.map((a, i) => (
-            <button key={a.label} className={`cta small ${i === sel ? 'focus' : ''}`} {...hoverSelect(() => setSel(i))} onClick={() => { sfx.confirm(); a.action(); }}>
+            <button key={a.label} className={`cta small ${i === sel && submit.kind !== 'need-name' ? 'focus' : ''}`} {...hoverSelect(() => setSel(i))} onClick={() => { sfx.confirm(); a.action(); }}>
               {a.label}
             </button>
           ))}
+          <FocusFrame on=".focus" deps={[sel, submit.kind]} pad={4} />
         </div>
       </div>
     </div>
@@ -216,7 +256,8 @@ export function ReplayOverlay() {
   useEffect(() => {
     let raf = 0;
     const loop = () => {
-      if (timeRef.current) timeRef.current.textContent = formatTime((gameHolder.game?.replayTime ?? 0) * 1000);
+      const text = formatTime((gameHolder.game?.replayTime ?? 0) * 1000);
+      if (timeRef.current && timeRef.current.textContent !== text) timeRef.current.textContent = text;
       raf = requestAnimationFrame(loop);
     };
     raf = requestAnimationFrame(loop);
@@ -226,11 +267,13 @@ export function ReplayOverlay() {
     if (a === 'back' || a === 'confirm') { sfx.back(); go('results'); }
   });
   return (
-    <div className="screen replay" onClick={() => go('results')}>
-      <div className="replay-tag"><i /> REPLAY <span ref={timeRef} /></div>
+    <div className="screen replay" data-wipe="none" onClick={() => go('results')}>
       <div className="letterbox top" />
       <div className="letterbox bottom" />
-      <div className="replay-hint">Esc / Enter / クリック：結果に戻る</div>
+      <div className="replay-tag"><i /> REPLAY <span ref={timeRef} /></div>
+      <div className="replay-hint">
+        <kbd className="k-key">Esc</kbd><kbd className="k-key">Enter</kbd><kbd className="k-pad pad">B</kbd> クリックでも結果に戻る
+      </div>
     </div>
   );
 }

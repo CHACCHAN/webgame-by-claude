@@ -47,6 +47,8 @@ export interface Landform {
   grid?: { near?: number; far?: number; reach?: number };
   /** scale of the hillsides the road is cut into (default 1; < 1 for rolling land) */
   hillside?: number;
+  /** strength of the spurs and gullies on the hillsides away from the road (default 1; visual only) */
+  gullies?: number;
   /** bridges are viaducts over valleys of the landform (the ground follows the valley down, as wide as the bridge) */
   viaducts?: boolean;
   features: {
@@ -263,6 +265,8 @@ export const PLATEAU: Landform = {
   cloudLevel: 258,
   grid: { near: 8, far: 32, reach: 4500 },
   hillside: 0.35,
+  // rolling farmland and forest: no mountain spurs
+  gullies: 0.25,
   viaducts: true,
   features: {
     towers: [[-2200, -2700], [7200, -1900]],

@@ -504,6 +504,40 @@ export class AudioEngine {
     o.stop(t + dur + 0.02);
   }
 
+  /** A UI tone that glides from one pitch to another (the interface's power-ons, stamps and refusals). */
+  sweep(from: number, to: number, dur = 0.16, type: OscillatorType = 'triangle', vol = 0.1) {
+    const t = this.ctx.currentTime;
+    const o = this.ctx.createOscillator();
+    o.type = type;
+    o.frequency.setValueAtTime(from, t);
+    o.frequency.exponentialRampToValueAtTime(Math.max(20, to), t + dur);
+    const g = this.ctx.createGain();
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(vol, t + 0.012);
+    g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+    o.connect(g).connect(this.master);
+    o.start(t);
+    o.stop(t + dur + 0.02);
+  }
+
+  /** A breath of filtered noise whose band glides (a screen wiped away under the scan line). */
+  hiss(from: number, to: number, dur = 0.22, vol = 0.08) {
+    const t = this.ctx.currentTime;
+    const src = this.ctx.createBufferSource();
+    src.buffer = this.noise;
+    const f = this.ctx.createBiquadFilter();
+    f.type = 'bandpass';
+    f.Q.value = 1.4;
+    f.frequency.setValueAtTime(from, t);
+    f.frequency.exponentialRampToValueAtTime(Math.max(40, to), t + dur);
+    const g = this.ctx.createGain();
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(vol, t + dur * 0.3);
+    g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+    src.connect(f).connect(g).connect(this.master);
+    src.start(t, Math.random(), dur + 0.05);
+  }
+
   /**
    * A car's horn: the two notes of a twin horn (a major third apart), bright and a little rough, cut off as a
    * horn is. `short` = a tap, `long` = held, `double` = two taps. `level`: how near it is (0…1).

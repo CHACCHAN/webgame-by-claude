@@ -21,7 +21,7 @@ class LeaderboardController extends Controller
         $limit = $data['limit'] ?? 50;
 
         $runs = Run::personalBests($trackId, $data['car_id'] ?? null)
-            ->with('player:id,name,is_bot')
+            ->with('player:id,name,is_bot,oidc_sub')
             ->withExists('ghost')
             ->limit($limit)
             ->get();
@@ -32,6 +32,7 @@ class LeaderboardController extends Controller
             'player_id' => $run->player_id,
             'player_name' => $run->player->name,
             'is_bot' => $run->player->is_bot,
+            'is_member' => $run->player->isMember(),
             'car_id' => $run->car_id,
             'mode' => $run->mode,
             'time_ms' => $run->time_ms,

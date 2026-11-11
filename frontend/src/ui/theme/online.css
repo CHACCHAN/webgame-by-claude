@@ -1,0 +1,117 @@
+/* Online battle (screens/Online.tsx): the lobby, the room with its seats, the results. Tokens: tokens.css.
+   The others are magenta's side of the palette; cyan stays the player's own row and the focus. */
+.online-lobby, .online-room { background: linear-gradient(90deg, rgb(var(--c-void) / 0.9) 0%, rgb(var(--c-void) / 0.55) 36%, rgb(var(--c-void) / 0) 58%); }
+.online-room { cursor: grab; }
+.online-room.orbiting { cursor: grabbing; }
+.online-results { background: radial-gradient(ellipse at center, rgb(var(--c-void) / 0.55), rgb(var(--c-void) / 0.9)); }
+
+.ol-panel { --c: var(--cut-l); position: absolute; left: var(--gutter); top: calc(var(--bar) + 4.6rem); width: min(34rem, 92vw); max-height: calc(100vh - var(--bar) * 2 - 5.6rem); overflow-y: auto;
+  display: flex; flex-direction: column; gap: 0.9rem; padding: 1.2rem 1.4rem; cursor: auto; scrollbar-width: thin; scrollbar-color: var(--line) transparent; animation: var(--kf-rise) var(--t-enter) var(--e-out) both; }
+/* (the lobby's sections come in one by one instead) */
+.ol-panel.stagger { animation: kf-fade var(--t-fast) linear both; }
+.online-results .ol-panel, .room-gone .ol-panel { left: 0; right: 0; margin: 0 auto; width: min(42rem, 94vw); }
+
+/* ---- lobby */
+.ol-section { display: grid; gap: 0.5rem; min-width: 0; }
+.ol-section label { display: flex; align-items: center; gap: 0.7rem; font-size: var(--fs-xs); font-weight: 700; letter-spacing: 0.24em; color: var(--cyan); }
+.ol-section label::after { content: ''; flex: 1; height: 1px; background: var(--line-soft); }
+.ol-help { font-size: var(--fs-s); color: var(--muted); }
+.ol-row { display: flex; gap: 0.5rem; }
+.ol-row input { flex: 1; min-width: 0; }
+.ol-code { font-family: var(--font-display); font-stretch: var(--w-norm); font-weight: 600; font-size: var(--fs-l); letter-spacing: 0.4em; }
+.ol-me b { font-size: var(--fs-xl); font-weight: 700; }
+.ol-cars, .ol-courses { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+.ol-courses .chip { font-family: var(--font-jp); font-weight: 700; }
+.ol-gearbox-none { font-size: var(--fs-s); color: var(--muted); }
+.ol-split { display: grid; gap: 0.9rem; }
+.ol-create { justify-self: start; }
+
+/* ---- room */
+.ol-code-big { display: grid; grid-template-columns: auto 1fr; align-items: baseline; column-gap: 1rem; }
+.ol-code-big small { grid-column: 1 / -1; font-family: var(--font-display); font-stretch: var(--w-norm); font-weight: 500; font-size: var(--fs-xs); letter-spacing: 0.3em; color: var(--cyan); }
+.ol-code-big b { font-family: var(--font-display); font-stretch: var(--w-cond); font-weight: 800; font-size: 3.6rem; line-height: 1.05; letter-spacing: 0.26em; text-shadow: var(--glow-cyan-text); user-select: text; }
+.ol-code-big span { font-size: var(--fs-s); color: var(--muted); }
+.ol-slots, .ol-standings { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.3rem; }
+.ol-slots li { --c: 5px; --tex: none; --fill: rgb(var(--c-ink-2) / 0.5); display: flex; align-items: center; gap: 0.6rem; min-height: 2.3rem; padding: 0.3rem 0.8rem 0.3rem 0.7rem; }
+.ol-slots li.me { --edge: var(--line-hot); }
+.ol-slots li.empty { --edge: var(--line-soft); --fill: rgb(var(--c-ink) / 0.2); }
+/* the paint of the seat's grid slot */
+.ol-slots li > i, .ol-standings li > i, .lobby-tag > i { flex: none; width: 0.7rem; height: 0.7rem; transform: rotate(45deg); }
+.ol-slots li.empty > i { opacity: 0.35; }
+.ol-slots li b { flex: 0 1 auto; min-width: 0; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ol-slots li span { flex: 1 1 0; min-width: 0; font-family: var(--font-display); font-stretch: var(--w-cond); font-weight: 500; font-size: var(--fs-s); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ol-slots li span.wait { font-family: var(--font-jp); color: var(--faint); animation: kf-blink 2s ease-in-out infinite; animation-play-state: var(--kf-idle); }
+/* what a member is doing */
+.ol-slots em, .lobby-tag em { flex: none; padding: 0 0.45rem; border: 1px solid currentColor; font-style: normal; font-size: var(--fs-xs); font-weight: 700; line-height: 1.55; white-space: nowrap; }
+em.ready { color: var(--green); }
+em.not-ready { color: var(--muted); }
+em.loading { color: var(--muted); animation: kf-blink 1.2s ease-in-out infinite; animation-play-state: var(--kf-idle); }
+em.choosing { color: var(--cyan); }
+em.host { color: var(--void); background: var(--text); border-color: var(--text); font-family: var(--font-display); letter-spacing: 0.1em; }
+em.you { color: var(--on-cyan); background: var(--cyan); border-color: var(--cyan); font-family: var(--font-display); letter-spacing: 0.1em; }
+.ol-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 0.6rem; }
+.ol-actions .ol-start, .ol-actions .ol-ready { flex: 1; }
+.ol-ready.on { --edge: var(--green); --fill: rgb(var(--c-green) / 0.14); color: var(--green); }
+.ol-waiting { order: 3; flex-basis: 100%; font-size: var(--fs-s); color: var(--muted); animation: kf-blink 1.8s ease-in-out infinite; animation-play-state: var(--kf-idle); }
+.online-results .ol-actions { justify-content: center; }
+.online-results .ol-waiting { order: 0; flex-basis: auto; }
+
+/* the link to the others: live, or the room's state fetched every few seconds */
+.rt-badge { display: inline-flex; align-items: center; gap: 0.35rem; margin-left: 0.6rem; padding: 0 0.5rem; border: 1px solid currentColor; font-family: var(--font-display); font-stretch: var(--w-norm); font-weight: 600; font-size: var(--fs-2xs);
+  line-height: 1.6; letter-spacing: 0.16em; vertical-align: 0.1em; white-space: nowrap; }
+.rt-badge::before { content: ''; width: 0.4rem; height: 0.4rem; border-radius: 50%; background: currentColor; }
+.rt-badge.live { color: var(--green); }
+.rt-badge.live::before { animation: kf-blink 1.4s ease-in-out infinite; animation-play-state: var(--kf-idle); }
+.rt-badge.connecting { color: var(--muted); }
+.rt-badge.failed { color: var(--amber); }
+.rt-badge.off { color: var(--faint); }
+
+/* name tags over the vehicles of the line-up (placed every frame by the screen: left / top are the tag's foot) */
+.lobby-tags { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+.lobby-tag { position: absolute; transform: translate(-50%, -100%); display: flex; align-items: center; gap: 0.4rem; padding: 0.12rem 0.6rem 0.12rem 0.5rem; font-size: var(--fs-s); white-space: nowrap;
+  border: 1px solid rgb(var(--c-magenta) / 0.5); border-left-width: 3px; background: rgb(var(--c-void) / 0.74); }
+.lobby-tag.me { border-color: var(--line-hot); }
+.lobby-tag > i { width: 0.55rem; height: 0.55rem; }
+.lobby-tag b { font-weight: 700; }
+.lobby-tag em { font-size: var(--fs-2xs); padding: 0 0.3rem; }
+
+/* ---- results */
+.ol-headline { font-family: var(--font-display); font-stretch: var(--w-cond); font-weight: 800; font-size: 2.8rem; line-height: 1.15; letter-spacing: 0.1em; text-align: center; animation: var(--kf-pop) 0.45s var(--e-out) both; }
+.ol-headline.mine { color: var(--cyan); letter-spacing: 0.24em; text-shadow: 0.04em 0 0 rgb(var(--c-magenta) / 0.7), var(--glow-cyan-text); }
+.ol-standings li { --c: 5px; --tex: none; --fill: rgb(var(--c-ink-2) / 0.5); display: grid; grid-template-columns: 2.2rem 0.7rem minmax(0, 1.2fr) minmax(0, 1fr) auto; align-items: center; gap: 0.7rem; padding: 0.4rem 1rem 0.4rem 0.5rem; }
+.ol-standings li.me { --edge: var(--line-hot); }
+.ol-standings .pos { font-family: var(--font-display); font-stretch: var(--w-tight); font-weight: 800; font-size: var(--fs-xl); line-height: 1; text-align: center; font-variant-numeric: tabular-nums; }
+.ol-standings li:first-child .pos { color: var(--amber); }
+.ol-standings b { font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ol-standings .car { font-family: var(--font-display); font-stretch: var(--w-cond); font-size: var(--fs-s); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ol-standings .time { font-family: var(--font-display); font-stretch: var(--w-cond); font-weight: 600; font-size: var(--fs-l); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ol-mine { text-align: center; font-size: var(--fs-s); color: var(--muted); }
+.ol-mine b { margin: 0 0.3rem; font-family: var(--font-display); font-stretch: var(--w-cond); font-size: var(--fs-l); font-variant-numeric: tabular-nums; color: var(--text); }
+
+/* the name tags would cover the vehicles on a small screen: the seats' list says the same */
+@media (max-width: 760px) {
+  .lobby-tags { display: none; }
+}
+
+/* landscape phones (short screens): the panel right of the shell's buttons, the start / ready button kept at its
+   foot while the rest scrolls */
+@media (max-height: 500px) {
+  .lobby-tags { display: none; }
+  .ol-panel { --c: var(--cut-m); left: calc(max(10px, env(safe-area-inset-left)) + 98px); top: calc(var(--bar) + 26px); width: min(470px, 58vw); max-height: calc(100vh - var(--bar) - 32px); padding: 8px 12px; gap: 6px; }
+  .online-lobby .ol-panel { width: min(680px, calc(100vw - 128px)); }
+  .online-results .ol-panel, .room-gone .ol-panel { left: calc(max(10px, env(safe-area-inset-left)) + 98px); right: 10px; width: min(600px, calc(100vw - 128px)); }
+  .ol-split { grid-template-columns: 1.5fr 1fr; gap: 14px; }
+  .ol-section { gap: 5px; }
+  .ol-me b { font-size: 16px; }
+  .ol-code-big { grid-template-columns: auto auto 1fr; column-gap: 10px; }
+  .ol-code-big small { grid-column: auto; }
+  .ol-code-big b { font-size: 24px; }
+  .ol-code-big span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ol-slots, .ol-standings { gap: 3px; }
+  .ol-slots li { min-height: 26px; padding: 1px 8px; gap: 6px; font-size: 12px; }
+  .ol-standings li { padding: 2px 10px 2px 5px; gap: 7px; font-size: 12px; }
+  .ol-standings .pos { font-size: 17px; }
+  .ol-headline { font-size: 22px; }
+  .ol-actions { position: sticky; bottom: -8px; z-index: 2; margin: 0 -12px -8px; padding: 6px 12px 8px; background: var(--glass-solid); border-top: 1px solid var(--line-soft); }
+  .ol-waiting { order: 0; flex-basis: auto; font-size: 11px; }
+}

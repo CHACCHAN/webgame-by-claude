@@ -3,6 +3,7 @@
 //   node tools/blender-models.cjs cars [ids]     tools/blender/cars/<id>.py   → public/models/cars/<id>.glb
 //   node tools/blender-models.cjs bikes [ids]    tools/blender/bikes/<id>.py  → public/models/bikes/<id>.glb
 //   node tools/blender-models.cjs props [ids]    tools/blender/props/<id>.py  → public/models/props/<id>.glb
+//   node tools/blender-models.cjs roadside [ids] tools/blender/roadside/<id>.py → public/models/roadside/<id>.glb
 //   node tools/blender-models.cjs creatures      tools/blender/creatures/roach.py → public/models/roach/roach.glb
 //   node tools/blender-models.cjs nature [ids]   tools/blender/nature/<id>.py → public/models/nature/<id>.glb + <id>.lite.glb
 //   … --render [dir]   also renders each model's check views with its script (default dir: /tmp/<id>-render)
@@ -39,6 +40,11 @@ const KINDS = {
       // the autobahn's (their textures and the sign atlas: tools/blender/props/paint_autobahn.py)
       'sign_gantry', 'emergency_phone', 'village_house', 'village_farmhouse', 'village_church',
     ],
+  },
+  // what stands along the road in modules (render/roadside.ts lays them out; materials are swapped by name)
+  roadside: {
+    dir: 'tools/blender/roadside', out: 'public/models/roadside', palette: false, textureSize: 512, big: {}, outDir: true,
+    ids: ['guardrail', 'guardrail_end', 'delineator', 'gutter_grate', 'rockfall_fence'],
   },
   creatures: { dir: 'tools/blender/creatures', out: 'public/models/roach', palette: false, textureSize: 1024, big: {}, resample: true, ids: ['roach'] },
   // trees, bushes, undergrowth, rocks (tools/blender/nature/nature_kit.py): the script writes the geometry (every level

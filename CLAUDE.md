@@ -47,7 +47,10 @@ pending. `docs/PLAN.md` holds the design.
 ## Environment notes (owner's PC `ubuntu-dev`, when the owner opens a session there)
 - The live stack (compose project `touge-nocturne` + cloudflared) runs on this machine. Deploy finished changes with
   `docker compose up -d --build` without asking (owner's standing permission; nobody else uses the site yet), then
-  check that the new build is served. Other compose projects on the host are unrelated: leave them alone.
+  check that the new build is served. Before a deploy: `node tools/gpu-errors.cjs` on the build (GPU errors over the
+  garage / race paths, and that the race camera is with the car) and look at one picture of a race: tests look at
+  states, and a build whose camera stayed at the garage passed them all (11-11).
+  Other compose projects on the host are unrelated: leave them alone.
 - `vite preview` inherits the dev proxy (`/api` → localhost:8080 = the live server): always serve with
   `API_PROXY=http://127.0.0.1:9 npx vite preview …` so test runs cannot create players or submit runs.
 - No Node on the host: use a user-space Node 24 tarball (nodejs.org) and `npm i playwright-core` outside the repo
@@ -57,6 +60,10 @@ pending. `docs/PLAN.md` holds the design.
   `id -nG`, else Chrome silently renders with llvmpipe; `~/.local/opt/quality/gpurun.sh VAR=… <command>` runs one
   through `sudo -u dev` with the groups, variables given as arguments).
 - The GPU picks its own clock (800–2100 MHz) and frame costs change ~2× with it: compare builds with paired runs.
+  Uncapped frame rates also follow whatever else runs on the machine (another session's test job moved them between
+  47 and 120 fps on one build, 11-11): check `uptime` first; what holds then is the GPU time per pass
+  (`tools/perf-pass.cjs`) and the make-up of a CPU profile (`~/.local/opt/quality/cpuprof.cjs` with `DUMP=`,
+  `profdiff.py`), not the fps.
 - ubuntu-dev is a Proxmox VM (QEMU Q35) with the RX 5700 XT passed through. Navi 10 cannot be reset from a VM restart:
   after a `reboot` (or a start within ~30 s of a shutdown) amdgpu fails (`PSP load smu failed`, no `/dev/dri`) and
   Chrome falls back to llvmpipe. Recovery: shut the VM down, wait ≥ 3 min, start it from Proxmox (boots 11-08 and 10-15
@@ -67,7 +74,9 @@ pending. `docs/PLAN.md` holds the design.
 ## Gotchas
 - Rendering (`render/RenderHost.ts`, created by `ui/GameCanvas.tsx`; no react-three-fiber): `WebGPURenderer` + a TSL
   `RenderPipeline` (scene → ambient occlusion → the lights' glow in the haze → bloom → tone mapping (AgX) + the time of
-  day's grade → SMAA → lens). `?webgl=1` forces the WebGL 2 backend. Custom
+  day's grade → SMAA → lens). `?webgl=1` forces the WebGL 2 backend; without WebGPU, or when it fails while running
+  (errors in a burst, a lost device), the game goes to WebGL 2 by itself (`render/backendChoice.ts`, settings 描画方式;
+  check with `node tools/backend-fallback.cjs` on the GPU). Custom
   shaders are TSL node materials only: no `ShaderMaterial`, no `onBeforeCompile`, no `THREE.Points` with a size
   (WebGPU points are 1 px: particles and lamps are instanced `Sprite`s, `fx/SpritePool.ts`). Plain three.js materials
   (GLB, `MeshStandardMaterial`) still work: the renderer makes their node twins. An `InstancedMesh` with no instances
@@ -79,6 +88,10 @@ pending. `docs/PLAN.md` holds the design.
   `geometry.dispose()` (a model shown, freed and shown again froze the picture on WebGPU); check whether it is still
   needed when three.js is updated. A check that starts a race directly does not cover this: go through the garage
   (`node tools/gpu-errors.cjs` counts the GPU's validation errors over those paths).
+  `keepShaders` (same file): three.js throws a built shader and its pipeline away with the last object that used
+  them, so every car leaving the scene cost its 22–32 shaders again at the next one (0.3–0.6 s); they are kept now
+  (not those keyed by one object: `InstancedMesh`, morph targets). It reaches into `renderer._nodes` /
+  `_pipelines`: check both when three.js is updated (`~/.local/opt/quality/builds2.cjs` counts shaders built per step).
   Passes that work from the depth buffer share `render/screenSpace.ts` (view position from the depth, sized targets,
   the surface-keeping blur that cancels a five-pixel tap pattern). The glow in the haze (`render/volumetricLights.ts`)
   takes its lights from `volume` (the course's lamps, the cars' cones via `CarVisual.beamInto`) and its amount from the
@@ -90,6 +103,33 @@ pending. `docs/PLAN.md` holds the design.
   material, `CarVisual` lets only shell / glass / wheels throw shadows, only the followed car's headlights throw
   any); a `DynamicDrawUsage` attribute is uploaded every frame, changed or not. A material's nodes (`materialColor`…)
   read the material being drawn, which in a shadow map is the shadow material: name the texture itself there.
+  What makes the picture stand still (all materials rebuilt in one frame, 1–2.6 s): the shaders are built for the
+  scene's set of lights (ids + `castShadow`, in scene order), the fog object and the environment texture object.
+  So every light lives in `render/LightRig.ts`, made once: never add, remove or re-parent a light, never make a
+  second fog or PMREM target; change intensity / colour / position (a car's headlights are `CarVisual.headlight()`
+  → the rig's three spots via `Game.updateBeams`; the vending machine's light is `vendingSpot`). Measure with
+  `~/.local/opt/quality/hitch.cjs` (frame gaps over 40 ms per action).
+  Courses stay built after leaving them (`Game.leaveWorld` / `enterWorld`, `keepCourses`, `keepBudget` in MB of
+  `gpuBytes`, oldest freed first, all on a GPU out-of-memory: `releaseKept`); `disposeWorld` frees only what no
+  other built course uses. Vehicle models load in stages (`render/vehicleModels.ts`: one car before the title, the
+  rest behind the menus): whatever shows a vehicle first waits with `Game.needs` / `ensureVehicleModels`.
+- Ground, road and roadside at quality medium and up (`surfaceDetail` 1–3 in `store/settings.ts`; 0 = `low`, the old
+  plain path `plainRoadside` / `plainTerrainMaterial`): `render/terrainMaterial.ts` (`groundMaterial`: photo layers
+  blended by slope, height and the `surf` vertex attribute), `render/roadMaterial.ts` (`roadSurface`: wear, markings
+  and puddles in one material; it reads the `road` attribute from `roadGeometry`: every asphalt strip merged into
+  the road must carry it), `render/weather.ts` `wetness` (set in `Game.applyTimeOfDay`). Costs ~1–1.8 ms of GPU time
+  a frame (scene pass, 1080p–4K); the layer textures are 512 px (medium, 2.6 MB) or 1024 px (high / ultra, 9.5 MB),
+  loaded before the title: `ACG=<dir of ambientCG zips> node tools/surface-textures.cjs [photo|own|all]` →
+  `public/textures/terrain/{512,1024}`.
+  Roadside (`render/roadside.ts`, materials in `render/structureMaterials.ts`): positions are `out` (metres outward
+  from the barrier line = width/2 + 0.6) and `h` (metres above the road there); a profile is a polyline of (out, h)
+  with its visible side on the left of the drawing direction; (right, up, fwd) is left-handed, so a module's
+  triangles are flipped when `side * dz > 0`. Colliders are not built here. Its models: `BLENDER=<bin> node
+  tools/blender-models.cjs roadside [ids]` → `public/models/roadside/<id>.glb`, materials by name only (`METAL` in
+  `structureMaterials.ts`); the optimiser drops the UVs of untextured models (`Roadside.bake` derives them);
+  `--render` does not work for this kind: run the script with `--out <dir> --render <dir>`.
+  A cut-out or line thinner than a pixel flickers under the upscaler (the rockfall net): dissolve it by `fwidth` of
+  its UV, keep thin steel dark.
 - Upscaler (settings アップスケーリング, off by default; `RenderHost` + `render/TemporalUpscaler.ts`): WebGPU draws the
   scene at 50–100 % with a jittered camera into three targets (colour, `velocity`, `reactive`) and gathers the frames
   at the output's size (three.js' `TAAUNode` with our resolve; SMAA off, RCAS after); the WebGL 2 backend uses FSR 1.
@@ -240,15 +280,53 @@ pending. `docs/PLAN.md` holds the design.
   before the start and after the finish (`hud.rivalLine`, event `rivalLine`), and in the race it can only call two
   things the game then does by rule: `AIDriver.block(seconds)` (moves in front of the chaser across the road, inside
   the road's edges; the road is left open as long again afterwards) and the horn (`AudioEngine.horn`, also the
-  player's H key). Whom to ask is a list of `RivalBrain`s (`game.rivalBrains`; today `api/rivalBrain.ts` = the
-  server; a model in the browser would be one more), with the game's own lines and rules (`scriptedBrain`) always
+  player's H key). Whom to ask is a list of `RivalBrain`s (`game.rivalBrains`: `api/rivalBrain.ts` = the server;
+  the owner dropped inference in the browser on 11-11: everything goes through the API), with the game's own lines and rules (`scriptedBrain`) always
   last: no key, no network, a slow answer (line 3.2 s, decision 1.5 s) or the setting ライバルAI off give the same game.
   Server: `POST /api/ai/taunt|decide` (`RivalAiController` → `Services/RivalMind.php` → the owner's LiteLLM gateway,
-  `config/llm.php`, `LLM_API_KEY` in `.env` only: never to the browser, never in a log or commit). The requests carry
+  `config/llm.php`; its address and key are `LLM_API_URL` / `LLM_API_KEY` in `.env` only: never to the browser, never in a log
+  or commit, no address written into the code). The requests carry
   facts only (ids, numbers, the rival's name / title / description), never a prompt; 45 a minute per address; 503 =
   nobody to ask. The decision is real tool calls (`block_player`, `sound_horn`), clamped by the server. The models are
   `LLM_TAUNT_MODELS` / `LLM_DECIDE_MODELS` (first that answers). Check the block with
   `BLOCK=4 npx tsx tools/sim-duel.ts <lead:level> <chase:level>`.
+- Interface (redesigned 11-11: a telemetry terminal over the live scene; `ui/theme/`: `tokens.css`, `base.css`,
+  `screens.css`, `picker.css`, `online.css`, `hud.css`; parts in `ui/kit.tsx`, the shell around every menu in
+  `ui/Shell.tsx`). Colour: tokens only, as rgb triplets (`rgb(var(--c-cyan) / 0.3)`); cyan = focus and live data,
+  magenta = rivals, others online, alerts, amber = medals and warnings, green = ready; no literal colour outside
+  `tokens.css`. Shape: a cut panel is one shared rule in `base.css` (`--c` cut, `--edge`, `--fill`): add a new
+  panel's class to that selector list. Type: Saira Variable for Latin and figures (width axis `--w-tight` /
+  `--w-cond` / `--w-norm`, tabular figures), Zen Kaku Gothic New, Shippori Mincho for place names; 1rem follows the
+  screen's height. Motion: durations and easings are tokens; entrances use `var(--kf-*)` so that `.motion-off` (the
+  setting UI アニメーション, or reduced motion) swaps them for fades; screen changes go through `ui/motion.ts`
+  `useScreenWipe` (the incoming screen is uncovered by a **mask, never a clip path**: a clip path takes the pointer
+  away for the wipe's 240 ms); figures count through `data-count`; `FocusFrame` is the moving focus marker; what must
+  move while the main thread is blocked (the busy mark, the boot bar) is a CSS transform / opacity animation only.
+  Lists the keys walk: hover moves the selection (`hoverSelect`), inside `.focus-box` only the selected button is
+  filled. `window.__app` is the app's store for probes (as `__game` is the game).
+- Who plays (owner 11-11: accounts come from Authentik; nothing in the browser keeps an account any more). **Members**
+  log in through the owner's Authentik (`AuthController`: authorization code + PKCE, the code is exchanged on the
+  server; `config/authentik.php`, `AUTHENTIK_*` in `.env` only: never to the browser, a log or a commit). The account
+  is Authentik's subject (`players.oidc_sub`, the owner's wish: never match by name or mail); the name is taken from
+  Authentik at every login. A login is the cookie `touge_session` (HttpOnly, SameSite=Lax; its hash in
+  `player_sessions`, 30 days from the last visit, `Services/MemberSession.php`); a request that changes something is
+  taken from the cookie only with the header `X-Touge-Client` (`api/client.ts` sends it always). **Guests** are
+  everyone else: `POST /api/players` gives a name a pass for the sitting (bearer token, 24 h, in the page's memory
+  only), and a record asks for the name every time (`Results`: only a member's is sent by itself);
+  another name is another guest. A token without an end date (the players of before 11-11) lets nobody in; a member
+  claims such records, and those set as a guest in the sitting, at login (`POST /api/auth/claim`,
+  `store/account.ts` `memberArrived`). A member's save data (`players.save` + `save_rev`, `GET/PUT
+  /api/players/me/save`): best time per vehicle, records against rivals, favourites (`Progress` in `api/client.ts`),
+  merged with the machine's at start and sent 1.5 s after a change (409 = changed elsewhere: merge, send again);
+  ghosts are not in it (the runs have them: `best_runs` of `/api/players/me`). **Nothing of a guest is kept by the browser**
+  (owner 11-11): pass, times, medals, battle records and favourites live in the page's memory (`guestProgress`,
+  the garage store's `partialize`); only device settings (`touge-settings`) are stored. What a browser kept from
+  before stays untouched until a member logs in there (it goes into their save); a logout clears the member's
+  copy from the machine. The guest's token rides along to Authentik and back in `sessionStorage` (`touge-claim`,
+  taken out at once) so that records set just before a login become the member's. Without `AUTHENTIK_*` (dev, the test stacks, E2E)
+  everyone is a guest and `/api/content` says `auth.enabled: false`. The redirect URI the provider must know is
+  `<public address>/api/auth/callback` (taken from the request: `X-Forwarded-Proto` + `Host`; `AUTHENTIK_REDIRECT_URI`
+  overrides). Tests: `AuthTest.php` (Authentik faked), `client.test.ts`.
 - Race timing/splits/AI run per physics step (`Game.raceStep`, `driveAI`); keep frame-time logic out of timing.
 - Tyre grip = course surface (`CourseInfo.surface.grip`) × weather (`WET_GRIP` in rain): `Game.roadGrip` → `VehicleSim.gripScale`
   (before `AIDriver.calibrate`). Headless tools take the course's grip. Changing a grip: re-check medals with the sim

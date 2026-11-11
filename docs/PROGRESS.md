@@ -308,7 +308,7 @@ What a deploy or a bad hour could break, found by reading the stack, and changed
   - `AIDriver.block(seconds)`: the one blocking routine (in front of the chaser across the road, inside the road's
     edges). `AudioEngine.horn` (synthesised twin horn; the player has one too: H / right stick).
   - Server: `/api/ai/taunt`, `/api/ai/decide` (facts only, 45 / min per address, key from `.env` to the gateway in a
-    header, models by env, first that answers; decisions as real tool calls, clamped). `/api/content` → `ai.enabled`.
+    header, the gateway's address from `.env` too since 11-11 (`LLM_API_URL`, owner: no address in the code), models by env, first that answers; decisions as real tool calls, clamped). `/api/content` → `ai.enabled`.
   - UI: the line under the versus plate (countdown and first seconds), the line on the results, the setting
     ライバルAI, the player's record against each rival (localStorage `touge-rivals:<course>`) as a fact for the line.
 - In the browser on the GPU, a stack with the key, through the menus (`~/.local/opt/quality/rivalmind.cjs`): the line
@@ -330,7 +330,10 @@ What a deploy or a bad hour could break, found by reading the stack, and changed
 - Measured on the gateway (11-11, one request each, from this machine): sarashina-3-nano 0.19 s, sarashina-3-mini
   0.29 s, qwen-3.8-27b 0.33 s, nemotron-3.5-bolt 0.58 s, gemini-3.5-flash-lite 2.0 s (the best line), gemma-4-31b
   6.7 s, gemini-3.8-flash 12 s; tool calls correct with sarashina-3-mini in 0.15–0.47 s. Defaults: lines
-  gemini-3.5-flash-lite then sarashina-3-mini, decisions sarashina-3-mini then qwen-3.8-27b.
+  gemini-3.5-flash-lite then sarashina-3-mini, decisions sarashina-3-mini then gemini-3.5-flash-lite (owner, 11-11:
+  only these two; qwen has a usage limit on the gateway).
+- **Owner's decision (11-11, after this report): inference on the device is dropped, everything goes through the
+  API.** What follows is the finding that led there; nothing of it is to be built.
 - **Not done: the model in the browser.** The combination asked for is unconfirmed at every point: LiteRT-LM.js
   (`@litert-lm/core`, early preview) documents Gemma 4 only for the web; there is no `.litertlm` of Spark-X2.6-1.7B,
   its architecture is its own (`Spark2_5ForCausalLM`) and no conversion path for such a model is documented; nothing on
@@ -339,6 +342,198 @@ What a deploy or a bad hour could break, found by reading the stack, and changed
   path), (b) Spark through ONNX Runtime Web (WebGPU) or llama.cpp's WASM build (GGUF q8_0) if a conversion works,
   (c) stay with the server. The seam is there: one more `RivalBrain` in `game.rivalBrains`, before the server's.
   No experiment in the browser has been run yet.
+
+### The renderer falls back from WebGPU to WebGL 2 by itself (11-11, owner's request; `d4fd3b5`)
+- What was there: three.js takes its WebGL 2 backend when the browser gives no WebGPU device. What was missing:
+  everything after that moment. Now (`render/backendChoice.ts`, `RenderHost.create`'s `onTrouble`, `ui/GameCanvas.tsx`):
+  - the renderer cannot be built although WebGPU came up, or three's own fallback cannot take the canvas (one that has
+    given a `webgpu` context gives no `webgl2` one) → started again on a new canvas with WebGL 2, remembered;
+  - the WebGPU device reports errors in a burst (12 in 10 s), or a frame throws that often → remembered for a week,
+    one reload, WebGL 2 (then WebGPU is tried again: a browser or driver update may have fixed it);
+  - the device is lost → one reload on WebGPU (a crashed GPU process is back), WebGL 2 from the second loss in a
+    session, a message with a reload button instead of a third reload in a row;
+  - settings row 描画方式 (自動 / WebGPU / WebGL 2): shows what runs and why; a choice by hand forgets what was
+    remembered, and an explicit WebGPU is not left on errors.
+- **Verified** on the RX 5700 XT (headless Chrome, `node tools/backend-fallback.cjs`: 14 cases, each a fresh browser
+  context, "up" = the title reached and frames drawn): WebGPU as it is; `?webgl=1`; the setting; no `navigator.gpu`;
+  no adapter; the device refused; no device with the canvas already taken; drawing throws on WebGPU; errors in a
+  burst (→ WebGL 2 after the reload, remembered); a few stray errors (stays); a burst with WebGPU chosen by hand
+  (stays); the device lost once (WebGPU again), twice (WebGL 2), a third time at once (message, no reload).
+  The losses and errors are simulated by calling the renderer's own handlers or by replacing browser functions
+  before the page loads: a real driver failure was not available to test with.
+- Not verified: a real browser without WebGPU (Firefox, Safari, a phone) by hand; a real device loss.
+
+### The freezes at a change of weather, car or course (11-11, owner's request)
+Owner: the screen stands still when the weather is switched; keep what was loaded, open the game as soon as what it
+needs is there and fetch the rest behind it, show that something is loading; asked also whether VRAM is used, and
+proposed freeing the oldest first when it runs short.
+
+- **Cause, measured** (`~/.local/opt/quality/hitch.cjs`: every frame gap over 40 ms after each action, with a CPU
+  profile): the renderer builds a material's shader for the scene's set of lights (each light's id and whether it
+  throws a shadow, in the scene graph's order), the fog object and the environment texture object. Every switch
+  changed one of them: a car brought two `SpotLight`s, the garage added its own, each time of day made a new PMREM
+  target, each course its own sun and fog. All materials were then rebuilt in one frame: 1.2–2.6 s, every time.
+- **`render/LightRig.ts`**: every light of the game is made once and never added, removed or re-parented (sun,
+  sky fill, fog, six lamp points, the vending machine's, three headlight spots; spot 0 is also the showroom's);
+  what changes is intensity, colour and position. `CarVisual` carries no lights any more (`headlight()`,
+  `beamInto()`), `Game.updateBeams` gives the three spots to the followed car and the nearest others each frame.
+  One environment target, drawn again in place at a change of time.
+- **Courses stay built** (`Game.leaveWorld` / `enterWorld`): up to three besides the shown one, within a budget of
+  GPU memory (`keepBudget`: 2000 MB, 500 MB under 8 GB of RAM, 0 on phones / quality low / under 4 GB); the one
+  left longest ago is freed first, and all of them when the GPU reports it is out of memory. Freeing a course keeps
+  what another built course still uses.
+- **Models in stages** (`render/vehicleModels.ts`): the title needs one car; the others load one at a time behind
+  the menus (paused in a race). The garage, a race and the waiting room wait for exactly the models they need
+  (`Game.needs`, `prepareRace`), with a mark in the corner (`busy` event → `.busy-mark`, an animation the compositor
+  runs, so it moves while the main thread works).
+- **Numbers** (RX 5700 XT, 1080p high, WebGPU, worst frame after the action; before = `d4fd3b5`):
+
+  | action | before | after |
+  |---|---|---|
+  | time / weather switched | 1.2–1.8 s every time | no frame over 40 ms (the first switch to dawn on a course: 0.5 s) |
+  | the garage shows another car | 1.3–1.6 s | 0.34–0.6 s |
+  | race start | 2.6 s (5.6 s of slow frames) | 0.65 s (0.75 s) |
+  | restart | 2.5 s | 0.59 s |
+  | back to a course shown before | 9.5–12.5 s | 15–32 ms |
+  | bytes fetched before the title | 31.0 MB | 10.9 MB |
+
+  A course's first visit is as before (3.5–14 s behind the loading screen). VRAM of the whole machine: 0.92 GB with
+  one course, 1.34 GB with four built (80–108 MB a course by our own count); JS heap ~170 → ~310 MB.
+  Cost of the fixed set of lights: scene pass 2.96 → 3.12 ms, GPU total 4.25 → 4.44 ms (`perf-pass.cjs`, two pairs);
+  `perf-frame.cjs` pairs are within their scatter.
+- **Tried and dropped**: compiling a car before it is shown (`compileObject`: several 110 ms frames and then the
+  same long one); building every time of day's shaders at course load (the first dawn stood still all the same).
+- **What still stands still**: ~0.5 s when a car is drawn for the first time (its materials' shaders), ~0.5 s at the
+  first dawn on a course, and the first visit of a course (the terrain is built on the main thread: frames of 1–1.4 s
+  behind the loading screen).
+- Verified: tsc, vitest (147), the build; `gpu-errors.cjs` 0 on WebGPU and WebGL 2; `backend-fallback.cjs`;
+  before / after pictures of the attract run, garage, grid, rain, dawn and waiting room (same look); E2E on an
+  isolated stack: 13 of 13 (the phone test failed first: it read a tab's place while the car select was still
+  sliding in, which the old freeze had hidden; its taps now wait until the target stands still).
+  Not verified: phones on a device; a slow network (the mark and the waits were only seen locally); the hitch numbers
+  on WebGL 2 and on medium / low; a real GPU out-of-memory.
+- **Built shaders are kept** (`render/threeFixes.ts` `keepShaders`, later the same day). What was left of the garage's
+  0.34–0.6 s: three.js counts the uses of a built shader and of its pipeline and throws both away with the last
+  object that used them, so a car that left the scene took its 22–32 shaders along and the next car (or the same one
+  again) built them anew. The count now never reaches zero for shaders that are not bound to one object (an
+  `InstancedMesh`'s and a morph target's key holds the object's id: those go as before), and pipelines / programs
+  are not released. Shaders built per garage step (`~/.local/opt/quality/builds2.cjs`): 32 / 29 / 26 / 22 / 22 →
+  21 (first car) / 11 / 3 / 3 / 6 / 2, a train 24. Worst frame (`hitch.cjs`, 1080p high, WebGPU): another car in
+  the garage 536 → 113 ms, a car shown before 547 → 58 ms, race start 648 → 107 ms, the attract run 381 ms → none
+  over 40 ms; a train's first showing 463 ms and the first car's 374 ms stay (shapes drawn for the first time).
+  Restart: no difference between the builds in paired runs (another session loaded the machine: 0–26 frames of
+  40–150 ms on both). Verified: tsc, vitest 147, `gpu-errors.cjs` 0 on both backends, one race picture.
+  Not measured: how much memory the kept shaders hold over a long sitting (a few hundred small objects; nothing
+  frees them before the page is left).
+
+### The interface, redesigned (11-11, owner's brief: all-new cyber UI with animation; package `ui`, an agent in a worktree)
+- Every screen and the HUD on one design system (`ui/theme/` tokens, `ui/kit.tsx`, `ui/Shell.tsx`: the trail at the
+  top, back and fullscreen bottom left, the hint bar in the glyphs of the device used last), a screen wipe, figures
+  that count, a moving focus marker, a setting to turn the motion off (CLAUDE.md "Interface").
+- Found and fixed on the way: a screen wipe took the pointer away for its 240 ms (clip path → mask); the main menu
+  forgot the row it was left through; two buttons filled at once on the results; the phone's back button clipped.
+- Verified by the agent (its report): tsc, build, vitest; E2E on its stack `game.spec.ts` 10 of 10, `mobile.spec.ts`,
+  the waiting-room and phone tests of `online.spec.ts`; sheets on GPU Chrome in `~/.local/opt/wt/ui/shots/` (shown to
+  the owner). The full suite on the merged tree: below.
+  **Not verified**: the HUD's frame cost (the machine was loaded by other work), the busy mark while the main thread
+  is blocked (built for it, only seen standing), Firefox / Safari, sound, pad glyphs, `prefers-reduced-motion`.
+
+### Accounts come from Authentik; everyone else is a guest (11-11, owner's request)
+Owner: members of their platform log in with the Authentik they host and go on with their own save data; keeping
+an account in the browser (the token in `localStorage`) is abolished; whoever cannot log in is a guest, asked for a
+name whenever a record is kept. Later the same day: the account's key should be Authentik's `sub`.
+
+- **Server**: `AuthController` (login → Authentik with PKCE and a state bound to the browser by a cookie; callback →
+  code for token, userinfo, the member by `oidc_sub`, name taken from Authentik each time), `MemberSession` (cookie
+  `touge_session`, HttpOnly / Lax / Secure over https, hash in `player_sessions`, 30 days from the last visit; a
+  change by cookie only with the header `X-Touge-Client`), `AuthenticatePlayer` (a guest's pass with an end date, or
+  the cookie), guests by `POST /players` (24 h; those without a record are removed two days after), claim of a
+  guest's records by a member, save data with a revision (`players.save`, 64 kB), `is_member` on the ranking,
+  `auth.enabled` in `/api/content`. Migration `2026_11_11_000001_members_and_guests`.
+- **Client**: `api/client.ts` (member = cookie, guest = pass in `sessionStorage`; the old `touge-player` only for
+  the claim), `store/account.ts` (who am I at start; at a login the guest's and the old player's records are
+  claimed, the save of server and machine merged — better time, larger battle count, favourites three-way — and
+  the best runs' ghosts fetched; sent 1.5 s after a change), the main menu's row メンバーログイン / ログアウト (only when
+  the server has a login), PLAYER / GUEST in the top bar, a notice for what the login came back with, the results
+  ask a guest for the name every time, the online lobby takes a member in at once, MEMBER marks in the ranking.
+- **Decided here** (the owner can change them): the login itself lives in a cookie of our own (the account is
+  Authentik's; nothing a script can read); a member's name is Authentik's `preferred_username` (cut to the game's
+  16 characters and letters), not editable in the game; what a machine holds at a login (the progress of before)
+  goes into the member's save; a logout clears it from the machine; device settings (graphics, sound, controls)
+  stay per machine for everyone.
+- **Owner's decision (same day)**: nothing of a guest is kept, not even for the tab: pass, times, medals, battle
+  records and favourites live in the page's memory; sending a record under a typed name stays. (A guest who
+  reloads in an online room loses the seat: the pass is gone with the page.)
+- Verified: backend tests 40 passed (12 new: the whole trip with Authentik faked, PKCE, state from another browser,
+  refusal, the same subject = the same player, the cookie without the header, expiry, guests, the old tokens and
+  the claim, the save's revisions); the migration on a copy of the live database (32 players, 71 runs: all kept,
+  the board unchanged); frontend tsc + vitest (8 in `client.test.ts`); Authentik's authorize endpoint knows the
+  client id from `.env` (it answers "redirect URI" for an address not registered, as it should).
+  **Not verified: a real login** (it needs the redirect URI `https://<public host>/api/auth/callback` registered
+  in the provider and a member's own credentials), the save across two real machines.
+### Ground, road and roadside remade (11-11, the owner's request to re-model everything; package `terrain`)
+An agent's package (six commits, `46041ec` … `6a1854a`), merged with the freeze work on its branch and checked there
+by the main session. **Not in the live game yet**: it brings new models (guardrail, terminal, delineator, gutter
+grating, rockfall fence), and the owner sees a model's sheet first.
+- What it is: the ground as one layered TSL material (rock on steep faces from its two sides, forest floor, moss or
+  grass, gravel at the verge, shoreline; wet and pooled in rain), the road's wear in one material (patches, seams,
+  cracks, tar lines, polished wheel tracks, worn markings, puddles), a modelled roadside (guardrail spans with
+  terminals, delineators that answer the headlights, U-gutters with gratings, block walls, sprayed slopes with their
+  frames and rockfall fences, rock shed, bridge), spurs and gullies on the hillsides away from the road. Quality
+  `low` keeps the old path. Textures: seven ambientCG CC0 sets + our own tiles (docs/ASSETS.md).
+- The drivable surface did not move (agent's proof: heights under road and shoulder, road and wall colliders
+  identical; `sim-run.ts hayate rookie` gives the same time on all four courses).
+- Checked on the merged tree by the main session: tsc, vitest 147, build; `gpu-errors.cjs` 0 on WebGPU and WebGL 2;
+  `hitch.cjs`: the freeze work holds (time / weather: no frame over 40 ms but the first dawn, kept courses 16–40 ms);
+  the before / after sheets of all four courses and close-ups looked at; E2E on an isolated stack: 13 of 13.
+- Cost. GPU time of the scene pass, before → after (`perf-pass.cjs`): 1080p high 3.06 → 4.91 ms, 1080p medium
+  2.65 → 3.04, 1440p ultra 5.63 → 7.23, 1440p ultra with the upscaler at Quality 3.33 → 4.32, 4K ultra 11.7 → 13.3
+  (whole frame 16.5 → 17.8 ms: native 4K ultra no longer fits 60 fps on the RX 5700 XT, with the upscaler it does).
+  Main thread: the CPU profile's make-up is the same (264 → 273 draw calls). Download before the title:
+  10.9 → 20.5 MB at high / ultra (the 1024 px layers), +2.7 MB at medium, nothing at low.
+- **Frame rates were not settled**: uncapped runs gave 105–116 → 66–73 fps (high) and 86–104 → 51–52 (ultra) in
+  one hour and 78 / 47 → 103 / 100 in the next: another project's session was running a six-process test job on the
+  machine (load average 6–7). The numbers above are the ones that do not depend on it.
+- Not done by the package: the autobahn's guardrails, barriers and gantries (new concrete material only), signs.
+  Known: under the upscaler the nearest rockfall-net panels flicker a little more than the base (99.9th percentile
+  8–9 against 5–7 of 255); the wear pattern's repeat shows from ~26 m above the road.
+- Not verified: frame rates on a quiet machine; low / medium / high on every course by eye (ultra everywhere);
+  phones (low: the old path).
+
+### Release (11-11): the redesigned interface, Authentik accounts and the remade ground go live
+
+- One tree (`auth` = main + the interface branch + the accounts + the terrain branch), fast-forwarded into main at `7a18cb6`.
+- Checked before the deploy: `tsc -b`, vitest 153, backend 40 (container), `vite build`; `tools/gpu-errors.cjs` on this
+  very bundle (`index-wYd6wJdU.js`, the same hash as the build that was checked): 0 errors on WebGPU and WebGL 2, the
+  race camera with the car, one race picture looked at; the account screens looked at (guest, member, a failed
+  login, no login configured; desktop and phone, the API played by the script).
+  E2E on an isolated stack: 14 of 15 in the full run (42.8 min, the five-player online race among them); the
+  fifteenth, the phone test, tapped one row too low: its helper took a row for standing while the software renderer
+  had drawn no frame between its two looks (the new ground makes the frames slower). The helper now waits for the
+  target's animations; the phone test alone then passed (2.0 min). Not re-run as a whole after that change (test only).
+- Deployed on ubuntu-dev with a dump taken first (`~/.local/opt/backups/touge-1111-1447-pre-auth.sql`): the
+  migration ran (9 migrations), players 32 and runs 71 as before; the new bundle is served locally and through the
+  public address; leaderboard API 200; `/api/content` says `auth.enabled: true`, `ai.enabled: true`; `/api/auth/login`
+  through the public address answers 302 to Authentik's authorize endpoint (PKCE S256, scope `openid profile`, the
+  callback https at the public host, the state cookie HttpOnly / Secure / Lax), and Authentik takes the request to
+  its login flow.
+- Not verified: a real login (the code exchange, the account by `sub`, the save's sync, the claim of a guest's
+  runs, logout): it needs a member's credentials, which are the owner's to enter. The interface's cost in the HUD on
+  a quiet machine, Firefox / Safari, pads' glyphs, sound of the new interface by ear.
+- Seen and left for a follow-up: the title's roadside cameras are now and then behind a mound or pass a post of the
+  new roadside (the cameras do not look for what stands in the way).
+
+### Grains over the menus (11-11, owner's idea; branch `ui-fx`, not merged)
+
+- Owner: 「粒が浮いている表現→マウスで特定の選択肢に重なると→粒子が形を変えてボタンの装飾になる」. `ui/fx/grains.ts` (simulation,
+  6 tests) + `ui/fx/Grains.tsx` (one canvas): dust that gathers into the outline of what the pointer is on, else of
+  the keys' selection; a change of screen sweeps it. Pictures and a 21 s recording taken on the GPU and looked at
+  (menus hold 60 fps with it: frame gaps median 16.7 ms); the recording was sent to the owner. Phones: fewer grains,
+  the selection's frame only (looked at one picture).
+- Not done: cost on a slow phone, a look with the owner's eyes (waiting for their word before it is merged), the
+  other uses (the boot bar, results' medals).
+- The condition cards as looping video (owner's idea): Gemini's video generation failed three times in a row
+  ("Sorry, something went wrong"); asked the owner.
 
 ## Session 8 (2026-11-10) — new vehicles: Cybertruck, Yangwang U9 Xtreme, three motorcycles, the L0 maglev
 

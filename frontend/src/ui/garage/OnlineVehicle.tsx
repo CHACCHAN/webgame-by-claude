@@ -49,7 +49,8 @@ export function OnlineVehicle({ carId, course, disabled, picking, onPicking, roo
       {picking && !disabled && host && createPortal(
         <VehiclePicker
           overlay
-          title="ONLINE BATTLE ― 車両選択"
+          title="車両選択"
+          titleEn="ONLINE ENTRY"
           vehicles={vehiclesFor(course)}
           initial={picking}
           colors={false}

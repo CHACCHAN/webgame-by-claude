@@ -8,7 +8,8 @@ import { smaa } from 'three/addons/tsl/display/SMAANode.js';
 import { ambientOcclusion } from './ambientOcclusion';
 import { graded } from './grade';
 import { beamCones, updateVolume, volumetricLights } from './volumetricLights';
-import { fixInterleavedDispose } from './threeFixes';
+import { fixInterleavedDispose, keepShaders } from './threeFixes';
+import { ErrorBurst } from './backendChoice';
 import { TemporalUpscaler, biasSceneTextures, sceneTextureBias, temporalUpscale } from './TemporalUpscaler';
 
 /** The renderer every engine module draws with (WebGPU, or its WebGL 2 backend where the browser has no WebGPU). */
@@ -88,6 +89,9 @@ const VOLUME_SCALE = 0.4;
 /** which backend the renderer ended up with */
 export type RenderBackend = 'webgpu' | 'webgl2';
 
+/** what `RenderHost.create`'s `onTrouble` reports */
+export type RenderTrouble = 'lost' | 'errors' | 'memory';
+
 /**
  * Owns the canvas' renderer, the scene, the camera and the post-processing chain, and drives the frame loop:
  * `frame(dt)` (the game's update) then the render. Post-processing: scene (HDR) → bloom → tone mapping (AgX), output
@@ -108,32 +112,73 @@ export class RenderHost {
   /** … and nothing is drawn meanwhile (behind the loading screen: the compile is then not paced by the frames) */
   private holding = false;
   private compileQueue: Promise<void> = Promise.resolve();
+  private renderThrew: ((err: unknown) => void) | null = null;
 
   private constructor(readonly renderer: GameRenderer, readonly canvas: HTMLCanvasElement, options: RenderOptions) {
     this.options = options;
     this.sharpness.value = rcasStops(options.sharpness);
   }
 
-  /** Creates the renderer on `canvas` (sized by its parent element). Rejects when neither WebGPU nor WebGL 2 works. */
-  static async create(canvas: HTMLCanvasElement, options: RenderOptions, forceWebGL = false) {
+  /**
+   * Creates the renderer on `canvas` (sized by its parent element): WebGPU, or the WebGL 2 backend when `forceWebGL`
+   * or when the browser gives no WebGPU device (three.js then takes its fallback by itself). Rejects when the renderer
+   * could not be built: on WebGPU the caller tries again with `forceWebGL` on a new canvas (one that has given a
+   * `webgpu` context gives no `webgl2` one). `onTrouble`: the running renderer stopped being usable
+   * (`render/backendChoice.ts` decides what follows): the device or context is lost (nothing is drawn any more), or
+   * the WebGPU device reports errors in a burst, or that it is out of memory.
+   */
+  static async create(canvas: HTMLCanvasElement, options: RenderOptions, forceWebGL = false, onTrouble?: (kind: RenderTrouble, message: string) => void) {
     // (`?gputime`: the passes' GPU times, for tools/perf-pass.cjs)
     const renderer = new WebGPURenderer({ canvas, antialias: false, powerPreference: 'high-performance', stencil: false, forceWebGL, trackTimestamp: new URLSearchParams(location.search).has('gputime') });
-    await renderer.init();
-    fixInterleavedDispose(renderer);
-    const host = new RenderHost(renderer, canvas, options);
-    renderer.toneMapping = THREE.AgXToneMapping;
-    renderer.setClearColor('#05070c');
-    renderer.shadowMap.enabled = options.shadows;
-    renderer.shadowMap.type = THREE.PCFShadowMap;
-    host.camera.position.set(0, 600, 0);
-    host.buildPipeline();
-    host.resize();
-    const parent = canvas.parentElement;
-    if (parent && typeof ResizeObserver !== 'undefined') {
-      host.observer = new ResizeObserver(() => host.resize());
-      host.observer.observe(parent);
+    try {
+      await renderer.init();
+      fixInterleavedDispose(renderer);
+      keepShaders(renderer);
+      const host = new RenderHost(renderer, canvas, options);
+      renderer.toneMapping = THREE.AgXToneMapping;
+      renderer.setClearColor('#05070c');
+      renderer.shadowMap.enabled = options.shadows;
+      renderer.shadowMap.type = THREE.PCFShadowMap;
+      host.camera.position.set(0, 600, 0);
+      host.buildPipeline();
+      host.resize();
+      const parent = canvas.parentElement;
+      if (parent && typeof ResizeObserver !== 'undefined') {
+        host.observer = new ResizeObserver(() => host.resize());
+        host.observer.observe(parent);
+      }
+      if (onTrouble) host.watch(onTrouble);
+      return host;
+    } catch (err) {
+      try {
+        renderer.dispose();
+      } catch {
+        // a renderer that never came up has nothing to free
+      }
+      throw err;
     }
-    return host;
+  }
+
+  /** three.js only logs these two and, on a loss, stops drawing: tell the page as well */
+  private watch(onTrouble: (kind: RenderTrouble, message: string) => void) {
+    // (three's typings give `onError` a string; the backends pass an object)
+    const r = this.renderer as unknown as { onDeviceLost: (info: { message?: string }) => void; onError: (info: { type?: string; message?: string }) => void };
+    const lost = r.onDeviceLost, report = r.onError;
+    r.onDeviceLost = (info) => {
+      lost.call(r, info);
+      onTrouble('lost', String(info?.message ?? ''));
+    };
+    if (this.backend !== 'webgpu') return;
+    // the device's uncaptured errors, and a render that throws: each is a frame (or a part of one) not drawn
+    const burst = new ErrorBurst();
+    const count = (what: string) => burst.add(performance.now() / 1000) && onTrouble('errors', what);
+    r.onError = (info) => {
+      report.call(r, info);
+      // out of video memory is not a broken backend: the game gives back what it only keeps (`Game.releaseKept`)
+      if (/OutOfMemory/i.test(info?.type ?? '')) onTrouble('memory', String(info?.message ?? ''));
+      else count(`${info?.type ?? 'GPUError'}: ${info?.message ?? ''}`);
+    };
+    this.renderThrew = (err) => count(String(err));
   }
 
   get backend(): RenderBackend {
@@ -267,7 +312,15 @@ export class RenderHost {
       }
       frame(dt);
       if (this.options.volumetric) updateVolume(this.camera);
-      if (!this.holding) this.pipeline.render();
+      if (!this.holding) {
+        try {
+          this.pipeline.render();
+        } catch (err) {
+          // (a backend that throws on every frame: counted with the device's errors, see `watch`)
+          this.renderThrew?.(err);
+          throw err;
+        }
+      }
       if (this.compiling) this.aim();
     });
   }

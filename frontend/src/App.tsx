@@ -1,6 +1,6 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { GameCanvas, gameHolder } from './ui/GameCanvas';
-import { useApp } from './store/app';
+import { useApp, type Screen } from './store/app';
 import { useSettings } from './store/settings';
 import { BootScreen, ControlsScreen, CourseLoadingScreen, CoursesScreen, ModesScreen, RivalsScreen, TitleScreen } from './ui/screens/Menus';
 import { GarageScreen } from './ui/garage/GarageScreen';
@@ -13,14 +13,32 @@ import { ConditionsScreen, TransmissionScreen } from './ui/screens/RaceSetup';
 import { CarsScreen } from './ui/screens/Cars';
 import { TouchControls } from './ui/hud/TouchControls';
 import { useTouch } from './ui/touch';
-import { fullscreenSupported, toggleFullscreen, useFullscreen } from './ui/fullscreen';
+import { toggleFullscreen } from './ui/fullscreen';
+import { AccountNotice, BusyMark, ShellNav, ShellTop } from './ui/Shell';
+import { useScreenWipe } from './ui/motion';
+import { noteInput } from './ui/inputDevice';
+
+declare global {
+  interface Window {
+    /** the app's store, for tests and probes (as `__game` is the game): `__app.setState({ busy: '…' })` */
+    __app?: typeof useApp;
+  }
+}
+window.__app = useApp;
+
+/** the menu screens: the shell (trail, back, fullscreen) stands around them */
+const SHELLED: Screen[] = ['modes', 'courses', 'conditions', 'garage', 'transmission', 'cars', 'rivals', 'leaderboard', 'settings', 'controls', 'online', 'onlineRoom', 'onlineResults'];
 
 export function App() {
   const screen = useApp((s) => s.screen);
   const paused = useApp((s) => s.paused);
   const phase = useApp((s) => s.phase);
   const touch = useTouch();
-  const fullscreen = useFullscreen();
+  const uiMotion = useSettings((s) => s.uiMotion !== false);
+  const overlay = useRef<HTMLDivElement>(null);
+  const wipeHost = useRef<HTMLDivElement>(null);
+  const wipeScan = useRef<HTMLElement>(null);
+  useScreenWipe(overlay, wipeHost, wipeScan);
 
   // pause handling during races
   useEffect(() => {
@@ -43,6 +61,7 @@ export function App() {
       const start = !!pad?.buttons[9]?.pressed;
       const app = useApp.getState();
       if (start && !prevStart && app.screen === 'race' && !app.paused) {
+        noteInput('pad');
         if (app.mode !== 'online') gameHolder.game?.setPaused(true);
         app.set({ paused: true });
       }
@@ -76,13 +95,16 @@ export function App() {
     return () => clearInterval(id);
   }, []);
 
+  // motion reduced by the setting or by the system: the styles swap every movement for a fade (tokens.css)
+  const calm = !uiMotion || (typeof window !== 'undefined' && !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches);
+
   const inRace = screen === 'race' || (screen === 'results' && phase !== 'replay') || screen === 'onlineResults';
-  // phones have no Esc key: a back button on the menu screens sends it (every screen maps Esc to its "back")
-  const touchBack = touch && !['boot', 'title', 'loading', 'race', 'results', 'replay', 'onlineResults'].includes(screen);
+  const shelled = SHELLED.includes(screen);
   return (
-    <div className={`app screen-${screen}${touch ? ' touch' : ''}`}>
+    <div className={`app screen-${screen}${touch ? ' touch' : ''}${calm ? ' motion-off' : ''}`}>
       <GameCanvas />
-      <div className="overlay">
+      <div className="overlay" ref={overlay}>
+        {shelled && <div className="shell-foot" />}
         {screen === 'boot' && <BootScreen />}
         {screen === 'title' && <TitleScreen />}
         {screen === 'modes' && <ModesScreen />}
@@ -99,31 +121,26 @@ export function App() {
         {screen === 'online' && <OnlineLobbyScreen />}
         {screen === 'onlineRoom' && <OnlineRoomScreen />}
         {screen === 'onlineResults' && <OnlineResultsScreen />}
-        {inRace && (phase === 'countdown' || phase === 'racing' || phase === 'finished') && <Hud key={String(gameHolder.game?.currentConfig?.carId) + phase.length} />}
+        {/* one HUD from the grid to the finish (it boots at every start by itself) */}
+        {inRace && (phase === 'countdown' || phase === 'racing' || phase === 'finished') && <Hud key={String(gameHolder.game?.currentConfig?.carId)} />}
         {screen === 'results' && <ResultsScreen />}
         {screen === 'replay' && <ReplayOverlay />}
         {screen === 'race' && paused && <PauseMenu />}
         {touch && screen === 'race' && !paused && (phase === 'countdown' || phase === 'racing') && <TouchControls />}
+        {/* the screen on its way out (ui/motion.ts) and the scan line of the wipe */}
+        <div className="wipe-host" ref={wipeHost} />
+        <i className="wipe-scan" ref={wipeScan} />
+        {shelled && <ShellTop />}
+        {(shelled || screen === 'title') && <ShellNav screen={screen} back={shelled} />}
       </div>
-      {fullscreenSupported() && !['boot', 'race'].includes(screen) && (
-        <button className={touchBack ? 'fs-toggle above-back' : 'fs-toggle'} onClick={toggleFullscreen} title="全画面表示の切り替え（F キー）">
-          {fullscreen ? '全画面終了' : '全画面'}
-        </button>
-      )}
-      {touchBack && (
-        <button
-          className="touch-back"
-          onPointerDown={(e) => {
-            e.preventDefault();
-            window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', bubbles: true }));
-          }}
-        >
-          ◀ 戻る
-        </button>
-      )}
+      <BusyMark />
+      <AccountNotice />
       {touch && (
         <div className="rotate-hint">
-          <div>📱↻</div>
+          <svg viewBox="0 0 48 48" aria-hidden>
+            <rect x="15" y="5" width="18" height="38" rx="3" />
+            <path d="M22 38h4" />
+          </svg>
           横向きにしてプレイしてください
         </div>
       )}

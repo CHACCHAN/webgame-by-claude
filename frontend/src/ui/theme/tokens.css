@@ -1,0 +1,120 @@
+/* The interface's design tokens: every colour, glow, size, corner cut, duration and easing the screens use is named
+   here (component styles hold no literal colour). The look: a tuner's telemetry terminal over the live scene.
+   Colours are rgb triplets so that any transparency can be taken from them: rgb(var(--c-cyan) / 0.3). */
+:root {
+  /* ---- colour */
+  --c-void: 3 6 12; /* the page's black, with a blue cast */
+  --c-ink: 7 13 24; /* panel glass */
+  --c-ink-2: 14 25 43; /* raised parts on a panel */
+  --c-steel: 122 148 184; /* hairlines, secondary text */
+  --c-text: 228 240 253;
+  --c-cyan: 56 232 255; /* focus, selection, live data */
+  --c-magenta: 255 46 136; /* rivals, the others online, alerts */
+  --c-amber: 255 190 70; /* gold, medals, warnings */
+  --c-green: 70 255 166; /* ready, ok, faster */
+  --c-silver: 205 216 230;
+  --c-bronze: 224 142 94;
+  --c-white: 255 255 255;
+  --c-black: 0 0 0;
+  /* the three skies of the conditions cards */
+  --c-sky-night: 16 30 66;
+  --c-sky-rain: 40 52 70;
+  --c-sky-dawn: 120 66 70;
+
+  --void: rgb(var(--c-void));
+  --text: rgb(var(--c-text));
+  --text-2: rgb(var(--c-text) / 0.78);
+  --muted: rgb(var(--c-steel));
+  --faint: rgb(var(--c-steel) / 0.55);
+  --cyan: rgb(var(--c-cyan));
+  --magenta: rgb(var(--c-magenta));
+  --amber: rgb(var(--c-amber));
+  --green: rgb(var(--c-green));
+  --on-cyan: rgb(var(--c-void)); /* text on a cyan fill */
+
+  --line: rgb(var(--c-steel) / 0.26);
+  --line-soft: rgb(var(--c-steel) / 0.13);
+  --line-hot: rgb(var(--c-cyan) / 0.75);
+  --glass: rgb(var(--c-ink) / 0.74);
+  --glass-thin: rgb(var(--c-ink) / 0.5);
+  --glass-solid: rgb(var(--c-ink));
+  --well: rgb(var(--c-black) / 0.38); /* inputs, bar tracks */
+  --veil: rgb(var(--c-void) / 0.66); /* over the scene, under a centred panel */
+
+  /* ---- glow */
+  --glow-cyan: 0 0 1.1rem rgb(var(--c-cyan) / 0.45);
+  --glow-cyan-text: 0 0 0.9rem rgb(var(--c-cyan) / 0.55);
+  --glow-magenta-text: 0 0 0.9rem rgb(var(--c-magenta) / 0.6);
+  /* what keeps HUD text readable on a bright sky: its own dark edge, not the scene's darkness */
+  --hud-edge: 0 0 2px rgb(var(--c-void) / 0.95), 0 1px 3px rgb(var(--c-void) / 0.9), 0 0 0.7rem rgb(var(--c-void) / 0.6);
+
+  /* ---- texture: fine scanlines on panels */
+  --tex-scan: repeating-linear-gradient(0deg, rgb(var(--c-white) / 0.022) 0 1px, transparent 1px 3px);
+
+  /* ---- type */
+  --font-display: 'Saira Variable', 'Zen Kaku Gothic New', system-ui, sans-serif; /* Latin and numerals; width axis 50–125 */
+  --font-jp: 'Zen Kaku Gothic New', system-ui, sans-serif;
+  --font-name: 'Shippori Mincho', serif; /* the names of places, the logo */
+  --font-mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  /* 1rem follows the screen's height (16 px at 1080); small text keeps a floor */
+  --fs-2xs: max(9px, 0.625rem);
+  --fs-xs: max(10px, 0.6875rem);
+  --fs-s: max(11px, 0.8125rem);
+  --fs-m: max(12px, 0.9375rem);
+  --fs-l: 1.125rem;
+  --fs-xl: 1.5rem;
+  --fs-2xl: 2.25rem;
+  --fs-3xl: 3.5rem;
+  --fs-4xl: 5.5rem;
+  --w-tight: 62.5%; /* font-stretch of big numerals */
+  --w-cond: 78%; /* headings, labels */
+  --w-norm: 96%; /* small technical text */
+
+  /* ---- space, corner cuts */
+  --s-1: 0.25rem;
+  --s-2: 0.5rem;
+  --s-3: 0.75rem;
+  --s-4: 1rem;
+  --s-5: 1.5rem;
+  --s-6: 2rem;
+  --s-7: 3rem;
+  --cut-s: 6px;
+  --cut-m: 11px;
+  --cut-l: 20px;
+  --gutter: 4vw; /* the screens' side margin */
+  --bar: 2.9rem; /* height of the shell's top and bottom bars */
+
+  /* ---- motion */
+  --t-snap: 110ms; /* the focus marker */
+  --t-fast: 180ms;
+  --t-wipe: 240ms; /* a screen change */
+  --t-enter: 380ms; /* content coming in */
+  --stagger: 38ms;
+  --e-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --e-snap: cubic-bezier(0.2, 0.9, 0.25, 1);
+  --e-inout: cubic-bezier(0.7, 0, 0.3, 1);
+  /* the keyframes behind each kind of motion, so that `.motion-off` can swap them all for a plain fade */
+  --kf-rise: kf-rise;
+  --kf-slide: kf-slide;
+  --kf-drop: kf-drop;
+  --kf-cut: kf-cut;
+  --kf-pop: kf-pop;
+  --kf-stamp: kf-stamp;
+  --kf-flicker: kf-flicker;
+  --kf-idle: running; /* play state of the idle loops (title, prompts) */
+}
+
+/* UI アニメーション off, or the system asks for less motion: fades only, no idle loops */
+.motion-off {
+  --kf-rise: kf-fade;
+  --kf-slide: kf-fade;
+  --kf-drop: kf-fade;
+  --kf-cut: kf-fade;
+  --kf-pop: kf-fade;
+  --kf-stamp: kf-fade;
+  --kf-flicker: kf-fade;
+  --kf-idle: paused;
+  --t-snap: 0ms;
+  --stagger: 0ms;
+  --t-enter: 160ms;
+}

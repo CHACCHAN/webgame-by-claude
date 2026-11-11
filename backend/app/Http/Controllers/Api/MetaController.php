@@ -46,8 +46,11 @@ class MetaController extends Controller
         ];
 
         // whether the rivals have a model to ask through this server (/api/ai/*); the key itself never leaves it
-        $ai = ['enabled' => (string) config('llm.key') !== ''];
+        $ai = ['enabled' => (string) config('llm.key') !== '' && (string) config('llm.url') !== ''];
 
-        return response()->json(['version' => config('game.version'), 'tracks' => $tracks, 'cars' => $cars, 'realtime' => $realtime, 'ai' => $ai]);
+        // whether members can log in (Authentik); without it everyone is a guest
+        $auth = ['enabled' => AuthController::enabled()];
+
+        return response()->json(['version' => config('game.version'), 'tracks' => $tracks, 'cars' => $cars, 'realtime' => $realtime, 'ai' => $ai, 'auth' => $auth]);
     }
 }

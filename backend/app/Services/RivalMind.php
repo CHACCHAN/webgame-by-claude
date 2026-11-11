@@ -28,7 +28,7 @@ class RivalMind
 
     public function available(): bool
     {
-        return (string) config('llm.key') !== '';
+        return (string) config('llm.key') !== '' && (string) config('llm.url') !== '';
     }
 
     /** One line in the rival's voice, or null (no key, every model failed). `$in` is validated by the controller. */
@@ -155,7 +155,7 @@ class RivalMind
         try {
             $response = Http::withHeaders([(string) config('llm.key_header') => (string) config('llm.key')])
                 ->connectTimeout(2)->timeout($timeout)->acceptJson()
-                ->post(config('llm.base_url').'/chat/completions', ['model' => $model] + $body);
+                ->post((string) config('llm.url'), ['model' => $model] + $body);
             if ($response->successful() && is_array($message = $response->json('choices.0.message'))) {
                 return $message;
             }

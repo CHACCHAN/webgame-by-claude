@@ -1,4 +1,4 @@
-import { clamp, fbm, lerp, smoothstep } from '../util/math';
+import { clamp, fbm, lerp, ridged, smoothstep } from '../util/math';
 import { DS, Track } from './Track';
 import type { Landform } from './landforms';
 
@@ -12,6 +12,11 @@ export interface HeightGrid {
   heights: Float32Array;
   /** distance (m) from the road centerline, only for the near grid */
   roadDist?: Float32Array;
+  /**
+   * distance (m) beyond the graded edge of the road (its asphalt, shoulder and formation; negative inside), only
+   * for the near grid: where the verge's gravel ends and the slope begins, whatever the road's width
+   */
+  edgeDist?: Float32Array;
 }
 
 export interface TerrainData {
@@ -26,9 +31,18 @@ export interface TerrainData {
 /** Region where the road carves the terrain (m around the centerline). */
 const ROAD_INFLUENCE = 320;
 
-/** Medium/fine relief, attenuated next to the road. */
+/**
+ * Medium/fine relief, attenuated next to the road: rolling ground, and on it the spurs and gullies running water
+ * leaves (a ridged noise bent by a slower one, so the ridges branch and wander instead of lying in rows) with
+ * knobs of rock on them. None of it reaches the road: `fieldHeight` fades it out 14 m from the centreline.
+ */
 function detailHeight(lf: Landform, x: number, z: number): number {
-  return (fbm(x / 160 + 4.4, z / 160 - 1.9, 4) * 9 + fbm(x / 45, z / 45, 3) * 2.2) * lf.relief(x, z);
+  const r = lf.relief(x, z);
+  if (r <= 0) return 0;
+  const wx = x + fbm(x / 310 - 3.7, z / 310 + 8.2, 2) * 90, wz = z + fbm(x / 310 + 6.1, z / 310 - 1.3, 2) * 90;
+  const spurs = (ridged(wx / 420 + 1.3, wz / 420 - 7.9, 3) - 0.45) * 15;
+  const knobs = Math.max(0, ridged(x / 70 + 9.4, z / 70 + 2.6, 2) - 0.55) * 7;
+  return (fbm(x / 160 + 4.4, z / 160 - 1.9, 4) * 9 + fbm(x / 45, z / 45, 3) * 2.2 + (spurs + knobs) * (lf.gullies ?? 1)) * r;
 }
 
 interface RoadSample {
@@ -236,6 +250,7 @@ export function buildTerrain(track: Track, lf: Landform, opts: { nearCell?: numb
   const nnz = Math.ceil((maxZ + margin - nz0) / nearCell) + 1;
   const nearH = new Float32Array(nnx * nnz);
   const nearD = new Float32Array(nnx * nnz);
+  const nearE = new Float32Array(nnx * nnz);
   const nearI = new Int32Array(nnx * nnz);
   const info = { dist: 0, roadY: 0, idx: -1, lat: 0 };
   for (let j = 0; j < nnz; j++) {
@@ -245,6 +260,7 @@ export function buildTerrain(track: Track, lf: Landform, opts: { nearCell?: numb
       nearH[j * nnx + i] = finalHeight(x, z, info);
       nearD[j * nnx + i] = info.dist;
       nearI[j * nnx + i] = info.idx;
+      nearE[j * nnx + i] = info.idx < 0 ? 1e6 : info.dist - (track.width[info.idx] / 2 + 1.2 + (info.lat < 0 ? formation.left : formation.right));
     }
   }
   // Hairpins: a grid point that belongs to the other leg's cutting can sit above this leg's road edge,
@@ -264,7 +280,7 @@ export function buildTerrain(track: Track, lf: Landform, opts: { nearCell?: numb
       }
     }
   }
-  const near: HeightGrid = { x0: nx0, z0: nz0, cell: nearCell, nx: nnx, nz: nnz, heights: nearH, roadDist: nearD };
+  const near: HeightGrid = { x0: nx0, z0: nz0, cell: nearCell, nx: nnx, nz: nnz, heights: nearH, roadDist: nearD, edgeDist: nearE };
 
   // ---- far grid (pure landform; dips below the near grid so the near mesh wins)
   const cxm = (minX + maxX) / 2, czm = (minZ + maxZ) / 2;

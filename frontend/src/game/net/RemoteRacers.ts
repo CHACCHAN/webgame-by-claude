@@ -61,9 +61,6 @@ export class RemoteRacers {
       const spec = CAR_SPECS[peer.carId];
       const ride = this.rideHeightOf(peer.carId);
       const visual = new CarVisual(spec, { headlights: true, shadows: this.shadows, rideHeight: ride, bodyColor: SLOT_COLORS[peer.slot % SLOT_COLORS.length] });
-      visual.rig.root.traverse((o) => {
-        if ((o as THREE.SpotLight).isSpotLight) (o as THREE.SpotLight).castShadow = false;
-      });
       const g = grid(peer.slot);
       visual.root.position.copy(g.position).add(new THREE.Vector3(0, ride, 0));
       visual.root.quaternion.setFromAxisAngle(new THREE.Vector3(0, 1, 0), g.heading);
