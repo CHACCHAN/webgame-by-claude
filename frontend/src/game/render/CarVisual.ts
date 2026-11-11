@@ -322,11 +322,7 @@ export class CarVisual {
     this.root.traverse((o) => {
       const m = o as THREE.Mesh;
       if (m.isMesh) {
-        // A loaded model's geometry belongs to the cached template (the next visual of that vehicle draws the same
-        // object) and stays. Where it is interleaved (meshopt GLBs) it must: three 0.186's WebGPU backend keeps the
-        // destroyed buffer of an interleaved attribute in its cache and draws with it again, so every frame with
-        // that vehicle shown a second time is thrown away (the picture stands still).
-        if (!Object.values(m.geometry.attributes).some((a) => (a as THREE.InterleavedBufferAttribute).isInterleavedBufferAttribute)) m.geometry.dispose();
+        m.geometry.dispose();
         const mats = Array.isArray(m.material) ? m.material : [m.material];
         mats.forEach((x) => x.dispose());
       }
