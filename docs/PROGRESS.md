@@ -500,6 +500,41 @@ grating, rockfall fence), and the owner sees a model's sheet first.
 - Not verified: frame rates on a quiet machine; low / medium / high on every course by eye (ultra everywhere);
   phones (low: the old path).
 
+### Release (11-11): the redesigned interface, Authentik accounts and the remade ground go live
+
+- One tree (`auth` = main + the interface branch + the accounts + the terrain branch), fast-forwarded into main at `7a18cb6`.
+- Checked before the deploy: `tsc -b`, vitest 153, backend 40 (container), `vite build`; `tools/gpu-errors.cjs` on this
+  very bundle (`index-wYd6wJdU.js`, the same hash as the build that was checked): 0 errors on WebGPU and WebGL 2, the
+  race camera with the car, one race picture looked at; the account screens looked at (guest, member, a failed
+  login, no login configured; desktop and phone, the API played by the script).
+  E2E on an isolated stack: 14 of 15 in the full run (42.8 min, the five-player online race among them); the
+  fifteenth, the phone test, tapped one row too low: its helper took a row for standing while the software renderer
+  had drawn no frame between its two looks (the new ground makes the frames slower). The helper now waits for the
+  target's animations; the phone test alone then passed (2.0 min). Not re-run as a whole after that change (test only).
+- Deployed on ubuntu-dev with a dump taken first (`~/.local/opt/backups/touge-1111-1447-pre-auth.sql`): the
+  migration ran (9 migrations), players 32 and runs 71 as before; the new bundle is served locally and through the
+  public address; leaderboard API 200; `/api/content` says `auth.enabled: true`, `ai.enabled: true`; `/api/auth/login`
+  through the public address answers 302 to Authentik's authorize endpoint (PKCE S256, scope `openid profile`, the
+  callback https at the public host, the state cookie HttpOnly / Secure / Lax), and Authentik takes the request to
+  its login flow.
+- Not verified: a real login (the code exchange, the account by `sub`, the save's sync, the claim of a guest's
+  runs, logout): it needs a member's credentials, which are the owner's to enter. The interface's cost in the HUD on
+  a quiet machine, Firefox / Safari, pads' glyphs, sound of the new interface by ear.
+- Seen and left for a follow-up: the title's roadside cameras are now and then behind a mound or pass a post of the
+  new roadside (the cameras do not look for what stands in the way).
+
+### Grains over the menus (11-11, owner's idea; branch `ui-fx`, not merged)
+
+- Owner: 「粒が浮いている表現→マウスで特定の選択肢に重なると→粒子が形を変えてボタンの装飾になる」. `ui/fx/grains.ts` (simulation,
+  6 tests) + `ui/fx/Grains.tsx` (one canvas): dust that gathers into the outline of what the pointer is on, else of
+  the keys' selection; a change of screen sweeps it. Pictures and a 21 s recording taken on the GPU and looked at
+  (menus hold 60 fps with it: frame gaps median 16.7 ms); the recording was sent to the owner. Phones: fewer grains,
+  the selection's frame only (looked at one picture).
+- Not done: cost on a slow phone, a look with the owner's eyes (waiting for their word before it is merged), the
+  other uses (the boot bar, results' medals).
+- The condition cards as looping video (owner's idea): Gemini's video generation failed three times in a row
+  ("Sorry, something went wrong"); asked the owner.
+
 ## Session 8 (2026-11-10) — new vehicles: Cybertruck, Yangwang U9 Xtreme, three motorcycles, the L0 maglev
 
 Owner: 「テスラのサイバートラック、バイクを3台、リニアモータ新幹線を実装してください」 (bikes chosen: Honda NSR250R,
