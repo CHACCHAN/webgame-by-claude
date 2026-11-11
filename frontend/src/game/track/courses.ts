@@ -142,9 +142,9 @@ export const COURSES: Record<CourseId, CourseInfo> = {
     rivals: {
       // a drag race: no corner sorts the field, so the rivals' cars and tunes set the battle (tools/sim-run.ts):
       // the rookie loses to any car driven flat out, the ace to the R34 and the RX-7, the legend only to a clean RX-7
-      rookie: { name: '早瀬 ユリア', title: 'ROOKIE / 留学帰りの新人', car: 'hayate', color: '#d8dde4', power: 0.95, portrait: '', description: 'ドイツ留学から帰ったばかり。速度無制限の道に憧れて、初めて夜のアウトバーンに挑む。' },
-      ace: { name: '神崎 ルカ', title: 'LOCAL ACE / 深夜便の運び屋', car: 'supra', color: '#14161a', portrait: '', description: '夜ごとこの道を往復する運び屋。追い越し車線の空け方まで知り尽くしている。' },
-      legend: { name: 'ファルケ', title: 'LEGEND / 無制限区間の亡霊', car: 'r34', color: '#9aa4ae', power: 1.02, portrait: '', description: '鷹の名で呼ばれる正体不明のドライバー。ミラーに映ったと思った時には、もう前にいる。' },
+      rookie: { name: '早瀬 ユリア', title: 'ROOKIE / 留学帰りの新人', car: 'hayate', color: '#d8dde4', power: 0.95, portrait: '/img/rivals/autobahn-rookie.webp', description: 'ドイツ留学から帰ったばかり。速度無制限の道に憧れて、初めて夜のアウトバーンに挑む。' },
+      ace: { name: '神崎 ルカ', title: 'LOCAL ACE / 深夜便の運び屋', car: 'supra', color: '#14161a', portrait: '/img/rivals/autobahn-ace.webp', description: '夜ごとこの道を往復する運び屋。追い越し車線の空け方まで知り尽くしている。' },
+      legend: { name: 'ファルケ', title: 'LEGEND / 無制限区間の亡霊', car: 'r34', color: '#9aa4ae', power: 1.02, portrait: '/img/rivals/autobahn-legend.webp', description: '鷹の名で呼ばれる正体不明のドライバー。ミラーに映ったと思った時には、もう前にいる。' },
     },
     // flat out from a standing start, the legend AI's race time +1.5 % (a clean run; no corner to gain time in),
     // silver +7 %, bronze +17 % (tools/sim-run.ts, 2026-11-06)
@@ -158,7 +158,7 @@ export const COURSES: Record<CourseId, CourseInfo> = {
       u9: { gold: 65_500, silver: 70_000, bronze: 76_500 },
       s15: { gold: 145_000, silver: 155_500, bronze: 170_000 },
     },
-    music: 'bgm_race_tenrou',
+    music: 'bgm_race_autobahn',
     art: '/img/courses/autobahn.webp',
   },
 };

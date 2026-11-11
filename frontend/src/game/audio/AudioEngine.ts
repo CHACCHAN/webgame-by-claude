@@ -41,6 +41,7 @@ const MUSIC: Record<string, Partial<LoopConfig>> = {
   bgm_race: { ...RACE, loopFrom: 59.49, loopAt: 176.79 },
   bgm_race_kirifuri: { ...RACE, loopFrom: 4.5, loopAt: 184.83, xfade: 2 },
   bgm_race_tenrou: { ...RACE, loopFrom: 50.43, loopAt: 185.33 },
+  bgm_race_autobahn: { ...RACE, loopFrom: 59.05, loopAt: 133.31 },
   bgm_race_rain: { ...RACE, loopFrom: 49.69, loopAt: 145.98 },
   bgm_race_dawn: { ...RACE, loopFrom: 59.26, loopAt: 159.83, xfade: 2 },
   bgm_rival: { ...RACE, loopFrom: 71.14, loopAt: 163.75, xfade: 2 },
