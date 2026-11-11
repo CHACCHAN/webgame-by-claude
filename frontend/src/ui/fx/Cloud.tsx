@@ -110,7 +110,8 @@ export function Cloud() {
     const n = isTouchDevice() ? FEW : MANY;
     // drawn with what the game is drawn with (its WebGPU device, or WebGL 2 next to its WebGL 2): never the other
     const host = renderHost();
-    if (!host) return;
+    // (no GPU: no grains, and no second context next to the game's: on SwiftShader that one blanked the game's canvas)
+    if (!host || host.software) return;
     const renderer = host.backend === 'webgpu' ? createCloudRendererGpu(canvas, n, host.gpuDevice) : createCloudRenderer(canvas, n);
     if (!renderer) return;
     const css = getComputedStyle(app);

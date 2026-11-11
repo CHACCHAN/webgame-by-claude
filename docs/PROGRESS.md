@@ -561,6 +561,45 @@ by the main session. Live since the release of 11-11 (below): the owner saw the 
   grains, close to 3D particles, that depict things and emphasise things by themselves: "the part in charge of
   beautiful expression". The 2D layer (`ui/fx/`) is to be remade on that brief.
 
+### The grains as a cloud in depth (11-11, after the owner's word on the first grains)
+Owner: 「粒はもっと細かく、3d パーティクルに近いです。粒だけで物を表現したり、粒だけで強調させたりといった使い方を
+予想してました。美しい寄りな表現担当ですね。」 The 2D layer (420 grains tracing frames) is gone; CLAUDE.md "The grains
+over the menus" describes what replaced it.
+
+- `ui/fx/cloud.ts` (simulation, 9 tests with `shapes.ts`), `shapes.ts`, `Cloud.tsx`, `cloudRenderGpu.ts` (instanced
+  quads on the game's WebGPU device), `cloudRender.ts` (WebGL 2 points, only next to the WebGL 2 backend).
+  Depicted by grains alone: the title's 峠 (the element's own text through a mask), the selected course as a relief
+  under the course cards and on the loading screen, where it fills with the progress (road, start and finish beams,
+  the land as contour lines from the course's `Landform`, water as a sheet; it sways and follows the pointer).
+  Emphasis by grains alone: the edge of what the pointer is on or the keys selected (the drawn focus frame is hidden
+  while the grains depict; rows keep their bar and wash).
+- **Found: a WebGL context made next to the game's WebGPU device loses that device** (`vkQueueSubmit failed with
+  VK_ERROR_DEVICE_LOST`, headless Chrome on the RX 5700 XT; the game then fell back and reloaded). Hence the WebGPU
+  renderer on the game's own device, and the rivals' voice offered only when the game is drawn with WebGPU
+  (`Speech.usable`; a WebGPU model next to a WebGL 2 game is the same pairing, untested and now excluded).
+- **Found: the first cloud cost 2.9 ms a frame for 9 400 grains** (~15 ms for 48 000: frames were lost and the
+  count, then steered by the frame time, fell to nothing under any load and stayed there). The step was rewritten
+  (no `Math.hypot`, sines from a table, flow / brightness / colour for a quarter of the grains in turn, the look
+  bytes written in the step): 48 000 grains cost 1.2 ms floating and 3.0 ms all seated in Node, 2.5–4.1 ms in the
+  page (upload and draw included). The count now follows the grains' own cost (4 ms budget).
+- Verified on the GPU (machine load 2–5 meanwhile): pictures of the title, the main menu with the pointer, the four
+  courses' reliefs with the pointer left and right (each stays in its place under the cards), the rivals screen,
+  the loading screen at three fills; two recordings (41 s, 57 fps of screencast frames) looked at as sheets of
+  frames; frame gaps with 48 000 grains median 16.7 ms, p95 16.8–33 ms; `tools/gpu-errors.cjs` 0 on WebGPU and on
+  `?webgl=1`; the WebGL 2 twin looked at (same picture). tsc, vitest 167, build.
+- **Found by E2E: on a software renderer (SwiftShader) the grains' WebGL 2 context blanked the game's canvas** (the
+  boot test's picture of it: 5.6 kB). No grains without a GPU now, decided from the game's own context
+  (`RenderHost.software`), no second context made. E2E on an isolated stack, a subset only: boot, menu navigation,
+  phone passed on the final tree; click during a wipe, course select, rival battle passed on the tree before that
+  fix. The whole suite was **not** run.
+- Not verified: other GPUs, browsers and phones (the WebGL 2 twin next to a WebGL 2 game on Firefox / Safari: one
+  machine's Chrome only); a display with a pixel ratio of 2 or 4K (pictures at 1280×720, ratio 1); the medal's
+  grains on the results screen are an amber edge only and faint on so small a thing (one picture of a made-up
+  result); the owner's eye on the whole.
+- Not built yet (ideas): the results' medal itself, the condition cards' pictures (stars, rain, dawn: a stand-in
+  for the Gemini videos that fail), the rival's portrait gathering; the simulation on the GPU (a compute pass) for
+  several hundred thousand grains if the owner wants it denser still.
+
 ### The rivals speak (11-11, owner's request): a speech model on the player's GPU
 Request: a TTS model, Supertonic 3, WebGPU assumed; the language model's lines are spoken; without WebGPU no TTS
 model, text only. My plan (the ~400 MB model only after the player's yes, served from our own server, a voice per
