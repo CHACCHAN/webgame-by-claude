@@ -12,7 +12,8 @@ import { createGrains, lineOutline, moveShape, panelOutline, resizeGrains, ringO
  *  1. what the pointer is on: the nearest thing that can be clicked (`cursor: pointer`), unless it is the whole screen;
  *  2. the selection of the keys or the pad: the screen's focus frame (`FocusFrame`);
  *  3. an element that asks for it: `data-grains` (`"line"`: a line under it, `"ring"`: a circle, else its panel).
- * Whichever of pointer and keys moved last decides between 1 and 2.
+ * Whichever of pointer and keys moved last decides between 1 and 2. An element with `data-grains-first="<ms>"` has
+ * them before all of these for its first moments on the screen (a medal being stamped).
  * Not mounted in a race, nor when the interface's motion is off (App.tsx).
  */
 
@@ -47,12 +48,19 @@ function clickable(from: Element | null, limit: Element): Element | null {
   return found;
 }
 
+const kindOf = (el: Element): Kind => {
+  const asked = (el as HTMLElement).dataset?.grains;
+  return asked === 'line' || asked === 'ring' ? asked : 'panel';
+};
+
 function describe(el: Element, kind: Kind, viewW: number, viewH: number): Target | null {
   const r = el.getBoundingClientRect();
   if (r.width < 8 || r.height < 4) return null;
   // (the title is one large button: no frame around the whole screen)
   if (r.width > viewW * 0.8 && r.height > viewH * 0.6) return null;
   const style = getComputedStyle(el);
+  // (not yet on show: a part of the screen waiting for its turn to come in)
+  if (Number(style.opacity) < 0.05) return null;
   const cut = parseFloat(style.getPropertyValue('--c')) || 8;
   const magenta = el.classList.contains('magenta') || el.classList.contains('rival-card') || (el as HTMLElement).dataset?.grainsTone === 'magenta';
   const amber = (el as HTMLElement).dataset?.grainsTone === 'amber';
@@ -139,8 +147,20 @@ export function Grains() {
     window.addEventListener('blur', onLeave);
     window.addEventListener('keydown', onKey);
 
+    const firsts = new WeakMap<Element, number>();
     const choose = (): Target | null => {
       if (hover && !hover.isConnected) hover = null;
+      const first = overlay.querySelector<HTMLElement>('[data-grains-first]');
+      if (first) {
+        // (its moments count from when it shows)
+        const t = describe(first, kindOf(first), w, h);
+        if (t) {
+          const now = performance.now();
+          const since = firsts.get(first) ?? now;
+          firsts.set(first, since);
+          if (now - since < Number(first.dataset.grainsFirst)) return t;
+        }
+      }
       // the selection moved while the pointer stood still (keys, pad): it takes over
       const frame = [...overlay.querySelectorAll<HTMLElement>('.focus-frame')].find((f) => f.style.opacity === '1' && f.offsetParent !== null);
       const box = frame ? frame.style.transform + frame.style.width : '';
@@ -148,7 +168,7 @@ export function Grains() {
       focusBox = box;
       moved = false;
       if (hover) {
-        const t = describe(hover, (hover as HTMLElement).dataset?.grains === 'line' ? 'line' : (hover as HTMLElement).dataset?.grains === 'ring' ? 'ring' : 'panel', w, h);
+        const t = describe(hover, kindOf(hover), w, h);
         if (t) return t;
       }
       if (frame) {
@@ -159,7 +179,7 @@ export function Grains() {
         }
       }
       const asked = overlay.querySelector<HTMLElement>('[data-grains]');
-      if (asked) return describe(asked, asked.dataset.grains === 'line' ? 'line' : asked.dataset.grains === 'ring' ? 'ring' : 'panel', w, h);
+      if (asked) return describe(asked, kindOf(asked), w, h);
       return null;
     };
 
