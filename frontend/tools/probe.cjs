@@ -3,7 +3,9 @@
 //   node tools/probe.cjs <low|medium|high> <absolute path to script.cjs> [width] [height]
 // The script exports `async (page, { fps, out }) => {}`; `window.__game` is the Game instance.
 // Env: URL (default http://localhost:4173/, e.g. add ?timescale=8), OUT (screenshot folder, default
-// tools/scratch — gitignored), PW_MODULE (playwright module path if `require('playwright')` fails).
+// tools/scratch — gitignored), PW_MODULE (playwright module path if `require('playwright')` fails), CHROME (a browser
+// to run instead of Playwright's own, e.g. /usr/bin/google-chrome where only playwright-core is installed), TOUCH=1
+// (a phone: touch input and a mobile viewport; its size is the width and height, e.g. 844 390).
 // SwiftShader runs at ~1–6 fps: for logic-only checks set `window.__game.renderer.render = () => {}`.
 const { chromium } = require(process.env.PW_MODULE || 'playwright');
 const fs = require('fs');
@@ -14,8 +16,9 @@ const path = require('path');
   if (!scriptPath) throw new Error('usage: node tools/probe.cjs <quality> <script.cjs> [w] [h]');
   const out = path.resolve(process.env.OUT || 'tools/scratch');
   fs.mkdirSync(out, { recursive: true });
-  const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
-  const page = await browser.newPage({ viewport: { width: +w, height: +h } });
+  const browser = await chromium.launch({ executablePath: process.env.CHROME || undefined, args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
+  const phone = process.env.TOUCH ? { hasTouch: true, isMobile: true } : {};
+  const page = await browser.newPage({ viewport: { width: +w, height: +h }, ...phone });
   const logs = [];
   page.on('console', (m) => logs.push(`[${m.type()}] ${m.text()}`));
   page.on('pageerror', (e) => logs.push(`[pageerror] ${e.message}`));
