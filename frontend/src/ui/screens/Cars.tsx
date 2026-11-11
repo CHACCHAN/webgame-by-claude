@@ -11,6 +11,7 @@ import { TANK_ORDER, TANK_SPECS, type TankId } from '../../game/vehicle/tanks';
 import { JET_ORDER, JET_SPECS, jetForLivery, type JetId } from '../../game/vehicle/jets';
 import { sfx } from '../sfx';
 import { traitsOf } from '../../game/vehicle/kinds';
+import { peakPowerKw } from '../../game/vehicle/stats';
 
 /** Body colours offered for each car (first = default). */
 export const COLORS: Record<CarId, string[]> = {
@@ -47,16 +48,13 @@ export function liveryName(id: CarId, color: string): string | null {
 
 /** Peak power from the torque curve (linear between the points, up to the redline). */
 export function peakPower(spec: CarSpec) {
-  const t = spec.engine.torque;
-  let best = { kw: 0, rpm: 0 };
-  for (let rpm = t[0][0]; rpm <= spec.engine.redline; rpm += 50) {
-    let k = 0;
-    while (k < t.length - 2 && t[k + 1][0] < rpm) k++;
-    const f = Math.min(1, Math.max(0, (rpm - t[k][0]) / (t[k + 1][0] - t[k][0])));
-    const kw = ((t[k][1] + (t[k + 1][1] - t[k][1]) * f) * rpm * 2 * Math.PI) / 60 / 1000;
-    if (kw > best.kw) best = { kw, rpm };
-  }
+  const best = peakPowerKw(spec);
   return { ps: Math.round(best.kw * 1.36), kw: Math.round(best.kw), rpm: Math.round(best.rpm / 100) * 100 };
+}
+
+/** What follows the tagline: a train's operator, a bike's maker, a tank's or fighter's country, a car's drive layout. */
+export function originOf(spec: CarSpec) {
+  return spec.train ? spec.train.operator : spec.creature ? `${spec.creature.figures.legs}本脚` : spec.bike ? spec.bike.maker : spec.tank ? spec.tank.origin : spec.jet ? spec.jet.origin : spec.engine.electric ? `EV・${spec.drive}` : spec.drive;
 }
 
 /** [rpm, Nm] of the highest point of the torque curve */
@@ -244,7 +242,7 @@ export function CarSheet({ spec: base, index, count = VEHICLE_ORDER.length, full
         {traitsOf(spec).badge && <span className="train-badge">{traitsOf(spec).badge}</span>}
       </div>
       <h2 className="car-name">{spec.name}</h2>
-      <div className="car-tag">{spec.tagline} ・ {spec.train ? spec.train.operator : spec.creature ? `${spec.creature.figures.legs}本脚` : spec.bike ? spec.bike.maker : spec.tank ? spec.tank.origin : spec.jet ? spec.jet.origin : spec.engine.electric ? `EV・${spec.drive}` : spec.drive}</div>
+      <div className="car-tag">{spec.tagline} ・ {originOf(spec)}</div>
       <p className="car-desc">{spec.description}</p>
       <div className="stats">
         <Stat label="POWER" v={spec.stats.power} />

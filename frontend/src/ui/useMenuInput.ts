@@ -1,10 +1,13 @@
 import { useEffect, useRef } from 'react';
 
-export type MenuAction = 'up' | 'down' | 'left' | 'right' | 'confirm' | 'back';
+export type MenuAction = 'up' | 'down' | 'left' | 'right' | 'confirm' | 'back' | 'prevTab' | 'nextTab' | 'optionX' | 'optionY' | 'optionSort';
 
 /**
  * Keyboard + gamepad navigation for menus. The handler receives abstract
  * actions; gamepad D-pad/stick and A/B buttons are polled each frame.
+ * Screens with tabs and extra functions (the car select) also get Q / E (LB / RB) as `prevTab` / `nextTab`,
+ * X and C (the pad's X and Y) as `optionX` / `optionY`, and R (the pad's Back) as `optionSort`; the other screens
+ * ignore them.
  */
 export function useMenuInput(handler: (a: MenuAction) => void, enabled = true) {
   const ref = useRef(handler);
@@ -16,9 +19,12 @@ export function useMenuInput(handler: (a: MenuAction) => void, enabled = true) {
         if (e.key === 'Escape') ref.current('back');
         return;
       }
+      // (Ctrl+R, Ctrl+C … stay the browser's)
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
       const map: Record<string, MenuAction> = {
         ArrowUp: 'up', KeyW: 'up', ArrowDown: 'down', KeyS: 'down', ArrowLeft: 'left', KeyA: 'left', ArrowRight: 'right', KeyD: 'right',
         Enter: 'confirm', Space: 'confirm', Escape: 'back', Backspace: 'back',
+        KeyQ: 'prevTab', KeyE: 'nextTab', KeyX: 'optionX', KeyC: 'optionY', KeyR: 'optionSort',
       };
       const a = map[e.code];
       if (a) {
@@ -40,6 +46,11 @@ export function useMenuInput(handler: (a: MenuAction) => void, enabled = true) {
           right: !!pad.buttons[15]?.pressed || (pad.axes[0] ?? 0) > 0.6,
           confirm: !!pad.buttons[0]?.pressed || !!pad.buttons[9]?.pressed,
           back: !!pad.buttons[1]?.pressed,
+          prevTab: !!pad.buttons[4]?.pressed,
+          nextTab: !!pad.buttons[5]?.pressed,
+          optionX: !!pad.buttons[2]?.pressed,
+          optionY: !!pad.buttons[3]?.pressed,
+          optionSort: !!pad.buttons[8]?.pressed,
         };
         const now = performance.now();
         for (const k of Object.keys(st)) {

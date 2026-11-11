@@ -4,17 +4,16 @@ import { enterFullscreen } from '../fullscreen';
 import { gameHolder } from '../GameCanvas';
 import { useApp } from '../../store/app';
 import { useMenuInput, hoverSelect } from '../useMenuInput';
-import { CAR_SPECS, singleRatio, vehiclesFor, type CarId } from '../../game/vehicle/carSpecs';
+import { CAR_SPECS, singleRatio } from '../../game/vehicle/carSpecs';
 import type { AILevel } from '../../game/ai/AIDriver';
 import { COURSES, COURSE_ORDER, type CourseId } from '../../game/track/courses';
 import { Track } from '../../game/track/Track';
 import { currentCourseId, useSettings } from '../../store/settings';
 import { decodeGhost } from '../../game/race/Ghost';
 import { api, loadCarBests, loadLocalBest } from '../../api/client';
-import { MEDAL_LABEL, medalFor, nextTarget } from '../../game/race/medals';
 import { formatTime } from '../format';
 import { sfx } from '../sfx';
-import { CarSheet, COLORS, liveryName, useGarageOrbit } from './Cars';
+import { COLORS } from './Cars';
 
 export function BootScreen() {
   const loading = useApp((s) => s.loading);
@@ -144,73 +143,6 @@ export function Hint({ items }: { items: [string, string][] }) {
           <kbd>{k}</kbd> {v}
         </span>
       ))}
-    </div>
-  );
-}
-
-
-export function GarageScreen() {
-  const { go, set, carId, mode, carColor } = useApp();
-  // the fighters only at Edwards
-  const [list] = useState(() => vehiclesFor(currentCourseId()));
-  const [i, setI] = useState(Math.max(0, list.indexOf(carId)));
-  const id = list[i];
-  const spec = CAR_SPECS[id];
-  const palette = COLORS[id];
-  const color = carColor && palette.includes(carColor) ? carColor : palette[0];
-  useEffect(() => {
-    gameHolder.game?.showGarage(id, color);
-    set({ carId: id });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id]);
-  useEffect(() => {
-    gameHolder.game?.setGarageColor(color);
-  }, [color]);
-  useEffect(() => {
-    void gameHolder.game?.audio?.playMusic('bgm_garage');
-  }, []);
-  const cycleColor = (d: number) => {
-    const k = (palette.indexOf(color) + d + palette.length) % palette.length;
-    set({ carColor: palette[k] });
-    sfx.move();
-  };
-  const orbit = useGarageOrbit();
-  const confirm = () => {
-    sfx.confirm();
-    // a train or the cockroach has a single ratio: no AT/MT choice
-    if (!singleRatio(spec)) go('transmission');
-    else if (mode === 'rival') go('rivals');
-    else void startRaceFromState();
-  };
-  useMenuInput((a) => {
-    if (a === 'left') { setI((x) => (x + list.length - 1) % list.length); sfx.move(); }
-    if (a === 'right') { setI((x) => (x + 1) % list.length); sfx.move(); }
-    if (a === 'up') cycleColor(-1);
-    if (a === 'down') cycleColor(1);
-    if (a === 'confirm') confirm();
-    if (a === 'back') { sfx.back(); go(mode === 'ghost' ? 'leaderboard' : 'conditions'); }
-  });
-  return (
-    <div className={`screen garage ${orbit.dragging ? 'orbiting' : ''}`} {...orbit.handlers}>
-      <div className="garage-top">
-        <div className="crumb">SELECT YOUR CAR ― 車両選択</div>
-      </div>
-      <div className="garage-card">
-        <CarSheet spec={spec} index={i} count={list.length} color={color} />
-        <CarRecord id={id} />
-        <div className="colors">
-          {palette.map((c) => (
-            <button key={c} className={c === color ? 'swatch on' : 'swatch'} style={{ background: c }} onClick={() => set({ carColor: c })} aria-label={liveryName(id, c) ?? `color ${c}`} title={liveryName(id, c) ?? undefined} />
-          ))}
-          {liveryName(id, color) && <span className="livery-name">{liveryName(id, color)}</span>}
-        </div>
-        <button className="cta" onClick={confirm}>
-          この車に決定 <span>▶</span>
-        </button>
-      </div>
-      <button className="arrow left" onClick={() => setI((x) => (x + list.length - 1) % list.length)}>‹</button>
-      <button className="arrow right" onClick={() => setI((x) => (x + 1) % list.length)}>›</button>
-      <Hint items={[['←→', '車両'], ['↑↓', 'カラー'], ['ドラッグ', '視点'], ['Enter', '決定'], ['Esc', '戻る']]} />
     </div>
   );
 }
@@ -464,28 +396,4 @@ export function ControlsScreen() {
 export function useLocalBestLabel() {
   const lb = loadLocalBest(currentCourseId());
   return lb ? `${formatTime(lb.timeMs)} (${CAR_SPECS[lb.carId].name})` : null;
-}
-
-function CarRecord({ id }: { id: CarId }) {
-  const course = currentCourseId();
-  const best = loadCarBests(course)[id] ?? null;
-  const medal = best !== null ? medalFor(course, id, best) : null;
-  const next = nextTarget(course, id, best);
-  return (
-    <div className="car-record">
-      <div>
-        <small>PERSONAL BEST</small>
-        <b>{best !== null ? formatTime(best) : '--:--.---'}</b>
-        {medal && <span className={`medal-dot medal-${medal}`}>{MEDAL_LABEL[medal]}</span>}
-      </div>
-      <div>
-        <small>NEXT TARGET</small>
-        {next ? (
-          <b className={`medal-${next.medal}`}>{MEDAL_LABEL[next.medal]} {formatTime(next.timeMs)}</b>
-        ) : (
-          <b className="medal-gold">COMPLETE</b>
-        )}
-      </div>
-    </div>
-  );
 }

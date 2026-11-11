@@ -13,22 +13,10 @@ import { sfx } from '../sfx';
 import { Hint } from './Menus';
 import { chooseCar, createRoom, joinRoom, leaveRoom, registerName, rematch, startOnlineRace, takeBackReady, toggleReady, useOnline } from '../../store/online';
 import { CONDITIONS } from './RaceSetup';
+import { neighbourVehicle, OnlineVehicle } from '../garage/OnlineVehicle';
 import type { TimeOfDay } from '../../game/render/Environment';
 
 const MAX_PLAYERS = 5;
-
-/** the vehicles a course allows (the fighters only at Edwards) */
-function CarPicker({ carId, course, disabled }: { carId: CarId; course: string; disabled?: boolean }) {
-  return (
-    <div className="ol-cars">
-      {vehiclesFor(course).map((id) => (
-        <button key={id} className={`chip ${id === carId ? 'on' : ''}`} disabled={disabled} onClick={() => { sfx.move(); chooseCar(id); }}>
-          {CAR_SPECS[id].name}
-        </button>
-      ))}
-    </div>
-  );
-}
 
 /** AT / MT: each player's own choice (the course and conditions are the room's); trains and the cockroach have one ratio. */
 function GearboxPicker({ carId, disabled }: { carId: CarId; disabled?: boolean }) {
@@ -59,6 +47,8 @@ export function OnlineLobbyScreen() {
   const [course, setCourse] = useState<CourseId>(currentCourseId());
   const [tod, setTod] = useState<TimeOfDay>(useSettings.getState().timeOfDay);
   const [code, setCode] = useState('');
+  // the car select open over this screen (on which vehicle); its keys replace this screen's meanwhile
+  const [picking, setPicking] = useState<CarId | null>(null);
   // the fighters race only at Edwards: picking another course swaps one for the first vehicle it allows
   useEffect(() => {
     if (!vehiclesFor(course).includes(useOnline.getState().carId)) chooseCar(vehiclesFor(course)[0]);
@@ -71,13 +61,12 @@ export function OnlineLobbyScreen() {
   }, []);
   useMenuInput((a) => {
     if (a === 'back') { sfx.back(); go('modes'); }
-    if (a === 'left' || a === 'right') {
-      const list = vehiclesFor(course);
-      const i = list.indexOf(useOnline.getState().carId);
-      chooseCar(list[(i + (a === 'left' ? list.length - 1 : 1)) % list.length]);
+    // ← →: the car select, on the previous / next vehicle (Enter there enters it)
+    if ((a === 'left' || a === 'right') && useOnline.getState().player) {
+      setPicking(neighbourVehicle(course, useOnline.getState().carId, a === 'left' ? -1 : 1));
       sfx.move();
     }
-  });
+  }, !picking);
   return (
     <div className="screen online-lobby">
       <div className="crumb center">ONLINE BATTLE ― オンライン対戦（最大{MAX_PLAYERS}人）</div>
@@ -95,7 +84,7 @@ export function OnlineLobbyScreen() {
             <div className="ol-section">
               <label>エントリー</label>
               <div className="ol-me"><b>{player.name}</b></div>
-              <CarPicker carId={carId} course={course} />
+              <OnlineVehicle carId={carId} course={course} picking={picking} onPicking={setPicking} />
               <GearboxPicker carId={carId} />
             </div>
             <div className="ol-split">
@@ -131,7 +120,7 @@ export function OnlineLobbyScreen() {
         )}
         {error && <div className="ol-error">{error}</div>}
       </div>
-      <Hint items={[['←→', '車'], ['Esc', '戻る']]} />
+      <Hint items={[['←→', '車両選択'], ['Esc', '戻る']]} />
     </div>
   );
 }
@@ -146,6 +135,7 @@ function RealtimeBadge() {
 export function OnlineRoomScreen() {
   const { room, player, carId, busy, error } = useOnline();
   const go = useApp((s) => s.go);
+  const [picking, setPicking] = useState<CarId | null>(null);
   useEffect(() => {
     void gameHolder.game?.audio?.playMusic('bgm_online');
   }, []);
@@ -182,13 +172,12 @@ export function OnlineRoomScreen() {
   useMenuInput((a) => {
     if (a === 'back') exit();
     if (a === 'confirm') (isHost ? start : ready)();
+    // ← →: the car select, on the previous / next vehicle (looking is no change of car: Enter there enters it)
     if ((a === 'left' || a === 'right') && room?.status === 'waiting') {
-      const list = vehiclesFor(room.track_id);
-      const i = list.indexOf(carId);
-      chooseCar(list[(i + (a === 'left' ? list.length - 1 : 1)) % list.length]);
+      setPicking(neighbourVehicle(room.track_id, carId, a === 'left' ? -1 : 1));
       sfx.move();
     }
-  });
+  }, !picking);
   if (!room || !player) return null;
   const course = COURSES[room.track_id as CourseId];
   return (
@@ -225,7 +214,7 @@ export function OnlineRoomScreen() {
             );
           })}
         </ul>
-        <CarPicker carId={carId} course={room.track_id} disabled={room.status !== 'waiting'} />
+        <OnlineVehicle carId={carId} course={room.track_id} disabled={room.status !== 'waiting'} picking={picking} onPicking={setPicking} />
         <GearboxPicker carId={carId} disabled={room.status !== 'waiting'} />
         <div className="ol-actions">
           {isHost ? (
@@ -244,7 +233,7 @@ export function OnlineRoomScreen() {
         </div>
         {error && <div className="ol-error">{error}</div>}
       </div>
-      <Hint items={[['←→', '車'], ['Enter', isHost ? 'スタート' : me?.ready ? '準備完了を取り消す' : '準備完了'], ['Esc', '退出']]} />
+      <Hint items={[['←→', '車両選択'], ['Enter', isHost ? 'スタート' : me?.ready ? '準備完了を取り消す' : '準備完了'], ['Esc', '退出']]} />
     </div>
   );
 }
