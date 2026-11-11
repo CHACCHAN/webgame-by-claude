@@ -1,22 +1,25 @@
 import { Quaternion, Vector3 } from 'three';
 import { GROUP_CAR, GROUP_PROXY, PHYSICS_DT, PhysicsWorld, RAPIER, groups } from '../vehicle/PhysicsWorld';
 import type { CarSpec } from '../vehicle/carSpecs';
+import { newSteerMemory, steerProxy } from './steer';
 
 const _p = new Vector3(), _q = new Quaternion();
-/** per-step velocity blend: ~0.15 s time constant at the physics rate */
-const BLEND = 1 - Math.exp(-PHYSICS_DT / 0.15);
+const _cmd: [number, number, number] = [0, 0, 0];
 
 /**
  * Physical stand-in for another player's car in an online race: a body with the car's real mass and
- * chassis shape, steered every physics step towards where the network says that car is. The local car
- * bumps into it with finite mass (both get pushed); the spring then pulls it back onto the network
- * track. It only collides with real cars — never with the ground, walls or other stand-ins.
+ * chassis shape, steered every physics step along the path the network gives for that car (`steerProxy`).
+ * The local car bumps into it with finite mass (both get pushed); a soft pull then brings it back onto the
+ * path. It only collides with real cars — never with the ground, walls or other stand-ins.
  */
 export class ProxyCar {
   readonly body: RAPIER.RigidBody;
   readonly collider: RAPIER.Collider;
   /** no contact until this time (ms) and until clear of the local car: after jumps and respawns */
   private ghostUntil = 0;
+  private memory = newSteerMemory();
+  /** where the network had the car at the end of the last step: the body's distance from it is what hits did */
+  private aim = new Vector3();
 
   constructor(private physics: PhysicsWorld, spec: CarSpec, position: Vector3, quaternion: Quaternion) {
     this.body = physics.world.createRigidBody(
@@ -37,33 +40,39 @@ export class ProxyCar {
         .setRestitution(0.1),
       this.body,
     );
+    this.aim.copy(position);
   }
 
   /**
-   * One physics step: velocity = network velocity plus a spring towards the network position;
-   * jumps (respawns, lag spikes) are teleported.
+   * One physics step: `target`, `targetQ`, `velocity` are the car's pose and velocity (in the physics world's
+   * seconds) at the end of this step. Jumps (respawns, lag spikes) are teleported. `gap`: time was skipped since
+   * the last step (see `steerProxy`).
    */
-  drive(target: Vector3, targetQ: Quaternion, velocity: Vector3, now = 0) {
+  drive(target: Vector3, targetQ: Quaternion, velocity: Vector3, now = 0, gap = false) {
     const t = this.body.translation();
-    _p.set(target.x - t.x, target.y - t.y, target.z - t.z);
-    if (_p.lengthSq() > 64) {
-      this.body.setTranslation({ x: target.x, y: target.y, z: target.z }, true);
-      _p.set(0, 0, 0);
-      this.ghost(now + 1500);
-    }
-    // the wanted velocity is the network velocity plus a (capped) pull back onto the track; the body
-    // only blends towards it, so the momentum of a hit survives for a moment and the car gets shoved
-    const k = Math.min(3, 8 / Math.max(0.5, _p.length()));
+    if (_p.set(target.x - t.x, target.y - t.y, target.z - t.z).lengthSq() > 64) return this.teleport(target, targetQ, now);
     const v = this.body.linvel();
-    const a = BLEND;
-    this.body.setLinvel(
-      { x: v.x + (velocity.x + _p.x * k - v.x) * a, y: v.y + (velocity.y + _p.y * k - v.y) * a, z: v.z + (velocity.z + _p.z * k - v.z) * a },
-      true,
-    );
-    const r = this.body.rotation();
-    _q.set(r.x, r.y, r.z, r.w).slerp(targetQ, 0.25);
-    this.body.setRotation({ x: _q.x, y: _q.y, z: _q.z, w: _q.w }, true);
+    steerProxy(this.memory, [t.x, t.y, t.z], [v.x, v.y, v.z], [target.x, target.y, target.z], [velocity.x, velocity.y, velocity.z], PHYSICS_DT, _cmd, gap);
+    if (gap) {
+      const s = this.memory.shift;
+      this.body.setTranslation({ x: t.x + s[0], y: t.y + s[1], z: t.z + s[2] }, true);
+    }
+    this.body.setLinvel({ x: _cmd[0], y: _cmd[1], z: _cmd[2] }, true);
+    // the heading is the network's, as it is: a hit shoves the stand-in, it does not spin it
+    this.body.setRotation({ x: targetQ.x, y: targetQ.y, z: targetQ.z, w: targetQ.w }, true);
     this.body.setAngvel({ x: 0, y: 0, z: 0 }, true);
+    this.aim.copy(target);
+  }
+
+  /** Puts the stand-in at a pose (the car was moved, not driven, there): no momentum, no contact for a moment. */
+  teleport(target: Vector3, targetQ: Quaternion, now = 0) {
+    this.body.setTranslation({ x: target.x, y: target.y, z: target.z }, true);
+    this.body.setRotation({ x: targetQ.x, y: targetQ.y, z: targetQ.z, w: targetQ.w }, true);
+    this.body.setLinvel({ x: 0, y: 0, z: 0 }, true);
+    this.body.setAngvel({ x: 0, y: 0, z: 0 }, true);
+    this.memory = newSteerMemory();
+    this.aim.copy(target);
+    this.ghost(now + 1500);
   }
 
   /** Pass through cars until `until` (ms) — it might have landed inside one. */
@@ -87,6 +96,12 @@ export class ProxyCar {
   get quaternion() {
     const r = this.body.rotation();
     return _q.set(r.x, r.y, r.z, r.w);
+  }
+
+  /** How far hits have pushed the body off the network's path (m): what the picture adds to the path's pose. */
+  shove(out: Vector3) {
+    const t = this.body.translation();
+    return out.set(t.x - this.aim.x, t.y - this.aim.y, t.z - this.aim.z);
   }
 
   dispose() {

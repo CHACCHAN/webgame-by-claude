@@ -163,11 +163,29 @@ test('online battle: five in one room (three games, two more through the API), e
     expect(await p.page.evaluate(() => (window as any).__game.timeOfDay)).toBe('rain');
     expect(st.remotes).toHaveLength(4);
   }
+  // the connection readout is off until asked for (N key), then lists the links
+  await expect(all[0].page.locator('.net-stats')).toBeEmpty();
+  await all[0].page.keyboard.press('n');
+  await expect(all[0].page.locator('.net-stats')).toContainText('往復', { timeout: 60_000 });
+  await all[0].page.keyboard.press('n');
+  await expect(all[0].page.locator('.net-stats')).toBeEmpty({ timeout: 60_000 });
   // car states flow between the three games and the live order lists all five
   const parked: { slot: number; x: number; z: number; s: number; lateral: number }[][] = [];
   for (const p of all) {
     await p.page.waitForFunction(() => (window as any).__game.remotes.standings().filter((r: any) => r.lastHeard > 0 && r.s > 0).length === 2, null, { timeout: 120_000 });
     await expect(p.page.locator('.online-standings li')).toHaveCount(5);
+    // each of the two other games is a link with its own clock exchange and statistics; nothing malformed came in
+    await p.page.waitForFunction(() => (window as any).__game.net.stats().filter((s: any) => s.synced && s.received > 5).length === 2, null, { timeout: 120_000 });
+    const link = await p.page.evaluate(() => {
+      const net = (window as any).__game.net;
+      return { rejected: net.rejected as number, stats: (net.stats() as any[]).filter((s) => s.synced) };
+    });
+    expect(link.rejected).toBe(0);
+    for (const s of link.stats) {
+      expect(s.rtt).toBeGreaterThan(0);
+      expect(s.rtt).toBeLessThan(2000);
+      expect(s.loss).toBeLessThan(0.5);
+    }
     // the other four cars are solid stand-ins in this client's physics world, riding on the road: the two games' cars
     // at their network pose, the two players without a game still on their grid places
     const solid = await standIns(p.page);

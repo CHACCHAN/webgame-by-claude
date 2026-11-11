@@ -4,7 +4,7 @@ import { api, ApiError, type RoomState, type StoredPlayer } from '../api/client'
 import { gameHolder } from '../ui/GameCanvas';
 import { useApp } from './app';
 import { useSettings } from './settings';
-import type { NetState } from '../game/net/RemoteRacers';
+import { parseImpairment, type NetTransport } from '../game/net/transport';
 import type { CarId } from '../game/vehicle/carSpecs';
 import type { CourseId } from '../game/track/courses';
 import type { Game } from '../game/Game';
@@ -40,7 +40,6 @@ let clockOffset = 0;
 let bestRtt = Infinity;
 let pusher: Pusher | null = null;
 let channel: PresenceChannel | null = null;
-let sendTimer = 0;
 let pollTimer = 0;
 let startedRace = 0;
 const hookedGames = new WeakSet<Game>();
@@ -224,10 +223,7 @@ function connectRealtime(code: string) {
       channel.bind('pusher:subscription_succeeded', () => st().set({ realtime: 'live' }));
       channel.bind('pusher:subscription_error', () => st().set({ realtime: 'failed' }));
       channel.bind('room.updated', (data: { room: RoomState }) => applyRoom(data.room));
-      channel.bind('client-state', (data: NetState & { id: number }, meta?: { user_id?: string }) => {
-        const id = meta?.user_id ? Number(meta.user_id) : data.id;
-        if (id && id !== st().player?.id) gameHolder.game?.remotes.push(id, data, performance.now());
-      });
+      bindStates(channel);
     })
     .catch(() => st().set({ realtime: 'failed' }));
 }
@@ -271,17 +267,46 @@ function beginRace(room: RoomState) {
   startSending();
 }
 
+// ---- car states: the transport the engine's NetLink sends and receives on
+
+const STATE_EVENT = 'client-state';
+
+/**
+ * Car states as client events on the room's presence channel: Reverb passes each on to the other members with
+ * the sender's player id (`user_id`, set by the server from the channel auth, so nobody can speak for another).
+ * This object is all the engine sees of the socket (`NetTransport`): a direct connection would be another one.
+ */
+const relay: NetTransport = {
+  get ready() {
+    return !!channel?.subscribed;
+  },
+  send(data) {
+    channel?.trigger(STATE_EVENT, data);
+  },
+  onReceive: null,
+};
+
+function bindStates(ch: PresenceChannel) {
+  ch.bind(STATE_EVENT, (data: number[], meta?: { user_id?: string }) => {
+    const id = Number(meta?.user_id);
+    if (id) relay.onReceive?.(id, data);
+  });
+}
+
+/** The game sends its car's state itself, after its physics (`Game.step`), on whatever it is attached to. */
 function startSending() {
-  stopSending();
-  sendTimer = window.setInterval(() => {
-    const state = gameHolder.game?.netState();
-    if (state && channel?.subscribed) channel.trigger('client-state', { ...state, id: st().player?.id });
-  }, 80);
+  const game = gameHolder.game;
+  if (!game) return;
+  // testing: `?netsim=50,20,2` makes this client's network worse, `?netmode=buffered` draws the peers in the past
+  const query = new URLSearchParams(location.search);
+  const worse = parseImpairment(query.get('netsim'));
+  if (worse && !game.net.impaired) game.net.impair(worse);
+  if (query.get('netmode') === 'buffered') game.net.setMode('buffered');
+  game.net.attach(relay);
 }
 
 function stopSending() {
-  if (sendTimer) clearInterval(sendTimer);
-  sendTimer = 0;
+  gameHolder.game?.net.attach(null);
 }
 
 function startPolling() {

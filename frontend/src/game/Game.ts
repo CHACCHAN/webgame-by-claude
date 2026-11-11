@@ -16,7 +16,8 @@ import { loadTrafficModels } from './render/trafficModels';
 import { loadSurfaceTextures } from './render/surfaceTextures';
 import { loadProps } from './render/props';
 import { findCorners, type Corner, type CornerKind } from './track/corners';
-import { RemoteRacers, SLOT_COLORS, type NetState, type Peer } from './net/RemoteRacers';
+import { RemoteRacers, SLOT_COLORS, type Peer } from './net/RemoteRacers';
+import { NetLink, type LocalState } from './net/NetLink';
 import type { GameRenderer } from './render/RenderHost';
 import { onlineGrid } from './net/grid';
 import { BIKE_CAMERA, CAR_CAMERA, ChaseCamera, TRAIN_CAMERA } from './camera/ChaseCamera';
@@ -131,6 +132,10 @@ const LAMP_LIGHT_DROP = 0.9;
 /** tyre grip on a wet road (rain) as a share of the dry grip */
 export const WET_GRIP = 0.8;
 const _zero = new THREE.Vector3();
+/** car states go out this often (s): every other frame of a 60 Hz screen, so the peers get them evenly spaced */
+const NET_SEND_INTERVAL = 1 / 30;
+/** the acceleration sent with a state is smoothed over about this long (s): suspension chatter and wall hits are not a trend */
+const NET_ACC_TAU = 0.06;
 
 export class Game {
   readonly root = new THREE.Group();
@@ -216,6 +221,24 @@ export class Game {
   remotes!: RemoteRacers;
   /** id of the local player in an online battle */
   onlineSelfId = 0;
+  /** the car-state exchange of an online battle (`remotes` draws what it receives); `net.stats()` are its numbers */
+  readonly net = new NetLink();
+  /**
+   * The frame's moment on the wall clock (ms, as performance.now): advanced by the frame time, like the physics,
+   * and only nudged towards performance.now(), which is read at an uneven point of every frame. Online, a
+   * millisecond of unevenness would move the other cars by 5 cm at 180 km/h.
+   */
+  private wall = 0;
+  /** the moment of the latest physics state on that clock (ms) */
+  private stateWall = 0;
+  private netSendT = 0;
+  /** physics seconds per wall-clock second, smoothed */
+  private simRate = 1;
+  private netUrgent = false;
+  /** counts the local car's respawns for the peers (2 bit) */
+  private netEpoch = 0;
+  private netAcc = new THREE.Vector3();
+  private netVel = new THREE.Vector3();
   private rideHeights = new Map<CarId, number>();
   /** stand-in for the post-processing buffer when compiling shaders (see precompile) */
   private compileTarget: THREE.RenderTarget | null = null;
@@ -260,7 +283,7 @@ export class Game {
     void loadTrainVariants(TRAIN_ORDER);
     this.root.add(this.smoke.points, this.skids.mesh, this.rain.mesh, this.exhaust.group);
     this.exhaust.density = this.quality.treeDensity < 0.6 ? 0.6 : 1;
-    this.remotes = new RemoteRacers(this.root, (id) => this.rideHeightOf(id), false);
+    this.remotes = new RemoteRacers(this.root, (id) => this.rideHeightOf(id), false, this.net);
     // pooled lights for nearby street lamps
     for (let i = 0; i < 6; i++) {
       const l = new THREE.PointLight('#ffa850', 0, 42, 1.7);
@@ -583,6 +606,14 @@ export class Game {
       this.remotes.setHeadlights(this.env.preset.lampsOn > 0.5 ? 1 : 0.6);
       // other players are solid: physical stand-ins the local car can bump into
       this.remotes.enablePhysics(this.physics);
+      this.remotes.timeScale = this.timeScale;
+      this.net.selfId = this.onlineSelfId;
+      this.netSendT = 0;
+      this.simRate = this.timeScale;
+      this.netUrgent = false;
+      this.netEpoch = 0;
+      this.netAcc.set(0, 0, 0);
+      this.netVel.set(0, 0, 0);
     }
     this.player.sim.autoShift = this.autoShift;
     if (cfg.mode === 'rival' && cfg.rivalLevel) {
@@ -652,11 +683,13 @@ export class Game {
     if (this.phase === 'loading') return;
     const dt = Math.min(dtRaw, 0.1) * this.timeScale;
     this.time += dt;
+    const real = performance.now(), next = this.wall + dtRaw * 1000;
+    this.wall = Math.abs(real - next) > 50 ? real : next + (real - next) * 0.05;
 
     if (this.input.menuPressed('camera')) this.chase.cycle();
 
     if (!this.paused) {
-      this.step(dt);
+      this.step(dt, dtRaw);
     }
     this.updateVisuals(dt);
     this.env.update(this.time, this.camera.position);
@@ -683,7 +716,7 @@ export class Game {
     return [this.player, this.rival, this.attractCar].filter((r): r is Racer => !!r);
   }
 
-  private step(dt: number) {
+  private step(dt: number, dtRaw: number) {
     const phase = this.phase;
     // ---- input / AI
     if (this.player) {
@@ -718,9 +751,17 @@ export class Game {
         r.sim.input = r.input;
         r.sim.preStep(PHYSICS_DT);
       }
-      if (this.config?.online) this.remotes.stepProxies(performance.now(), this.player?.sim.position ?? null);
+      // the stand-ins of the other players' cars go where those cars are at the moment this step ends at
+      if (this.config?.online) this.remotes.stepProxies(this.wall - ((this.accumulator - PHYSICS_DT) / this.timeScale) * 1000, this.wall, this.player?.sim.position ?? null);
       this.physics.step();
       for (const r of racers) r.sim.postStep(PHYSICS_DT);
+      if (this.config?.online && this.player) {
+        const v = this.player.sim.velocity;
+        // a hit (wall, another car) is no trend to carry on, but news the peers cannot guess: it goes out at once
+        if (this.player.sim.impact > 0) this.netUrgent = true;
+        else this.netAcc.lerp(_v.subVectors(v, this.netVel).divideScalar(PHYSICS_DT).clampLength(0, 40), 1 - Math.exp(-PHYSICS_DT / NET_ACC_TAU));
+        this.netVel.copy(v);
+      }
       this.detectCarContact();
       this.simTime += PHYSICS_DT;
       if (this.phase === 'racing' || this.phase === 'finished') this.raceStep();
@@ -728,6 +769,20 @@ export class Game {
       steps++;
     }
     if (steps === maxSteps) this.accumulator = 0;
+    this.stateWall = this.wall - (this.accumulator / this.timeScale) * 1000;
+    // how fast the physics really runs against the wall clock: the time scale, unless this machine cannot keep up
+    // (under 15 fps the steps of a frame are capped and the race runs in slow motion)
+    if (dtRaw > 0) this.simRate += ((steps * PHYSICS_DT) / dtRaw - this.simRate) * (1 - Math.exp(-dtRaw / 0.5));
+    if (this.config?.online) {
+      // sent here, straight after the physics, so a state is as fresh as it can be when it leaves
+      this.netSendT += dt / this.timeScale;
+      if (this.netUrgent || this.netSendT >= NET_SEND_INTERVAL - 0.002) {
+        this.netSendT = this.netUrgent ? 0 : Math.min(this.netSendT - NET_SEND_INTERVAL, NET_SEND_INTERVAL);
+        this.netUrgent = false;
+        const st = this.netState();
+        if (st) this.net.send(st);
+      }
+    }
 
     // ---- race logic
     for (const r of racers) this.trackRacer(r, dt);
@@ -869,7 +924,13 @@ export class Game {
     r.proj.index = -1;
     r.flippedTime = 0;
     // a respawned car may land inside another player's car: ghost them until clear
-    if (r === this.player && this.config?.online) this.remotes.ghostAll(performance.now() + 1500);
+    if (r === this.player && this.config?.online) {
+      this.remotes.ghostAll(this.wall + 1500);
+      // the peers put the car here instead of easing it over
+      this.netEpoch = (this.netEpoch + 1) & 3;
+      this.netAcc.set(0, 0, 0);
+      this.netVel.copy(r.sim.velocity);
+    }
     r.lastSafe = { s, t: this.time };
     for (let i = 0; i < 4; i++) this.skids.break(i);
   }
@@ -990,22 +1051,30 @@ export class Game {
     return online ? Math.max(sim, (performance.now() - online.startAt) / 1000) : sim;
   }
 
-  /** Snapshot of the local car for the other players (online battles). */
-  netState(): NetState | null {
+  /**
+   * The local car for the other players (online battles): the latest physics state with the moment it is of.
+   * Rates are per wall-clock second (they differ from the physics' own under a time scale, a test aid, and on a
+   * machine too slow to run the physics in real time).
+   */
+  netState(): LocalState | null {
     const pl = this.player;
     if (!pl || !this.config?.online || (this.phase !== 'countdown' && this.phase !== 'racing' && this.phase !== 'finished')) return null;
-    const p = pl.sim.position, q = pl.sim.quaternion;
-    const r = (v: number, k = 1000) => Math.round(v * k) / k;
-    const st: NetState = {
-      t: Math.round(performance.now()),
-      p: [r(p.x), r(p.y), r(p.z)],
-      q: [r(q.x, 1e4), r(q.y, 1e4), r(q.z, 1e4), r(q.w, 1e4)],
-      v: r(pl.sim.forwardSpeed, 100),
-      st: r(pl.sim.wheels[0]?.steer ?? 0, 1e3),
-      s: r(pl.proj.s, 10),
+    const p = pl.sim.position, q = pl.sim.quaternion, v = pl.sim.velocity, w = pl.sim.body.angvel(), a = this.netAcc;
+    // (the smoothed rate ripples with the frame rate: within a tenth of the time scale it is the time scale)
+    const ts = Math.abs(this.simRate / this.timeScale - 1) < 0.1 ? this.timeScale : this.simRate;
+    const st: LocalState = {
+      at: this.stateWall,
+      p: [p.x, p.y, p.z],
+      q: [q.x, q.y, q.z, q.w],
+      vel: [v.x * ts, v.y * ts, v.z * ts],
+      acc: [a.x * ts * ts, a.y * ts * ts, a.z * ts * ts],
+      w: [w.x * ts, w.y * ts, w.z * ts],
+      st: pl.sim.wheels[0]?.steer ?? 0,
+      s: pl.proj.s,
       br: pl.sim.input.brake > 0.2 ? 1 : 0,
-      th: r(pl.sim.input.throttle, 100),
-      rp: r(clamp(pl.sim.rpm / pl.sim.spec.engine.redline, 0, 1), 100),
+      ep: this.netEpoch,
+      th: pl.sim.input.throttle,
+      rp: clamp(pl.sim.rpm / pl.sim.spec.engine.redline, 0, 1),
     };
     if (pl.finished) st.fin = Math.round(pl.finishTime * 1000);
     return st;
@@ -1106,7 +1175,9 @@ export class Game {
       }
     }
     if (this.config?.online && (this.phase === 'countdown' || this.phase === 'racing' || this.phase === 'finished')) {
-      this.remotes.update(performance.now(), dt);
+      // the local car is drawn one physics step behind the frame's moment (the interpolation between its last two
+      // states): the others at that same moment
+      this.remotes.update(this.wall - (PHYSICS_DT / this.timeScale) * 1000, dt);
       if (!this.paused) this.remotes.forEachExhaust((visual, fx, state) => this.emitExhaustFromPose(visual, state, fx.speed, dt, fx.th, fx.rp));
     }
     if (!this.paused) {
