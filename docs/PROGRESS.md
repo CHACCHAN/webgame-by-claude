@@ -331,6 +331,8 @@ What a deploy or a bad hour could break, found by reading the stack, and changed
   0.29 s, qwen-3.8-27b 0.33 s, nemotron-3.5-bolt 0.58 s, gemini-3.5-flash-lite 2.0 s (the best line), gemma-4-31b
   6.7 s, gemini-3.8-flash 12 s; tool calls correct with sarashina-3-mini in 0.15–0.47 s. Defaults: lines
   gemini-3.5-flash-lite then sarashina-3-mini, decisions sarashina-3-mini then qwen-3.8-27b.
+- **Owner's decision (11-11, after this report): inference on the device is dropped, everything goes through the
+  API.** What follows is the finding that led there; nothing of it is to be built.
 - **Not done: the model in the browser.** The combination asked for is unconfirmed at every point: LiteRT-LM.js
   (`@litert-lm/core`, early preview) documents Gemma 4 only for the web; there is no `.litertlm` of Spark-X2.6-1.7B,
   its architecture is its own (`Spark2_5ForCausalLM`) and no conversion path for such a model is documented; nothing on

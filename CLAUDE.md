@@ -243,8 +243,8 @@ pending. `docs/PLAN.md` holds the design.
   before the start and after the finish (`hud.rivalLine`, event `rivalLine`), and in the race it can only call two
   things the game then does by rule: `AIDriver.block(seconds)` (moves in front of the chaser across the road, inside
   the road's edges; the road is left open as long again afterwards) and the horn (`AudioEngine.horn`, also the
-  player's H key). Whom to ask is a list of `RivalBrain`s (`game.rivalBrains`; today `api/rivalBrain.ts` = the
-  server; a model in the browser would be one more), with the game's own lines and rules (`scriptedBrain`) always
+  player's H key). Whom to ask is a list of `RivalBrain`s (`game.rivalBrains`: `api/rivalBrain.ts` = the server;
+  the owner dropped inference in the browser on 11-11: everything goes through the API), with the game's own lines and rules (`scriptedBrain`) always
   last: no key, no network, a slow answer (line 3.2 s, decision 1.5 s) or the setting ライバルAI off give the same game.
   Server: `POST /api/ai/taunt|decide` (`RivalAiController` → `Services/RivalMind.php` → the owner's LiteLLM gateway,
   `config/llm.php`, `LLM_API_KEY` in `.env` only: never to the browser, never in a log or commit). The requests carry
