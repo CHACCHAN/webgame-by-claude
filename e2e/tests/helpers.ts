@@ -19,6 +19,7 @@ export async function prepare(page: Page) {
 }
 
 export async function waitForTitle(page: Page) {
-  await expect(page.locator('.title h1')).toBeVisible({ timeout: 180_000 });
+  // (a game that loads while two others draw on the same software renderer has taken over three minutes)
+  await expect(page.locator('.title h1')).toBeVisible({ timeout: 420_000 });
   await page.waitForFunction(() => (window as any).__game?.phase === 'attract');
 }

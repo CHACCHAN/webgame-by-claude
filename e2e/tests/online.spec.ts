@@ -1,6 +1,8 @@
 import { expect, test, type APIRequestContext, type Browser, type BrowserContextOptions, type Page } from '@playwright/test';
 import { prepare, waitForTitle } from './helpers';
 
+// Time limits: twice what the software renderer needed on 11-10. On 11-11 the same machine drew 1.3–1.6× slower and
+// a guest's course took over three minutes to load next to two other games.
 /** One player = one browser context (own localStorage, own player token). */
 async function openPlayer(browser: Browser, name: string, options: BrowserContextOptions = { viewport: { width: 640, height: 360 } }) {
   // three WebGL clients share one CPU (SwiftShader): small canvases
@@ -15,7 +17,7 @@ async function openPlayer(browser: Browser, name: string, options: BrowserContex
   await page.locator('.ol-name').fill(name);
   await page.keyboard.press('Enter');
   // (three software-rendered browsers at once: the entry can take a while to show)
-  await expect(page.locator('.ol-me')).toContainText(name, { timeout: 90_000 });
+  await expect(page.locator('.ol-me')).toContainText(name, { timeout: 180_000 });
   return { ctx, page, errors };
 }
 
@@ -67,15 +69,15 @@ const nearFinish = (page: Page) => page.evaluate(() => {
 const TIME = /^\d:\d\d\.\d{3}$/;
 
 test('online battle: five in one room (three games, two more through the API), everyone ready, race, rematch', async ({ browser, request }) => {
-  test.setTimeout(1_500_000);
+  test.setTimeout(2_400_000);
   const tag = String(Date.now() % 10000);
   const host = await openPlayer(browser, `HOST${tag}`);
   await host.page.locator('.ol-courses .chip', { hasText: '天狼スカイライン' }).click();
   await host.page.locator('.ol-tod .chip', { hasText: '深夜・雨' }).click();
   await host.page.locator('button', { hasText: 'ルームを作成' }).click();
-  const code = (await host.page.locator('.ol-code-big b').textContent({ timeout: 180_000 }))!.trim();
+  const code = (await host.page.locator('.ol-code-big b').textContent({ timeout: 420_000 }))!.trim();
   expect(code).toMatch(/^[A-Z2-9]{4}$/);
-  await expect(host.page.locator('.rt-badge')).toHaveText('LIVE', { timeout: 60_000 });
+  await expect(host.page.locator('.rt-badge')).toHaveText('LIVE', { timeout: 120_000 });
   const start = host.page.locator('.ol-start');
   // five seats; alone, the host cannot start yet
   await expect(host.page.locator('.ol-slots li')).toHaveCount(5);
@@ -84,27 +86,27 @@ test('online battle: five in one room (three games, two more through the API), e
   // nor while another player's game is still loading the course
   const slow = await apiPlayer(request, `SLOW${tag}`);
   expect((await slow.join(code)).status()).toBe(200);
-  await expect(host.page.locator('.ol-slots em.loading')).toHaveCount(1, { timeout: 30_000 });
+  await expect(host.page.locator('.ol-slots em.loading')).toHaveCount(1, { timeout: 60_000 });
   await expect(start).toBeDisabled();
   await expect(start).toHaveText('読み込み待ち… あと1人');
   // nobody is ready before their game has loaded; and loaded is not ready: the player has to press the button
   expect((await slow.ready(code)).status()).toBe(409);
   expect((await slow.loaded(code)).status()).toBe(200);
-  await expect(host.page.locator('.ol-slots em.not-ready')).toHaveCount(1, { timeout: 30_000 });
+  await expect(host.page.locator('.ol-slots em.not-ready')).toHaveCount(1, { timeout: 60_000 });
   await expect(start).toBeDisabled();
   await expect(start).toHaveText('準備完了待ち… あと1人');
   // (Enter is the start button: nothing yet)
   await host.page.keyboard.press('Enter');
   expect(await host.page.evaluate(() => (window as any).__game.phase)).toBe('garage');
   expect((await slow.leave(code)).status()).toBe(200);
-  await expect(host.page.locator('.ol-slots li:not(.empty)')).toHaveCount(1, { timeout: 30_000 });
+  await expect(host.page.locator('.ol-slots li:not(.empty)')).toHaveCount(1, { timeout: 60_000 });
 
   const guests = [];
   for (const name of [`B${tag}`, `C${tag}`]) {
     const g = await openPlayer(browser, name);
     await g.page.locator('.ol-code').fill(code);
     await g.page.locator('button', { hasText: '参加' }).click();
-    await expect(g.page.locator('.ol-code-big b')).toHaveText(code, { timeout: 180_000 });
+    await expect(g.page.locator('.ol-code-big b')).toHaveText(code, { timeout: 420_000 });
     guests.push(g);
   }
   const [b, c] = guests;
@@ -113,7 +115,7 @@ test('online battle: five in one room (three games, two more through the API), e
   const silent = [await apiPlayer(request, `D${tag}`), await apiPlayer(request, `E${tag}`)];
   for (const p of silent) expect((await p.join(code)).status()).toBe(200);
   // everyone sees the full room (pushed over the socket or picked up by polling)
-  for (const p of all) await expect(p.page.locator('.ol-slots li:not(.empty)')).toHaveCount(5, { timeout: 30_000 });
+  for (const p of all) await expect(p.page.locator('.ol-slots li:not(.empty)')).toHaveCount(5, { timeout: 60_000 });
   // a sixth player is turned away
   const full = await (await apiPlayer(request, 'SIXTH')).join(code);
   expect(full.status()).toBe(409);
@@ -121,24 +123,24 @@ test('online battle: five in one room (three games, two more through the API), e
 
   // the start waits until every game has loaded the course (the guests came from another course) …
   for (const p of silent) expect((await p.loaded(code)).status()).toBe(200);
-  await expect(host.page.locator('.ol-slots em.loading')).toHaveCount(0, { timeout: 60_000 });
+  await expect(host.page.locator('.ol-slots em.loading')).toHaveCount(0, { timeout: 120_000 });
   // … and until every guest has pressed 準備完了
   await expect(start).toBeDisabled();
   await expect(start).toHaveText('準備完了待ち… あと4人');
   for (const p of silent) expect((await p.ready(code)).status()).toBe(200);
-  await expect(start).toHaveText('準備完了待ち… あと2人', { timeout: 30_000 });
+  await expect(start).toHaveText('準備完了待ち… あと2人', { timeout: 60_000 });
   // a guest has the ready button instead of the start button
   for (const p of guests) {
     await expect(p.page.locator('.ol-start')).toHaveCount(0);
-    await expect(p.page.locator('.ol-ready')).toBeEnabled({ timeout: 60_000 });
+    await expect(p.page.locator('.ol-ready')).toBeEnabled({ timeout: 120_000 });
     await expect(p.page.locator('.ol-ready')).toHaveText('準備完了');
     await expect(p.page.locator('.ol-waiting')).toHaveCount(0);
   }
   await b.page.locator('.ol-ready').click();
-  await expect(b.page.locator('.ol-ready')).toHaveText('準備完了を取り消す', { timeout: 30_000 });
+  await expect(b.page.locator('.ol-ready')).toHaveText('準備完了を取り消す', { timeout: 60_000 });
   await expect(b.page.locator('.ol-waiting')).toBeVisible();
   await expect(b.page.locator('.ol-slots li.me em.ready')).toHaveText('準備完了 ✓');
-  await expect(start).toHaveText('準備完了待ち… あと1人', { timeout: 30_000 });
+  await expect(start).toHaveText('準備完了待ち… あと1人', { timeout: 60_000 });
   await expect(host.page.locator('.ol-slots em.ready')).toHaveCount(3);
   // looking around in the car select enters nothing (the ready stays); the car confirmed there takes the ready
   // back; Enter gives it again
@@ -151,21 +153,21 @@ test('online battle: five in one room (three games, two more through the API), e
   await b.page.locator('.vp .cta', { hasText: 'この車でエントリー' }).click();
   await expect(b.page.locator('.vp')).toHaveCount(0);
   await expect(b.page.locator('.ol-vehicle')).toContainText('RX-7 (FD3S)');
-  await expect(b.page.locator('.ol-ready')).toHaveText('準備完了', { timeout: 30_000 });
-  await expect(start).toHaveText('準備完了待ち… あと2人', { timeout: 30_000 });
+  await expect(b.page.locator('.ol-ready')).toHaveText('準備完了', { timeout: 240_000 });
+  await expect(start).toHaveText('準備完了待ち… あと2人', { timeout: 60_000 });
   await expect(b.page.locator('.ol-ready')).toBeEnabled();
   await b.page.keyboard.press('Enter');
-  await expect(b.page.locator('.ol-ready')).toHaveText('準備完了を取り消す', { timeout: 30_000 });
+  await expect(b.page.locator('.ol-ready')).toHaveText('準備完了を取り消す', { timeout: 240_000 });
   await expect(start).toBeDisabled();
   await c.page.locator('.ol-ready').click();
-  await expect(c.page.locator('.ol-waiting')).toBeVisible({ timeout: 30_000 });
+  await expect(c.page.locator('.ol-waiting')).toBeVisible({ timeout: 60_000 });
 
   // all ready: the host starts (Enter is the start button)
-  await expect(start).toHaveText('レース開始', { timeout: 30_000 });
+  await expect(start).toHaveText('レース開始', { timeout: 60_000 });
   await expect(start).toBeEnabled();
   await host.page.keyboard.press('Enter');
   for (const p of all) {
-    await p.page.waitForFunction(() => (window as any).__game.phase === 'racing', null, { timeout: 120_000 });
+    await p.page.waitForFunction(() => (window as any).__game.phase === 'racing', null, { timeout: 240_000 });
     const st = await game(p.page);
     expect(st.course).toBe('tenrou-skyline');
     // everyone races in the host's conditions, whatever their own last choice was
@@ -175,16 +177,16 @@ test('online battle: five in one room (three games, two more through the API), e
   // the connection readout is off until asked for (N key), then lists the links
   await expect(all[0].page.locator('.net-stats')).toBeEmpty();
   await all[0].page.keyboard.press('n');
-  await expect(all[0].page.locator('.net-stats')).toContainText('往復', { timeout: 60_000 });
+  await expect(all[0].page.locator('.net-stats')).toContainText('往復', { timeout: 120_000 });
   await all[0].page.keyboard.press('n');
-  await expect(all[0].page.locator('.net-stats')).toBeEmpty({ timeout: 60_000 });
+  await expect(all[0].page.locator('.net-stats')).toBeEmpty({ timeout: 120_000 });
   // car states flow between the three games and the live order lists all five
   const parked: { slot: number; x: number; z: number; s: number; lateral: number }[][] = [];
   for (const p of all) {
-    await p.page.waitForFunction(() => (window as any).__game.remotes.standings().filter((r: any) => r.lastHeard > 0 && r.s > 0).length === 2, null, { timeout: 120_000 });
+    await p.page.waitForFunction(() => (window as any).__game.remotes.standings().filter((r: any) => r.lastHeard > 0 && r.s > 0).length === 2, null, { timeout: 240_000 });
     await expect(p.page.locator('.online-standings li')).toHaveCount(5);
     // each of the two other games is a link with its own clock exchange and statistics; nothing malformed came in
-    await p.page.waitForFunction(() => (window as any).__game.net.stats().filter((s: any) => s.synced && s.received > 5).length === 2, null, { timeout: 120_000 });
+    await p.page.waitForFunction(() => (window as any).__game.net.stats().filter((s: any) => s.synced && s.received > 5).length === 2, null, { timeout: 240_000 });
     const link = await p.page.evaluate(() => {
       const net = (window as any).__game.net;
       return { rejected: net.rejected as number, stats: (net.stats() as any[]).filter((s) => s.synced) };
@@ -220,28 +222,28 @@ test('online battle: five in one room (three games, two more through the API), e
   // shortcut to the finish once the race clock passes the course minimum, so the results
   // flow is covered without driving 2.4 km at ~1 fps
   for (const p of all) {
-    await p.page.waitForFunction(() => (window as any).__game.hud.raceTime > 47, null, { timeout: 300_000, polling: 500 });
+    await p.page.waitForFunction(() => (window as any).__game.hud.raceTime > 47, null, { timeout: 480_000, polling: 500 });
     await nearFinish(p.page);
   }
   // the room is not finished before the two without a game are in as well
   for (const [k, p] of silent.entries()) expect((await p.finish(code, 61_000 + k * 1_500)).status()).toBe(200);
-  for (const p of all) await expect(p.page.locator('.online-results')).toBeVisible({ timeout: 300_000 });
+  for (const p of all) await expect(p.page.locator('.online-results')).toBeVisible({ timeout: 480_000 });
   for (const p of all) {
-    await expect(p.page.locator('.ol-standings li .time')).toHaveText([TIME, TIME, TIME, TIME, TIME], { timeout: 120_000 });
+    await expect(p.page.locator('.ol-standings li .time')).toHaveText([TIME, TIME, TIME, TIME, TIME], { timeout: 240_000 });
   }
   await expect(host.page.locator('button', { hasText: 'もう一度走る' })).toBeVisible();
   // rematch takes everyone back to the room, where the readies have to be given again
   await host.page.locator('button', { hasText: 'もう一度走る' }).click();
-  for (const p of all) await expect(p.page.locator('.ol-code-big b')).toHaveText(code, { timeout: 30_000 });
+  for (const p of all) await expect(p.page.locator('.ol-code-big b')).toHaveText(code, { timeout: 60_000 });
   await expect(start).toBeDisabled();
-  await expect(start).toHaveText('準備完了待ち… あと4人', { timeout: 30_000 });
-  for (const p of guests) await expect(p.page.locator('.ol-ready')).toHaveText('準備完了', { timeout: 30_000 });
+  await expect(start).toHaveText('準備完了待ち… あと4人', { timeout: 60_000 });
+  for (const p of guests) await expect(p.page.locator('.ol-ready')).toHaveText('準備完了', { timeout: 60_000 });
   // … and where the five vehicles stand on the course again (the waiting room's line-up)
   for (const p of all) {
     await p.page.waitForFunction(() => {
       const s = (window as any).__game.lobbyState;
       return s?.length === 5 && s.every((e: any) => e.carId && !e.pending);
-    }, null, { timeout: 120_000 });
+    }, null, { timeout: 240_000 });
   }
   for (const p of all) expect(p.errors).toEqual([]);
   for (const p of all) await p.ctx.close();
@@ -253,7 +255,7 @@ const lineup = (page: Page) => page.evaluate(() => (window as any).__game.lobbyS
 const seat = (page: Page, slot: number, carId: string, browsing = false) => page.waitForFunction(([slot, carId, browsing]) => {
   const e = (window as any).__game.lobbyState?.find((x: any) => x.slot === slot);
   return !!e && e.carId === carId && e.browsing === browsing && !e.pending;
-}, [slot, carId, browsing] as const, { timeout: 120_000 });
+}, [slot, carId, browsing] as const, { timeout: 240_000 });
 /** Line-ups left in the scene (there is one while the waiting room is up, none otherwise). */
 const lineupsInScene = (page: Page) => page.evaluate(() => {
   let n = 0;
@@ -262,12 +264,12 @@ const lineupsInScene = (page: Page) => page.evaluate(() => {
 });
 
 test('online waiting room: the members\' vehicles stand on the course; one being looked at shows on the other screen, a confirmed one takes its place', async ({ browser, request }) => {
-  test.setTimeout(1_200_000);
+  test.setTimeout(2_000_000);
   const tag = String(Date.now() % 10000);
   const host = await openPlayer(browser, `HOST${tag}`);
   await host.page.locator('button', { hasText: 'ルームを作成' }).click();
-  const code = (await host.page.locator('.ol-code-big b').textContent({ timeout: 180_000 }))!.trim();
-  await expect(host.page.locator('.rt-badge')).toHaveText('LIVE', { timeout: 60_000 });
+  const code = (await host.page.locator('.ol-code-big b').textContent({ timeout: 420_000 }))!.trim();
+  await expect(host.page.locator('.rt-badge')).toHaveText('LIVE', { timeout: 120_000 });
   const start = host.page.locator('.ol-start');
   // alone: the host's own car where the garage's car stood (the game is still in its garage phase)
   await seat(host.page, 0, 'hayate');
@@ -279,8 +281,8 @@ test('online waiting room: the members\' vehicles stand on the course; one being
   const guest = await openPlayer(browser, `G${tag}`);
   await guest.page.locator('.ol-code').fill(code);
   await guest.page.locator('button', { hasText: '参加' }).click();
-  await expect(guest.page.locator('.ol-code-big b')).toHaveText(code, { timeout: 180_000 });
-  await expect(guest.page.locator('.rt-badge')).toHaveText('LIVE', { timeout: 60_000 });
+  await expect(guest.page.locator('.ol-code-big b')).toHaveText(code, { timeout: 420_000 });
+  await expect(guest.page.locator('.rt-badge')).toHaveText('LIVE', { timeout: 120_000 });
   const both = [host, guest];
   for (const p of both) {
     await seat(p.page, 0, 'hayate');
@@ -293,14 +295,14 @@ test('online waiting room: the members\' vehicles stand on the course; one being
   expect((await silent.loaded(code)).status()).toBe(200);
   expect((await silent.ready(code)).status()).toBe(200);
   await guest.page.locator('.ol-ready').click();
-  await expect(start).toHaveText('レース開始', { timeout: 60_000 });
+  await expect(start).toHaveText('レース開始', { timeout: 120_000 });
 
   // the guest opens the car select and looks at another vehicle: on their own screen the garage shows it, on the
   // host's it stands in their seat, marked 選択中 …
   const garageCar = (page: Page) => page.evaluate(() => (window as any).__game.garageCar?.spec.id ?? null);
   await guest.page.locator('.ol-vehicle').click();
   await guest.page.locator('.vp-tile[data-id="roach"]').click();
-  await expect.poll(() => garageCar(guest.page), { timeout: 60_000 }).toBe('roach');
+  await expect.poll(() => garageCar(guest.page), { timeout: 120_000 }).toBe('roach');
   expect(await lineup(guest.page)).toBeNull();
   await seat(host.page, 2, 'roach', true);
   const row = host.page.locator('.ol-slots li', { hasText: `G${tag}` });
@@ -328,25 +330,25 @@ test('online waiting room: the members\' vehicles stand on the course; one being
   await expect(guest.page.locator('.vp')).toHaveCount(0);
   for (const p of both) await seat(p.page, 2, 'roach');
   await expect(row.locator('span')).toHaveText('ゴキブリ');
-  await expect(start).toHaveText('準備完了待ち… あと1人', { timeout: 30_000 });
+  await expect(start).toHaveText('準備完了待ち… あと1人', { timeout: 60_000 });
   await expect(host.page.locator('.ol-slots em.choosing')).toHaveCount(0);
 
   // the guest leaves: their seat is cleared on the host's screen, nothing of the room is left in their own scene
   await guest.page.locator('.ol-leave').click();
-  await host.page.waitForFunction(() => (window as any).__game.lobbyState?.length === 2, null, { timeout: 60_000 });
+  await host.page.waitForFunction(() => (window as any).__game.lobbyState?.length === 2, null, { timeout: 120_000 });
   expect((await lineup(host.page))!.map((e) => e.slot)).toEqual([0, 1]);
-  await guest.page.waitForFunction(() => (window as any).__game.lobbyState === null, null, { timeout: 60_000 });
+  await guest.page.waitForFunction(() => (window as any).__game.lobbyState === null, null, { timeout: 120_000 });
   expect(await lineupsInScene(guest.page)).toBe(0);
   // back in (the same seat), ready, and the host starts: the line-up makes way for the race
   await guest.page.locator('.ol-code').fill(code);
   await guest.page.locator('button', { hasText: '参加' }).click();
-  await expect(guest.page.locator('.ol-code-big b')).toHaveText(code, { timeout: 180_000 });
+  await expect(guest.page.locator('.ol-code-big b')).toHaveText(code, { timeout: 420_000 });
   for (const p of both) await seat(p.page, 2, 'roach');
   await guest.page.locator('.ol-ready').click();
-  await expect(start).toHaveText('レース開始', { timeout: 60_000 });
+  await expect(start).toHaveText('レース開始', { timeout: 120_000 });
   await host.page.keyboard.press('Enter');
   for (const p of both) {
-    await p.page.waitForFunction(() => ['countdown', 'racing'].includes((window as any).__game.phase), null, { timeout: 120_000 });
+    await p.page.waitForFunction(() => ['countdown', 'racing'].includes((window as any).__game.phase), null, { timeout: 240_000 });
     expect(await lineup(p.page)).toBeNull();
     expect(await lineupsInScene(p.page)).toBe(0);
     expect((await game(p.page)).remotes).toHaveLength(2);
@@ -356,7 +358,7 @@ test('online waiting room: the members\' vehicles stand on the course; one being
 });
 
 test('online battle on a phone: five seats, the live order and five results fit the screen', async ({ browser, request }, testInfo) => {
-  test.setTimeout(900_000);
+  test.setTimeout(1_500_000);
   const tag = String(Date.now() % 10000);
   // a phone held sideways, as in mobile.spec.ts
   const host = await openPlayer(browser, `PHONE${tag}`, { viewport: { width: 844, height: 390 }, hasTouch: true, isMobile: true });
@@ -369,7 +371,7 @@ test('online battle on a phone: five seats, the live order and five results fit 
   await expect(page.locator('.app')).toHaveClass(/touch/);
   await page.locator('.ol-courses .chip', { hasText: '天狼スカイライン' }).click();
   await page.locator('button', { hasText: 'ルームを作成' }).click();
-  const code = (await page.locator('.ol-code-big b').textContent({ timeout: 180_000 }))!.trim();
+  const code = (await page.locator('.ol-code-big b').textContent({ timeout: 420_000 }))!.trim();
   const others = [];
   for (const name of ['B', 'C', 'D', 'E']) {
     // (a long name: sixteen characters, the limit)
@@ -379,7 +381,7 @@ test('online battle on a phone: five seats, the live order and five results fit 
     others.push(p);
   }
   // the room: all five seats and the start button in view at once, nothing cut off to the side
-  await expect(page.locator('.ol-slots li:not(.empty)')).toHaveCount(5, { timeout: 30_000 });
+  await expect(page.locator('.ol-slots li:not(.empty)')).toHaveCount(5, { timeout: 60_000 });
   await page.locator('.ol-panel').evaluate((el) => el.scrollTo(0, 0));
   const box = async (sel: string) => (await page.locator(sel).first().boundingBox())!;
   const bottom = async (sel: string) => { const b = await box(sel); return b.y + b.height; };
@@ -392,16 +394,16 @@ test('online battle on a phone: five seats, the live order and five results fit 
   expect(await noSideScroll()).toBe(true);
   await page.screenshot({ path: testInfo.outputPath('phone-room.png') });
   for (const p of others) expect((await p.ready(code)).status()).toBe(200);
-  await expect(page.locator('.ol-slots em.ready')).toHaveCount(4, { timeout: 30_000 });
+  await expect(page.locator('.ol-slots em.ready')).toHaveCount(4, { timeout: 60_000 });
   await expect(page.locator('.ol-start')).toHaveText('レース開始');
   await page.screenshot({ path: testInfo.outputPath('phone-room-ready.png') });
   // the back button leaves the room (Esc on a keyboard) … not pressed here; the start button by a tap
   await expect(page.locator('.touch-back')).toBeVisible();
   await tap('.ol-start');
-  await page.waitForFunction(() => (window as any).__game.phase === 'racing', null, { timeout: 180_000 });
+  await page.waitForFunction(() => (window as any).__game.phase === 'racing', null, { timeout: 420_000 });
 
   // the race: the live order of five under the clock, clear of the steering pad, the buttons and the bend warning
-  await expect(page.locator('.online-standings li')).toHaveCount(5, { timeout: 60_000 });
+  await expect(page.locator('.online-standings li')).toHaveCount(5, { timeout: 120_000 });
   const order = await box('.online-standings'), steer = await box('.tc-steer'), note = await box('.corner-note'), top = await box('.tc-top');
   expect(order.y).toBeGreaterThanOrEqual(0);
   expect(order.y + order.height).toBeLessThanOrEqual(steer.y);
@@ -416,11 +418,11 @@ test('online battle on a phone: five seats, the live order and five results fit 
   await page.screenshot({ path: testInfo.outputPath('phone-race.png') });
 
   // the results: five rows and the buttons in view
-  await page.waitForFunction(() => (window as any).__game.hud.raceTime > 26, null, { timeout: 300_000, polling: 500 });
+  await page.waitForFunction(() => (window as any).__game.hud.raceTime > 26, null, { timeout: 480_000, polling: 500 });
   await nearFinish(page);
   for (const [k, p] of others.entries()) expect((await p.finish(code, 58_000 + k * 1_300)).status()).toBe(200);
-  await expect(page.locator('.online-results')).toBeVisible({ timeout: 300_000 });
-  await expect(page.locator('.ol-standings li .time')).toHaveText([TIME, TIME, TIME, TIME, TIME], { timeout: 120_000 });
+  await expect(page.locator('.online-results')).toBeVisible({ timeout: 480_000 });
+  await expect(page.locator('.ol-standings li .time')).toHaveText([TIME, TIME, TIME, TIME, TIME], { timeout: 240_000 });
   await page.locator('.ol-panel').evaluate((el) => el.scrollTo(0, 0));
   for (let k = 0; k < 5; k++) await expect(page.locator('.ol-standings li').nth(k)).toBeInViewport({ ratio: 1 });
   await expect(page.locator('button', { hasText: 'もう一度走る' })).toBeInViewport({ ratio: 1 });

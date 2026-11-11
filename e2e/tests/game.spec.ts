@@ -87,6 +87,10 @@ test('ranking shows the seeded CPU drivers from the Laravel API', async ({ page 
 });
 
 test('time attack: full autodriven run, results and online submission', async ({ page }) => {
+  // (a frame takes over a second on the software renderer, and a frame carries at most 0.67 s of the race at this
+  // timescale: the lap of 1:54 then takes three to four minutes. The same build took 3 minutes on 11-10 and over 4
+  // on 11-11 on the same machine)
+  test.setTimeout(600_000);
   await prepare(page);
   await page.goto('/?autodrive=1&timescale=10');
   await waitForTitle(page);
@@ -102,7 +106,7 @@ test('time attack: full autodriven run, results and online submission', async ({
   await page.keyboard.press('Enter'); // gearbox as last time
   await expect(page.locator('.hud')).toBeVisible();
   await page.waitForFunction(() => (window as any).__game.phase === 'racing', null, { timeout: 120_000 });
-  await expect(page.locator('.results-time')).toBeVisible({ timeout: 200_000 });
+  await expect(page.locator('.results-time')).toBeVisible({ timeout: 480_000 });
   const time = await page.locator('.results-time').textContent();
   expect(time).toMatch(/^[1-3]:\d\d\.\d{3}$/);
   // first submission asks for a name

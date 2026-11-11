@@ -138,7 +138,9 @@ function RealtimeBadge() {
  */
 function MemberMark({ p, room, choosing, tag, tight }: { p: RoomMember; room: RoomState; choosing: boolean; tag?: boolean; tight?: boolean }) {
   if (!p.loaded) return <em className="loading">ロード中…</em>;
-  if (choosing) return <em className="choosing">選択中</em>;
+  // (looking round the car select enters nothing: a ready member stays ready, and is shown as both)
+  const ready = p.ready && p.id !== room.host_id;
+  if (choosing) return <><em className="choosing">選択中</em>{ready && <em className="ready">{tag || tight ? '✓' : '準備完了 ✓'}</em>}</>;
   if (p.id === room.host_id) return null;
   if (tight) return p.ready ? <em className="ready">✓</em> : null;
   return <em className={p.ready ? 'ready' : 'not-ready'}>{p.ready ? (tag ? '準備OK ✓' : '準備完了 ✓') : '準備中'}</em>;
