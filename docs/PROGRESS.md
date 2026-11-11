@@ -599,6 +599,10 @@ over the menus" describes what replaced it.
 - Not built yet (ideas): the results' medal itself, the condition cards' pictures (stars, rain, dawn: a stand-in
   for the Gemini videos that fail), the rival's portrait gathering; the simulation on the GPU (a compute pass) for
   several hundred thousand grains if the owner wants it denser still.
+- **Live (11-11)**: main `6f453b4` deployed, bundle `index-BoanQkpS.js` served locally and through the public
+  address, leaderboard 200, the speech model's JSON 200; the grains pictured on the live site on the GPU (47 250
+  grains, 3.8–3.9 ms a frame of their own, frame gaps median 16.7 ms, no page errors). A 42 s recording of the
+  final build went to the owner.
 
 ### The rivals speak (11-11, owner's request): a speech model on the player's GPU
 Request: a TTS model, Supertonic 3, WebGPU assumed; the language model's lines are spoken; without WebGPU no TTS
