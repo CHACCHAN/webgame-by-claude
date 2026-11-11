@@ -35,6 +35,9 @@ return [
             'hostname' => env('REVERB_HOST'),
             'options' => [
                 'tls' => [],
+                // car states are many small frames: without this the kernel holds each one back until the frame
+                // before it is acknowledged (Nagle), up to 40 ms once three or more players are in a room
+                'tcp' => ['tcp_nodelay' => true],
             ],
             'max_request_size' => env('REVERB_MAX_REQUEST_SIZE', 10_000),
             'scaling' => [
