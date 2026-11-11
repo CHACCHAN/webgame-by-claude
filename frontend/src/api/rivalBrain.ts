@@ -14,6 +14,12 @@ const on = () =>
     return false;
   }));
 
+/**
+ * Asks the server once, ahead of the first race, whether it has a model: the answer is then there when a rival wants
+ * its line (on a slow page the question alone outlasted the countdown, and the line before the start was dropped).
+ */
+export const warmRivalBrain = () => void on();
+
 async function timed<T>(ms: number, call: (signal: AbortSignal) => Promise<T>): Promise<T | null> {
   const abort = new AbortController();
   const timer = setTimeout(() => abort.abort(), ms);

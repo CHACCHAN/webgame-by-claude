@@ -267,7 +267,14 @@ What a deploy or a bad hour could break, found by reading the stack, and changed
      still for 60–80 s at each change of scene (garage ↔ line-up) under the software renderer (the trace: the room
      poll, every 2.5 s, has gaps of 61–82 s there; the request itself took 81 ms). The two waits are 240 s now.
      Not seen on the GPU (the garage and line-up changes there were checked by the packages' own GPU runs).
-  Result of the run after that: see the end of this section's next entry.
+  4. After the rematch the test waited 60 s for the room on every screen: three games change their scene at once
+     there, and each page stood still for about 100 s (same trace reading). 300 s now.
+  Then: **passed** (27.9 min), together with the rival test (which now also expects the rival's line before the
+  start and the camera with the car). All 13 tests have passed on the merged tree, though not in one run: the
+  whole suite has not been run again in one piece since the first run (11 of 13).
+- The rival's line was missing in the first run of that test: the question "does the server have a model?"
+  (`/api/content`) alone outlasted the countdown on the slow page, and the line was dropped as late. The game now
+  asks once at start-up (`warmRivalBrain`), so the game's own line is there at once when there is no model.
 
 ### Found on the first deploy of all this: the race camera stayed at the garage (11-11)
 - My own bug in `31c6a03` (the clearing among the trees): the line that closes the clearing was written into the

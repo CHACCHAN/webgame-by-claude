@@ -4,7 +4,7 @@ import { RenderHost, type RenderOptions } from '../game/render/RenderHost';
 import type { CarId } from '../game/vehicle/carSpecs';
 import { UPSCALE_SCALE, currentCourseId, qualityProfile, useSettings, type Settings } from '../store/settings';
 import { useApp } from '../store/app';
-import { serverBrain } from '../api/rivalBrain';
+import { serverBrain, warmRivalBrain } from '../api/rivalBrain';
 
 /** The single game instance (the 3D world is expensive to build). */
 export const gameHolder: { game: Game | null } = { game: null };
@@ -32,6 +32,7 @@ function startGame(host: RenderHost) {
     game.showGhost = s.showGhost;
     game.cornerGuide = s.cornerGuide ?? true;
     game.rivalBrains = (s.rivalAi ?? true) ? [serverBrain] : [];
+    warmRivalBrain();
     if (params.get('autodrive') === '1') game.autoDrive = true;
     if (params.get('timescale')) game.timeScale = Math.max(0.1, Math.min(20, Number(params.get('timescale')) || 1));
     gameHolder.game = game;

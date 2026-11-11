@@ -232,12 +232,13 @@ test('online battle: five in one room (three games, two more through the API), e
     await expect(p.page.locator('.ol-standings li .time')).toHaveText([TIME, TIME, TIME, TIME, TIME], { timeout: 240_000 });
   }
   await expect(host.page.locator('button', { hasText: 'もう一度走る' })).toBeVisible();
-  // rematch takes everyone back to the room, where the readies have to be given again
+  // rematch takes everyone back to the room, where the readies have to be given again (three games change their
+  // scene at once here: under the software renderer each page stood still for about 100 s)
   await host.page.locator('button', { hasText: 'もう一度走る' }).click();
-  for (const p of all) await expect(p.page.locator('.ol-code-big b')).toHaveText(code, { timeout: 60_000 });
+  for (const p of all) await expect(p.page.locator('.ol-code-big b')).toHaveText(code, { timeout: 300_000 });
   await expect(start).toBeDisabled();
-  await expect(start).toHaveText('準備完了待ち… あと4人', { timeout: 60_000 });
-  for (const p of guests) await expect(p.page.locator('.ol-ready')).toHaveText('準備完了', { timeout: 60_000 });
+  await expect(start).toHaveText('準備完了待ち… あと4人', { timeout: 300_000 });
+  for (const p of guests) await expect(p.page.locator('.ol-ready')).toHaveText('準備完了', { timeout: 300_000 });
   // … and where the five vehicles stand on the course again (the waiting room's line-up)
   for (const p of all) {
     await p.page.waitForFunction(() => {
