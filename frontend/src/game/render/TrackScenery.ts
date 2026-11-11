@@ -23,6 +23,7 @@ import { placeProp, prop, type PropModel } from './props';
 import type { CourseStyle } from '../track/courses';
 import { ChunkedLods, cutout } from './instancing';
 import { buildAutobahnScenery } from './autobahnScenery';
+import { layBridges, layRoadside, layRocksheds, Roadside } from './roadside';
 
 export interface Lamp {
   position: THREE.Vector3;
@@ -102,7 +103,71 @@ export function buildScenery(track: Track, terrain: TerrainData, quality: Scener
   farMesh.name = 'terrain-far';
   group.add(farMesh);
 
-  // ------------------------------------------------------- roadside items
+  const lamps: Lamp[] = [];
+  const covers: number[] = [];
+  let roadsideUpdate: ((camera: THREE.Vector3) => void) | null = null;
+  if (detail) {
+    // ----------------------------------- roadside and structures, modelled
+    const rs = new Roadside(track, terrain, { detail, shadows: quality.shadows, ground: terrainMat, cover: (x, y, z) => groundCover(lf, x, y, z) });
+    layRoadside(rs, sides);
+    for (const l of layRocksheds(rs, sides, covers)) lamps.push({ position: l.position, color: SODIUM.clone(), s: l.s });
+    for (const l of layBridges(rs, terrain)) lamps.push({ position: l.position, color: LED.clone(), s: l.s });
+    const built = rs.finish(group);
+    nightEmissive.push(...built.nightEmissive);
+    roadsideUpdate = built.update;
+  } else plainRoadside(track, terrain, sides, group, quality, surfaceImage, surfaceTexture, nightEmissive, lamps, covers);
+
+  // ------------------------------------------------------------- lamps
+  placeLamps(track, sides, lamps);
+  buildLampMeshes(track, lamps, group, nightEmissive);
+  // baked pools of lamp light on the road and the ground around it
+  const roadLightmap = bakeRoadLightmap(track, lamps, road.geometry);
+  roadMaterial.lightMap = roadLightmap;
+  roadMaterial.lightMapIntensity = 17;
+  terrainMat.lightMap = bakeTerrainLightmap(terrain.near, lamps);
+  terrainMat.lightMapIntensity = 13;
+  const lightmapMats = [roadMaterial, terrainMat];
+
+  // ------------------------------------------------------------- signs
+  buildSigns(track, sides, group);
+  nightEmissive.push(...nightEmissiveSigns);
+  const keepOut = buildLandmarks(track, terrain, sides, group, lamps);
+
+  // ------------------------------------------------------------- trees
+  const trees = buildTrees(terrain, quality.treeDensity, quality.treeLod);
+  group.add(trees);
+  group.add(buildClutter(track, terrain, quality.treeDensity, surfaceTexture, keepOut));
+  const turbines = buildTurbines(terrain);
+  group.add(turbines.group);
+
+  return {
+    group,
+    lamps,
+    roadMaterial,
+    nightEmissive,
+    lightmapMats,
+    covers: new Float32Array(covers),
+    update(time, cameraPos) {
+      updateTreeLods(trees, cameraPos);
+      turbines.update(time);
+      roadsideUpdate?.(cameraPos);
+    },
+  };
+}
+
+/** the low setting's roadside: ribbons for the rails, kerbs and walls, the rock sheds and bridges as plain slabs */
+function plainRoadside(
+  track: Track,
+  terrain: TerrainData,
+  sides: ReturnType<typeof classifySides>,
+  group: THREE.Group,
+  quality: SceneryQuality,
+  surfaceImage: (n: SurfaceName) => HTMLImageElement | null,
+  surfaceTexture: (n: SurfaceName, srgb: boolean) => THREE.Texture | null,
+  nightEmissive: THREE.MeshStandardMaterial[],
+  lamps: Lamp[],
+  covers: number[],
+) {
   const steel = new THREE.MeshStandardMaterial({ color: '#e9ebe8', metalness: 0.55, roughness: 0.38, side: THREE.DoubleSide });
   const postMat = new THREE.MeshStandardMaterial({ color: '#c9ccc8', metalness: 0.5, roughness: 0.45 });
   const concretePhoto = surfaceImage('concrete_albedo');
@@ -180,47 +245,8 @@ export function buildScenery(track: Track, terrain: TerrainData, quality: Scener
   reflectors.forEach((m, i) => reflMesh.setMatrixAt(i, m));
   group.add(reflMesh);
 
-  // ----------------------------------------------------------- structures
-  const lamps: Lamp[] = [];
-  const covers: number[] = [];
   buildRockshed(track, sides, group, concreteMat, lamps, nightEmissive, covers);
   buildBridge(track, terrain, group, concreteMat, steel, lamps);
-
-  // ------------------------------------------------------------- lamps
-  placeLamps(track, sides, lamps);
-  buildLampMeshes(track, lamps, group, nightEmissive);
-  // baked pools of lamp light on the road and the ground around it
-  const roadLightmap = bakeRoadLightmap(track, lamps, road.geometry);
-  roadMaterial.lightMap = roadLightmap;
-  roadMaterial.lightMapIntensity = 17;
-  terrainMat.lightMap = bakeTerrainLightmap(terrain.near, lamps);
-  terrainMat.lightMapIntensity = 13;
-  const lightmapMats = [roadMaterial, terrainMat];
-
-  // ------------------------------------------------------------- signs
-  buildSigns(track, sides, group);
-  nightEmissive.push(...nightEmissiveSigns);
-  const keepOut = buildLandmarks(track, terrain, sides, group, lamps);
-
-  // ------------------------------------------------------------- trees
-  const trees = buildTrees(terrain, quality.treeDensity, quality.treeLod);
-  group.add(trees);
-  group.add(buildClutter(track, terrain, quality.treeDensity, surfaceTexture, keepOut));
-  const turbines = buildTurbines(terrain);
-  group.add(turbines.group);
-
-  return {
-    group,
-    lamps,
-    roadMaterial,
-    nightEmissive,
-    lightmapMats,
-    covers: new Float32Array(covers),
-    update(time, cameraPos) {
-      updateTreeLods(trees, cameraPos);
-      turbines.update(time);
-    },
-  };
 }
 
 /** the low setting's road: the lines painted into one texture over the asphalt photo (or noise) */
@@ -336,6 +362,14 @@ export function bakeTerrainLightmap(g: HeightGrid, lamps: Lamp[]) {
   return tex;
 }
 
+/** what covers the ground at a place: [town 0..1, forest 0..1] (the `surf` attribute's z and w) */
+export function groundCover(lf: Landform, x: number, y: number, z: number): [number, number] {
+  const urban = cityWeight(lf, x, z);
+  let forest = smoothstep(0.15, 0.35, lf.relief(x, z)) * smoothstep(lf.treeLine + 35, lf.treeLine - 25, y) * (1 - urban);
+  if (lf.waterLevel !== null) forest *= smoothstep(lf.waterLevel + 1.5, lf.waterLevel + 4, y);
+  return [urban, forest];
+}
+
 // --------------------------------------------------------------------------
 /**
  * A height grid's mesh. `layered`: for render/terrainMaterial.ts, which reads what the ground is from `surf` (four
@@ -373,9 +407,7 @@ export function gridGeometry(g: HeightGrid, terrain: TerrainData, near: boolean,
         const beyond = near && g.edgeDist ? g.edgeDist[vi] : 1e6;
         // convex (a spur, a bank's shoulder) above 0.5, hollow below: the land's second derivative, per metre
         const lap = (h(i - 1, j) + h(i + 1, j) + h(i, j - 1) + h(i, j + 1) - 4 * y) / (cell * cell);
-        const urban = cityWeight(lf, x, z);
-        let forest = smoothstep(0.15, 0.35, lf.relief(x, z)) * smoothstep(lf.treeLine + 35, lf.treeLine - 25, y) * (1 - urban);
-        if (lf.waterLevel !== null) forest *= smoothstep(lf.waterLevel + 1.5, lf.waterLevel + 4, y);
+        const [urban, forest] = groundCover(lf, x, y, z);
         surf[vi * 4] = clamp((beyond + 2) / 34, 0, 1) * 255;
         surf[vi * 4 + 1] = clamp(0.5 - lap * 7, 0, 1) * 255;
         surf[vi * 4 + 2] = urban * 255;

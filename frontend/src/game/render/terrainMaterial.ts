@@ -35,9 +35,9 @@ export type GroundDetail = 1 | 2 | 3;
 // what the layers' photos are multiplied with (linear): they come as bright as the day they were taken on,
 // the game's ground is seen by lamps and the moon
 const TINT = {
-  rock: [1.05, 1.02, 0.98] as const,
-  floor: [0.5, 0.5, 0.52] as const,
-  moss: [0.2, 0.26, 0.3] as const,
+  rock: [0.88, 0.86, 0.84] as const,
+  floor: [0.3, 0.35, 0.42] as const,
+  moss: [0.16, 0.21, 0.25] as const,
   grass: [0.42, 0.44, 0.5] as const,
   gravel: [0.62, 0.62, 0.64] as const,
 };
@@ -71,8 +71,8 @@ export function groundMaterial(look: GroundLook, detail: GroundDetail, far = fal
   // ---- who is where
   // the road's cutting: bare for a while after the digger left
   const cut = smoothstep(24, 5, beyond).mul(smoothstep(0.1, 0.28, slope)) as Float;
-  const rockW = smoothstep(0.25, 0.43, slope.add(m1.r.sub(0.5).mul(0.2)).add(convex.mul(0.06)).add(cut.mul(0.07))) as Float;
-  const floorW = smoothstep(0.38, 0.62, forest.mul(0.82).add(m1.g.sub(0.5).mul(0.7)).add(m2.b.sub(0.5).mul(0.4)).add(cut.mul(0.35))) as Float;
+  const rockW = smoothstep(0.25, 0.43, slope.add(m1.r.sub(0.5).mul(0.2)).add(convex.mul(0.06)).add(cut.mul(0.15))) as Float;
+  const floorW = smoothstep(0.38, 0.62, forest.mul(0.82).add(m1.g.sub(0.5).mul(0.7)).add(m2.b.sub(0.5).mul(0.4)).add(cut.mul(0.2))) as Float;
   const gravelW = max(smoothstep(2.6, 0.2, beyond.add(m1.b.sub(0.5).mul(2.4))), urban.mul(0.92)) as Float;
 
   // ---- the layers

@@ -80,7 +80,7 @@ export function roadMaterial(look: RoadLook, detail: 1 | 2 | 3): MeshStandardNod
   rough = mix(rough, rough.mul(0.94), fresh) as Float;
 
   // cracks where the old surface has tired; the wider ones are sealed with tar
-  const gateA = smoothstep(0.5, 0.68, mA.b) as Float, gateB = smoothstep(0.56, 0.78, mA.a.mul(0.7).add(mB.g.mul(0.3))) as Float;
+  const gateA = smoothstep(0.58, 0.72, mA.b) as Float, gateB = smoothstep(0.66, 0.84, mA.a.mul(0.7).add(mB.g.mul(0.3))) as Float;
   const crack = max(marks.r.mul(gateA), marks2.r.mul(gateB)).mul(float(1).sub(fresh.mul(0.95))) as Float;
   const sealed = smoothstep(0.5, 0.6, mB.b) as Float;
   tar = max(tar, crack.mul(sealed)) as Float;
@@ -112,9 +112,9 @@ export function roadMaterial(look: RoadLook, detail: 1 | 2 | 3): MeshStandardNod
     const line = (d: Float, half: number) => smoothstep(aa.add(half), float(half).sub(aa), d) as Float;
     // stretches where the lines were redone: bright and whole, the old line still showing beside the new
     const redone = step(0.62, hash2(vec2(floor(s.div(83).add(0.3)), 9.1))) as Float;
-    const wearAt = mix(mix(float(0.3), float(0.62), mB.g), float(0.86), redone) as Float;
-    const worn = smoothstep(wearAt, wearAt.add(0.16), marks.b.mul(0.55).add(marks2.b.mul(0.45))) as Float;
-    const keep = float(1).sub(worn.mul(0.86)).mul(float(1).sub(crack.mul(0.85))) as Float;
+    const wearAt = mix(mix(float(0.45), float(0.75), mB.g), float(0.9), redone) as Float;
+    const worn = smoothstep(wearAt, wearAt.add(0.16), mA.a.mul(0.5).add(marks2.b.mul(0.3)).add(marks.b.mul(0.2))) as Float;
+    const keep = float(1).sub(worn.mul(0.7)).mul(float(1).sub(crack.mul(0.85))) as Float;
     const edge = line(abs(inside.sub(0.75)) as Float, 0.075);
     const centre = line(abs(lat) as Float, 0.1);
     const ghost = line(abs(inside.sub(0.93)) as Float, 0.07).mul(redone).mul(0.16).mul(marks.b) as Float;
@@ -128,8 +128,8 @@ export function roadMaterial(look: RoadLook, detail: 1 | 2 | 3): MeshStandardNod
 
   // tar and open cracks go over everything
   col = mix(col, vec3(0.012, 0.012, 0.013), tar.mul(0.92)) as unknown as Vec3;
-  col = col.mul(float(1).sub(open.mul(0.7))) as unknown as Vec3;
-  rough = mix(mix(rough, float(0.4), tar), float(0.97), open) as Float;
+  col = col.mul(float(1).sub(open.mul(0.55))) as unknown as Vec3;
+  rough = mix(mix(rough, float(0.56), tar), float(0.97), open) as Float;
 
   // a manhole cover now and then: cast iron in a square of newer asphalt
   let iron: Float = float(0);

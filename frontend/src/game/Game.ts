@@ -17,6 +17,7 @@ import { loadCarTemplates } from './render/carAssets';
 import { loadTrafficModels } from './render/trafficModels';
 import { loadSurfaceTextures } from './render/surfaceTextures';
 import { loadProps } from './render/props';
+import { loadRoadsideModels } from './render/roadsideModels';
 import { wetness } from './render/weather';
 import { findCorners, type Corner, type CornerKind } from './track/corners';
 import { RemoteRacers, SLOT_COLORS, type Peer } from './net/RemoteRacers';
@@ -316,7 +317,7 @@ export class Game {
     await this.yieldFrame(0.05, '物理エンジンを初期化中');
     await initRapier();
     await this.yieldFrame(0.08, '車両モデルを読み込み中');
-    await Promise.all([loadCarTemplates(CAR_ORDER), loadBikeModels(BIKE_ORDER), loadTrainModels(TRAIN_ORDER), loadRoachModel(), loadSurfaceTextures(this.quality.surfaceDetail ?? 0), loadProps()]);
+    await Promise.all([loadCarTemplates(CAR_ORDER), loadBikeModels(BIKE_ORDER), loadTrainModels(TRAIN_ORDER), loadRoachModel(), loadSurfaceTextures(this.quality.surfaceDetail ?? 0), loadProps(), this.quality.surfaceDetail ? loadRoadsideModels() : null]);
     // the trains' other lines (liveries with their own model) follow in the background
     void loadTrainVariants(TRAIN_ORDER);
     this.root.add(this.smoke.points, this.skids.mesh, this.rain.mesh, this.exhaust.group);
