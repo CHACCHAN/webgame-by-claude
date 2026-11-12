@@ -15,7 +15,7 @@ import { PHYSICS_DT, PhysicsWorld, initRapier } from '../vehicle/PhysicsWorld';
 import { VehicleSim, emptyInput } from '../vehicle/VehicleSim';
 import { BIKE_ORDER } from '../vehicle/bikes';
 import { CAR_ORDER, CAR_SPECS, VEHICLE_ORDER, vehiclesFor, type CarId } from '../vehicle/carSpecs';
-import { JET_ORDER, enginesAt, jetRpm } from '../vehicle/jets';
+import { JET_ORDER, enginesAt, jetForLivery, jetRpm } from '../vehicle/jets';
 import { kindOf } from '../vehicle/kinds';
 import { TRAIN_ORDER } from '../vehicle/trains';
 
@@ -227,6 +227,40 @@ describe('a fighter on the ground', () => {
     expect(top).toBeGreaterThan(CAR_SPECS.f15j.jet!.lof * 1.5);
     expect(top * 3.6).toBeLessThan(1300);
   }, 120_000);
+
+  it('the two-seater is the heavier aircraft in a race too, and a little slower away', () => {
+    const two = CAR_SPECS.f15j.jet!.liveries.find((l) => l.crew === 2)!;
+    const spec = jetForLivery(CAR_SPECS.f15j, two.swatch);
+    expect(spec.mass).toBe(two.mass);
+    expect(spec.mass).toBeGreaterThan(CAR_SPECS.f15j.mass);
+    // any other paint is the single-seater itself
+    expect(jetForLivery(CAR_SPECS.f15j, CAR_SPECS.f15j.jet!.liveries[0].swatch)).toBe(CAR_SPECS.f15j);
+    expect(jetForLivery(CAR_SPECS.hayate, two.swatch)).toBe(CAR_SPECS.hayate);
+    // full power down the runway from a stand: the seconds to 300 km/h
+    const run = (s: typeof spec) => {
+      const physics = new PhysicsWorld(track);
+      const at = track.zone.indexOf('runway') + 60;
+      const sim = new VehicleSim(physics, s, track.pointAt(at), track.headingAt(at));
+      sim.gripScale = course.surface.grip;
+      const input = emptyInput();
+      input.throttle = 1;
+      let t = 0;
+      while (t < 30 && sim.forwardSpeed < 300 / 3.6) {
+        sim.input = input;
+        sim.preStep(PHYSICS_DT);
+        physics.step();
+        sim.postStep(PHYSICS_DT);
+        t += PHYSICS_DT;
+      }
+      physics.dispose();
+      return t;
+    };
+    const one = run(CAR_SPECS.f15j), heavy = run(spec);
+    expect(one).toBeGreaterThan(8);
+    expect(one).toBeLessThan(16);
+    expect(heavy).toBeGreaterThan(one);
+    expect(heavy).toBeLessThan(one * 1.05);
+  }, 60_000);
 });
 
 describe('the take-off after the finish', () => {

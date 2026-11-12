@@ -49,6 +49,7 @@ import { kindOf } from './vehicle/kinds';
 import { GhostPlayer, GhostRecorder, type GhostData } from './race/Ghost';
 import { clamp, damp, lerp, smoothstep, wrapAngle } from './util/math';
 import { Departure } from './race/Departure';
+import { jetForLivery } from './vehicle/jets';
 import type { TrackProjection } from './track/Track';
 import { loadTrainModel, loadTrainVariants, trainModelReady, trainNose } from './render/TrainModel';
 import { specForLivery, trainLivery, trainModelKey, TRAIN_ORDER } from './vehicle/trains';
@@ -689,8 +690,8 @@ export class Game {
   }
 
   private createRacer(carId: CarId, s: number, lateral: number, opts: { ai?: AILevel; headlights: boolean; color?: string; rival?: boolean }): Racer {
-    // a train as fitted for its line (the livery picked: its inverter sound)
-    const spec = specForLivery(CAR_SPECS[carId], opts.color);
+    // a train as fitted for its line (the livery picked: its inverter sound), a fighter's two-seater with its own mass
+    const spec = jetForLivery(specForLivery(CAR_SPECS[carId], opts.color), opts.color);
     const p = this.track.pointAt(s, lateral);
     const sim = new VehicleSim(this.physics, spec, p, this.track.headingAt(s));
     sim.assist = this.assist;
