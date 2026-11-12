@@ -97,6 +97,8 @@ span.vp-key { display: none; }
 .ol-vehicle-name small { display: block; font-size: var(--fs-2xs); letter-spacing: 0.14em; color: var(--muted); }
 .ol-vehicle-name b { display: block; font-family: var(--font-display); font-stretch: var(--w-cond); font-size: var(--fs-xl); line-height: 1.15; }
 .ol-vehicle em { font-style: normal; font-size: var(--fs-s); font-weight: 700; color: var(--cyan); white-space: nowrap; }
+/* the paint entered with it (none picked: the seat's colour, no chip) */
+.ol-vehicle-paint { flex: none; width: 1.1rem; height: 1.1rem; border: 1px solid rgb(var(--c-white) / 0.35); clip-path: polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px); }
 
 /* ---- short screens (a phone held sideways): the tabs become a rail on the left, above the shell's back and
    fullscreen buttons in the bottom-left corner, and the card shrinks so the car stays in view */

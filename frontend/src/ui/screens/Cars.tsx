@@ -4,37 +4,15 @@ import { useMenuInput } from '../useMenuInput';
 import { gameHolder } from '../GameCanvas';
 import { CAR_SPECS, VEHICLE_ORDER, type CarId, type CarSpec } from '../../game/vehicle/carSpecs';
 import { Count, Hint, ScreenHead } from '../kit';
-import { liverySwatch, specForLivery, TRAIN_INFO, TRAIN_ORDER, trainLivery, type TrainId } from '../../game/vehicle/trains';
-import { ROACH_INFO } from '../../game/vehicle/roach';
-import { BIKE_ORDER, BIKE_SPECS, type BikeId } from '../../game/vehicle/bikes';
-import { TANK_ORDER, TANK_SPECS, type TankId } from '../../game/vehicle/tanks';
-import { JET_ORDER, JET_SPECS, jetForLivery, type JetId } from '../../game/vehicle/jets';
+import { specForLivery, trainLivery } from '../../game/vehicle/trains';
+import { jetForLivery } from '../../game/vehicle/jets';
 import { sfx } from '../sfx';
 import { traitsOf } from '../../game/vehicle/kinds';
 import { peakPowerKw } from '../../game/vehicle/stats';
 
-/** Body colours offered for each car (first = default). */
-export const COLORS: Record<CarId, string[]> = {
-  // trains: one swatch per line it runs on (its paint and displays)
-  ...(Object.fromEntries(TRAIN_ORDER.map((id) => [id, TRAIN_INFO[id].liveries.map(liverySwatch)])) as Record<TrainId, string[]>),
-  hayate: ['#e8e6e1', '#b3121c', '#1b1d22', '#2f6db5', '#e0b400'],
-  raijin: ['#d9dbde', '#1d4fa8', '#0c0c0e', '#8f1218', '#5e6b3a'],
-  shiden: ['#f5c400', '#c8102e', '#f2f2f0', '#121214', '#3a7d44'],
-  supra: ['#eeeeee', '#d8481c', '#c40d1e', '#121214', '#1f5fb5'],
-  r34: ['#2f4fa6', '#e9e9ea', '#121214', '#8a8f96', '#4a2a63'],
-  s15: ['#f5cf30', '#e9e9ea', '#121214', '#b3121c', '#2f6db5'],
-  // bare stainless, then wraps
-  cybertruck: ['#b9bdc0', '#232427', '#e6e6e4', '#4b5a3a', '#7d1d1d'],
-  u9: ['#1b1d22', '#e8e9ea', '#1f5bd6', '#c9d400', '#8c1c22'],
-  // motorcycles: one swatch per factory colour
-  ...(Object.fromEntries(BIKE_ORDER.map((id) => [id, BIKE_SPECS[id].bike!.liveries.map((l) => l.swatch)])) as Record<BikeId, string[]>),
-  // tanks: their own camouflage
-  ...(Object.fromEntries(TANK_ORDER.map((id) => [id, [TANK_SPECS[id].colors.body]])) as Record<TankId, string[]>),
-  // fighters: one swatch per scheme / two-seat variant
-  ...(Object.fromEntries(JET_ORDER.map((id) => [id, JET_SPECS[id].jet!.liveries.map((l) => l.swatch)])) as Record<JetId, string[]>),
-  // the cockroach: one swatch per species colouring
-  roach: ROACH_INFO.liveries.map((l) => l.swatch),
-};
+/** Body colours offered for each vehicle (first = default): kept with the engine, which clamps online paints. */
+import { COLORS } from '../../game/vehicle/paints';
+export { COLORS };
 
 /** Name of a train's line or of the cockroach's species for a swatch (null for a car's plain paint). */
 export function liveryName(id: CarId, color: string): string | null {

@@ -30,7 +30,8 @@ const keyOf = (e: LineupEntry) => `${e.carId}|${e.livery ?? ''}`;
 const _box = new THREE.Box3();
 
 /**
- * The vehicles of an online waiting room, standing on the course in their seats' colours. A seat's vehicle changes
+ * The vehicles of an online waiting room, standing on the course in their members' paints (the seat's colour where
+ * none is picked). A seat's vehicle changes
  * while the room is up (another one confirmed, or looked at in the picker): the new model is built, its shaders are
  * compiled off the frame loop (`compile`, when the renderer offers it) and only then does it take the place of the
  * one before it, which is disposed. The vehicles have no headlamp beams: a light more or less in the scene would

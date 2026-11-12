@@ -4,9 +4,9 @@ import type { RoomState } from '../api/client';
 import { gameHolder } from '../ui/GameCanvas';
 import { useApp } from './app';
 import type { Game } from '../game/Game';
-import { BrowseBook, BrowseThrottle, lobbyEntries, type Browse, type LobbyEntry } from '../game/net/browse';
-import { CAR_SPECS, vehiclesFor, type CarId } from '../game/vehicle/carSpecs';
-import { trainLivery } from '../game/vehicle/trains';
+import { BrowseBook, BrowseThrottle, isConfirmed, lobbyEntries, type Browse, type LobbyEntry } from '../game/net/browse';
+import { vehiclesFor, type CarId } from '../game/vehicle/carSpecs';
+import { offeredPaint } from '../game/vehicle/paints';
 
 /**
  * The waiting room's vehicles (UI side of game/net/LobbyLineup.ts and game/net/browse.ts). `store/online.ts` hands
@@ -41,25 +41,17 @@ const hooked = new WeakSet<Game>();
 const me = () => room?.players.find((p) => p.id === selfId);
 const waiting = () => room?.status === 'waiting';
 
-/** A livery worth telling: a train's other line, the cockroach's other colouring (paint is the seat's colour online). */
-export function browseLivery(carId: CarId, color?: string): string | undefined {
-  const spec = CAR_SPECS[carId];
-  if (!color) return undefined;
-  if (spec.train) return trainLivery(spec.train, color) !== spec.train.liveries[0] ? color : undefined;
-  if (spec.creature) return spec.creature.liveries.slice(1).some((l) => l.swatch === color) ? color : undefined;
-  return undefined;
-}
 
 /** Every room state as it is applied, and null when the room is left. */
 export function lobbyRoom(next: RoomState | null, self: number | null) {
   if (!next) {
-    const last = me()?.car_id;
+    const last = me();
     room = null;
     selfId = null;
     forget();
     lobbyChannel(null);
     // nothing of the room stays on the course: back to the player's own vehicle in the garage
-    if (lineup && last) gameHolder.game?.showGarage(last);
+    if (lineup && last) gameHolder.game?.showGarage(last.car_id, offeredPaint(last.car_id, last.color));
     lineup = false;
     publish();
     return;
@@ -73,7 +65,7 @@ export function lobbyRoom(next: RoomState | null, self: number | null) {
     // the race has the scene; nobody is choosing any more
     lineup = false;
     forget();
-  } else if (own && !own.livery && me()?.car_id === own.car) {
+  } else if (own && me() && isConfirmed(own, me()!)) {
     // confirmed by the server: not "choosing" any more
     look(null);
   }
@@ -125,7 +117,7 @@ export function showRoomLineup(keep = false) {
 /** A vehicle looked at in a picker that leaves the line-up on screen: shown in the player's seat, told to the others. */
 export function previewCar(carId: CarId, livery?: string) {
   if (!waiting()) return;
-  look({ car: carId, livery: browseLivery(carId, livery) });
+  look({ car: carId, livery: offeredPaint(carId, livery) });
   publish();
 }
 
@@ -137,8 +129,9 @@ export function endPreview() {
 }
 
 function look(b: Browse | null) {
-  // one's confirmed vehicle is not a choice in the making
-  own = b && !b.livery && b.car === me()?.car_id ? null : b;
+  // one's confirmed vehicle in its paint is not a choice in the making
+  const m = me();
+  own = b && m && isConfirmed(b, m) ? null : b;
   throttle.look(own);
   pump();
 }
@@ -192,7 +185,7 @@ function hook() {
     if (e.type !== 'garage' || !room || !waiting()) return;
     // the garage has the scene now (the line-up comes back with `showRoomLineup`)
     lineup = false;
-    look({ car: e.carId, livery: browseLivery(e.carId, e.color) });
+    look({ car: e.carId, livery: offeredPaint(e.carId, e.color) });
     publish();
   });
 }

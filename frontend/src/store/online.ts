@@ -20,6 +20,8 @@ interface OnlineState {
   player: StoredPlayer | null;
   room: RoomState | null;
   carId: CarId;
+  /** the paint picked for it (null: none, the seat's colour) */
+  carColor: string | null;
   realtime: 'off' | 'connecting' | 'live' | 'failed';
   error: string | null;
   busy: boolean;
@@ -30,6 +32,7 @@ export const useOnline = create<OnlineState>((set) => ({
   player: null,
   room: null,
   carId: 'hayate',
+  carColor: null,
   realtime: 'off',
   error: null,
   busy: false,
@@ -84,21 +87,22 @@ export function registerName(name: string) {
   });
 }
 
-export function chooseCar(carId: CarId) {
-  st().set({ carId });
+/** The entry's vehicle and its paint (null: none picked, the seat's colour). */
+export function chooseCar(carId: CarId, color: string | null = null) {
+  st().set({ carId, carColor: color });
   const room = st().room;
   if (!room) {
-    gameHolder.game?.showGarage(carId);
+    gameHolder.game?.showGarage(carId, color ?? undefined);
     return;
   }
   // in a room the line-up shows it in the player's seat (store/lobby.ts): 選択中 until the server has confirmed it
-  if (room.status === 'waiting') previewCar(carId);
+  if (room.status === 'waiting') previewCar(carId, color ?? undefined);
   if (room.status !== 'racing') void sendCar();
 }
 
 /**
- * The chosen car to the server. A car picked while another call is under way (←→ pressed twice) follows once that
- * call is done: it used to be dropped, and the room raced the car before it.
+ * The chosen car and paint to the server. A car picked while another call is under way (←→ pressed twice) follows
+ * once that call is done: it used to be dropped, and the room raced the car before it.
  */
 let sendingCar = false;
 async function sendCar() {
@@ -107,11 +111,12 @@ async function sendCar() {
   try {
     for (let tries = 0; tries < 40; tries++) {
       const room = st().room;
-      const want = st().carId;
-      if (!room || room.status === 'racing' || self()?.car_id === want) return;
+      const want = st().carId, color = st().carColor;
+      const me = self();
+      if (!room || room.status === 'racing' || (me?.car_id === want && (me.color ?? null) === color)) return;
       if (st().busy) await new Promise((r) => setTimeout(r, 120));
       else {
-        await run(async () => applyRoom(await api.rooms.setCar(onlinePlayer(), room.code, want)));
+        await run(async () => applyRoom(await api.rooms.setCar(onlinePlayer(), room.code, want, color)));
         if (st().error) return;
       }
     }
@@ -143,14 +148,14 @@ export function takeBackReady() {
 
 export function createRoom(trackId: CourseId, timeOfDay: TimeOfDay) {
   return run(async () => {
-    const room = await timed(() => api.rooms.create(onlinePlayer(), trackId, timeOfDay, st().carId));
+    const room = await timed(() => api.rooms.create(onlinePlayer(), trackId, timeOfDay, st().carId, st().carColor));
     await enterRoom(room);
   });
 }
 
 export function joinRoom(code: string) {
   return run(async () => {
-    const room = await timed(() => api.rooms.join(onlinePlayer(), code.trim().toUpperCase(), st().carId));
+    const room = await timed(() => api.rooms.join(onlinePlayer(), code.trim().toUpperCase(), st().carId, st().carColor));
     await enterRoom(room);
   });
 }
@@ -194,7 +199,7 @@ async function enterRoom(room: RoomState) {
   const game = gameHolder.game;
   st().set({ room });
   const me = room.players.find((p) => p.id === st().player?.id);
-  if (me) st().set({ carId: me.car_id });
+  if (me) st().set({ carId: me.car_id, carColor: me.color ?? null });
   useSettings.getState().set({ courseId: room.track_id as CourseId });
   if (game && game.course.id !== room.track_id) {
     app.set({ loading: { progress: 0, label: '' } });
@@ -293,10 +298,11 @@ function beginRace(room: RoomState) {
   startedRace = room.race_no;
   if (game.timeOfDay !== room.time_of_day) game.applyTimeOfDay(room.time_of_day);
   const startAt = performance.now() + (room.start_at_ms - (Date.now() + clockOffset));
-  const peers = room.players.filter((p) => p.id !== me.id).map((p) => ({ id: p.id, name: p.name, carId: p.car_id, slot: p.slot }));
+  // (every vehicle in the paint its member picked: the game draws it if the vehicle offers it, else the seat's colour)
+  const peers = room.players.filter((p) => p.id !== me.id).map((p) => ({ id: p.id, name: p.name, carId: p.car_id, slot: p.slot, color: p.color ?? null }));
   game.initAudio();
   game.onlineSelfId = me.id;
-  game.startRace({ mode: 'online', carId: me.car_id, online: { startAt, slot: me.slot, peers } });
+  game.startRace({ mode: 'online', carId: me.car_id, color: me.color ?? undefined, online: { startAt, slot: me.slot, peers } });
   useApp.getState().set({ mode: 'online', carId: me.car_id, screen: 'race', result: null, paused: false });
   startSending();
 }
