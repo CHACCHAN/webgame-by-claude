@@ -142,6 +142,8 @@ export function shadeScene(land: ShadeLand, casters: readonly ShadeCaster[], cov
 const ROOF_STEP = 0.1;
 /** how much of the light a cell wholly under crowns takes from a ray through it (the shadow map's hulls have holes too) */
 const CROWN_SHADE = 0.7;
+/** the share of a tree's height, from the top down, over which its crown widens to its full width */
+const CROWN_TIP = 0.6;
 /** a crown's shadow is followed this far (m) */
 const CROWN_REACH = 170;
 
@@ -216,15 +218,19 @@ export function bakeShade(scene: ShadeScene, toLight: { x: number; y: number; z:
       const src = at(a, b);
       if (!(cover[src] > 0)) continue;
       const dim = CROWN_SHADE * cover[src], top = crown[src];
+      // a crown narrows to its tip: a ray that passes through its upper part meets less of it (under a low sun the
+      // road behind a tree is shaded by the tip alone)
+      const taper = 1 / (CROWN_TIP * Math.max(1, top - scene.land[src]));
+      const thin = (h: number) => Math.min(1, (top - h) * taper) ** 2;
       for (let n = 0; n <= reach; n++) {
         const ra = a - dir * n, rb = b - side * n;
         if (ra < 0 || ra >= N || rb < 0 || rb > N - 1 || top - n * drop < lo) break;
         const b0 = Math.floor(rb), f = rb - b0;
         const p = at(ra, b0);
-        if (scene.land[p] + n * drop < top) light[p] *= 1 - dim * (1 - f);
+        if (scene.land[p] + n * drop < top) light[p] *= 1 - dim * thin(scene.land[p] + n * drop) * (1 - f);
         if (f > 0) {
           const q = at(ra, b0 + 1);
-          if (scene.land[q] + n * drop < top) light[q] *= 1 - dim * f;
+          if (scene.land[q] + n * drop < top) light[q] *= 1 - dim * thin(scene.land[q] + n * drop) * f;
         }
       }
     }
