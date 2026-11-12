@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState, type PointerEvent, type WheelEvent } from 'react';
+import { useEffect, useRef, useState, type PointerEvent, type ReactNode, type WheelEvent } from 'react';
+import { createPortal } from 'react-dom';
 import { gameHolder } from '../GameCanvas';
 import { useApp } from '../../store/app';
 import { useMenuInput } from '../useMenuInput';
@@ -10,10 +11,13 @@ import { loadPlayer, type RoomMember, type RoomState } from '../../api/client';
 import { SLOT_COLORS } from '../../game/net/RemoteRacers';
 import { formatTime } from '../format';
 import { sfx } from '../sfx';
-import { Hint, Notice, ScreenHead } from '../kit';
-import { chooseCar, createRoom, joinRoom, leaveRoom, registerName, rematch, startOnlineRace, takeBackReady, toggleReady, useOnline } from '../../store/online';
+import { Hint, Notice, ScreenHead, type HintKey } from '../kit';
+import { changeRoom, chooseCar, chooseConditions, createRoom, joinRoom, kickMember, leaveRoom, previewConditions, registerName, rematch, ROOM_REMOVED, startOnlineRace, takeBackReady, toggleReady, useOnline } from '../../store/online';
 import { showRoomLineup, useLobby } from '../../store/lobby';
-import { CONDITIONS } from './RaceSetup';
+import { gone as isGone, stalled, startHold } from '../../game/net/roomWait';
+import { CONDITIONS, ConditionsSelect } from './RaceSetup';
+import { CourseSelect } from './Menus';
+import { useOverScreen } from '../Shell';
 import { neighbourVehicle, OnlineVehicle } from '../garage/OnlineVehicle';
 import type { TimeOfDay } from '../../game/render/Environment';
 
@@ -157,7 +161,11 @@ function RoomGone() {
     <div className="screen online-room room-gone">
       <ScreenHead jp="オンライン対戦" en="ONLINE BATTLE" />
       <div className="ol-panel">
-        <Notice title={error ?? 'ルームが閉じられました'}>ホストが退出したか、通信が切れました。ロビーから新しいルームを作るか、別のコードで参加できます。</Notice>
+        <Notice title={error ?? 'ルームが閉じられました'}>
+          {error === ROOM_REMOVED
+            ? 'ホストがメンバーから外したか、通信が切れていました。ルームが続いていれば、同じコードでもう一度参加できます。'
+            : 'ホストが退出したか、通信が切れました。ロビーから新しいルームを作るか、別のコードで参加できます。'}
+        </Notice>
         <div className="ol-actions">
           <button className="cta" onClick={leave}>ロビーに戻る</button>
         </div>
@@ -176,15 +184,48 @@ function RealtimeBadge() {
 /**
  * What a member is doing, as their seat's row and their vehicle's name tag say it. `tag`: shorter, and in a crowded
  * room (`tight`) only the tick of the ready ones (the tags of five vehicles would cover the vehicles behind).
+ * Loading the course comes before everything else: it is what the whole room waits for. `gone`: not on the room's
+ * channel any more (the game closed, the connection lost).
  */
-function MemberMark({ p, room, choosing, tag, tight }: { p: RoomMember; room: RoomState; choosing: boolean; tag?: boolean; tight?: boolean }) {
-  if (!p.loaded) return <em className="loading">ロード中…</em>;
+function MemberMark({ p, room, choosing, tag, tight, gone }: { p: RoomMember; room: RoomState; choosing: boolean; tag?: boolean; tight?: boolean; gone?: boolean }) {
+  if (!p.loaded) return <em className="loading"><i className="busy-glyph" aria-hidden />{tag && tight ? '' : '読み込み中'}</em>;
+  const cut = gone ? <em className="gone">切断</em> : null;
   // (looking round the car select enters nothing: a ready member stays ready, and is shown as both)
   const ready = p.ready && p.id !== room.host_id;
-  if (choosing) return <><em className="choosing">選択中</em>{ready && <em className="ready">{tag || tight ? '✓' : '準備完了 ✓'}</em>}</>;
-  if (p.id === room.host_id) return null;
-  if (tight) return p.ready ? <em className="ready">✓</em> : null;
-  return <em className={p.ready ? 'ready' : 'not-ready'}>{p.ready ? (tag ? '準備OK ✓' : '準備完了 ✓') : '準備中'}</em>;
+  if (choosing) return <>{cut}<em className="choosing">選択中</em>{ready && <em className="ready">{tag || tight ? '✓' : '準備完了 ✓'}</em>}</>;
+  if (p.id === room.host_id) return cut;
+  if (tight) return <>{cut}{p.ready && <em className="ready">✓</em>}</>;
+  return <>{cut}<em className={p.ready ? 'ready' : 'not-ready'}>{p.ready ? (tag ? '準備OK ✓' : '準備完了 ✓') : '準備中'}</em></>;
+}
+
+/**
+ * A picker of the room's (its course, its conditions) up over the screen that opened it: a screen of its own in the
+ * overlay, like the car select's (the wipe brings it in and takes it out; the screen under it waits, hidden).
+ */
+function Over({ children }: { children: ReactNode }) {
+  const host = document.querySelector('.overlay');
+  return host ? createPortal(children, host) : null;
+}
+
+/** The names of members in a line of text. */
+const names = (who: readonly { name: string }[]) => who.map((p) => p.name).join('、');
+
+/** One of the room's two settings: what it is, and for the host the way to change it. */
+function SetupCell({ label, value, hint, onChange }: { label: string; value: string; hint: HintKey; onChange?: () => void }) {
+  const body = (
+    <>
+      <span className="ol-set-name">
+        <small>{label}</small>
+        <b>{value}</b>
+      </span>
+      {onChange && <em><span>変更</span> ▶</em>}
+    </>
+  );
+  return onChange ? (
+    <button className={`ol-set ol-set-${hint}`} onClick={() => { sfx.confirm(); onChange(); }}>{body}</button>
+  ) : (
+    <div className="ol-set fixed">{body}</div>
+  );
 }
 
 /**
@@ -243,12 +284,19 @@ function LobbyTags({ room, playerId, choosing }: { room: RoomState; playerId: nu
   );
 }
 
-/** The room: code to share, who is in (and their vehicles on the course behind), car choice, and the host's start button. */
+/**
+ * The room: code to share, its course and conditions (the host's to change: the course select and the conditions
+ * list come up over the room, and the change is sent when one is chosen), who is in and what each is doing (their
+ * vehicles on the course behind), car choice, and the host's start button with what it still waits for.
+ */
 export function OnlineRoomScreen() {
-  const { room, player, carId, busy, error } = useOnline();
+  const { room, player, carId, busy, error, waits, absent } = useOnline();
   const choosing = useLobby((s) => s.choosing);
   const go = useApp((s) => s.go);
   const [picking, setPicking] = useState<CarId | null>(null);
+  // the host's change of course or conditions, up over the room
+  const [setup, setSetup] = useState<'course' | 'conditions' | null>(null);
+  useOverScreen(!!setup);
   useEffect(() => {
     void gameHolder.game?.audio?.playMusic('bgm_online');
     // the members' vehicles on the course (again after a picker that showed the garage)
@@ -296,10 +344,28 @@ export function OnlineRoomScreen() {
   const me = room?.players.find((p) => p.id === player?.id);
   const isHost = !!room && room.host_id === player?.id;
   const waiting = room?.status === 'waiting';
-  const enough = (room?.players.length ?? 0) >= 2;
-  const loading = room ? room.players.filter((p) => !p.loaded).length : 0;
-  const unready = room ? room.players.filter((p) => p.id !== room.host_id && !p.ready).length : 0;
-  const canStart = waiting && enough && !loading && !unready;
+  const hold = room ? startHold(room) : null;
+  const canStart = waiting && !hold;
+  // a load that goes on and on, a member who stays away: told as such after a while, so looked at again every few
+  // seconds while there is one
+  const watch = hold?.why === 'loading' || Object.keys(absent).length > 0;
+  const [, look] = useState(0);
+  useEffect(() => {
+    if (!watch) return;
+    const t = setInterval(() => look((n) => n + 1), 3000);
+    return () => clearInterval(t);
+  }, [watch]);
+  const now = Date.now();
+  const slow = (p: RoomMember) => !p.loaded && stalled(waits[p.id], now);
+  // (known only with a live connection here)
+  const gone = (p: RoomMember) => p.loaded && p.id !== player?.id && isGone(absent[p.id], now);
+  // whom the host may take out of the room: the start would wait for them for ever
+  const removable = room && isHost && waiting ? room.players.filter((p) => p.id !== player?.id && (slow(p) || gone(p))) : [];
+  const kick = (p: RoomMember) => {
+    if (busy) return;
+    sfx.back();
+    void kickMember(p.id);
+  };
   const start = () => {
     if (busy) return;
     if (!canStart) return void sfx.deny();
@@ -312,6 +378,14 @@ export function OnlineRoomScreen() {
     else sfx.confirm();
     void toggleReady();
   };
+  const canSet = isHost && waiting;
+  // the race started, or the room went to another host, with the picker up
+  useEffect(() => {
+    if (setup && !canSet) {
+      setSetup(null);
+      previewConditions(null);
+    }
+  }, [setup, canSet]);
   useMenuInput((a) => {
     if (a === 'back') exit();
     if (a === 'confirm') (isHost ? start : ready)();
@@ -320,33 +394,109 @@ export function OnlineRoomScreen() {
       setPicking(neighbourVehicle(room.track_id, carId, a === 'left' ? -1 : 1));
       sfx.move();
     }
-  }, !picking && !!room);
+    // the host: X the course, C the time & weather; R takes a member out who holds the room up
+    if (canSet && (a === 'optionX' || a === 'optionY')) {
+      sfx.confirm();
+      setSetup(a === 'optionX' ? 'course' : 'conditions');
+    }
+    if (a === 'optionSort' && removable.length) kick(removable[0]);
+  }, !picking && !setup && !!room);
   if (!player) return null;
   if (!room) return <RoomGone />;
   const course = COURSES[room.track_id as CourseId];
+  const conditions = CONDITIONS.find((c) => c.id === room.time_of_day);
+  const roomNote = (what: string) => `ルーム ${room.code}・${what}`;
+  const picker = !canSet ? null : setup === 'course' ? (
+    <CourseSelect
+      over
+      head={<ScreenHead jp="コースを変更" en="ROOM COURSE" note={roomNote('決定すると全員のゲームがコースを読み込みます')} />}
+      initial={room.track_id as CourseId}
+      current={room.track_id as CourseId}
+      plain
+      confirm="このコースに変更"
+      onChoose={(id) => {
+        setSetup(null);
+        void changeRoom({ track_id: id });
+      }}
+      onBack={() => setSetup(null)}
+    />
+  ) : setup === 'conditions' && course ? (
+    <ConditionsSelect
+      over
+      head={<ScreenHead jp="時間帯・天候を変更" en="ROOM CONDITIONS" note={roomNote('決定すると全員の画面が切り替わります')} />}
+      course={course}
+      initial={room.time_of_day}
+      current={room.time_of_day}
+      plain
+      confirm="この条件に変更"
+      // (this game shows what the cursor rests on; the others' change when it is chosen)
+      onLook={previewConditions}
+      onChoose={(tod) => {
+        setSetup(null);
+        void chooseConditions(tod);
+      }}
+      onBack={() => {
+        setSetup(null);
+        previewConditions(null);
+      }}
+    />
+  ) : null;
+  // what the start still waits for, in words (the host's button and the guests' line)
+  const others = hold && hold.why !== 'players' ? hold.who.filter((p) => p.id !== player.id) : [];
+  const late = removable.filter((p) => !p.loaded), lost = removable.filter((p) => p.loaded);
+  const waitLine = !waiting
+    ? null
+    : late.length
+      ? `${names(late)} の読み込みに時間がかかっています。待つか、ルームから外せます。`
+      : lost.length
+        ? `${names(lost)} は接続が切れています。ルームから外せます。`
+        : !hold || hold.why === 'players' || !others.length
+          ? null
+          : hold.why === 'loading'
+            ? `${names(others)} がコースを読み込んでいます`
+            : isHost || me?.ready
+              ? `${names(others)} の準備完了を待っています`
+              : null;
+  const hints: [HintKey, string][] = [['lr', '車両選択'], ['drag', '視点']];
+  if (canSet) hints.push(['fav', 'コース'], ['color', '天候']);
+  if (removable.length) hints.push(['sort', `${removable[0].name} を外す`]);
+  hints.push(['ok', isHost ? 'スタート' : me?.ready ? '準備完了を取り消す' : '準備完了']);
   return (
     <div className={`screen online-room ${dragging ? 'orbiting' : ''}`} {...orbit}>
-      {!picking && <LobbyTags room={room} playerId={player.id} choosing={choosing} />}
-      <ScreenHead jp="ルーム" en="ONLINE ROOM" note={<>{course?.name ?? room.track_id}・{CONDITIONS.find((c) => c.id === room.time_of_day)?.jp ?? ''} <RealtimeBadge /></>} />
+      {/* (not under a picker: a tag placed on screen would show through the hidden room) */}
+      {!picking && !setup && <LobbyTags room={room} playerId={player.id} choosing={choosing} />}
+      <ScreenHead jp="ルーム" en="ONLINE ROOM" note={<>{course?.name ?? room.track_id}・{conditions?.jp ?? ''} <RealtimeBadge /></>} />
       <div className="ol-panel">
-        <div className="ol-code-big">
-          <small>ROOM CODE</small>
-          <b>{room.code}</b>
-          <span>友達にこのコードを伝えてください</span>
+        {/* (two rows; on a phone one: the code, then the room's course and conditions beside it) */}
+        <div className="ol-top">
+          <div className="ol-code-big">
+            <small>ROOM CODE</small>
+            <b>{room.code}</b>
+            <span>友達にこのコードを伝えてください</span>
+          </div>
+          <div className="ol-setup">
+            <SetupCell label="コース" value={course?.name ?? room.track_id} hint="fav" onChange={canSet ? () => setSetup('course') : undefined} />
+            <SetupCell label="時間帯・天候" value={conditions?.jp ?? ''} hint="color" onChange={canSet ? () => setSetup('conditions') : undefined} />
+          </div>
         </div>
         <ul className="ol-slots">
           {Array.from({ length: room.max_players }, (_, slot) => {
             const p = room.players.find((m) => m.slot === slot);
+            const state = !p ? 'empty' : !p.loaded ? 'loading' : gone(p) ? 'gone' : p.ready && p.id !== room.host_id ? 'ready' : '';
+            const pct = p && !p.loaded ? waits[p.id]?.pct ?? null : null;
             return (
-              <li key={slot} className={p ? (p.id === player.id ? 'me' : '') : 'empty'}>
+              <li key={slot} className={`${state}${p?.id === player.id ? ' me' : ''}`}>
                 <i style={{ background: SLOT_COLORS[slot] }} />
                 {p ? (
                   <>
                     <b>{p.name}</b>
                     <span>{CAR_SPECS[choosing[p.id] ?? p.car_id].name}</span>
-                    <MemberMark p={p} room={room} choosing={p.id in choosing} />
+                    <MemberMark p={p} room={room} choosing={p.id in choosing} gone={gone(p)} />
+                    {removable.includes(p) && <button className="mini ol-kick" disabled={busy} onClick={() => kick(p)}>外す</button>}
                     {p.id === room.host_id && <em className="host">HOST</em>}
                     {p.id === player.id && <em className="you">YOU</em>}
+                    {/* how far their game has come with the course, when it tells (the bar; no figure) */}
+                    {!p.loaded && <div className={`ol-load${pct === null ? ' blind' : ''}`} aria-hidden><div style={{ transform: `scaleX(${((pct ?? 0) / 100).toFixed(2)})` }} /></div>}
                   </>
                 ) : (
                   <span className="wait">参加を待っています…</span>
@@ -360,21 +510,24 @@ export function OnlineRoomScreen() {
         <div className="ol-actions">
           {isHost ? (
             <button className="cta ol-start" disabled={busy || !canStart} onClick={start}>
-              {!enough ? '2人以上でスタートできます' : loading ? `読み込み待ち… あと${loading}人` : unready ? `準備完了待ち… あと${unready}人` : 'レース開始'}
+              {!hold ? 'レース開始' : hold.why === 'players' ? '2人以上でスタートできます' : hold.why === 'loading' ? `読み込み待ち… あと${hold.who.length}人` : `準備完了待ち… あと${hold.who.length}人`}
             </button>
           ) : (
-            <>
-              <button className={`cta ol-ready ${me?.ready ? 'on' : ''}`} disabled={busy || !waiting || !me?.loaded} onClick={ready}>
-                {!me?.loaded ? 'コースを読み込んでいます…' : me.ready ? '準備完了を取り消す' : '準備完了'}
-              </button>
-              {me?.ready && <div className="ol-waiting">ホストのスタートを待っています…</div>}
-            </>
+            <button className={`cta ol-ready ${me?.ready ? 'on' : ''}`} disabled={busy || !waiting || !me?.loaded} onClick={ready}>
+              {!me?.loaded ? 'コースを読み込んでいます…' : me.ready ? '準備完了を取り消す' : '準備完了'}
+            </button>
+          )}
+          {waitLine ? (
+            <div className={`ol-waiting ol-hold${late.length || (!lost.length && hold?.why === 'loading') ? ' amber' : lost.length ? ' alert' : ''}`}>{waitLine}</div>
+          ) : (
+            !isHost && me?.ready && <div className="ol-waiting">ホストのスタートを待っています…</div>
           )}
           <button className="cta small ghost ol-leave" onClick={exit}>退出</button>
         </div>
         {error && <OnlineError message={error} />}
       </div>
-      <Hint items={[['lr', '車両選択'], ['drag', '視点'], ['ok', isHost ? 'スタート' : me?.ready ? '準備完了を取り消す' : '準備完了']]} />
+      <Hint items={hints} />
+      {picker && <Over>{picker}</Over>}
     </div>
   );
 }
@@ -384,18 +537,25 @@ export function OnlineResultsScreen() {
   const { room, player, busy, error } = useOnline();
   const result = useApp((s) => s.result);
   const go = useApp((s) => s.go);
+  // the host picks another course for the next race: the course select, up over the results
+  const [picking, setPicking] = useState(false);
+  useOverScreen(picking);
   useEffect(() => {
     // after the finish jingle
     void gameHolder.game?.audio?.playMusic('bgm_results', { delay: 4.5 });
   }, []);
+  const isHost = !!room && !!player && room.host_id === player.id;
+  useEffect(() => {
+    if (picking && !isHost) setPicking(false);
+  }, [picking, isHost]);
   useMenuInput((a) => {
     if (a === 'back') { sfx.back(); void leaveRoom(); go('modes'); }
-    // the host's Enter is the rematch button
-    if (a === 'confirm' && room && player && room.host_id === player.id && !busy) { sfx.confirm(); void rematch(); }
-  }, !!room);
+    // the host's Enter is the rematch button, X the next race on another course
+    if (a === 'confirm' && isHost && !busy) { sfx.confirm(); void rematch(); }
+    if (a === 'optionX' && isHost && !busy) { sfx.confirm(); setPicking(true); }
+  }, !!room && !picking);
   if (!player) return null;
   if (!room) return <RoomGone />;
-  const isHost = room.host_id === player.id;
   const rows = [...room.players].sort((a, b) => (a.finish_ms ?? Infinity) - (b.finish_ms ?? Infinity));
   const winner = rows[0]?.finish_ms !== null ? rows[0] : null;
   return (
@@ -417,15 +577,35 @@ export function OnlineResultsScreen() {
         {result && <div className="ol-mine">あなたのタイム <b>{formatTime(result.timeMs)}</b>　最高速 {Math.round(result.topSpeedKmh)} km/h</div>}
         <div className="ol-actions">
           {isHost ? (
-            <button className="cta" disabled={busy} onClick={() => { sfx.confirm(); void rematch(); }}>もう一度走る</button>
+            <>
+              <button className="cta" disabled={busy} onClick={() => { sfx.confirm(); void rematch(); }}>もう一度走る</button>
+              <button className="cta small ol-next" disabled={busy} onClick={() => { sfx.confirm(); setPicking(true); }}>コースを変えて走る</button>
+            </>
           ) : (
-            <div className="ol-waiting">ホストの再戦を待っています…</div>
+            <div className="ol-waiting">ホストが次のレースを決めるのを待っています…</div>
           )}
           <button className="cta small ghost" onClick={() => { sfx.back(); void leaveRoom(); go('modes'); }}>ルームを出る</button>
         </div>
         {error && <OnlineError message={error} />}
       </div>
-      {isHost && <Hint items={[['ok', 'もう一度走る']]} />}
+      {isHost && <Hint items={[['ok', 'もう一度走る'], ['fav', 'コースを変える']]} />}
+      {picking && isHost && (
+        <Over>
+          <CourseSelect
+            over
+            head={<ScreenHead jp="次のコース" en="NEXT COURSE" note={`ルーム ${room.code}・決定すると全員がルームに戻り、コースを読み込みます`} />}
+            initial={room.track_id as CourseId}
+            current={room.track_id as CourseId}
+            plain
+            confirm="このコースで次のレース"
+            onChoose={(id) => {
+              setPicking(false);
+              void rematch(id === room.track_id ? {} : { track_id: id });
+            }}
+            onBack={() => setPicking(false)}
+          />
+        </Over>
+      )}
     </div>
   );
 }

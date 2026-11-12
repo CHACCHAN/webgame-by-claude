@@ -274,6 +274,22 @@ pending. `docs/PLAN.md` holds the design.
   The game draws it only if the vehicle offers it (`game/vehicle/paints.ts` `offeredPaint`, `RemoteRacers.paintFor`),
   else the seat's colour. **The seat's colour stays the member's mark** (`SLOT_COLORS`, five: name tags, HUD rows,
   progress dots, lists): two members may pick the same paint. A change of paint alone keeps `ready`.
+  The host's changes (v2.5, owner 11-12): `PATCH /api/rooms/{code}` (host only, `waiting` only; `track_id` /
+  `time_of_day`), and `POST …/rematch` takes the same two (the results' コースを変えて走る). `Room::change`: another
+  course takes everyone's `loaded` and `ready` back and replaces a vehicle the course does not offer
+  (`Room::vehiclesOn`: `game.cars.<id>.courses`, the server's side of `vehiclesFor`; none set yet: **a
+  course-bound vehicle must get its list there**), other conditions take the readies only. Every game follows the
+  room (`store/online.ts` `followRoom` ← every `applyRoom`): `loadRoomCourse` builds the course behind the loading
+  screen (again if the room moved on meanwhile), then the line-up, the conditions, and `reportLoaded` with the
+  course's id (the server drops a report for a course the room has left). Never start a load for the room
+  elsewhere; nothing touches the scene while `following`. The change is sent on confirm only; the host's
+  conditions list previews in its own game (`previewConditions`). The pickers are the single-player parts
+  (`CourseSelect` in Menus.tsx, `ConditionsSelect` in RaceSetup.tsx; `plain` / `current` / `over`) portalled over
+  the room (`.room-over`, as `.vp-over`). Who is loading: `game/net/roomWait.ts` (`startHold` = the reason under
+  the start button, by name; `client-load` [percent] ≤ 2 Hz on the presence channel → the bar in a member's row;
+  `STALLED_MS` 45 s without news / `GONE_MS` 8 s off the channel → the host's 外す, `POST /rooms/{code}/kick`,
+  host + waiting only). On a phone the code, the course and the conditions share one row (`.ol-top`): five seats
+  and the buttons must fit under it (`online.spec.ts` checks). `window.__online` is the online store for probes.
 - Stack (`docker-compose.yml`): nginx looks `app` up per request (`resolver 127.0.0.11` + `$app` in `docker/web/nginx.conf`:
   a name written straight into `fastcgi_pass` / `proxy_pass` is resolved once at start and answers 502 after the
   backend alone is rebuilt); `app` is healthy when PHP-FPM listens and Reverb answers over HTTP, `web` starts after that;

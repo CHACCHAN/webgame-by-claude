@@ -167,6 +167,12 @@ export interface RoomState {
   players: RoomMember[];
 }
 
+/** A room's course and / or conditions, as its host sets them (what is left out stays). */
+export interface RoomSetup {
+  track_id?: string;
+  time_of_day?: TimeOfDay;
+}
+
 export interface RealtimeInfo {
   enabled: boolean;
   key: string | null;
@@ -314,15 +320,24 @@ export const api = {
     /** the vehicle and its paint (another paint alone keeps the 準備完了; another vehicle takes it back) */
     setCar: (p: StoredPlayer, code: string, carId: CarId, color: string | null) =>
       request<RoomState>(`/rooms/${encodeURIComponent(code)}/me`, { method: 'PATCH', body: JSON.stringify({ car_id: carId, color }) }, p.token),
-    setLoaded: (p: StoredPlayer, code: string) =>
-      request<RoomState>(`/rooms/${encodeURIComponent(code)}/me`, { method: 'PATCH', body: JSON.stringify({ loaded: true }) }, p.token),
+    /** this game shows the course `trackId` (the server drops the report if the room has moved on to another) */
+    setLoaded: (p: StoredPlayer, code: string, trackId: string) =>
+      request<RoomState>(`/rooms/${encodeURIComponent(code)}/me`, { method: 'PATCH', body: JSON.stringify({ loaded: true, track_id: trackId }) }, p.token),
+    /** the host's change of the room's course and / or conditions, while it waits */
+    change: (p: StoredPlayer, code: string, to: RoomSetup) =>
+      request<RoomState>(`/rooms/${encodeURIComponent(code)}`, { method: 'PATCH', body: JSON.stringify(to) }, p.token),
+    /** the host takes a member out of the waiting room */
+    kick: (p: StoredPlayer, code: string, playerId: number) =>
+      request<RoomState>(`/rooms/${encodeURIComponent(code)}/kick`, { method: 'POST', body: JSON.stringify({ player_id: playerId }) }, p.token),
     setReady: (p: StoredPlayer, code: string, ready: boolean) =>
       request<RoomState>(`/rooms/${encodeURIComponent(code)}/me`, { method: 'PATCH', body: JSON.stringify({ ready }) }, p.token),
     leave: (p: StoredPlayer, code: string) => request<{ left: boolean }>(`/rooms/${encodeURIComponent(code)}/leave`, { method: 'POST' }, p.token),
     start: (p: StoredPlayer, code: string) => request<RoomState>(`/rooms/${encodeURIComponent(code)}/start`, { method: 'POST' }, p.token),
     finish: (p: StoredPlayer, code: string, raceNo: number, timeMs: number) =>
       request<RoomState>(`/rooms/${encodeURIComponent(code)}/finish`, { method: 'POST', body: JSON.stringify({ race_no: raceNo, time_ms: timeMs }) }, p.token),
-    rematch: (p: StoredPlayer, code: string) => request<RoomState>(`/rooms/${encodeURIComponent(code)}/rematch`, { method: 'POST' }, p.token),
+    /** back to the waiting room; `to`: on another course or in other conditions at once */
+    rematch: (p: StoredPlayer, code: string, to: RoomSetup = {}) =>
+      request<RoomState>(`/rooms/${encodeURIComponent(code)}/rematch`, { method: 'POST', body: JSON.stringify(to) }, p.token),
   },
 
   /** Signed authorization for the room's presence channel (Pusher protocol, served by Laravel). */

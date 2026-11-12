@@ -1,11 +1,12 @@
 import { create } from 'zustand';
 import Pusher, { type PresenceChannel } from 'pusher-js';
-import { api, ApiError, type RoomState, type StoredPlayer } from '../api/client';
+import { api, ApiError, type RoomSetup, type RoomState, type StoredPlayer } from '../api/client';
 import { gameHolder } from '../ui/GameCanvas';
 import { useApp } from './app';
 import { useSettings } from './settings';
 import { parseImpairment, type NetTransport } from '../game/net/transport';
-import { lobbyChannel, lobbyRoom, previewCar, showRoomLineup } from './lobby';
+import { hideRoomLineup, lobbyChannel, lobbyRoom, previewCar, showRoomLineup } from './lobby';
+import { heardLoad, LoadTeller, nextAbsent, nextWaits, readLoad, type Waiting } from '../game/net/roomWait';
 import type { CarId } from '../game/vehicle/carSpecs';
 import type { CourseId } from '../game/track/courses';
 import type { Game } from '../game/Game';
@@ -15,7 +16,27 @@ import type { TimeOfDay } from '../game/render/Environment';
  * Online battle session (UI side). Lobby actions go through the Laravel API; while racing, car
  * states travel as client events on the room's presence channel (Laravel Reverb, Pusher protocol).
  * If the socket is unavailable the room state is still kept up to date by polling.
+ *
+ * The room's course and its time & weather are the host's to change while the room waits (`changeRoom`, or with
+ * the rematch). Every game follows the room (`followRoom`): another course is built behind the loading screen,
+ * the line-up comes back on it and the game reports `loaded` again; other conditions change the scene at once.
  */
+
+/** What the host changed, for the members to read once (`n` tells one notice from the next). */
+export interface RoomNotice {
+  n: number;
+  course: CourseId | null;
+  conditions: TimeOfDay | null;
+  /** this player's vehicle may not race on the new course: what it was, and what the server entered instead */
+  replaced: [CarId, CarId] | null;
+  /** this player's 準備完了 was taken back by the change */
+  unready: boolean;
+}
+
+/** why a player is out of a room that goes on without them (`error`, read by the room screen) */
+export const ROOM_CLOSED = 'ルームが閉じられました';
+export const ROOM_REMOVED = 'ルームから外れました';
+
 interface OnlineState {
   player: StoredPlayer | null;
   room: RoomState | null;
@@ -25,6 +46,15 @@ interface OnlineState {
   realtime: 'off' | 'connecting' | 'live' | 'failed';
   error: string | null;
   busy: boolean;
+  notice: RoomNotice | null;
+  /** why this game is building a course for the room (the loading screen says it); null: it is not */
+  loadingFor: 'join' | 'change' | null;
+  /** the members whose games are loading the room's course: since when, how far (game/net/roomWait.ts) */
+  waits: Record<number, Waiting>;
+  /** the members on the room's channel (null: not known here, no live connection) */
+  present: number[] | null;
+  /** loaded members who are not on it, since when (game/net/roomWait.ts) */
+  absent: Record<number, number>;
   set: (patch: Partial<OnlineState>) => void;
 }
 
@@ -36,8 +66,16 @@ export const useOnline = create<OnlineState>((set) => ({
   realtime: 'off',
   error: null,
   busy: false,
+  notice: null,
+  loadingFor: null,
+  waits: {},
+  present: null,
+  absent: {},
   set: (patch) => set(patch),
 }));
+
+// for probes, as `__app` and `__game` are
+(window as unknown as { __online?: unknown }).__online = useOnline;
 
 /** server clock − local clock (ms), taken from the HTTP exchange with the shortest round trip */
 let clockOffset = 0;
@@ -47,6 +85,13 @@ let channel: PresenceChannel | null = null;
 let pollTimer = 0;
 let startedRace = 0;
 const hookedGames = new WeakSet<Game>();
+/** the game is building a course for the room (`loadRoomCourse`) */
+let following = false;
+let reporting = false;
+let noticeNo = 0;
+/** conditions the host is looking at in the room's picker: this game shows them, the room's wait */
+let preview: TimeOfDay | null = null;
+const teller = new LoadTeller();
 
 const st = () => useOnline.getState();
 const message = (e: unknown) => (e instanceof ApiError ? e.message : 'サーバーに接続できません');
@@ -72,6 +117,11 @@ async function run(action: () => Promise<void>) {
   } finally {
     st().set({ busy: false });
   }
+}
+
+/** A call that must not be dropped because another is under way (`run` lets one through at a time). */
+async function idle() {
+  for (let k = 0; k < 40 && st().busy; k++) await new Promise((r) => setTimeout(r, 120));
 }
 
 export function onlinePlayer() {
@@ -166,22 +216,68 @@ export function startOnlineRace() {
   return run(async () => applyRoom(await timed(() => api.rooms.start(onlinePlayer(), room.code))));
 }
 
-export function rematch() {
+/** The host: back to the waiting room for another race; `to`: on another course (or in other conditions) at once. */
+export function rematch(to: RoomSetup = {}) {
   const room = st().room;
   if (!room) return;
-  return run(async () => applyRoom(await api.rooms.rematch(onlinePlayer(), room.code)));
+  return run(async () => applyRoom(await api.rooms.rematch(onlinePlayer(), room.code, to)));
 }
 
-export async function leaveRoom() {
+/**
+ * The host changes the room's course and / or its time & weather (only while it waits; the server checks both).
+ * Sent once, when the choice is made: every game loads a new course, and everyone's 準備完了 goes back.
+ */
+export async function changeRoom(to: RoomSetup) {
+  const room = st().room;
+  if (!room || room.status !== 'waiting') return;
+  // (what the room has already is no change: nothing to send, nobody's ready to take back)
+  if ((to.track_id ?? room.track_id) === room.track_id && (to.time_of_day ?? room.time_of_day) === room.time_of_day) return;
+  await idle();
+  await run(async () => applyRoom(await api.rooms.change(onlinePlayer(), room.code, to)));
+}
+
+/**
+ * The host looks through the conditions in the room's picker: this game shows them, nothing is sent (the others'
+ * scenes change when the choice is made). Null: the room's own again.
+ */
+export function previewConditions(tod: TimeOfDay | null) {
+  preview = tod;
+  const game = gameHolder.game;
+  const want = tod ?? st().room?.time_of_day;
+  if (game && want && !following && game.timeOfDay !== want) game.applyTimeOfDay(want);
+}
+
+/** The host's choice of conditions: the scene keeps showing it while the server is told (no flick back in between). */
+export async function chooseConditions(tod: TimeOfDay) {
+  previewConditions(tod);
+  await changeRoom({ time_of_day: tod });
+  previewConditions(null);
+}
+
+/** The host takes a member out of the waiting room (one whose game does not finish loading, or who is gone). */
+export async function kickMember(id: number) {
+  const room = st().room;
+  if (!room || room.status !== 'waiting' || room.host_id !== st().player?.id || id === room.host_id) return;
+  await idle();
+  await run(async () => applyRoom(await api.rooms.kick(onlinePlayer(), room.code, id)));
+}
+
+export function dismissRoomNotice() {
+  if (st().notice) st().set({ notice: null });
+}
+
+/** `why`: the room goes on without this player (`ROOM_CLOSED`, `ROOM_REMOVED`): the room screen says it. */
+export async function leaveRoom(why: string | null = null) {
   const room = st().room;
   stopLoops();
+  preview = null;
   lobbyRoom(null, null);
   // (closing the connection takes the player out of the room's channel. An unsubscribe before it never got there:
   // pusher-js sends a tick later, on the socket that is closing by then, and the browser logs an error)
   channel = null;
   pusher?.disconnect();
   pusher = null;
-  st().set({ room: null, realtime: 'off', error: null });
+  st().set({ room: null, realtime: 'off', error: why, notice: null, waits: {}, present: null, absent: {} });
   gameHolder.game?.remotes.clear();
   // back to the player's own conditions
   const tod = useSettings.getState().timeOfDay;
@@ -195,18 +291,12 @@ export async function leaveRoom() {
  * guest has pressed 準備完了 (`toggleReady`), which the server takes only from a loaded game.
  */
 async function enterRoom(room: RoomState) {
-  const app = useApp.getState();
   const game = gameHolder.game;
-  st().set({ room });
+  st().set({ room, notice: null, waits: nextWaits({}, room.players, Date.now()), present: null, absent: {} });
   const me = room.players.find((p) => p.id === st().player?.id);
   if (me) st().set({ carId: me.car_id, carColor: me.color ?? null });
-  useSettings.getState().set({ courseId: room.track_id as CourseId });
-  if (game && game.course.id !== room.track_id) {
-    app.set({ loading: { progress: 0, label: '' } });
-    app.go('loading');
-    await game.switchCourse(room.track_id as CourseId);
-    app.set({ loading: null });
-  }
+  hookGame();
+  await loadRoomCourse('join');
   // everyone races in the conditions the host chose
   if (game && game.timeOfDay !== room.time_of_day) game.applyTimeOfDay(room.time_of_day);
   // the members' vehicles on the course (store/lobby.ts)
@@ -214,12 +304,105 @@ async function enterRoom(room: RoomState) {
   showRoomLineup();
   useApp.getState().set({ mode: 'online' });
   useApp.getState().go('onlineRoom');
-  hookGame();
   // after loading: building a course blocks the page long enough for the socket to give up on its first try
   connectRealtime(room.code);
   startPolling();
+  // (a room that changed while the course was being built: the report's answer tells, and the game follows)
   applyRoom(room);
-  if (st().room?.code === room.code) applyRoom(await api.rooms.setLoaded(onlinePlayer(), room.code));
+}
+
+/**
+ * Builds the room's course behind the loading screen, when the game shows another one; again if the host has moved
+ * on meanwhile (the room's course at the end of a load is the one that counts). Nothing else touches the scene
+ * while this runs (`following`): no line-up, no conditions, no report.
+ */
+async function loadRoomCourse(why: 'join' | 'change') {
+  const game = gameHolder.game;
+  if (!game || following) return;
+  following = true;
+  try {
+    for (let room = st().room; room && game.course.id !== room.track_id; room = st().room) {
+      const id = room.track_id as CourseId;
+      // (the shell and the loading screen name the course from the settings)
+      useSettings.getState().set({ courseId: id });
+      hideRoomLineup();
+      const app = useApp.getState();
+      st().set({ loadingFor: why });
+      app.set({ loading: { progress: 0, label: '' }, paused: false });
+      if (app.screen !== 'loading') app.go('loading');
+      teller.reset();
+      tellLoad(0);
+      // the loading screen gets its frame before the build takes the main thread
+      await new Promise((r) => setTimeout(r, 50));
+      await game.switchCourse(id);
+    }
+  } finally {
+    following = false;
+    st().set({ loadingFor: null });
+    useApp.getState().set({ loading: null });
+    const room = st().room;
+    if (room) useSettings.getState().set({ courseId: room.track_id as CourseId });
+  }
+}
+
+/**
+ * The game follows the room while it waits: its course (built anew when the host picked another: `loaded` was
+ * taken back by the server and is reported again here), its conditions, and the line-up on the course.
+ */
+async function followRoom() {
+  const game = gameHolder.game;
+  const room = st().room;
+  if (!game || !room || following || room.status !== 'waiting') return;
+  if (game.course.id !== room.track_id) {
+    await loadRoomCourse('change');
+    const app = useApp.getState();
+    const now = st().room;
+    // (the loading screen is left in any case: for the room, or for the word that it is gone)
+    if (now?.status === 'waiting') showRoomLineup();
+    if (app.screen === 'loading') app.go('onlineRoom');
+    if (!now) return;
+  }
+  syncConditions();
+  void reportLoaded();
+}
+
+/** Everyone races in the conditions the host chose: the scene changes with the room (no load needed for that). */
+function syncConditions() {
+  const game = gameHolder.game;
+  const room = st().room;
+  if (!game || !room || following || preview || room.status !== 'waiting') return;
+  if (game.timeOfDay !== room.time_of_day) game.applyTimeOfDay(room.time_of_day);
+}
+
+/** Tells the server that this game shows the room's course, when it does and the server does not know. */
+async function reportLoaded() {
+  const game = gameHolder.game;
+  const room = st().room;
+  const player = st().player;
+  const me = self();
+  if (reporting || following || !game || !room || !player || !me || me.loaded || game.course.id !== room.track_id) return;
+  reporting = true;
+  try {
+    applyRoom(await timed(() => api.rooms.setLoaded(player, room.code, room.track_id)));
+  } catch {
+    // (the poll comes back to it; a room that is gone is the poll's to tell)
+  } finally {
+    reporting = false;
+  }
+}
+
+/** How far this game's load has come, to the others (`client-load`; nothing without a live channel). */
+function tellLoad(progress: number) {
+  const m = teller.tell(progress, performance.now());
+  if (m && channel?.subscribed && channel.pusher.connection.state === 'connected') channel.trigger('client-load', m);
+}
+
+/** Who is on the room's channel (a member who is not has closed the game or lost the connection). */
+function readPresence() {
+  const ids: number[] = [];
+  channel?.members.each((m: { id: string }) => ids.push(Number(m.id)));
+  const present = channel?.subscribed ? ids : null;
+  st().set({ present, absent: nextAbsent(st().absent, st().room?.players ?? [], present, Date.now()) });
 }
 
 function connectRealtime(code: string) {
@@ -254,12 +437,23 @@ function connectRealtime(code: string) {
       });
       pusher.connection.bind('state_change', (s: { current: string }) => {
         if (s.current === 'connected') st().set({ realtime: channel?.subscribed ? 'live' : 'connecting' });
-        if (s.current === 'unavailable' || s.current === 'failed') st().set({ realtime: 'failed' });
+        if (s.current === 'unavailable' || s.current === 'failed') st().set({ realtime: 'failed', present: null, absent: {} });
       });
       channel = pusher.subscribe(`presence-room.${code}`) as PresenceChannel;
-      channel.bind('pusher:subscription_succeeded', () => st().set({ realtime: 'live' }));
-      channel.bind('pusher:subscription_error', () => st().set({ realtime: 'failed' }));
+      channel.bind('pusher:subscription_succeeded', () => {
+        st().set({ realtime: 'live' });
+        readPresence();
+      });
+      channel.bind('pusher:subscription_error', () => st().set({ realtime: 'failed', present: null, absent: {} }));
+      channel.bind('pusher:member_added', readPresence);
+      channel.bind('pusher:member_removed', readPresence);
       channel.bind('room.updated', (data: { room: RoomState }) => applyRoom(data.room));
+      // how far a member's game has come with the course (game/net/roomWait.ts)
+      channel.bind('client-load', (data: unknown, meta?: { user_id?: string }) => {
+        const id = Number(meta?.user_id);
+        const pct = readLoad(data);
+        if (id && pct !== null && st().waits[id]) st().set({ waits: heardLoad(st().waits, id, pct, Date.now()) });
+      });
       bindStates(channel);
       lobbyChannel(channel);
     })
@@ -272,8 +466,15 @@ export function applyRoom(room: RoomState) {
   if (!prev || prev.code !== room.code) return;
   // a reply overtaken by a newer state (a poll sent before the 準備完了 button was pressed) would undo it on screen
   if (room.server_time_ms < prev.server_time_ms) return;
-  st().set({ room });
-  lobbyRoom(room, st().player?.id ?? null);
+  const selfId = st().player?.id ?? null;
+  // taken out (by the host, or as one whose connection was gone): the room goes on without this player
+  if (selfId !== null && !room.players.some((p) => p.id === selfId)) {
+    void leaveRoom(ROOM_REMOVED);
+    return;
+  }
+  st().set({ room, waits: nextWaits(st().waits, room.players, Date.now()), absent: nextAbsent(st().absent, room.players, st().present, Date.now()) });
+  announce(prev, room);
+  lobbyRoom(room, selfId);
   const app = useApp.getState();
   if (room.status === 'racing' && room.start_at_ms && room.race_no > startedRace) beginRace(room);
   if (room.status === 'waiting' && (app.screen === 'onlineResults' || app.screen === 'race')) {
@@ -288,6 +489,28 @@ export function applyRoom(room: RoomState) {
   if (game && room.status !== 'waiting') {
     for (const r of game.remotes.standings()) if (!room.players.some((p) => p.id === r.id)) game.remotes.removePeer(r.id);
   }
+  if (room.status === 'waiting') void followRoom();
+}
+
+/**
+ * The host changed the room's course or conditions: a notice for the members (why their game starts loading, why
+ * their 準備完了 is gone). The host reads it only when it cost them their own vehicle.
+ */
+function announce(prev: RoomState, room: RoomState) {
+  const course = prev.track_id !== room.track_id;
+  const conditions = prev.time_of_day !== room.time_of_day;
+  if (!course && !conditions) return;
+  const selfId = st().player?.id;
+  const was = prev.players.find((p) => p.id === selfId);
+  const me = room.players.find((p) => p.id === selfId);
+  // the new course does not offer this player's vehicle: the server entered its first one, which is the entry now
+  let replaced: [CarId, CarId] | null = null;
+  if (course && was && me && was.car_id !== me.car_id && st().carId === was.car_id) {
+    replaced = [was.car_id, me.car_id];
+    st().set({ carId: me.car_id, carColor: me.color ?? null });
+  }
+  if (room.host_id === selfId && !replaced) return;
+  st().set({ notice: { n: ++noticeNo, course: course ? (room.track_id as CourseId) : null, conditions: conditions ? room.time_of_day : null, replaced, unready: !!was?.ready && !me?.ready } });
 }
 
 function beginRace(room: RoomState) {
@@ -358,16 +581,13 @@ function startPolling() {
     const screen = useApp.getState().screen;
     // racing state comes from the cars themselves; the lobby and results need the room
     if (screen !== 'onlineRoom' && screen !== 'onlineResults') return;
-    const me = room.players.find((p) => p.id === player.id);
-    // the room's course is on screen here: report it loaded if the server has not got it (failed call, rejoin)
-    const ask = me && !me.loaded && gameHolder.game?.course.id === room.track_id ? api.rooms.setLoaded(player, room.code) : api.rooms.get(player, room.code);
-    void timed(() => ask)
+    // (the answer goes through `applyRoom`, which reports the course loaded if the server has not got it: a failed
+    // call, a rejoin)
+    void timed(() => api.rooms.get(player, room.code))
       .then(applyRoom)
       .catch((e) => {
-        if (e instanceof ApiError && (e.status === 404 || e.status === 403)) {
-          st().set({ error: 'ルームが閉じられました' });
-          void leaveRoom();
-        }
+        // (403: no member any more, taken out while the connection was away)
+        if (e instanceof ApiError && (e.status === 404 || e.status === 403)) void leaveRoom(e.status === 403 ? ROOM_REMOVED : ROOM_CLOSED);
       });
   }, 2500);
 }
@@ -385,6 +605,8 @@ function hookGame() {
   if (!game || hookedGames.has(game)) return;
   hookedGames.add(game);
   game.on((e) => {
+    // the course being built for the room: how far, to the others
+    if (e.type === 'loading' && following) tellLoad(e.progress);
     if (e.type !== 'finish' || e.result.mode !== 'online') return;
     const room = st().room;
     const player = st().player;

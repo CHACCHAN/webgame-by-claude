@@ -118,7 +118,7 @@ class RoomTest extends TestCase
         $this->patchJson("/api/rooms/{$code}/me", ['loaded' => true], $h)
             ->assertOk()->assertJsonPath('players.0.loaded', true)->assertJsonPath('players.0.ready', false);
         $this->postJson("/api/rooms/{$code}/start", [], $h)
-            ->assertStatus(409)->assertJsonPath('status', null)->assertJsonPath('message', 'まだコースを読み込んでいるプレイヤーがいます');
+            ->assertStatus(409)->assertJsonPath('status', null)->assertJsonPath('message', 'B がコースを読み込んでいます');
         // nobody is ready before their game has loaded
         $this->patchJson("/api/rooms/{$code}/me", ['ready' => true], $b)->assertStatus(409);
         $this->patchJson("/api/rooms/{$code}/me", ['loaded' => false, 'ready' => true], $b)->assertStatus(409);
@@ -219,7 +219,7 @@ class RoomTest extends TestCase
             ->assertJsonPath('players.0.loaded', false)->assertJsonPath('players.1.loaded', false)->assertJsonPath('players.2.loaded', false)
             ->assertJsonPath('players.1.ready', false)->assertJsonPath('players.2.ready', false);
         $this->postJson("/api/rooms/{$code}/start", [], $h)
-            ->assertStatus(409)->assertJsonPath('message', 'まだコースを読み込んでいるプレイヤーがいます');
+            ->assertStatus(409)->assertJsonPath('message', 'HOST、B、C がコースを読み込んでいます');
         // any other change of the room (a touch, the status) leaves them alone
         $this->patchJson("/api/rooms/{$code}/me", ['loaded' => true, 'ready' => true], $b)->assertOk();
         $room->touch();
@@ -311,6 +311,181 @@ class RoomTest extends TestCase
         $this->postJson('/api/rooms', ['track_id' => 'oboro-downhill', 'time_of_day' => 'noon', 'car_id' => 'hayate'], $h)->assertStatus(422);
         // older clients send no conditions: night
         $this->assertSame('night', $this->postJson('/api/rooms', ['track_id' => 'oboro-downhill', 'car_id' => 'hayate'], $b)->json('time_of_day'));
+    }
+
+    /** A room of three, everyone loaded, the two guests ready. @return array{0: string, 1: array, 2: array, 3: array} */
+    private function readyRoom(): array
+    {
+        [, $h] = $this->player('HOST');
+        [, $b] = $this->player('B');
+        [, $c] = $this->player('C');
+        $code = $this->createRoom($h);
+        $this->postJson("/api/rooms/{$code}/join", ['car_id' => 'hayate', 'color' => '#c8102e'], $b)->assertOk();
+        $this->postJson("/api/rooms/{$code}/join", ['car_id' => 'hayabusa', 'color' => '#101010'], $c)->assertOk();
+        $this->patchJson("/api/rooms/{$code}/me", ['loaded' => true], $h)->assertOk();
+        foreach ([$b, $c] as $g) {
+            $this->patchJson("/api/rooms/{$code}/me", ['loaded' => true, 'ready' => true], $g)->assertOk();
+        }
+
+        return [$code, $h, $b, $c];
+    }
+
+    public function test_the_host_changes_the_course_and_the_conditions_of_a_waiting_room(): void
+    {
+        Event::fake([RoomUpdated::class]);
+        [$code, $h, $b, $c] = $this->readyRoom();
+
+        // the conditions alone: the readies go back, the course stays loaded
+        $this->patchJson("/api/rooms/{$code}", ['time_of_day' => 'dawn'], $h)
+            ->assertOk()
+            ->assertJsonPath('track_id', 'kirifuri-lakeside')->assertJsonPath('time_of_day', 'dawn')
+            ->assertJsonPath('players.0.loaded', true)->assertJsonPath('players.1.loaded', true)->assertJsonPath('players.2.loaded', true)
+            ->assertJsonPath('players.1.ready', false)->assertJsonPath('players.2.ready', false);
+        // the same again changes nothing: a ready given meanwhile stays
+        $this->patchJson("/api/rooms/{$code}/me", ['ready' => true], $b)->assertOk();
+        $this->patchJson("/api/rooms/{$code}", ['time_of_day' => 'dawn', 'track_id' => 'kirifuri-lakeside'], $h)
+            ->assertOk()->assertJsonPath('players.1.ready', true)->assertJsonPath('players.1.loaded', true);
+
+        // another course: every game loads again and nobody is ready; the conditions stay, vehicles and paints too
+        $this->patchJson("/api/rooms/{$code}", ['track_id' => 'autobahn'], $h)
+            ->assertOk()
+            ->assertJsonPath('track_id', 'autobahn')->assertJsonPath('time_of_day', 'dawn')
+            ->assertJsonPath('players.0.loaded', false)->assertJsonPath('players.1.loaded', false)->assertJsonPath('players.2.loaded', false)
+            ->assertJsonPath('players.1.ready', false)
+            ->assertJsonPath('players.1.car_id', 'hayate')->assertJsonPath('players.1.color', '#c8102e')
+            ->assertJsonPath('players.2.car_id', 'hayabusa');
+        $this->postJson("/api/rooms/{$code}/start", [], $h)
+            ->assertStatus(409)->assertJsonPath('message', 'HOST、B、C がコースを読み込んでいます');
+        // a game that reports the course it left behind is still loading; the room's course counts
+        $this->patchJson("/api/rooms/{$code}/me", ['loaded' => true, 'track_id' => 'kirifuri-lakeside'], $b)
+            ->assertOk()->assertJsonPath('players.1.loaded', false);
+        $this->patchJson("/api/rooms/{$code}/me", ['loaded' => true, 'ready' => true, 'track_id' => 'kirifuri-lakeside'], $b)->assertStatus(409);
+        $this->patchJson("/api/rooms/{$code}/me", ['loaded' => true, 'track_id' => 'autobahn'], $b)
+            ->assertOk()->assertJsonPath('players.1.loaded', true);
+        // both at once
+        $this->patchJson("/api/rooms/{$code}", ['track_id' => 'tenrou-skyline', 'time_of_day' => 'rain'], $h)
+            ->assertOk()->assertJsonPath('track_id', 'tenrou-skyline')->assertJsonPath('time_of_day', 'rain')->assertJsonPath('players.1.loaded', false);
+        Event::assertDispatched(RoomUpdated::class, fn ($e) => $e->room['track_id'] === 'tenrou-skyline' && $e->room['time_of_day'] === 'rain');
+
+        // what is not a course or a condition, and a request with neither
+        $this->patchJson("/api/rooms/{$code}", ['track_id' => 'nurburgring'], $h)->assertStatus(422);
+        $this->patchJson("/api/rooms/{$code}", ['time_of_day' => 'noon'], $h)->assertStatus(422);
+        $this->patchJson("/api/rooms/{$code}", [], $h)->assertStatus(422);
+        $this->getJson("/api/rooms/{$code}", $h)->assertJsonPath('track_id', 'tenrou-skyline')->assertJsonPath('time_of_day', 'rain');
+    }
+
+    public function test_only_the_host_changes_the_room_and_only_while_it_waits(): void
+    {
+        [$code, $h, $b, $c] = $this->readyRoom();
+        [, $stranger] = $this->player('X');
+
+        $this->patchJson("/api/rooms/{$code}", ['track_id' => 'autobahn'], $b)
+            ->assertForbidden()->assertJsonPath('message', 'コースと天候を変更できるのはホストだけです');
+        $this->patchJson("/api/rooms/{$code}", ['time_of_day' => 'rain'], $c)->assertForbidden();
+        $this->patchJson("/api/rooms/{$code}", ['track_id' => 'autobahn'], $stranger)->assertForbidden();
+        $this->patchJson("/api/rooms/{$code}", ['track_id' => 'autobahn'])->assertUnauthorized();
+        $this->getJson("/api/rooms/{$code}", $h)
+            ->assertJsonPath('track_id', 'kirifuri-lakeside')->assertJsonPath('time_of_day', 'night')->assertJsonPath('players.1.ready', true);
+
+        // not in a race, not on the results
+        $raceNo = $this->postJson("/api/rooms/{$code}/start", [], $h)->assertOk()->json('race_no');
+        $this->patchJson("/api/rooms/{$code}", ['track_id' => 'autobahn'], $h)
+            ->assertStatus(409)->assertJsonPath('message', 'コースと天候を変更できるのはレースの前だけです');
+        foreach ([$h, $b, $c] as $p) {
+            $this->postJson("/api/rooms/{$code}/finish", ['race_no' => $raceNo, 'time_ms' => 90_000], $p)->assertOk();
+        }
+        $this->patchJson("/api/rooms/{$code}", ['time_of_day' => 'rain'], $h)->assertStatus(409);
+        $this->getJson("/api/rooms/{$code}", $h)->assertJsonPath('status', 'finished')->assertJsonPath('track_id', 'kirifuri-lakeside');
+
+        // a new host inherits it
+        $this->postJson("/api/rooms/{$code}/rematch", [], $h)->assertOk();
+        $this->postJson("/api/rooms/{$code}/leave", [], $h)->assertOk();
+        $this->patchJson("/api/rooms/{$code}", ['time_of_day' => 'rain'], $c)->assertForbidden();
+        $this->patchJson("/api/rooms/{$code}", ['time_of_day' => 'rain'], $b)->assertOk()->assertJsonPath('time_of_day', 'rain');
+    }
+
+    public function test_the_next_race_can_be_on_another_course(): void
+    {
+        [$code, $h, $b, $c] = $this->readyRoom();
+        $raceNo = $this->postJson("/api/rooms/{$code}/start", [], $h)->assertOk()->json('race_no');
+        foreach ([$h, $b, $c] as $p) {
+            $this->postJson("/api/rooms/{$code}/finish", ['race_no' => $raceNo, 'time_ms' => 90_000], $p)->assertOk();
+        }
+
+        // from the results: back to the lobby and onto another course in one step (the host's alone)
+        $this->postJson("/api/rooms/{$code}/rematch", ['track_id' => 'oboro-downhill'], $b)->assertForbidden();
+        $this->postJson("/api/rooms/{$code}/rematch", ['track_id' => 'nurburgring'], $h)->assertStatus(422);
+        $this->postJson("/api/rooms/{$code}/rematch", ['track_id' => 'oboro-downhill', 'time_of_day' => 'rain'], $h)
+            ->assertOk()
+            ->assertJsonPath('status', 'waiting')->assertJsonPath('track_id', 'oboro-downhill')->assertJsonPath('time_of_day', 'rain')
+            ->assertJsonPath('players.0.finish_ms', null)
+            ->assertJsonPath('players.0.loaded', false)->assertJsonPath('players.1.loaded', false)->assertJsonPath('players.2.loaded', false)
+            ->assertJsonPath('players.1.ready', false);
+        $this->postJson("/api/rooms/{$code}/start", [], $h)->assertStatus(409);
+        $this->patchJson("/api/rooms/{$code}/me", ['loaded' => true, 'track_id' => 'oboro-downhill'], $h)->assertOk();
+        foreach ([$b, $c] as $g) {
+            $this->patchJson("/api/rooms/{$code}/me", ['loaded' => true, 'ready' => true, 'track_id' => 'oboro-downhill'], $g)->assertOk();
+        }
+        $second = $this->postJson("/api/rooms/{$code}/start", [], $h)
+            ->assertOk()->assertJsonPath('status', 'racing')->assertJsonPath('track_id', 'oboro-downhill')->json('race_no');
+        $this->assertSame($raceNo + 1, $second);
+        // the finish is checked against the course of this race
+        $this->postJson("/api/rooms/{$code}/finish", ['race_no' => $second, 'time_ms' => 40_000], $h)->assertOk();
+    }
+
+    public function test_a_vehicle_the_new_course_does_not_offer_is_replaced(): void
+    {
+        // (no vehicle is bound to a course yet: the fighters will be, to their air base)
+        config(['game.cars.hayabusa.courses' => ['kirifuri-lakeside', 'autobahn']]);
+        $this->assertNotContains('hayabusa', Room::vehiclesOn('oboro-downhill'));
+        $this->assertSame(array_keys(config('game.cars')), Room::vehiclesOn('autobahn'));
+        [$code, $h, $b, $c] = $this->readyRoom();
+
+        // a course that offers it: kept, with its paint
+        $this->patchJson("/api/rooms/{$code}", ['track_id' => 'autobahn'], $h)
+            ->assertOk()->assertJsonPath('players.2.car_id', 'hayabusa')->assertJsonPath('players.2.color', '#101010');
+        // one that does not: the course's first vehicle, without the other one's paint; the others keep theirs
+        $this->patchJson("/api/rooms/{$code}", ['track_id' => 'oboro-downhill'], $h)
+            ->assertOk()
+            ->assertJsonPath('players.2.car_id', 'hayate')->assertJsonPath('players.2.color', null)
+            ->assertJsonPath('players.1.car_id', 'hayate')->assertJsonPath('players.1.color', '#c8102e')
+            ->assertJsonPath('players.0.car_id', 'raijin');
+        // and it cannot be entered there, nor joined or made a room with
+        $this->patchJson("/api/rooms/{$code}/me", ['car_id' => 'hayabusa'], $c)
+            ->assertStatus(422)->assertJsonPath('errors.car_id.0', 'GSX1300R 隼はこのコースでは走れません');
+        [, $d] = $this->player('D');
+        $this->postJson("/api/rooms/{$code}/join", ['car_id' => 'hayabusa'], $d)->assertStatus(422);
+        $this->postJson("/api/rooms/{$code}/join", ['car_id' => 'ninjah2'], $d)->assertOk();
+        $this->postJson('/api/rooms', ['track_id' => 'tenrou-skyline', 'car_id' => 'hayabusa'], $d)->assertStatus(422);
+        $this->postJson('/api/rooms', ['track_id' => 'autobahn', 'car_id' => 'hayabusa'], $d)->assertCreated();
+    }
+
+    public function test_the_host_takes_a_member_out_of_the_waiting_room(): void
+    {
+        Event::fake([RoomUpdated::class]);
+        [$code, $h, $b, $c] = $this->readyRoom();
+        $ids = collect($this->getJson("/api/rooms/{$code}", $h)->json('players'))->pluck('id')->all();
+
+        $this->postJson("/api/rooms/{$code}/kick", ['player_id' => $ids[2]], $b)
+            ->assertForbidden()->assertJsonPath('message', 'メンバーを外せるのはホストだけです');
+        // not oneself, nobody who is not there
+        $this->postJson("/api/rooms/{$code}/kick", ['player_id' => $ids[0]], $h)->assertNotFound();
+        $this->postJson("/api/rooms/{$code}/kick", ['player_id' => 999_999], $h)->assertNotFound();
+        $this->postJson("/api/rooms/{$code}/kick", [], $h)->assertStatus(422);
+
+        $this->postJson("/api/rooms/{$code}/kick", ['player_id' => $ids[2]], $h)
+            ->assertOk()->assertJsonCount(2, 'players')->assertJsonPath('players.1.name', 'B')->assertJsonPath('host_id', $ids[0]);
+        Event::assertDispatched(RoomUpdated::class, fn ($e) => count($e->room['players']) === 2);
+        // the one taken out is no member any more, and may come back with the code
+        $this->patchJson("/api/rooms/{$code}/me", ['loaded' => true], $c)->assertForbidden();
+        $this->postJson("/api/rooms/{$code}/join", ['car_id' => 'hayate'], $c)->assertOk()->assertJsonCount(3, 'players');
+        $back = collect($this->getJson("/api/rooms/{$code}", $h)->json('players'))->firstWhere('name', 'C')['id'];
+
+        // not in a race
+        $this->patchJson("/api/rooms/{$code}/me", ['loaded' => true, 'ready' => true], $c)->assertOk();
+        $this->postJson("/api/rooms/{$code}/start", [], $h)->assertOk();
+        $this->postJson("/api/rooms/{$code}/kick", ['player_id' => $back], $h)
+            ->assertStatus(409)->assertJsonPath('message', 'メンバーを外せるのはレースの前だけです');
     }
 
     public function test_presence_channel_auth_is_signed_for_members_only(): void
