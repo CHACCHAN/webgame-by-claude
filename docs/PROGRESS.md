@@ -598,6 +598,9 @@ owner has not yet seen).
   The whole suite was **not** run. tsc, vitest 169, build.
 - Not verified: the owner's eye (a recording goes with the report); other GPUs / browsers / real phones; a
   display with a pixel ratio of 2 at desktop size.
+- **Live (11-12)**: main `540856c` deployed, bundle `index-D21nWRu6.js` served locally and through the public
+  address, leaderboard 200 on both, the speech model's JSON 200. A 24 s recording, a still of the three cards and
+  four title pictures went to the owner.
 
 ### The grains as a cloud in depth (11-11, after the owner's word on the first grains)
 Owner: 「粒はもっと細かく、3d パーティクルに近いです。粒だけで物を表現したり、粒だけで強調させたりといった使い方を
@@ -653,6 +656,14 @@ over the menus" describes what replaced it.
   from oboro, the lake from kirifuri), one artefact on a retaining wall at night, far hillsides as dots. Sent back
   for one more round (views open by a planting rule, the artefact, far hills, frustum culling, timings on a quiet
   machine). Five sheets went to the owner; nothing of it is in the game.
+- **Round 2 (tip `8c984ee`), reviewed by me on its pairs (11-12)**: the views are open (a sight-line planting rule;
+  trees within 40 m of the road: oboro 8 090 → 2 952, kirifuri 4 246 → 2 917, tenrou 1 793 → 293), the wall
+  artefact is gone, the forest is culled by the camera's frustum. Still **not ready**: tenrou is nearly treeless
+  by the road (worse than before at its hairpin and finish), the valley sides under the views are bare, a comb
+  of same-height trees on a ridge of oboro, kirifuri's far hillsides read as pale bare faces; and the cost: load
+  to the title 7.2–8.7 → 13.2–13.9 s, ultra at 1440p with upscaling 64.6 fps with a p95 of 32 ms (the agent's
+  numbers, quiet machine). Sent back once more with these five points (round 3, running). Nothing of it is in
+  the game; the owner has said nothing on the first sheets yet.
 
 ### The rivals speak (11-11, owner's request): a speech model on the player's GPU
 Request: a TTS model, Supertonic 3, WebGPU assumed; the language model's lines are spoken; without WebGPU no TTS
