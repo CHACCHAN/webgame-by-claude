@@ -175,7 +175,7 @@ export function ResultsScreen() {
         <div className="results-main">
           <Count as="div" className="results-time" to={result.timeMs} format={formatTime} ms={again ? 0 : COUNT_MS} delay={again ? 0 : CARD_AT + 250} tick />
           {medal && (
-            <div className={`medal medal-${medal}`} data-grains="panel" data-grains-tone="amber" data-grains-first="2400">
+            <div className={`medal medal-${medal}`}>
               <b>{MEDAL_LABEL[medal]}</b>
               {medalNew.get(result) && <em>獲得！</em>}
             </div>

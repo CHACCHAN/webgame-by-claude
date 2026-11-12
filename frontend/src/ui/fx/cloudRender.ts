@@ -26,7 +26,7 @@ void main() {
   // (a grain finer than the smallest dot that draws evenly is a dimmer dot)
   if (px < 1.6) { a *= px / 1.6; px = 1.6; }
   gl_PointSize = px;
-  gl_Position = s > 0.0 && s < 6.0 ? vec4(p.x / uView.x * 2.0 - 1.0, 1.0 - p.y / uView.y * 2.0, 0.0, 1.0) : vec4(2.0, 2.0, 2.0, 1.0);
+  gl_Position = s > 0.0 && s < 6.0 && aCol.a > 0.0 ? vec4(p.x / uView.x * 2.0 - 1.0, 1.0 - p.y / uView.y * 2.0, 0.0, 1.0) : vec4(2.0, 2.0, 2.0, 1.0);
   vCol = vec4(aCol.rgb * a, a * 0.35);
 }`;
 

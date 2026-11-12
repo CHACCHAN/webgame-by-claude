@@ -109,12 +109,12 @@ export function TitleScreen() {
       <div className="title-logo">
         <div className="title-small">{COURSES[currentCourseId()].nameEn} ・ {COURSE_ORDER.length} COURSES</div>
         <h1>
-          <span className="kanji" data-text="峠" data-cloud="glyph">峠</span>
+          <span className="kanji" data-text="峠" data-cloud="glyph" data-cloud-once="1500">峠</span>
           <span className="en">TOUGE<br />NOCTURNE</span>
         </h1>
         <div className="title-jp">朧 峠 夜 想 曲</div>
       </div>
-      <div className="press-start" data-grains="line">{isTouchDevice() ? 'TAP TO START' : 'PRESS ENTER / CLICK TO START'}</div>
+      <div className="press-start">{isTouchDevice() ? 'TAP TO START' : 'PRESS ENTER / CLICK TO START'}</div>
       <div className="title-ticker" aria-hidden>
         <div>
           {[0, 1].map((k) => (

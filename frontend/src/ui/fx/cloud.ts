@@ -1,13 +1,14 @@
-// The grains over the menus, as a cloud of fine points in depth: the simulation (no DOM: tested in Node).
-// Tens of thousands of grains float in a volume behind the screen's plane. A group of them can be given a shape:
-// points in the shape's own space, placed (turned, sized, moved) anew every frame. The grains then fly to their
-// places and stay there, each a little alive; freed, they drift off again. The grains alone make the picture: a
-// course's relief, a glyph, the edge of what is selected. Drawing: cloudRender.ts; what is shown where: Cloud.tsx.
-
-/** the groups a grain can belong to: dust that only floats, the thing a screen shows, the edge of the selection */
-export const AMBIENT = 0, OBJECT = 1, EMPHASIS = 2;
-/** of every 16 grains: 5 float, 8 depict, 3 mark the selection (interleaved: any first part of the cloud has all three) */
-const PATTERN = [0, 1, 1, 2, 1, 0, 1, 1, 0, 2, 1, 1, 0, 1, 2, 0];
+// The grains of the menus: the simulation (no DOM: tested in Node).
+// The grains are there only to depict a thing: a course's relief, a glyph, a sky, a medal (shapes.ts). A thing is a
+// shape: points in its own space, placed (turned, sized, moved) anew every frame. While nothing is shown there are
+// no grains at all, and a step costs nothing. A thing asked for condenses: its grains come into being around their
+// places in wisps and draw together; let go, it comes apart like ink in water and is gone within a second. The
+// grains hang in a fluid (fluid.ts) that the pointer stirs: a stroke through a picture carries its grains off in
+// two eddies, and they find their way back as the water comes to rest.
+// (Owner 11-12: the dust all over the screen and the grains around every button were too much. So: no dust, no
+// ornaments; the grains are a picture in a few places, or they are not there.)
+// Drawing: cloudRender.ts / cloudRenderGpu.ts; what is shown where: Cloud.tsx.
+import { createFluid, stepFluid, type Fluid } from './fluid';
 
 export interface Shape {
   /** x, y, z per point in the shape's own space, in an order in which any first part is an even sample */
@@ -43,18 +44,19 @@ export interface Placement {
   scale: number;
   yaw: number;
   pitch: number;
-  /** 0–1: this share of the group is in the shape, the rest floats (a picture that fills up) */
+  /** 0–1: this share of the grains is there (a picture that fills up) */
   fill: number;
 }
 
+/** a grain is not there, on its way to its place or in it, or let go and fading */
+export const GONE = 0, PLACED = 1, FREE = 2;
+
 export interface Cloud {
   n: number;
-  /** only the first `active` grains live (a slow machine gets fewer) */
+  /** only the first `active` grains are used (a slow machine gets fewer) */
   active: number;
   w: number;
   h: number;
-  /** the volume's half depth, pixels */
-  deep: number;
   pos: Float32Array;
   vel: Float32Array;
   /** colour (r, g, b: 0–1), brightness and size as they are now (they ease to what the grain's place asks) */
@@ -69,21 +71,19 @@ export interface Cloud {
   look: Uint8ClampedArray;
   /** steps so far (what changes slowly is worked out for a quarter of the grains each step) */
   tick: number;
-  group: Uint8Array;
-  /** the grain is the rank-th of its group */
-  rank: Uint32Array;
-  /** 0–1: how much the grain is in its place */
-  held: Float32Array;
-  shapes: (Shape | null)[];
-  places: Placement[];
-  /** when each group got its shape (grains leave for it one after another) */
-  since: number[];
+  /** GONE / PLACED / FREE per grain */
+  state: Uint8Array;
+  /** how many grains were there at the last step (none, and nothing to show: nothing needs to be stepped or drawn) */
+  live: number;
+  shape: Shape | null;
+  place: Placement;
+  /** when the shape was given (its grains leave for it one after another) */
+  since: number;
   /** r, g, b per tone */
   palette: Float32Array;
   time: number;
-  /** the pointer on the screen's plane (NaN: none) */
-  px: number;
-  py: number;
+  /** the water the grains hang in */
+  fluid: Fluid;
 }
 
 /** the distance of the eye from the screen's plane, in screen heights */
@@ -105,101 +105,34 @@ export function rng(seed: number) {
 export function createCloud(n: number, w: number, h: number, palette: Float32Array): Cloud {
   const rand = rng(20261111);
   const c: Cloud = {
-    n, active: n, w, h, deep: 520,
+    n, active: n, w, h,
     pos: new Float32Array(n * 3), vel: new Float32Array(n * 3), col: new Float32Array(n * 3), lum: new Float32Array(n),
-    size: new Float32Array(n), seed: new Float32Array(n), s2: new Float32Array(n), s3: new Float32Array(n), look: new Uint8ClampedArray(n * 8), tick: 0, group: new Uint8Array(n), rank: new Uint32Array(n), held: new Float32Array(n),
-    shapes: [null, null, null],
-    places: [0, 1, 2].map(() => ({ x: 0, y: 0, z: 0, scale: 1, yaw: 0, pitch: 0, fill: 1 })),
-    since: [0, 0, 0], palette, time: 0, px: NaN, py: NaN,
+    size: new Float32Array(n), seed: new Float32Array(n), s2: new Float32Array(n), s3: new Float32Array(n), look: new Uint8ClampedArray(n * 8), tick: 0,
+    state: new Uint8Array(n), live: 0, shape: null,
+    place: { x: 0, y: 0, z: 0, scale: 1, yaw: 0, pitch: 0, fill: 1 },
+    since: 0, palette, time: 0, fluid: createFluid(w, h),
   };
-  const count = [0, 0, 0];
   for (let i = 0; i < n; i++) {
-    const g = PATTERN[i % 16];
-    c.group[i] = g;
-    c.rank[i] = count[g]++;
     c.seed[i] = rand();
     c.s2[i] = frac(c.seed[i] * 7.31 + 0.17);
     c.s3[i] = frac(c.seed[i] * 13.7 + 0.61);
-    c.pos[i * 3] = rand() * w;
-    c.pos[i * 3 + 1] = rand() * h;
-    c.pos[i * 3 + 2] = (rand() * 2 - 1) * c.deep;
-    c.col[i * 3] = palette[0];
-    c.col[i * 3 + 1] = palette[1];
-    c.col[i * 3 + 2] = palette[2];
     c.size[i] = 1;
   }
   return c;
 }
 
-/** how many grains of a group there are among the first `active` */
-export function members(c: Cloud, group: number, active = c.active): number {
-  let m = Math.floor(active / 16) * PATTERN.filter((g) => g === group).length;
-  for (let k = 0; k < active % 16; k++) if (PATTERN[k] === group) m++;
-  return m;
-}
-
-/** The screen changed its size: the floating grains keep their places in proportion. */
+/** The screen changed its size (the water starts anew, at rest). */
 export function resizeCloud(c: Cloud, w: number, h: number) {
-  const sx = w / (c.w || 1), sy = h / (c.h || 1);
-  for (let i = 0; i < c.n; i++) {
-    if (c.held[i] > 0.5) continue;
-    c.pos[i * 3] *= sx;
-    c.pos[i * 3 + 1] *= sy;
-  }
   c.w = w;
   c.h = h;
+  c.fluid = createFluid(w, h);
 }
 
-/** Give a group a shape (its grains fly to it), another one (they move over), or none (they float off). */
-export function bind(c: Cloud, group: number, shape: Shape | null) {
-  if (c.shapes[group] === shape) return;
-  const had = c.shapes[group];
-  c.shapes[group] = shape;
-  c.since[group] = c.time;
-  if (!shape && had) scatter(c, group);
-}
-
-const anywhere = rng(4099);
-/**
- * A shape let go dissolves into the dust: each of its grains is sent off to some place of its own in the volume
- * (the flow alone would carry the whole lump along for minutes: it has no sources or sinks).
- */
-export function scatter(c: Cloud, group: number) {
-  const f = c.h * FOCAL, near = -f * 0.55;
-  // (a floating grain loses its speed at 0.9 a second, see stepCloud: with this much it comes to rest there)
-  const rate = 0.9;
-  for (let i = 0; i < c.active; i++) {
-    if (c.group[i] !== group || c.held[i] < 0.2) continue;
-    const a = i * 3;
-    c.vel[a] += ((anywhere() * 1.44 - 0.22) * c.w - c.pos[a]) * rate;
-    c.vel[a + 1] += ((anywhere() * 1.44 - 0.22) * c.h - c.pos[a + 1]) * rate;
-    c.vel[a + 2] += (near + anywhere() * (c.deep - near) - c.pos[a + 2]) * rate;
-  }
-}
-
-/** A push outward from where the group's shape stands (a choice made, a shape let go). */
-export function burst(c: Cloud, group: number, speed: number) {
-  const p = c.places[group];
-  for (let i = 0; i < c.active; i++) {
-    if (c.group[i] !== group || c.held[i] < 0.2) continue;
-    const dx = c.pos[i * 3] - p.x, dy = c.pos[i * 3 + 1] - p.y, dz = c.pos[i * 3 + 2] - p.z;
-    const d = Math.hypot(dx, dy, dz) + 1;
-    const s = speed * (0.4 + 1.2 * frac(c.seed[i] * 7.31 + 0.17));
-    c.vel[i * 3] += (dx / d) * s;
-    c.vel[i * 3 + 1] += (dy / d) * s;
-    c.vel[i * 3 + 2] += (dz / d) * s - s * 0.6;
-  }
-}
-
-/** A change of screen: the floating grains rush past the eye (forward) or fall back from it. */
-export function sweep(c: Cloud, dir: number) {
-  for (let i = 0; i < c.active; i++) {
-    if (c.held[i] > 0.5) continue;
-    const s = 0.35 + frac(c.seed[i] * 13.7 + 0.61);
-    c.vel[i * 3 + 2] -= dir * 620 * s;
-    c.vel[i * 3] += (c.pos[i * 3] - c.w / 2) * 0.5 * dir * s;
-    c.vel[i * 3 + 1] += (c.pos[i * 3 + 1] - c.h / 2) * 0.5 * dir * s;
-  }
+/** Show a shape (its grains condense around it), another one (they move over), or none (they come apart and fade). */
+export function bind(c: Cloud, shape: Shape | null) {
+  if (c.shape === shape) return;
+  c.shape = shape;
+  c.since = c.time;
 }
 
 /** Where a point of the volume is on the screen, and how large things are there (1 at the screen's plane). */
@@ -212,70 +145,106 @@ export function project(c: Cloud, x: number, y: number, z: number, out: [number,
   return out;
 }
 
-const DUST_TONE = 0;
-
 // sines from a table (the grains' wandering needs no better, and there are tens of thousands of them every frame)
 const LUT = 2048, SIN = new Float32Array(LUT), TO_LUT = LUT / (2 * Math.PI);
 for (let k = 0; k < LUT; k++) SIN[k] = Math.sin(k / TO_LUT);
 const lsin = (x: number) => SIN[((x * TO_LUT) | 0) & (LUT - 1)];
 const lcos = (x: number) => SIN[((x * TO_LUT + LUT / 4) | 0) & (LUT - 1)];
-const mats = new Float64Array(27), falls = new Float64Array(9);
+const mat = new Float64Array(9);
+/** a flow this fast (pixels a second) halves the pull of a grain's place: the water carries it, then lets it home */
+const CARRIED = 150;
 
 /**
- * One step. What changes slowly (the flow that carries a floating grain, a grain's brightness, colour and size) is
- * worked out for a quarter of the grains each step, in turn; where a grain is, every step.
+ * One step. What changes slowly (a grain's brightness, colour and size, the drift of a grain let go) is worked out
+ * for a quarter of the grains each step, in turn; where a grain is, every step. Grains that are not there cost a
+ * comparison.
  */
 export function stepCloud(c: Cloud, dt: number) {
   c.time += dt;
   c.tick++;
-  const t = c.time, tick = c.tick, { pos, vel, col, lum, size, seed, s2: S2, s3: S3, held, palette, look, group, rank } = c;
+  const fl = c.fluid;
+  stepFluid(fl, dt);
+  const shape = c.shape, place = c.place;
+  if (shape === null && c.live === 0) return;
+  const t = c.time, tick = c.tick, { pos, vel, col, lum, size, seed, s2: S2, s3: S3, palette, look, state } = c;
   const f = c.h * FOCAL, cx = c.w / 2, cy = c.h / 2;
-  const pointer = Number.isFinite(c.px), px = c.px, py = c.py;
-  // per group: the placement as a matrix (yaw about y, then pitch about x)
-  for (let g = 0; g < 3; g++) {
-    const p = c.places[g];
-    const cyw = Math.cos(p.yaw), syw = Math.sin(p.yaw), cp = Math.cos(p.pitch), sp = Math.sin(p.pitch), s = p.scale;
-    mats.set([cyw * s, 0, syw * s, sp * syw * s, cp * s, -sp * cyw * s, -cp * syw * s, sp * s, cp * cyw * s], g * 9);
-    // (how fast a travelling point moves on the screen: its grain is carried along, not dragged behind)
-    const fall = c.shapes[g]?.fall, m = g * 9;
-    for (let k = 0; k < 3; k++) falls[g * 3 + k] = fall ? (mats[m + k * 3] * fall.x + mats[m + k * 3 + 1] * fall.y + mats[m + k * 3 + 2] * fall.z) * fall.rate : 0;
+  // the placement as a matrix (yaw about y, then pitch about x)
+  {
+    const cyw = Math.cos(place.yaw), syw = Math.sin(place.yaw), cp = Math.cos(place.pitch), sp = Math.sin(place.pitch), s = place.scale;
+    mat.set([cyw * s, 0, syw * s, sp * syw * s, cp * s, -sp * cyw * s, -cp * syw * s, sp * s, cp * cyw * s]);
   }
-  const dt4 = Math.min(dt * 4, 0.2), ease = Math.min(1, dt4 * 5), easeHeld = Math.min(1, dt4 * 4);
-  // the volume the floating grains live in (wider than the screen: the near grains spread beyond it)
-  const mx = c.w * 0.22, my = c.h * 0.22, D = c.deep, near = -f * 0.55;
-  const spanX = c.w + 2 * mx, spanY = c.h + 2 * my, spanZ = D - near, maxX = c.w + mx, maxY = c.h + my;
+  const m0 = mat[0], m1 = mat[1], m2 = mat[2], m3 = mat[3], m4 = mat[4], m5 = mat[5], m6 = mat[6], m7 = mat[7], m8 = mat[8];
+  // (how fast a travelling point moves on the screen: its grain is carried along, not dragged behind)
+  const fall = shape?.fall, along = shape?.along;
+  const fvx = fall ? (m0 * fall.x + m1 * fall.y + m2 * fall.z) * fall.rate : 0;
+  const fvy = fall ? (m3 * fall.x + m4 * fall.y + m5 * fall.z) * fall.rate : 0;
+  const fvz = fall ? (m6 * fall.x + m7 * fall.y + m8 * fall.z) * fall.rate : 0;
+  const pts = shape ? shape.points : null, np = pts ? pts.length / 3 : 1;
+  const flowing = !fl.still, fu = fl.u, fv = fl.v, fnx = fl.nx, fny = fl.ny, toCell = 1 / fl.cell, soften = 1 / (CARRIED * CARRIED);
+  const dt4 = Math.min(dt * 4, 0.2), ease = Math.min(1, dt4 * 5);
+  // how far from its place a grain comes into being
+  const R = c.h * 0.12;
+  const fill = place.fill, since = c.since;
+  let live = 0;
   for (let i = 0; i < c.active; i++) {
-    const a = i * 3, g = group[i], shape = c.shapes[g], sd = seed[i], s2 = S2[i], s3 = S3[i];
+    const sd = seed[i], s3 = S3[i], st = state[i];
+    const wanted = pts !== null && s3 <= fill;
+    // the grain's turn to leave for the shape comes a moment after the shape (not all at once: they pour in)
+    const due = wanted && t - since >= sd * 0.45;
+    if (st === GONE && !due) continue;
+    live++;
+    const a = i * 3, s2 = S2[i], b = i * 8;
     const turn = ((i + tick) & 3) === 0;
     let x = pos[a], y = pos[a + 1], z = pos[a + 2];
-    let wantLum = 0, wantSize = 1, tone = DUST_TONE, wantHeld = 0;
-    // the grain's turn to leave for the shape comes a moment after the shape (not all at once: they pour in)
-    const place = c.places[g];
-    if (shape !== null && s3 <= place.fill && t - c.since[g] >= sd * 0.45) {
-      const pts = shape.points, k = rank[i] % (pts.length / 3), m = g * 9, k3 = k * 3;
-      let lx = pts[k3], ly = pts[k3 + 1], lz = pts[k3 + 2];
+    // the water where the grain is seen
+    let ux = 0, uy = 0;
+    if (flowing && st !== GONE) {
+      const s = f / (f + z), gx = (cx + (x - cx) * s) * toCell + 1.5, gy = (cy + (y - cy) * s) * toCell + 1.5;
+      if (gx >= 0 && gy >= 0 && gx < fnx - 1 && gy < fny - 1) {
+        const i0 = gx | 0, j0 = gy | 0, tx = gx - i0, ty = gy - j0, o = j0 * fnx + i0;
+        const k00 = (1 - tx) * (1 - ty), k10 = tx * (1 - ty), k01 = (1 - tx) * ty, k11 = tx * ty;
+        ux = fu[o] * k00 + fu[o + 1] * k10 + fu[o + fnx] * k01 + fu[o + fnx + 1] * k11;
+        uy = fv[o] * k00 + fv[o + 1] * k10 + fv[o + fnx] * k01 + fv[o + fnx + 1] * k11;
+      }
+    }
+    if (due) {
+      const sh = shape as Shape, P = sh.points, k = i % np, k3 = k * 3;
+      let lx = P[k3], ly = P[k3 + 1], lz = P[k3 + 2];
       let vx = 0, vy = 0, vz = 0, shown = 1, again = false;
-      const fall = shape.fall;
-      if (fall !== undefined && shape.along !== undefined && shape.along[k] >= 0) {
-        const u = frac(shape.along[k] + t * fall.rate), at = u - 0.5;
+      if (fall !== undefined && along !== undefined && along[k] >= 0) {
+        const u = frac(along[k] + t * fall.rate), at = u - 0.5;
         lx += fall.x * at;
         ly += fall.y * at;
         lz += fall.z * at;
-        vx = falls[g * 3];
-        vy = falls[g * 3 + 1];
-        vz = falls[g * 3 + 2];
+        vx = fvx;
+        vy = fvy;
+        vz = fvz;
         shown = lsin(u * Math.PI);
         again = u < fall.rate * dt * 1.5;
       }
+      const tx = m0 * lx + m1 * ly + m2 * lz + place.x, ty = m3 * lx + m4 * ly + m5 * lz + place.y, tz = m6 * lx + m7 * ly + m8 * lz + place.z;
+      if (st === GONE) {
+        // it comes into being off its place, with its neighbours on one side of theirs: wisps that draw together
+        const ang = 3.1 * (lsin(tx * 0.013 + ty * 0.007) + lcos(ty * 0.017 - tx * 0.005)) + (s2 - 0.5) * 0.9;
+        const r = R * (0.25 + 1.1 * s2), ca = lcos(ang), sa = lsin(ang);
+        x = tx + ca * r;
+        y = ty + sa * r;
+        z = tz + (sd - 0.5) * 2 * R;
+        vel[a] = -sa * r * 1.6 + vx;
+        vel[a + 1] = ca * r * 1.6 + vy;
+        vel[a + 2] = vz;
+        lum[i] = 0;
+        size[i] = sh.size;
+        const p3 = (sh.tones ? sh.tones[k] : sh.tone) * 3;
+        col[a] = palette[p3];
+        col[a + 1] = palette[p3 + 1];
+        col[a + 2] = palette[p3 + 2];
+      }
+      state[i] = PLACED;
       // a small orbit around its place: the shape breathes
-      const w = t * (0.5 + 1.3 * s2) + sd * 40, r = shape.loose * (0.3 + s3), sw = lsin(w);
-      const dx = mats[m] * lx + mats[m + 1] * ly + mats[m + 2] * lz + place.x + lcos(w) * r - x;
-      const dy = mats[m + 3] * lx + mats[m + 4] * ly + mats[m + 5] * lz + place.y + lsin(w * 0.83 + 1.7) * r - y;
-      const dz = mats[m + 6] * lx + mats[m + 7] * ly + mats[m + 8] * lz + place.z + sw * r - z;
+      const w = t * (0.5 + 1.3 * s2) + sd * 40, r = sh.loose * (0.3 + s3), sw = lsin(w);
+      const dx = tx + lcos(w) * r - x, dy = ty + lsin(w * 0.83 + 1.7) * r - y, dz = tz + sw * r - z;
       const d = Math.sqrt(dx * dx + dy * dy + dz * dz);
-      // a spring, each grain its own (they do not arrive as one), and a turn about the way there: they spiral in
-      const k1 = 26 + 46 * s2, damp = 2 * Math.sqrt(k1) * 0.82;
-      const swirl = (d < 140 ? d / 140 : 1) * k1 * 1.1 * (s3 - 0.35);
       if (again && d < 400) {
         // its point started again at the other end: so does the grain (it does not fly back through the picture)
         x += dx;
@@ -285,74 +254,72 @@ export function stepCloud(c: Cloud, dt: number) {
         vel[a + 1] = vy;
         vel[a + 2] = vz;
       } else {
+        // a spring, each grain its own (they do not arrive as one), and a turn about the way there: they spiral in.
+        // Where the water runs the spring is weak: the grain goes with the water and comes home when it rests.
+        const k0 = 26 + 46 * s2, damp = 2 * Math.sqrt(k0) * 0.82;
+        const k1 = flowing ? k0 / (1 + (ux * ux + uy * uy) * soften) : k0;
+        const swirl = (d < 140 ? d / 140 : 1) * k1 * 1.1 * (s3 - 0.35);
         vel[a] += (dx * k1 - (vel[a] - vx) * damp - dy * swirl) * dt;
         vel[a + 1] += (dy * k1 - (vel[a + 1] - vy) * damp + dx * swirl) * dt;
         vel[a + 2] += (dz * k1 - (vel[a + 2] - vz) * damp) * dt;
-        x += vel[a] * dt;
-        y += vel[a + 1] * dt;
+        x += (vel[a] + ux) * dt;
+        y += (vel[a + 1] + uy) * dt;
         z += vel[a + 2] * dt;
       }
       if (turn) {
-        wantHeld = d < 26 ? 1 : 0.35;
-        let l = (shape.lum ? shape.lum[k] : 1) * shape.gain;
-        if (shape.along && shape.wave) {
+        let l = (sh.lum ? sh.lum[k] : 1) * sh.gain;
+        if (along && sh.wave) {
           // the running light: a crest that goes round, twice the brightness where it is
-          const u = frac(shape.along[k] - t * shape.wave);
+          const u = frac(along[k] - t * sh.wave);
           l *= 0.62 + 1.1 * Math.exp(-u * 9) + 0.5 * Math.exp(-(1 - u) * 28);
         }
-        wantLum = l * shown * (d < 60 ? 1 : 0.55);
-        wantSize = shape.size * (0.75 + 0.5 * s2);
-        tone = shape.tones ? shape.tones[k] : shape.tone;
+        const wantLum = l * shown * (d < 60 ? 1 : 0.55), wantSize = sh.size * (0.75 + 0.5 * s2);
+        const p3 = (sh.tones ? sh.tones[k] : sh.tone) * 3;
+        lum[i] += (wantLum - lum[i]) * ease;
+        size[i] += (wantSize - size[i]) * ease;
+        col[a] += (palette[p3] - col[a]) * ease;
+        col[a + 1] += (palette[p3 + 1] - col[a + 1]) * ease;
+        col[a + 2] += (palette[p3 + 2] - col[a + 2]) * ease;
       }
-    } else {
-      if (turn) {
-        // floating: a steady three-dimensional flow without sources or sinks (the grains never bunch up), slow
-        const q = 1 / 210, ph = sd * 6.283;
-        const speed = 9 + 13 * s2;
-        const fx = lsin(z * q + t * 0.11 + ph) + lcos(y * q - t * 0.07);
-        const fy = lsin(x * q - t * 0.09 + ph) + lcos(z * q + t * 0.05) - 0.28;
-        const fz = lsin(y * q + t * 0.08) + lcos(x * q - t * 0.06 + ph);
-        const rate = 0.9 * dt4;
-        vel[a] += (fx * speed - vel[a]) * rate;
-        vel[a + 1] += (fy * speed - vel[a + 1]) * rate;
-        vel[a + 2] += (fz * speed * 0.8 - vel[a + 2]) * rate;
-        if (pointer) {
-          // around the pointer (where the grain is seen, not where it is) they turn and keep a little off it
-          const s = f / (f + z);
-          const dx = cx + (x - cx) * s - px, dy = cy + (y - cy) * s - py;
-          const d2 = dx * dx + dy * dy, R = 170;
-          if (d2 < R * R) {
-            const d = Math.sqrt(d2) + 1, push = ((1 - d / R) * 190 * s * dt4) / d;
-            vel[a] += -dy * push + dx * push * 0.4;
-            vel[a + 1] += dx * push + dy * push * 0.4;
-          }
-        }
-        // dust: a few of the grains bright (the renderer dims and blurs the near and the far ones)
-        wantLum = (0.16 + 0.5 * s2 * s2 * s2) * (shape ? 0.6 : 1);
-        wantSize = 1 + 1.3 * s3 * s3;
-      }
-      x += vel[a] * dt;
-      y += vel[a + 1] * dt;
+    } else if (wanted) {
+      // another shape is coming and this grain's turn has not: it stays where it is, as it is
+      const slow = 1 - Math.min(1, dt * 6);
+      vel[a] *= slow;
+      vel[a + 1] *= slow;
+      vel[a + 2] *= slow;
+      x += (vel[a] + ux) * dt;
+      y += (vel[a + 1] + uy) * dt;
       z += vel[a + 2] * dt;
-      // out at one side of the volume, in at the other
-      if (x < -mx) x += spanX;
-      else if (x > maxX) x -= spanX;
-      if (y < -my) y += spanY;
-      else if (y > maxY) y -= spanY;
-      if (z < near) z += spanZ;
-      else if (z > D) z -= spanZ;
+    } else {
+      // let go: ink in water. One slow turbulence for all of them (the picture shears into strands, it does not
+      // fuzz), a little upward, and whatever the water does; fainter all the while, then gone.
+      state[i] = FREE;
+      if (turn) {
+        const q = 1 / 46, speed = 46 + 44 * s2, ph = sd * 0.7;
+        const gx = lsin(y * q + t * 0.5 + ph) + lcos(z * q - t * 0.37);
+        const gy = lsin(x * q - t * 0.43 + ph) + lcos(z * q + t * 0.29) - 0.45;
+        const gz = lsin(y * q + t * 0.41) + lcos(x * q - t * 0.31 + ph);
+        const rate = 2.4 * dt4;
+        vel[a] += (gx * speed - vel[a]) * rate;
+        vel[a + 1] += (gy * speed - vel[a + 1]) * rate;
+        vel[a + 2] += (gz * speed - vel[a + 2]) * rate;
+        lum[i] -= lum[i] * Math.min(1, dt4 * (3.4 + 3 * s2));
+        size[i] += (2.4 - size[i]) * dt4 * 0.5;
+        if (lum[i] < 0.02) {
+          lum[i] = 0;
+          state[i] = GONE;
+          vel[a] = vel[a + 1] = vel[a + 2] = 0;
+          live--;
+        }
+      }
+      x += (vel[a] + ux) * dt;
+      y += (vel[a + 1] + uy) * dt;
+      z += vel[a + 2] * dt;
     }
     pos[a] = x;
     pos[a + 1] = y;
     pos[a + 2] = z;
     if (turn) {
-      held[i] += (wantHeld - held[i]) * easeHeld;
-      lum[i] += (wantLum - lum[i]) * ease;
-      size[i] += (wantSize - size[i]) * ease;
-      const p3 = tone * 3, b = i * 8;
-      col[a] += (palette[p3] - col[a]) * ease;
-      col[a + 1] += (palette[p3 + 1] - col[a + 1]) * ease;
-      col[a + 2] += (palette[p3 + 2] - col[a + 2]) * ease;
       look[b] = col[a] * 255;
       look[b + 1] = col[a + 1] * 255;
       look[b + 2] = col[a + 2] * 255;
@@ -361,4 +328,6 @@ export function stepCloud(c: Cloud, dt: number) {
       look[b + 5] = sd * 255;
     }
   }
+  // (grains past `active`, left there when a slow machine was given fewer: they are not drawn, and gone)
+  c.live = live;
 }

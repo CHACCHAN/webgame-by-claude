@@ -561,6 +561,47 @@ by the main session. Live since the release of 11-11 (below): the owner saw the 
   grains, close to 3D particles, that depict things and emphasise things by themselves: "the part in charge of
   beautiful expression". The 2D layer (`ui/fx/`) is to be remade on that brief.
 
+### The grains reconsidered: pictures only, in water; no dust, no ornaments (11-12, the owner's word)
+The owner (11-12): the grains are too many; grains decorating the buttons and particles spread over the whole
+screen all the time are "しつこい"; reconsider all of it; a fluid-simulation-like expression would be beautiful; do
+not cling to my requests, make it by your own sense. What I decided, and why:
+- **Grains are a picture of a thing or they are not there.** Dust over the screen and the selection's edge in
+  grains are gone (with `sweep`, `burst`, `data-grains`, the three groups). A menu is the interface over the live
+  scene, nothing more; the drawn focus frame marks the selection again. Without a picture on the screen the layer
+  does nothing: no step, no draw (it used to cost 3–4 ms a frame on every menu).
+- **Four pictures stay**, each where the screen is about that thing: the course's relief (course select, loading
+  screen), the sky in the selected time-of-day card, the medal on the results, and the title's 峠, which is now an
+  **entrance only**: it condenses out of wisps in about a second, then the type takes over (at that size type is
+  finer than grains: next to the crisp "TOUGE NOCTURNE" the grain glyph looked like noise) and the grains come
+  apart. The grain glyph is now as large as the type (it was 1 / 1.3 of it).
+- **The grains hang in water** (`ui/fx/fluid.ts`: stable fluids on a 40-row grid of the screen, velocity only).
+  The pointer's strokes stir it; where it runs a grain goes with it and comes home when it rests: a stroke through
+  the relief bends its contour lines, draws them out into mist between two eddies, and they find their places
+  again within ~2 s. A thing asked for condenses near its place; let go, it thins out like ink within a second
+  (it used to fly apart through the whole screen and stay as dust).
+- 32 000 grains, all of them the picture (before: 48 000, half of them the picture): finer pictures for less.
+
+Verified (RX 5700 XT, Chrome headless, WebGPU; build of this tree on vite preview; load average ~1):
+- vitest 186 passed (grains: gone / condense / let go / move over / fill / stroke and home; water: rest, two
+  eddies, divergence, dies down and never runs away); `tsc -b`; build.
+- Pictures (`~/.local/opt/quality/cmp/fluid2`, `titlein1`, `fluid-medal`, `fluid-sky`, `fluid-gl`, `fluid-phone`):
+  the title's entrance frame by frame (wisps → 峠 → type, no jump in size or place), a menu without a grain and
+  with its drawn focus frame, the relief condensing, a stroke through it at 60 / 300 / 700 / 1400 / 3200 ms (bent,
+  mist, home), the next course (the grains move over), the three skies, the medal in the three metals, the loading
+  screen filling; the same on the WebGL 2 backend (`?webgl=1`), at phone size with touch (8 000 grains), and
+  nothing with motion off.
+- Cost on the page (their own step + draw, a frame): 0 on a menu without a picture (frame gaps 16.7 ms median and
+  max), 2.5–3.0 ms with 32 000 grains in a picture, ~1 ms more while the water runs (then the count goes down by
+  itself: `BUDGET` 3.5 ms). Node: 32 000 placed 1.9 ms a step, stirred 3.0 ms; the water alone 0.4 ms.
+- `tools/gpu-errors.cjs`: 0 on WebGPU and on WebGL 2; one race picture looked at (camera with the car).
+- E2E on the isolated stack (SwiftShader, quality low: no grains there, the markup only): boot, menu navigation,
+  a click during a wipe, the phone run: passed; the time attack failed once and passed on its retry (the rank
+  message did not show within 30 s; the server had answered 201 to the run, 17 s after the name: the machine was at
+  load 10 with five tests' worth of SwiftShader), then passed at once when run by itself. Not the whole suite.
+
+Not verified: other GPUs and real phones; how the stroke feels in the hand (pictures of a scripted stroke only);
+the owner's opinion.
+
 ### The forest is in: trees, bushes, undergrowth, rocks remade; a course's shaders built once (11-12)
 The `nature` package (three rounds by an agent, each reviewed by me on pictures) is merged: twelve own species from
 Blender scripts, planted by altitude, slope and distance to the road, on medium and up (`low` keeps the old trees).

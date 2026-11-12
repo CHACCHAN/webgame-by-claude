@@ -29,7 +29,8 @@ struct VOut { @builtin(position) pos: vec4f, @location(0) col: vec4f, @location(
   let corner = corners[vi];
   let at = q + corner * (px / u.ratio) * 0.5;
   var o: VOut;
-  let seen = s > 0.0 && s < 6.0;
+  // (a grain that is not there: no brightness, nothing to draw)
+  let seen = s > 0.0 && s < 6.0 && col.a > 0.0;
   o.pos = select(vec4f(2.0, 2.0, 2.0, 1.0), vec4f(at.x / u.view.x * 2.0 - 1.0, 1.0 - at.y / u.view.y * 2.0, 0.0, 1.0), seen);
   o.col = vec4f(col.rgb * a, a * 0.35);
   o.uv = corner;

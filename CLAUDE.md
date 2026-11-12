@@ -348,28 +348,36 @@ pending. `docs/PLAN.md` holds the design.
   move while the main thread is blocked (the busy mark, the boot bar) is a CSS transform / opacity animation only.
   Lists the keys walk: hover moves the selection (`hoverSelect`), inside `.focus-box` only the selected button is
   filled. `window.__app` is the app's store for probes (as `__game` is the game).
-  The grains over the menus (`ui/fx/`, owner 11-11: fine, close to 3D particles; grains alone depict things and
-  grains alone emphasise them; "the part in charge of beauty"): up to 48 000 grains (12 000 on a phone) in a volume
-  behind the screen, one canvas over the interface (`Cloud.tsx`; not in a race, not with motion off, none on a
-  software renderer). `cloud.ts` is the simulation (DOM-free, tested): three interleaved groups (dust / the thing a
-  screen shows / the selection's edge); a group is given a `Shape` (points in its own space, placed anew every frame)
-  and its grains fly there, a shape let go scatters through the volume. `shapes.ts` makes the shapes: a course's
-  relief (`courseRelief`: road, start / finish beams, the land as contour lines; laid across its place, `box` fits
-  it), a glyph from a mask, the edge of a selection (`shellOf`), a sky per time of day (`skyScene`: night / rain /
-  dawn, drawn in units of its place's height for the place's aspect; on the conditions screen's selected card), a
-  medal (`medalShape`: disc, wreath, ribbon, the element's text as its emblem by the strokes' edges; beside the
-  results card once the stamp has landed).
-  `Shape.fall` makes the points with an `along` travel (the rain): their grains ride with them, without lag. In the
-  markup: `data-cloud="course:<id>"`, `"sky:<time of day>"`, `"medal:<gold|silver|bronze>"` or `"glyph"` (`data-cloud-fill="0…1"`: how much has
-  gathered, as on the loading screen) = a thing depicted where the element stands; the emphasis goes to what the pointer is on (anything with `cursor: pointer`), else the screen's
-  `FocusFrame`, else an element with `data-grains` (`"line"` / `"ring"` / its panel; `data-grains-tone`;
-  `data-grains-first="<ms>"`). While the grains depict, the app has the class `cloud-on` and the page's own picture
-  of the same thing steps back (the title's kanji, the drawn focus frame). The count follows the grains' own cost
-  on the main thread (`BUDGET` 4 ms a frame; 48 000 cost ~3–4 ms here), never the frame time. While the game is in a
-  race (`countdown` / `racing`; not `replay`, which goes on behind the results) the grains rest whatever screen the
-  app is on (a tool that starts a race
-  from the title left them simulating: 3 ms a frame in a timing). What is slow in the
-  step: `Math.hypot`, sines (a table), anything per grain per frame that could be done for a quarter of them in turn.
+  The grains of the menus (`ui/fx/`; reworked 11-12 after the owner's word that grains around every button and
+  dust over the whole screen all the time were too much, that a fluid-like motion would be beautiful, and that the
+  rest is ours to judge). **Grains do one thing: they are the picture of a thing, in the few places where a picture
+  belongs; a screen without one has no grains and the layer then costs nothing (no step, no draw).** No dust, nothing
+  around buttons or the selection (the drawn `FocusFrame` marks that): do not bring those back. Up to 32 000 grains
+  (8 000 on a phone), one canvas over the interface (`Cloud.tsx`; not with motion off, none on a software renderer).
+  `cloud.ts` is the simulation (DOM-free, tested): a grain is `GONE`, `PLACED` or `FREE`; a `Shape` (points in its
+  own space, placed anew every frame) asked for **condenses** (its grains come into being around their places in
+  wisps and draw together, one after another), let go it comes apart like ink (one slow turbulence for all, fainter,
+  gone within ~1 s); from one shape to the next the grains move over. The grains hang in water: `fluid.ts` (stable
+  fluids on a coarse grid of the screen, velocity only, DOM-free, tested; the pressure's neighbours are two cells
+  away because velocity and pressure share cells; `CURL` must stay below `DECAY` or an eddy feeds itself; at rest
+  it is `still` and free). The pointer's strokes stir it (`splat`), a flow weakens the pull of a grain's place
+  (`CARRIED`), so a stroke through a picture carries it off in two eddies and it comes home as the water rests.
+  `shapes.ts` makes the shapes: a course's relief (`courseRelief`: road, start / finish beams, the land as contour
+  lines; `box` fits it into its place; course select and loading screen), a glyph from a mask (the title's 峠:
+  **an entrance only**, `data-cloud-once="<ms>"`, then the element gets `data-cloud-done` and the type takes over:
+  type is finer than grains at that size; the grain glyph is sized like the type, `GLYPH_EM`), a sky per time of day
+  (`skyScene`: night / rain / dawn, in units of its place's height; the conditions screen's selected card), a medal
+  (`medalShape`: disc, wreath, ribbon, the element's text as its emblem; beside the results card once the stamp has
+  landed). `Shape.fall` makes the points with an `along` travel (the rain): their grains ride with them, without lag.
+  In the markup: `data-cloud="course:<id>"`, `"sky:<time of day>"`, `"medal:<gold|silver|bronze>"` or `"glyph"`
+  (`data-cloud-fill="0…1"`: how much of it is there, as on the loading screen; the rest is not there). While the
+  grains can depict, the app has the class `cloud-on` and the page's own picture of the same thing steps back. The
+  count follows the grains' own cost on the main thread (`BUDGET` 3.5 ms a frame; 32 000 in a picture cost 2–3 ms
+  here, ~1 ms more while the water runs), never the frame time. While the game is in a race (`countdown` /
+  `racing`; not `replay`, which goes on behind the results) the grains rest whatever screen the app is on. What is
+  slow in the step: `Math.hypot`, sines (a table), anything per grain per frame that could be done for a quarter of
+  them in turn. Pictures of all of it: `~/.local/opt/quality/fluidshots.cjs`, `titlein.cjs`, `medalgrains.cjs`,
+  `cloudsky.cjs`.
   **Nothing else on the page may make a WebGL context while the game is on WebGPU**: it lost the game's device
   (`VK_ERROR_DEVICE_LOST`, 11-11). Whatever else draws uses the game's own API: the grains draw on
   `RenderHost.gpuDevice` (`cloudRenderGpu.ts`), or with WebGL 2 next to the WebGL 2 backend (`cloudRender.ts`); the

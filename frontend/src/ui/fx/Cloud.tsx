@@ -1,78 +1,32 @@
 import { useEffect, useRef } from 'react';
-import { useApp, type Screen } from '../../store/app';
-import { screenDepth } from '../motion';
 import { isTouchDevice } from '../touch';
 import { COURSES, type CourseId } from '../../game/track/courses';
 import { Track } from '../../game/track/Track';
-import { AMBIENT, EMPHASIS, OBJECT, bind, burst, createCloud, members, resizeCloud, rng, stepCloud, sweep, type Cloud as Field, type Shape } from './cloud';
+import { bind, createCloud, resizeCloud, rng, stepCloud, type Cloud as Field, type Shape } from './cloud';
+import { splat } from './fluid';
 import { createCloudRenderer } from './cloudRender';
 import { createCloudRendererGpu } from './cloudRenderGpu';
 import { gameHolder, renderHost } from '../GameCanvas';
-import { RELIEF_PITCH, RELIEF_SWAY, TONE, courseRelief, lineOutline, maskShape, medalShape, panelOutline, ringOutline, shellOf, skyScene } from './shapes';
+import { RELIEF_PITCH, RELIEF_SWAY, TONE, courseRelief, maskShape, medalShape, skyScene } from './shapes';
 
 /**
- * The grains over the menus (owner 11-11: fine, close to 3D particles; grains alone depict things and grains alone
- * emphasise them; the part in charge of beauty). One WebGL canvas over the interface that takes no input; the
- * simulation is ./cloud.ts, the shapes ./shapes.ts.
+ * The grains of the menus. Owner 11-12: grains around every button and dust over the whole screen all the time
+ * were too much ("しつこい"), a fluid-like motion would be beautiful, and the rest is ours to judge. So the grains do
+ * one thing: **they are the picture of a thing, in the few places where a picture belongs**, and they hang in water.
  *
- * - Dust floats in a volume behind the screen while nothing asks for the grains.
- * - **Emphasis**: what the pointer is on (the nearest thing with `cursor: pointer`), else the screen's `FocusFrame`,
- *   else an element with `data-grains` (`"line"` / `"ring"` / its panel; `data-grains-tone="magenta|amber"`;
- *   `data-grains-first="<ms>"`: before all of these for its first moments), gets its edge drawn by grains.
- * - **Things**: an element with `data-cloud` is depicted by grains where it stands: `course:<id>` (the course's
- *   relief), `glyph` (the element's own text), `sky:night|rain|dawn` (a time of day and its weather as a scene),
+ * - An element with `data-cloud` is depicted by grains where it stands: `course:<id>` (the course's relief),
+ *   `glyph` (the element's own text), `sky:night|rain|dawn` (a time of day and its weather as a scene),
  *   `medal:gold|silver|bronze` (a medal, the element's text as its emblem). `data-cloud-fill="0…1"`: how much of
- *   it has gathered.
+ *   it is there. A thing condenses when it is asked for and comes apart like ink when it is let go.
+ *   `data-cloud-once="<ms>"`: an entrance only: after that long in grains the element gets `data-cloud-done` and
+ *   its own picture takes over (the title's kanji: type is finer than grains can be at that size).
+ * - The pointer stirs the water (./fluid.ts): a stroke through a picture carries its grains off, and they come home.
+ * - Nothing else: no dust, nothing around buttons or the selection (the drawn `FocusFrame` marks that). A screen
+ *   without a `data-cloud` has no grains, and then this costs nothing: no step, no draw.
  * While the grains depict something the app has the class `cloud-on` (the page's own picture of it steps back).
+ * One canvas over the interface that takes no input; the simulation is ./cloud.ts, the shapes ./shapes.ts.
  * A slow machine gets fewer grains, down to none. Not mounted in a race, nor with the interface's motion off.
  */
-
-type Kind = 'panel' | 'line' | 'ring';
-interface Target {
-  el: Element;
-  kind: Kind;
-  tone: number;
-  pad: number;
-  cut: number;
-  box: [number, number, number, number];
-}
-
-/** the nearest thing under the pointer that can be clicked: the outermost element of the run with `cursor: pointer` */
-function clickable(from: Element | null, limit: Element): Element | null {
-  let found: Element | null = null;
-  for (let el = from; el && el !== limit; el = el.parentElement) {
-    if (getComputedStyle(el).cursor === 'pointer') found = el;
-    else if (found) break;
-  }
-  return found;
-}
-
-const kindOf = (el: Element): Kind => {
-  const asked = (el as HTMLElement).dataset?.grains;
-  return asked === 'line' || asked === 'ring' ? asked : 'panel';
-};
-
-function describe(el: Element, kind: Kind, viewW: number, viewH: number): Target | null {
-  const r = el.getBoundingClientRect();
-  if (r.width < 8 || r.height < 4) return null;
-  // (the title is one large button: no edge around the whole screen)
-  if (r.width > viewW * 0.8 && r.height > viewH * 0.6) return null;
-  const style = getComputedStyle(el);
-  // (not yet on show: a part of the screen waiting for its turn to come in)
-  if (Number(style.opacity) < 0.05) return null;
-  const cut = parseFloat(style.getPropertyValue('--c')) || 8;
-  const data = (el as HTMLElement).dataset;
-  const magenta = el.classList.contains('magenta') || el.classList.contains('rival-card') || data?.grainsTone === 'magenta';
-  return { el, kind, tone: magenta ? TONE.magenta : data?.grainsTone === 'amber' ? TONE.amber : TONE.cyan, pad: kind === 'panel' ? 4 : 3, cut: Math.min(cut, 24), box: [r.left, r.top, r.width, r.height] };
-}
-
-/** the outline of a target in its own corner's coordinates (the shape is placed at the element every frame) */
-function outlineOf(t: Target): Float32Array {
-  const [, , w, h] = t.box;
-  if (t.kind === 'ring') return ringOutline(w / 2, h / 2, Math.max(w, h) / 2 + t.pad);
-  if (t.kind === 'line') return lineOutline(0, h + t.pad, w);
-  return panelOutline(0, 0, w, h, t.cut, t.pad);
-}
 
 const TOKENS: [number, string, number[]][] = [
   [TONE.dust, '', [176, 205, 225]],
@@ -86,26 +40,19 @@ const TOKENS: [number, string, number[]][] = [
   [TONE.bronze, '--c-bronze', [224, 142, 94]],
 ];
 
-/** how many grains: a desktop, a phone */
-const MANY = 48000, FEW = 12000;
+/** how many grains: a desktop, a phone (all of them are the picture) */
+const MANY = 32000, FEW = 8000;
 /** the time the grains may take in a frame, milliseconds (their own work on the main thread) */
-const BUDGET = 4;
-/** below this many living grains they no longer depict things (too few to read): the page's own pictures stay */
-const DEPICT = 9000;
+const BUDGET = 3.5;
+/** below this many grains they no longer depict things (too few to read): the page's own pictures stay */
+const DEPICT = 4500;
+/** a glyph's mask is this many em high (shapes are in units of their mask's height) */
+const GLYPH_EM = 1.3;
+/** how much of the pointer's speed the water takes */
+const STIR = 0.45;
 
 export function Cloud() {
   const ref = useRef<HTMLCanvasElement>(null);
-  const field = useRef<Field | null>(null);
-
-  // a change of screen sends the floating grains past the eye, the way the wipe goes
-  const screen = useApp((s) => s.screen);
-  const last = useRef<Screen>(screen);
-  useEffect(() => {
-    const c = field.current;
-    const dir = Math.sign(screenDepth(screen) - screenDepth(last.current)) || 1;
-    last.current = screen;
-    if (c) sweep(c, dir);
-  }, [screen]);
 
   useEffect(() => {
     const canvas = ref.current;
@@ -126,9 +73,8 @@ export function Cloud() {
       for (let k = 0; k < 3; k++) palette[tone * 3 + k] = rgb[k] / 255;
     }
     const c = createCloud(n, 1, 1, palette);
-    field.current = c;
     // (a start with few grains: the count grows while the frames keep coming)
-    c.active = Math.min(n, 14000);
+    c.active = Math.min(n, 12000);
     const rand = rng(7);
 
     let w = 0, h = 0, left = 0, top = 0, ratio = 1;
@@ -138,111 +84,52 @@ export function Cloud() {
       top = r.top;
       const nr = Math.min(window.devicePixelRatio || 1, 2);
       if (r.width === w && r.height === h && nr === ratio) return;
-      const first = w === 0;
       w = r.width;
       h = r.height;
       ratio = nr;
       renderer.resize(w, h, ratio);
-      if (first) {
-        c.w = w;
-        c.h = h;
-        for (let i = 0; i < c.n; i++) {
-          c.pos[i * 3] *= w;
-          c.pos[i * 3 + 1] *= h;
-        }
-      } else resizeCloud(c, w, h);
+      resizeCloud(c, w, h);
     };
     size();
     const watch = new ResizeObserver(size);
     watch.observe(app);
 
-    // --- the pointer, and what the grains mark
-    let hover: Element | null = null;
-    let target: Target | null = null;
-    let focusBox = '';
-    let moved = false;
+    // --- the pointer: it stirs the water, and the pictures turn a little towards it
+    let pointer = false, px = 0, py = 0, stirX = 0, stirY = 0, stirred = false;
     let leanX = 0, leanY = 0;
     const overlay = app.querySelector('.overlay') ?? app;
     const onMove = (e: PointerEvent) => {
       if (e.pointerType === 'touch') {
-        c.px = NaN;
-        hover = null;
+        pointer = false;
         return;
       }
-      c.px = e.clientX - left;
-      c.py = e.clientY - top;
-      moved = true;
-      hover = clickable(e.target as Element | null, app);
+      const x = e.clientX - left, y = e.clientY - top;
+      if (!pointer) {
+        stirX = x;
+        stirY = y;
+      }
+      px = x;
+      py = y;
+      pointer = true;
+      stirred = true;
     };
-    const onDown = (e: PointerEvent) => {
-      onMove(e);
-      // a choice made: the edge flies apart (it gathers again around whatever is selected next)
-      if (target) burst(c, EMPHASIS, 300);
-    };
-    const onLeave = () => {
-      c.px = NaN;
-      hover = null;
-    };
-    const onKey = (e: KeyboardEvent) => {
-      hover = null;
-      if ((e.code === 'Enter' || e.code === 'Space') && target) burst(c, EMPHASIS, 300);
-    };
+    const onLeave = () => (pointer = false);
     window.addEventListener('pointermove', onMove, { passive: true });
-    window.addEventListener('pointerdown', onDown, { passive: true });
     document.addEventListener('pointerleave', onLeave);
     window.addEventListener('blur', onLeave);
-    window.addEventListener('keydown', onKey);
-
-    const firsts = new WeakMap<Element, number>();
-    const choose = (): Target | null => {
-      if (hover && !hover.isConnected) hover = null;
-      const first = overlay.querySelector<HTMLElement>('[data-grains-first]');
-      if (first) {
-        const t = describe(first, kindOf(first), w, h);
-        if (t) {
-          const now = performance.now();
-          const since = firsts.get(first) ?? now;
-          firsts.set(first, since);
-          if (now - since < Number(first.dataset.grainsFirst)) return t;
-        }
-      }
-      // the selection moved while the pointer stood still (keys, pad): it takes over
-      const frame = [...overlay.querySelectorAll<HTMLElement>('.focus-frame')].find((f) => f.style.opacity === '1' && f.offsetParent !== null);
-      const box = frame ? frame.style.transform + frame.style.width : '';
-      if (box !== focusBox && !moved) hover = null;
-      focusBox = box;
-      moved = false;
-      if (hover) {
-        const t = describe(hover, kindOf(hover), w, h);
-        if (t) return t;
-      }
-      if (frame) {
-        const t = describe(frame, 'panel', w, h);
-        if (t) {
-          t.pad = 2;
-          return t;
-        }
-      }
-      const asked = overlay.querySelector<HTMLElement>('[data-grains]');
-      if (asked) return describe(asked, kindOf(asked), w, h);
-      return null;
-    };
-    const shellKey = (t: Target) => `${t.kind}:${Math.round(t.box[2])}:${Math.round(t.box[3])}:${t.cut}:${t.tone}`;
-    let shellAt = '';
 
     // --- the things the grains depict (built once each, when first asked for, between two frames)
     const things = new Map<string, Shape | 'making'>();
     let thing: { el: HTMLElement; key: string } | null = null;
-    const objects = members(c, OBJECT, n);
     const make = (key: string, el: HTMLElement): Shape | null => {
       const [kind, arg] = key.split(':');
       if (kind === 'course' && arg in COURSES) {
         const info = COURSES[arg as CourseId];
         const t = new Track(info.design);
-        return courseRelief({ count: t.count, pos: t.pos, startS: t.startS, finishS: t.finishS, base: (x, z) => info.landform.base(x, z), water: info.landform.waterLevel }, objects, rng(arg.length * 977 + 3));
+        return courseRelief({ count: t.count, pos: t.pos, startS: t.startS, finishS: t.finishS, base: (x, z) => info.landform.base(x, z), water: info.landform.waterLevel }, n, rng(arg.length * 977 + 3));
       }
       if (kind === 'sky' && (arg === 'night' || arg === 'rain' || arg === 'dawn')) {
-        return skyScene(arg, Number(key.split(':')[2]) || 3, objects, rng(arg.length * 131 + 7));
+        return skyScene(arg, Number(key.split(':')[2]) || 3, n, rng(arg.length * 131 + 7));
       }
       if (kind === 'glyph' || kind === 'medal') {
         // the element's own text in its own type, drawn into a mask
@@ -256,7 +143,7 @@ export function Cloud() {
           const font = `${style.fontWeight} ${px}px ${style.fontFamily}`;
           ctx.font = font;
           mask.width = Math.ceil(ctx.measureText(text).width + px * 0.3);
-          mask.height = Math.ceil(px * 1.3);
+          mask.height = Math.ceil(px * GLYPH_EM);
           ctx.font = font;
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
@@ -266,8 +153,8 @@ export function Cloud() {
           alpha = new Uint8Array(mask.width * mask.height);
           for (let i = 0; i < alpha.length; i++) alpha[i] = data[i * 4 + 3];
         }
-        if (kind === 'medal') return arg === 'gold' || arg === 'silver' || arg === 'bronze' ? medalShape(arg, objects, rng(arg.length * 53 + 11), alpha ? { alpha, w: mask.width, h: mask.height } : undefined) : null;
-        return alpha ? maskShape(alpha, mask.width, mask.height, objects, TONE.white, rand) : null;
+        if (kind === 'medal') return arg === 'gold' || arg === 'silver' || arg === 'bronze' ? medalShape(arg, n, rng(arg.length * 53 + 11), alpha ? { alpha, w: mask.width, h: mask.height } : undefined) : null;
+        return alpha ? maskShape(alpha, mask.width, mask.height, n, TONE.white, rand) : null;
       }
       return null;
     };
@@ -283,7 +170,7 @@ export function Cloud() {
       if (c.active < DEPICT) return;
       for (const el of overlay.querySelectorAll<HTMLElement>('[data-cloud]')) {
         const r = el.getBoundingClientRect();
-        if (r.width < 8 || r.height < 8 || r.bottom < 0 || r.top > window.innerHeight) continue;
+        if (r.width < 8 || r.height < 8 || r.bottom < 0 || r.top > window.innerHeight || el.dataset.cloudDone !== undefined) continue;
         thing = { el, key: keyOf(el, r) };
         return;
       }
@@ -294,9 +181,16 @@ export function Cloud() {
     // --- the frame loop
     let raf = 0;
     let before = performance.now();
-    let look = 0;
+    let look = 0, boundAt = 0;
     let frames = 0, spent = 0, gauge = before, resting = false;
     const stats = { cost: 0 };
+    /** nothing on the canvas: once, then it is left alone */
+    const clear = () => {
+      const living = c.active;
+      c.active = 0;
+      renderer.draw(c, ratio, 0, 0);
+      c.active = living;
+    };
     const frame = (now: number) => {
       raf = requestAnimationFrame(frame);
       // a race under way with the menus still mounted (a tool that starts one through the game, not the screens):
@@ -305,19 +199,53 @@ export function Cloud() {
       if (phase === 'countdown' || phase === 'racing') {
         if (!resting) {
           resting = true;
-          const living = c.active;
-          c.active = 0;
-          renderer.draw(c, ratio, 0, 0);
-          c.active = living;
+          clear();
           app.classList.remove('cloud-on');
         }
         before = now;
         return;
       }
-      resting = false;
-      const gap = now - before;
-      const dt = Math.min(gap / 1000, 0.05);
+      const dt = Math.min((now - before) / 1000, 0.05);
       before = now;
+
+      // what is to be depicted is looked up a few times a second; where it is, every frame
+      if (now - look > 90) {
+        look = now;
+        findThing();
+        const t: { el: HTMLElement; key: string } | null = thing;
+        if (!t) bind(c, null);
+        else {
+          const made = things.get(t.key);
+          if (made && made !== 'making') {
+            if (c.shape !== made) boundAt = now;
+            bind(c, made);
+            // an entrance only: the grains have drawn it, the page's own picture takes over and they come apart
+            const once = Number(t.el.dataset.cloudOnce);
+            if (once > 0 && now - boundAt > once) t.el.dataset.cloudDone = '';
+          } else if (!made && (fontsReady || !(t.key.startsWith('glyph') || t.key.startsWith('medal')))) {
+            things.set(t.key, 'making');
+            const { el, key } = t;
+            setTimeout(() => {
+              const shape = make(key, el);
+              if (shape) things.set(key, shape);
+            }, 0);
+          }
+        }
+        app.classList.toggle('cloud-on', c.active >= DEPICT);
+      }
+      // nothing to show and nothing left of what was: no step, no draw
+      if (!c.shape && c.live === 0) {
+        if (!resting) {
+          resting = true;
+          clear();
+          stats.cost = 0;
+        }
+        stirred = false;
+        stirX = px;
+        stirY = py;
+        return;
+      }
+      resting = false;
 
       // as many grains as cost little: by the time the grains themselves take in a frame (the frame's own length
       // says nothing: a course being built or the scene behind the menus makes frames long, and the grains would
@@ -331,56 +259,13 @@ export function Cloud() {
         frames = spent = 0;
         gauge = now;
       }
-      app.classList.toggle('cloud-on', c.active >= DEPICT);
 
-      // what is selected and what is to be depicted is looked up a few times a second; where it is, every frame
-      if (now - look > 90) {
-        look = now;
-        const next = c.active ? choose() : null;
-        if (!next) bind(c, EMPHASIS, null);
-        target = next;
-        if (next) {
-          const key = shellKey(next);
-          if (key !== shellAt || !c.shapes[EMPHASIS]) {
-            shellAt = key;
-            bind(c, EMPHASIS, shellOf(outlineOf(next), members(c, EMPHASIS, n), next.tone, rand));
-          }
-        } else shellAt = '';
-
-        findThing();
-        const t: { el: HTMLElement; key: string } | null = thing;
-        if (!t) bind(c, OBJECT, null);
-        else {
-          const made = things.get(t.key);
-          if (made && made !== 'making') bind(c, OBJECT, made);
-          else if (!made && (fontsReady || !(t.key.startsWith('glyph') || t.key.startsWith('medal')))) {
-            things.set(t.key, 'making');
-            const { el, key } = t;
-            setTimeout(() => {
-              const shape = make(key, el);
-              if (shape) things.set(key, shape);
-            }, 0);
-          }
-        }
-      }
-      if (target) {
-        if (!target.el.isConnected) {
-          bind(c, EMPHASIS, null);
-          target = null;
-        } else {
-          const r = target.el.getBoundingClientRect();
-          const p = c.places[EMPHASIS];
-          p.x = r.left - left;
-          p.y = r.top - top;
-          target.box = [r.left, r.top, r.width, r.height];
-        }
-      }
-      const shown = c.shapes[OBJECT] && thing ? (thing as { el: HTMLElement; key: string }) : null;
+      const shown = c.shape && thing ? (thing as { el: HTMLElement; key: string }) : null;
       if (shown) {
-        if (!shown.el.isConnected) bind(c, OBJECT, null);
+        if (!shown.el.isConnected) bind(c, null);
         else {
           const r = shown.el.getBoundingClientRect();
-          const p = c.places[OBJECT];
+          const p = c.place;
           const fill = shown.el.dataset.cloudFill;
           p.fill = fill === undefined ? 1 : Math.max(0, Math.min(1, Number(fill)));
           p.x = r.left - left + r.width / 2;
@@ -388,37 +273,46 @@ export function Cloud() {
           if (shown.key.startsWith('course')) {
             // a relief lying across its place, tipped towards the eye: it sways (and follows the pointer) rather
             // than turns, so that it stays inside its place
-            const box = c.shapes[OBJECT]?.box ?? [0, 0, 1, 0.5];
+            const box = c.shape?.box ?? [0, 0, 1, 0.5];
             p.scale = Math.min(r.width / Math.max(box[2], 0.2), r.height / Math.max(box[3], 0.1)) * 0.95 * Number(shown.el.dataset.cloudScale ?? 1);
             p.x -= box[0] * p.scale;
             p.y -= box[1] * p.scale;
             p.pitch = RELIEF_PITCH + Math.sin(c.time * 0.17) * 0.04;
-            p.yaw = RELIEF_SWAY * (Math.sin(c.time * 0.23) * 0.45 + (Number.isFinite(c.px) ? (c.px / w - 0.5) * 1.1 : 0));
+            p.yaw = RELIEF_SWAY * (Math.sin(c.time * 0.23) * 0.45 + (pointer ? (px / w - 0.5) * 1.1 : 0));
             p.z = -10;
           } else if (shown.key.startsWith('sky')) {
             // a small scene in its place: it turns a little with the pointer, enough to part the near from the far
             p.scale = r.height * Number(shown.el.dataset.cloudScale ?? 1);
-            p.yaw = Math.sin(c.time * 0.21) * 0.1 + (Number.isFinite(c.px) ? (c.px / w - 0.5) * 0.3 : 0);
+            p.yaw = Math.sin(c.time * 0.21) * 0.1 + (pointer ? (px / w - 0.5) * 0.3 : 0);
             p.pitch = Math.sin(c.time * 0.17 + 1) * 0.04;
             p.z = 0;
           } else if (shown.key.startsWith('medal')) {
             // a medal on its ribbon: it swings a little and turns to the pointer, and the gleam goes round it
             p.scale = r.height * Number(shown.el.dataset.cloudScale ?? 1);
-            p.yaw = Math.sin(c.time * 0.7) * 0.42 + (Number.isFinite(c.px) ? (c.px / w - 0.5) * 0.5 : 0);
+            p.yaw = Math.sin(c.time * 0.7) * 0.42 + (pointer ? (px / w - 0.5) * 0.5 : 0);
             p.pitch = Math.sin(c.time * 0.45 + 1) * 0.08;
             p.z = 0;
           } else {
-            // a glyph: it sways a little, enough to show that it is deep
-            p.scale = (parseFloat(getComputedStyle(shown.el).fontSize) || r.height) * Number(shown.el.dataset.cloudScale ?? 1);
-            p.yaw = Math.sin(c.time * 0.31) * 0.22;
-            p.pitch = Math.sin(c.time * 0.23 + 1) * 0.07;
+            // a glyph, as large as the element's own type (the mask is 1.3 em high: `make`), so that the type can
+            // take over from it; it sways a little, enough to show that it is deep
+            p.scale = (parseFloat(getComputedStyle(shown.el).fontSize) || r.height) * GLYPH_EM * Number(shown.el.dataset.cloudScale ?? 1);
+            p.yaw = Math.sin(c.time * 0.31) * 0.1;
+            p.pitch = Math.sin(c.time * 0.23 + 1) * 0.04;
             p.z = 0;
           }
         }
       }
 
+      // a stroke of the pointer stirs the water where it went
+      if (stirred && pointer && dt > 0) {
+        splat(c.fluid, px, py, ((px - stirX) / dt) * STIR, ((py - stirY) / dt) * STIR, h * 0.05);
+      }
+      stirred = false;
+      stirX = px;
+      stirY = py;
+
       // the eye leans a little with the pointer: near and far grains part
-      const lx = Number.isFinite(c.px) ? (c.px / w - 0.5) * -0.05 : 0, ly = Number.isFinite(c.py) ? (c.py / h - 0.5) * -0.05 : 0;
+      const lx = pointer ? (px / w - 0.5) * -0.05 : 0, ly = pointer ? (py / h - 0.5) * -0.05 : 0;
       leanX += (lx - leanX) * Math.min(1, dt * 3);
       leanY += (ly - leanY) * Math.min(1, dt * 3);
       const from = performance.now();
@@ -434,17 +328,12 @@ export function Cloud() {
       cancelAnimationFrame(raf);
       watch.disconnect();
       window.removeEventListener('pointermove', onMove);
-      window.removeEventListener('pointerdown', onDown);
       document.removeEventListener('pointerleave', onLeave);
       window.removeEventListener('blur', onLeave);
-      window.removeEventListener('keydown', onKey);
       app.classList.remove('cloud-on');
       renderer.dispose();
-      field.current = null;
     };
   }, []);
 
   return <canvas ref={ref} className="grains" aria-hidden />;
 }
-
-void AMBIENT;
