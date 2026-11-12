@@ -2007,3 +2007,5 @@ on road and ground only: a far lamp lit nothing but its pool on the asphalt.
   (the lamps light the walls more now): to be recorded again together with the props' re-modelling.
 - Seen on the way, not from this change: Kirifuri's far caldera wall shows the far trees as large blotches at
   dawn (before and after alike); the exhaust's puffs read as white balls behind the car at dawn.
+- Deployed 11-12 as v2.1.1 (bundle `index-D1rLr9WI.js`): the same bundle at the local and the public address,
+  `/api/content` says 2.1.1, leaderboard 200, a film's range request 206 through the tunnel.
