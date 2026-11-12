@@ -356,7 +356,17 @@ pending. `docs/PLAN.md` holds the design.
   starts it (the old noise is the fallback without AudioWorklet), `updateRain(speed, cover, body)` steers it per frame
   from `Game` (`coverShare` on `scenery.covers`, `rainBodyOf(kindOf(spec))`). Check a change with
   `npx tsx tools/rain-wav.ts <dir>` (WAVs + spectrograms, levels, modulation, correlation between the ears, old
-  against new); `MASTER` in `rain.ts` holds the long-term level standing still at the old −24.6 dBFS.
+  against new). **The rain is a bed under the drive** (v2.2.2, a player's report: it was as loud as a car at full
+  throttle and 10 dB over a commuter train at 60 km/h): its levels are `LEVEL` (outside / body / spray) and
+  `OUTSIDE` per body (a train 0.47: heard from the cab) in `rain.ts`, set against the vehicles' own sound in the
+  game's mix, not against the old loop (that was a hiss at 4–8 kHz; this rain is broad and at the same dB(A) lay
+  over the engines' octaves). After a change of level: `rain-wav.ts` (layers alone, over time, in a gust's peak,
+  gusts held still: with them a 30 s stretch moves ±3 dB), then `gpurun.sh URL=<preview> npx tsx tools/rain-mix.ts
+  <dir> [--wet]` (rain minus drive per vehicle, speed and state; vehicle renders are cached in
+  `<dir>/vehicles.json`, `--fresh` after a change of a vehicle's sound; `?export=1` gives `window.__renderMix`).
+  Target: under the drive under power for every vehicle that sounds (−6 … −17 dB now); louder only where the
+  vehicle is nearly silent. Settings 雨音 (`rainVolume`, a share of the effects' volume; `AudioEngine.rain` bus,
+  `setVolumes`' fourth argument): at 0 no rain source runs; stored settings without the key read as 100 %.
 - Particles: any per-particle value raised to a power must have its base clamped (a NaN alpha on a puff drawn next to
   the camera covers the screen, and bloom turns a NaN frame black).
 - The rival's language model (rival battles; `ai/RivalMind.ts`): a model never drives. It gives the rival's line

@@ -2068,3 +2068,36 @@ to be seen). The films still show the balls until they are recorded again.
   accepted as it is; the black horizontal lines are gone on their side (nothing was changed for them knowingly).
 - Still with agents, stopped twice by the usage limit: the cockroach's wings in the air (a model change: sheet to
   the owner first), the rain's loudness and a 雨音 setting.
+- **Deployed 11-12 as v2.2.1** (bundle `index-C-0J8al6.js`, local = public; leaderboard API 200; `/api/content`
+  says 2.2.1 with the maker and one link). Desk report `PVW7D6` closed. No E2E run for it.
+
+## v2.2.2 (11-12): the rain is a bed under the drive, and has a volume of its own
+
+- **Players' report through the desk** (`5WKASA`: the rain is too loud). Measured by the agent (dB(A), the game's
+  own chain rendered offline per vehicle, speed and state, `tools/rain-mix.ts`): the rain was louder than the
+  drive in 22 of 35 states under power (median +1.8 dB; a commuter train at 60 km/h +9.7, in a gust +15.6) and in
+  30 of 35 coasting. Cause: the new rain's level was matched to the old loop's figure, but the old loop was a hiss
+  at 4–8 kHz and the new rain is broad: at the same figure it had 4–9 dB more in 500 Hz – 2 kHz, where engines
+  and inverters sound. Changed (`audio/rain.ts`): `LEVEL` (the rain outside −10 dB, the spray −9 dB, the drops on
+  the body as they were), `OUTSIDE` per body (a train a further −6.5 dB: heard from the cab); the fallback noise
+  0.16 → 0.05. After: louder than the drive in 3 of 35 under power (E5 at 60, the cockroach at 60 / 120: vehicles
+  that are nearly silent there), median −7.9 dB; coasting 8 of 35, median −4.8 dB. Standing, the rain is 10 dB
+  under what it was (16 dB in a train): this departs from "keep the standing level"; `LEVEL.outside` is the one
+  number to raise if it turns out too faint.
+- **Settings 雨音** (`rainVolume`, サウンド's last row, steps of 10 %, default 100 % = the corrected level; a share
+  of the effects' volume): `AudioEngine.rain` bus; at 0 % no rain source runs at all. Stored settings without the
+  key read as 100 %.
+- Verified by me on the merged build: tsc; vitest 229; backend tests 62 (the desk's knowledge file 7477 bytes of
+  8192); `gpu-errors` 0 / 0 (WebGPU, WebGL 2); the agent's `setcheck.cjs` on the GPU (100 % → worklet running,
+  50 % → gain 0.5, 0 % → no source and silence, back to 100 % by keys → running again, a race started in the rain
+  at 0 % → no source; no page errors); one race picture looked at. By the agent: the tables above
+  (`~/.local/opt/wt/rainvol/before|after`).
+- Not verified: **anything by ear** (the pair to listen to: `new-runup.wav`, `new-train.wav` in both directories);
+  the fallback path without AudioWorklet in a browser; the new row on a phone; a whole lap's mix (music, rival,
+  squeal mask the rain further).
+- Also 11-12, with agents: the cockroach's wings are done on a branch (`worktree-agent-a4d9cc6c7fe2e6517`: model
+  script, GLB 901 → 950 kB, `flightStep` / `wingPose`, a flutter sound; sheet sent to the owner, merge on their
+  yes: a minor version); the owner's new requests: the wind turbine's night lamp is "a huge round red lamp" (the
+  props agent resumed: obstruction light, branch brought onto main), the host changes course and conditions in an
+  online room and everyone sees who is loading (`~/.local/opt/wt/ONLINE_BRIEF.md`); Edwards + fighters
+  (`EDWARDS_BRIEF.md`).
