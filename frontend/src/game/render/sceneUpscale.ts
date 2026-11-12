@@ -17,6 +17,19 @@ type N = any;
 export const steadyProjection = new Matrix4();
 
 /**
+ * What the package multiplies the scene's light by before it gathers the frames in a squeezed range
+ * (`c / (1 + max(c))`, undone afterwards): fixed, and small. The package's own choice (mid-grey from the picture's
+ * average, at most 8) is at its top in every night scene, and a small bright thing averaged with its dark surround
+ * in that range comes out far darker than its light: the lamps and the glints on a car lost the glow the bloom makes
+ * of them (a still night picture 5 % darker than without upscaling, a quarter to a third darker around a lamp; the
+ * first half second after a cut 3 % brighter, while the average settled). At 0.01 the range is nearly straight up
+ * to a light of ~30: the picture is within 1.2 % of native (0.2 at 0.002, where the still picture's flicker begins to
+ * rise), the detail on the move the same at every value. The price is the package's hold on thin steady
+ * things, which wants a contrast of 0.02 in that range (its `LOCK_CONTRAST_LO`): only lights reach it now.
+ */
+const PRE_EXPOSURE = 0.01;
+
+/**
  * The temporal upscaler of the WebGPU backend: FSR 3's upscaling (the FSR 2 / 3 temporal pass graph, without frame
  * generation) from `@pmndrs/upscaler`, raw WGSL compute passes on the renderer's own device. The scene is drawn
  * smaller than the output with the camera jittered inside a pixel (the package's node does that around the pipeline's
@@ -52,7 +65,11 @@ export class SceneUpscaler extends UpscalerNode {
   }
 
   private apply() {
-    if (this.upscaler) this.upscaler.settings.sharpness = this._sharpness;
+    const settings = this.upscaler?.settings;
+    if (!settings) return;
+    settings.sharpness = this._sharpness;
+    settings.autoExposure = false;
+    settings.exposure = PRE_EXPOSURE;
   }
 
   /**
