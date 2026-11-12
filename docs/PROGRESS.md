@@ -2044,3 +2044,27 @@ a plume. Verified: 700 pictures of Kirifuri's start at dawn next to the same fra
 to be seen). The films still show the balls until they are recorded again.
 - Deployed 11-12 as v2.2.0 (bundle `index-CofCe0oY.js`): the same bundle at the local and the public address,
   `/api/content` says 2.2.0, leaderboard 200 at both.
+
+## v2.2.1 (11-12): the cockroach's colours stopped the game; Kirifuri's morning sun; the maker on the About screen
+
+- **Players' report through the desk** (`PVW7D6`: after changing the cockroach's colour it is not drawn).
+  Reproduced on the v2.1.0 build on the GPU (`tools/paint-drawn.cjs roach`: the two plain liveries and everything
+  after them 0.00 % of the frame). Cause (agent): a plain livery set `map = null` on materials already drawn;
+  three.js' shadow shader keeps a reference to the source material's map, the next shadow map read `null.matrix`
+  and every frame from then on threw: the picture stood still, garage and race alike, on both backends. Fix:
+  a white stand-in texel (`RoachModel.applyLivery`), the slot is never emptied. Verified by me on the build:
+  `paint-drawn.cjs roach keikyu1000 hayate` on WebGPU (17 states drawn, 0 errors) and `roach` on WebGL 2, the
+  pictures of four states looked at, `gpu-errors` 0 / 0, vitest 228 (new: `roachLivery.test.ts`).
+- **Kirifuri at dawn** (the owner chose: a higher sun and the land's shadow): `Landform.dawnSun`, the caldera's
+  26° up over the eastern rim (bearing 75°); `dawnShade` is gone. Six suns were compared in pictures on the eight
+  fixed viewpoints (`~/.local/opt/quality/cmp/sun-cands-*.jpg`); with this one 28 % of the road lies in the land's
+  shade (32 % with the trees), the sun stands in the picture in two of the eight views, and the lake side has
+  long shadows across the road. Verified: the eight views of the final build looked at
+  (`cmp/rel221-kirifuri-dawn.jpg`), Oboro's dawn unchanged. Not verified: a whole run at dawn on the final sun.
+  The course select's Kirifuri film was recorded under the old sun (to be recorded again with the others).
+- **About**: the owner gave the maker's name and the repository's link: `ABOUT_CREATOR` / `ABOUT_LINKS` in the
+  live `.env` (not in the repository); `/api/content` returns them (checked), the link answers 200.
+- The owner's other answers (11-12): the films are recorded again together with the props; FSR 3's softness is
+  accepted as it is; the black horizontal lines are gone on their side (nothing was changed for them knowingly).
+- Still with agents, stopped twice by the usage limit: the cockroach's wings in the air (a model change: sheet to
+  the owner first), the rain's loudness and a 雨音 setting.

@@ -223,6 +223,12 @@ pending. `docs/PLAN.md` holds the design.
   new model with `~/.local/opt/quality/lamps.cjs`. Lamp materials only on lamp parts (check: only at the car's ends). Dark lens textures:
   `tailLampGain`. Unpainted metal swatches (the Cybertruck's stainless; with `clearcoat` the H2's mirror coat): `CarSpec.bareMetal`. A new model goes in
   only after the owner has seen its sheet; never label a third-party model 自作.
+- Never empty a texture slot of a material that has been drawn (`map = null` on a shadow caster): three.js 0.186
+  builds the caster's shadow shader with a reference to the source material's `map` and never rebuilds it, so the
+  next shadow map reads `null.matrix` and every frame from then on throws, on both backends (the cockroach's plain
+  liveries stopped the whole game, v2.1.0). Swap in a stand-in texture instead (`RoachModel.applyLivery`: a white
+  texel sampled like the model's). `node tools/paint-drawn.cjs <ids>` (GPU) sets every paint of a vehicle in the
+  garage, builds it anew in each and races: the vehicle must change the picture.
 - Never leave a transmissive (refractive) material in the scene: three.js then renders every opaque object a second
   time per frame. Loaded car materials are flattened by `CarModel.withoutTransmission`.
 - Courses live in `track/courses.ts` (design + `Landform` from `track/landforms.ts` + rivals, medals, music, art).
