@@ -2095,6 +2095,9 @@ to be seen). The films still show the balls until they are recorded again.
 - Not verified: **anything by ear** (the pair to listen to: `new-runup.wav`, `new-train.wav` in both directories);
   the fallback path without AudioWorklet in a browser; the new row on a phone; a whole lap's mix (music, rival,
   squeal mask the rain further).
+- **Deployed 11-12 as v2.2.2** (bundle `index-Dc9qiaZ8.js`, local = public; leaderboard API 200; `/api/content`
+  says 2.2.2). Desk report `5WKASA` closed. E2E: the settings test alone, on an isolated stack (1 passed: the row
+  shows 100 %, a step down 90 % and is stored).
 - Also 11-12, with agents: the cockroach's wings are done on a branch (`worktree-agent-a4d9cc6c7fe2e6517`: model
   script, GLB 901 → 950 kB, `flightStep` / `wingPose`, a flutter sound; sheet sent to the owner, merge on their
   yes: a minor version); the owner's new requests: the wind turbine's night lamp is "a huge round red lamp" (the
