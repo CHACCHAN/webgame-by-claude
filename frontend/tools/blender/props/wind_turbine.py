@@ -127,8 +127,12 @@ def nacelle(S):
         m.box(dark, 1.05, 1.15, cy + 3.28, cy + 3.5, -5.1, -4.5)
         m.cyl(zinc, (-0.7, cy + 1.7, -4.8), (-0.7, cy + 3.9, -4.8), 0.03, 0.01, seg=6)
         for x in (-1.1, 1.1):
-            m.cyl(zinc, (x, cy + 1.66, -1.5), (x, cy + 1.86, -1.5), 0.13, seg=10)
-            m.lathe(S['lamp'], [(0.15, cy + 1.86), (0.15, cy + 2.06), (0.10, cy + 2.14), (0.0, cy + 2.16)], seg=10, cx=x, cz=-1.5)
+            # each on a post: 1.2 m over the roof they are seen from the ground all around, past the roof's edges
+            # and the cooler (standing on the roof itself they were hidden from the front and from behind)
+            m.cyl(zinc, (x, cy + 1.66, -1.5), (x, cy + 1.70, -1.5), 0.16, seg=10)
+            m.cyl(zinc, (x, cy + 1.70, -1.5), (x, cy + 2.62, -1.5), 0.045, seg=8)
+            m.cyl(zinc, (x, cy + 2.62, -1.5), (x, cy + 2.76, -1.5), 0.13, seg=10)
+            m.lathe(S['lamp'], [(0.15, cy + 2.76), (0.15, cy + 2.96), (0.10, cy + 3.04), (0.0, cy + 3.06)], seg=10, cx=x, cz=-1.5)
     return m
 
 
