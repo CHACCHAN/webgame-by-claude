@@ -139,9 +139,10 @@ const OUTSIDE: Record<RainBody, number> = { car: 1, bike: 1, train: 0.47, none: 
  *  - outside: −36.6 dB(A) with the gusts held still, −35.8 over a long time with them, −30 in a gust's peak.
  *    It was 10 dB higher until v2.1.1 (all three were 2.6), at the A-weighted level of the filtered noise it had
  *    replaced. But that noise was a hiss at 4–8 kHz, above where an engine or an inverter sounds, and this rain is
- *    broad: at the same figure it had 5–8 dB more in the octaves 500 Hz … 2 kHz, was as loud as a car at full
+ *    broad: at the same figure it had 4–9 dB more in the octaves 500 Hz … 2 kHz, was as loud as a car at full
  *    throttle and 10 dB over a commuter train at 60 km/h (a player's report: a train in the rain). Now it is
- *    2–5 dB under the old noise in those octaves.
+ *    3–6 dB under the old noise at 1–2 kHz and 10 dB under it above; only from 500 Hz down, where the old noise
+ *    had next to nothing, it has more.
  *  - spray: −38.5 dB(A) at 120 km/h, −36 from 137 km/h on for a car (9 dB lower than it was): with speed it
  *    becomes the larger part and lifts the rain by 4–5 dB, and the whole stays 7–8 dB under the engine.
  *  - body: the drops on the vehicle's own panels and glass, as they were (−48 … −40 dB(A) on a car): 14–22 dB

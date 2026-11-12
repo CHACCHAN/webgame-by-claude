@@ -9,16 +9,19 @@
  *     sound, the wind, updated 60 times a second as Game.update does), 5 s per state: under power (throttle 1) and
  *     coasting (throttle 0) at each speed. Taken before the master's compressor, with master and effects at 100 %
  *     (the defaults, master 80 %, move everything by −1.9 dB alike);
- *  3. the rain (audio/rain.ts in Node, the worklet's code; tools/rain-wav.ts `rainLevel`: full rain, gusts held
- *     still) for the vehicle's kind at the same speeds. Both enter the same effects bus, so the figures compare.
+ *  3. the rain (audio/rain.ts in Node, the worklet's code; tools/rain-wav.ts `rainOverTime`: full rain) for the
+ *     vehicle's kind at the same speeds. Both enter the same effects bus, so the figures compare.
  * Printed and written to <outDir>/mix.json: A-weighted levels (dB(A) re full scale, tools/rain-wav.ts `levels`) of
  * the vehicle's own sound (`own`: engine / inverter and running noise / legs), of that with the shared wind
- * (`drive`), of the rain in the open and under a roof; the rain over the drive (positive: the rain is the louder
- * of the two) and in how many of the octaves 250 Hz…8 kHz the rain lies above the drive (there it covers it).
+ * (`drive`), of the rain in the open over a long time and in a gust's peak, and under a roof; each over the drive
+ * (positive: the rain is the louder of the two), and in how many of the octaves 250 Hz…8 kHz the rain lies above
+ * the drive (there it covers it).
  * Vehicle renders are kept in <outDir>/vehicles.json and reused (they change only with the vehicles' sounds:
  * `--fresh` renders them again), so after a change of the rain only Node runs.
  * `--wet` also renders each vehicle with the rain in Chrome and gives what is heard after the compressor, dry and
- * in the rain: how much the rain adds to the whole.
+ * in the rain: how much the rain adds to the whole. These are 3 s of the rain with whatever gust it had (±3 dB and
+ * more: a check that the chain agrees with the figures above, not figures to tune by), and they are of the build
+ * that was served: `--fresh` after a change of the rain.
  * Needs `vite preview` of a build (`URL`, default http://127.0.0.1:4193/) and Chrome on the GPU:
  *   ~/.local/opt/quality/gpurun.sh URL=… npx tsx tools/rain-mix.ts <outDir>
  */
