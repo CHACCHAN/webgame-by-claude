@@ -9,14 +9,18 @@ import type { BackendPref } from '../game/render/backendChoice';
 
 export type QualityLevel = 'low' | 'medium' | 'high' | 'ultra';
 
-/** how much smaller than the output the scene is drawn, per axis (`native`: full size, temporal anti-aliasing only) */
+/**
+ * How much smaller than the output the scene is drawn, per axis: FSR's modes by their ratios (`native`: full size,
+ * FSR 3's Native AA = temporal anti-aliasing only; `ultra`: FSR 1's Ultra Quality, 1.3×; then FSR 3's Quality 1.5×,
+ * Balanced 1.7×, Performance 2×).
+ */
 export type UpscaleMode = 'native' | 'ultra' | 'quality' | 'balanced' | 'performance';
-export const UPSCALE_SCALE: Record<UpscaleMode, number> = { native: 1, ultra: 0.77, quality: 0.67, balanced: 0.59, performance: 0.5 };
+export const UPSCALE_SCALE: Record<UpscaleMode, number> = { native: 1, ultra: 1 / 1.3, quality: 1 / 1.5, balanced: 1 / 1.7, performance: 1 / 2 };
 
 export interface Settings {
   quality: QualityLevel;
   resolutionScale: number;
-  /** the scene drawn smaller and upscaled (WebGPU: over time, which is also the anti-aliasing; WebGL 2: FSR 1) */
+  /** the scene drawn smaller and upscaled (WebGPU: FSR 3 over time, which is also the anti-aliasing; WebGL 2: FSR 1) */
   upscale: boolean;
   upscaleMode: UpscaleMode;
   /** sharpening after the upscale, 0 … 1 */

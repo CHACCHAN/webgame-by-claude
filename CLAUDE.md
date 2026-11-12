@@ -179,16 +179,29 @@ pending. `docs/PLAN.md` holds the design.
   it too; by night foliage is darker and greyer (`vegetationWeather(rain, dark)`: in headlights a bright-leaved
   crown stood like a green lamp). Counting and maps: `npx tsx tools/nature-count.ts`, `nature-map.ts`,
   `nature-probe.ts`.
-- Upscaler (settings アップスケーリング, off by default; `RenderHost` + `render/TemporalUpscaler.ts`): WebGPU draws the
-  scene at 50–100 % with a jittered camera into three targets (colour, `velocity`, `reactive`) and gathers the frames
-  at the output's size (three.js' `TAAUNode` with our resolve; SMAA off, RCAS after); the WebGL 2 backend uses FSR 1.
+- Upscaler (settings アップスケーリング, off by default; `RenderHost` + `render/sceneUpscale.ts`; changed 11-12 on the
+  owner's word, v2.2): on WebGPU the scene is drawn at 50–100 % (FSR's ratios 1.3 / 1.5 / 1.7 / 2) into three
+  targets (colour, `velocity`, `reactive`) and `@pmndrs/upscaler` 0.5.0 (MIT; FSR 2/3-style temporal upscaling as
+  compute passes on the game's own device, no frame generation; its `UpscalerNode` unmodified, `SceneUpscaler`
+  extends it) jitters the camera inside `pipeline.render()`, gathers the frames and sharpens (its RCAS; SMAA off).
+  The WebGL 2 backend uses three.js' `FSR1Node`. Against our old resolve (three's `TAAUNode`) it has clean edges
+  at speed and a stiller picture, is softer in moving textures and costs 0.6 ms (1080p) / 2.1 ms (4K) more.
+  The motion vectors' projection is `steadyProjection`, one matrix for the page's life, copied from the camera
+  before each render: never read `camera.projectionMatrix` inside the render for anything that must hold still.
+  The package's pre-exposure is fixed (`PRE_EXPOSURE` 0.01): its auto-exposure dimmed the lamps and their bloom.
   What new scene content must respect: a see-through material without depth (`transparent && !depthWrite`) writes no
-  motion vector and marks the reactive mask by its opacity or light (`userData.reactive = 0` for wide soft layers);
-  a material with its own `positionNode` on opaque geometry must also assign `positionPrevious` (`instancedMaterial`
-  does), or its motion vectors lie and it smears; shaders are precompiled only through `RenderHost.precompile`
-  (the scene pass' targets, and the unjittered projection for the motion vectors). Check a change with
-  `SET='{"upscale":true,"upscaleMode":"quality"}' MOVING=200 node tools/shots.cjs <label>` next to a native run, and
-  `~/.local/opt/quality/flicker.cjs` (a still scene must hold still).
+  motion vector and marks the reactive mask by its opacity or light (`userData.reactive = 0` for wide soft layers;
+  a thin additive thing that is elsewhere every frame needs more than 1: the rain has 2, 4 made it bolder than
+  native); a material with its own `positionNode` on opaque geometry must also assign `positionPrevious`
+  (`instancedMaterial` does), or its motion vectors lie and it smears; shaders are precompiled only through
+  `RenderHost.precompile` (the scene pass' targets, the unjittered projection, and the upscaler's own pipelines
+  waited for); a mip-mapped texture sampled plainly in the scene pass gets a mip bias while the upscaler is on
+  (`biasSceneTextures`): data textures are read with `textureLoad`. Check a change with
+  `SET='{"upscale":true,"upscaleMode":"quality"}' MOVING=200 node tools/shots.cjs <label>` next to a native run,
+  `~/.local/opt/quality/flicker.cjs` (a still scene must hold still), and `gpu-errors.cjs` / `backend-fallback.cjs`
+  with the same `SET`; `?gputime` gives `window.__upscaler()` and `__textureBias`, `perf-pass.cjs` lists
+  `upscaler: <pass>`. On a package update: `Upscaler.isSupported`, `prepare()`, `settings`, `gpuTimings`, and that
+  no shader is built in a race (`~/.local/opt/quality/fsr3/tools/builds.cjs`).
 - Own 3D models (no third-party assets): Blender Python scripts built by `BLENDER=<bin> node tools/blender-models.cjs
   <trains|cars|props|creatures|nature> [ids] [--render [dir]]` (Blender 5.2 headless → GLB → glTF-Transform: meshopt, WebP;
   trains also palette textures). Scenery: `tools/blender/props/<id>.py` → `public/models/props/<id>.glb`; size,

@@ -82,6 +82,10 @@ export class Rain {
     mat.positionNode = head.sub(dir.mul(end).mul(length(uVel).mul(0.012).add(0.55)));
     const alpha = varying(open.mul(smoothstep(10, 34, length(p.xz)).oneMinus()).mul(end.mul(0.7).oneMinus()));
     mat.colorNode = vec4(uniform(new THREE.Color('#9fb2cc')).mul(alpha).mul(0.35).mul(this.uIntensity), 1);
+    // (the upscaler's reactive mask, RenderHost `surfaceReactive`: a streak is somewhere else every frame, so even a
+    // faint one is most of its pixel; by its light alone the far and the fading ones were averaged away, 0.6 of
+    // native's streak pixels; at 4 they stood bolder than native and left a copy behind, 1.4-1.6 of them; at 2: 0.9-1.2)
+    mat.userData.reactive = 2;
     this.mesh = new THREE.LineSegments(geo, mat);
     this.mesh.frustumCulled = false;
     this.mesh.renderOrder = 6;

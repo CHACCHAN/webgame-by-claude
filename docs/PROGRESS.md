@@ -2009,3 +2009,36 @@ on road and ground only: a far lamp lit nothing but its pool on the asphalt.
   dawn (before and after alike); the exhaust's puffs read as white balls behind the car at dawn.
 - Deployed 11-12 as v2.1.1 (bundle `index-D1rLr9WI.js`): the same bundle at the local and the public address,
   `/api/content` says 2.1.1, leaderboard 200, a film's range request 206 through the tunnel.
+
+## Release 2.2 (11-12): the upscaler is FSR 3 on WebGPU; the exhaust's white balls
+
+**Upscaler** (the owner's request of 11-12; agent). WebGPU: `@pmndrs/upscaler` 0.5.0 (MIT; an independent
+implementation of FSR 2/3's temporal upscaling as compute passes on the game's own device, no frame generation)
+replaces our resolve on three's `TAAUNode` (`render/sceneUpscale.ts`; `TemporalUpscaler.ts` is gone; the B2
+entry above describes the old one). WebGL 2 keeps three.js' `FSR1Node`. Modes by FSR's ratios (1.3 / 1.5 / 1.7 /
+2; the shown percentages are the same). The settings row says which one runs. The package's pre-exposure is
+fixed at 0.01 (its auto-exposure dimmed the lamps' glow by 20–35 %); the rain marks the reactive mask twice as
+strongly. CLAUDE.md "Upscaler".
+- The agent's numbers (RX 5700 XT, quality mode, load next to each in its report): fine detail at 200 km/h
+  (mean |picture − 2 px blur|, six viewpoints) FSR 3 1.38–3.21, old upscaler 1.92–4.27, native 2.37–5.88: softer
+  in moving textures; edges clean where the old one stair-stepped; a still picture's flicker 0.005–0.013 %
+  (night) / 0.09–0.14 % (dawn) of pixels against the old 0.03–0.07 / 0.17–0.44; night brightness 0.988 of
+  native. GPU time (`perf-pass`): upscale passes 0.94 ms at 1080p (old 0.34), 3.54 ms at 4K (old 1.44); the
+  whole frame at 4K: native 20.7, old 16.2, FSR 3 18.0 ms. Device-loss fallback with the upscaler on: ok.
+- Verified by me on the merged tree (main with the far light + this + the exhaust): tsc; vitest 225; build;
+  `gpu-errors` 0 in all four (WebGPU / WebGL 2 × upscaler off / on) and the race picture with it on; shaders
+  built per stage with it on: racing 0, as before (load 88 / title 16 / garage 18 / race start 19 / restart 6;
+  load 4); 32 moving pictures (140 km/h, Oboro and Kirifuri, night and dawn) next to the old upscaler's on the
+  same views: the lamp field and the far shade look the same under both, no smear; a still night scene's
+  flicker 0.07–0.08 % of pixels over 8/255 (medium, Oboro; the agent's lower figure was on the autobahn).
+- Not verified: E2E (no spec touches it); modes other than quality beyond switching; phones, other GPUs and
+  browsers; thin lines over time in video; a real device loss.
+- For the owner: softer at speed and 0.6 ms (1080p) / 2.1 ms (4K) dearer than the old one, cleaner edges and a
+  stiller picture; sharpness 0.8 recovers a little (default left at 0.5). Off by default as before.
+
+**Exhaust.** The white balls behind a moving car (seen in the course select's films, brightest at dawn) were
+the exhaust's puffs: thinned out with speed in number only, a few a second at full opacity. What is seen now
+falls with the speed (`fx/Exhaust.ts` `exhaustSeen`: half at 22 km/h, none from 90 km/h); pulling away is still
+a plume. Verified: 700 pictures of Kirifuri's start at dawn next to the same frames before
+(`~/.local/opt/wt/far/drive2/exhaust-before-after.jpg`). The tyres' smoke in a slide is untouched (it is meant
+to be seen). The films still show the balls until they are recorded again.
