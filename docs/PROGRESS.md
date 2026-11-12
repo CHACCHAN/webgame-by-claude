@@ -2153,6 +2153,18 @@ to be seen). The films still show the balls until they are recorded again.
 - Not verified: the flash watched running (stills at fixed moments only); rain and dawn pictures of the lamp;
   quality low / medium; phones; frame cost and video memory of the new props (no paired run: the machine was
   busy with three agents; the earlier figure: +4.4 MB of downloads); E2E.
-- **The course select's films are from before all of today's changes** (props, lamp field, exhaust, Kirifuri's
-  sun): being recorded again after this deploy.
+- **Deployed 11-12 as v2.4.0** (bundle `index-DOXObXix.js`, local = public; leaderboard API 200; `/api/content`
+  says 2.4.0; the public `wind_turbine.glb` is the new one, 249 760 bytes).
+
+## v2.4.1 (11-12): the course select's four films recorded again
+
+- The films were from before the day's changes (props, the lamp field, the exhaust's white balls, Kirifuri's
+  morning sun; the owner 11-12: together with the props). Recorded from the v2.4.0 build with
+  `tools/course-clip.cjs` (hayate, ultra, 960×540 at 1.5; Oboro night 3427 pictures, Kirifuri dawn 2904, Tenrou
+  night 2516, autobahn dawn 5252; no page errors) and encoded with `course-clip-encode.sh` (720p, CRF 34:
+  12.6 / 11.0 / 7.1 / 21.0 MB). Raw frames: `~/.local/opt/wt/clips/raw2`.
+- Verified: eight frames of the Oboro film looked at (no white balls behind the car, the new props); the course
+  select on the GPU with each film at 15 % and 60 % (`~/.local/opt/quality/cmp/rel241/sheet.jpg`: the films play,
+  the relief's ring is where the film's car is, no page errors); tsc, vitest 236.
+- Not verified: the films watched whole; phones.
 
