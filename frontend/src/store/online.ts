@@ -6,7 +6,7 @@ import { useApp } from './app';
 import { useSettings } from './settings';
 import { parseImpairment, type NetTransport } from '../game/net/transport';
 import { hideRoomLineup, lobbyChannel, lobbyRoom, previewCar, showRoomLineup } from './lobby';
-import { heardLoad, LoadTeller, nextWaits, readLoad, type Waiting } from '../game/net/roomWait';
+import { heardLoad, LoadTeller, nextAbsent, nextWaits, readLoad, type Waiting } from '../game/net/roomWait';
 import type { CarId } from '../game/vehicle/carSpecs';
 import type { CourseId } from '../game/track/courses';
 import type { Game } from '../game/Game';
@@ -53,6 +53,8 @@ interface OnlineState {
   waits: Record<number, Waiting>;
   /** the members on the room's channel (null: not known here, no live connection) */
   present: number[] | null;
+  /** loaded members who are not on it, since when (game/net/roomWait.ts) */
+  absent: Record<number, number>;
   set: (patch: Partial<OnlineState>) => void;
 }
 
@@ -68,8 +70,12 @@ export const useOnline = create<OnlineState>((set) => ({
   loadingFor: null,
   waits: {},
   present: null,
+  absent: {},
   set: (patch) => set(patch),
 }));
+
+// for probes, as `__app` and `__game` are
+(window as unknown as { __online?: unknown }).__online = useOnline;
 
 /** server clock − local clock (ms), taken from the HTTP exchange with the shortest round trip */
 let clockOffset = 0;
@@ -271,7 +277,7 @@ export async function leaveRoom(why: string | null = null) {
   channel = null;
   pusher?.disconnect();
   pusher = null;
-  st().set({ room: null, realtime: 'off', error: why, notice: null, waits: {}, present: null });
+  st().set({ room: null, realtime: 'off', error: why, notice: null, waits: {}, present: null, absent: {} });
   gameHolder.game?.remotes.clear();
   // back to the player's own conditions
   const tod = useSettings.getState().timeOfDay;
@@ -286,7 +292,7 @@ export async function leaveRoom(why: string | null = null) {
  */
 async function enterRoom(room: RoomState) {
   const game = gameHolder.game;
-  st().set({ room, notice: null, waits: nextWaits({}, room.players, Date.now()), present: null });
+  st().set({ room, notice: null, waits: nextWaits({}, room.players, Date.now()), present: null, absent: {} });
   const me = room.players.find((p) => p.id === st().player?.id);
   if (me) st().set({ carId: me.car_id, carColor: me.color ?? null });
   hookGame();
@@ -378,9 +384,8 @@ async function reportLoaded() {
   reporting = true;
   try {
     applyRoom(await timed(() => api.rooms.setLoaded(player, room.code, room.track_id)));
-  } catch (e) {
-    // (the poll asks again; a room that is gone is its to tell)
-    if (!(e instanceof ApiError)) throw e;
+  } catch {
+    // (the poll comes back to it; a room that is gone is the poll's to tell)
   } finally {
     reporting = false;
   }
@@ -396,7 +401,8 @@ function tellLoad(progress: number) {
 function readPresence() {
   const ids: number[] = [];
   channel?.members.each((m: { id: string }) => ids.push(Number(m.id)));
-  st().set({ present: channel?.subscribed ? ids : null });
+  const present = channel?.subscribed ? ids : null;
+  st().set({ present, absent: nextAbsent(st().absent, st().room?.players ?? [], present, Date.now()) });
 }
 
 function connectRealtime(code: string) {
@@ -431,14 +437,14 @@ function connectRealtime(code: string) {
       });
       pusher.connection.bind('state_change', (s: { current: string }) => {
         if (s.current === 'connected') st().set({ realtime: channel?.subscribed ? 'live' : 'connecting' });
-        if (s.current === 'unavailable' || s.current === 'failed') st().set({ realtime: 'failed', present: null });
+        if (s.current === 'unavailable' || s.current === 'failed') st().set({ realtime: 'failed', present: null, absent: {} });
       });
       channel = pusher.subscribe(`presence-room.${code}`) as PresenceChannel;
       channel.bind('pusher:subscription_succeeded', () => {
         st().set({ realtime: 'live' });
         readPresence();
       });
-      channel.bind('pusher:subscription_error', () => st().set({ realtime: 'failed', present: null }));
+      channel.bind('pusher:subscription_error', () => st().set({ realtime: 'failed', present: null, absent: {} }));
       channel.bind('pusher:member_added', readPresence);
       channel.bind('pusher:member_removed', readPresence);
       channel.bind('room.updated', (data: { room: RoomState }) => applyRoom(data.room));
@@ -466,7 +472,7 @@ export function applyRoom(room: RoomState) {
     void leaveRoom(ROOM_REMOVED);
     return;
   }
-  st().set({ room, waits: nextWaits(st().waits, room.players, Date.now()) });
+  st().set({ room, waits: nextWaits(st().waits, room.players, Date.now()), absent: nextAbsent(st().absent, room.players, st().present, Date.now()) });
   announce(prev, room);
   lobbyRoom(room, selfId);
   const app = useApp.getState();

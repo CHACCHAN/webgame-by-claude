@@ -225,11 +225,14 @@ export function AccountNotice() {
  */
 export function RoomNotice() {
   const notice = useOnline((s) => s.notice);
+  // (while the new course is being built the word stays: its time counts from the return to the room, where it
+  // says why the 準備完了 is gone)
+  const loading = useApp((s) => !!s.loading);
   useEffect(() => {
-    if (!notice) return;
+    if (!notice || loading) return;
     const t = setTimeout(dismissRoomNotice, NOTICE_MS);
     return () => clearTimeout(t);
-  }, [notice]);
+  }, [notice, loading]);
   if (!notice) return null;
   const course = notice.course && COURSES[notice.course];
   const title = course

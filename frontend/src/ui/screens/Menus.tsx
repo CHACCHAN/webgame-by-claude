@@ -408,9 +408,10 @@ export function CoursesScreen() {
 /**
  * The course select itself: the list, the selected course's words and figures, the film of a run with the relief
  * over it. The course select screen is this, and so is an online room's change of course (`plain`: the words
- * without the figures; `current`: the room's course, marked in the list).
+ * without the figures; `current`: the room's course, marked in the list; `over`: it stands over the screen that
+ * opened it, which waits hidden under it).
  */
-export function CourseSelect({ head, initial, current, plain, confirm = '決定', onChoose, onBack }: { head: ReactNode; initial: CourseId; current?: CourseId; plain?: boolean; confirm?: string; onChoose: (id: CourseId) => void; onBack: () => void }) {
+export function CourseSelect({ head, initial, current, plain, over, confirm = '決定', onChoose, onBack }: { head: ReactNode; initial: CourseId; current?: CourseId; plain?: boolean; over?: boolean; confirm?: string; onChoose: (id: CourseId) => void; onBack: () => void }) {
   const [i, setI] = useState(Math.max(0, COURSE_ORDER.indexOf(initial)));
   const choose = (id: CourseId) => {
     sfx.confirm();
@@ -426,7 +427,7 @@ export function CourseSelect({ head, initial, current, plain, confirm = '決定'
   const best = plain ? Infinity : Math.min(...Object.values(loadCarBests(id)).filter((v): v is number => typeof v === 'number'));
   const grip = Math.round(c.surface.grip * 100);
   return (
-    <div className={`screen courses crs${plain ? ' crs-plain' : ''}`}>
+    <div className={`screen courses crs${plain ? ' crs-plain' : ''}${over ? ' room-over' : ''}`}>
       {head}
       <div className="cond-list crs-list focus-box stagger">
         {COURSE_ORDER.map((cid, k) => (

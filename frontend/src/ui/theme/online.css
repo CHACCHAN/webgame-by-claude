@@ -31,6 +31,11 @@
 .ol-code-big small { grid-column: 1 / -1; font-family: var(--font-display); font-stretch: var(--w-norm); font-weight: 500; font-size: var(--fs-xs); letter-spacing: 0.3em; color: var(--cyan); }
 .ol-code-big b { font-family: var(--font-display); font-stretch: var(--w-cond); font-weight: 800; font-size: 3.6rem; line-height: 1.05; letter-spacing: 0.26em; text-shadow: var(--glow-cyan-text); user-select: text; }
 .ol-code-big span { font-size: var(--fs-s); color: var(--muted); }
+/* the host's change of course or conditions: the course select / the conditions list as a screen over the room
+   (or the results), which waits hidden under it, as under the car select (picker.css) */
+.room-over { z-index: 6; }
+.overlay:has(> .room-over) > .screen:not(.room-over) { visibility: hidden; }
+
 /* the room's course and its time & weather: what they are, and for the host the way to change each */
 .ol-setup { display: grid; grid-template-columns: 1.3fr 1fr; gap: 0.4rem; }
 .ol-set { --c: var(--cut-s); --tex: none; --fill: rgb(var(--c-ink-2) / 0.55); display: flex; align-items: center; gap: 0.6rem; min-width: 0; padding: 0.4rem 0.8rem; text-align: left; }

@@ -49,10 +49,29 @@ export function nextWaits(prev: Readonly<Record<number, Waiting>>, players: read
   return out;
 }
 
-/** a load that has told nothing new for this long is taking long: the host is offered to take the member out */
-export const STALLED_MS = 30_000;
+/**
+ * a load that has told nothing new for this long is taking long: the host is told so and offered to take the member
+ * out (an offer only: a course takes 5–20 s on a desktop, a step of it can take longer than that on a phone)
+ */
+export const STALLED_MS = 45_000;
 
 export const stalled = (w: Waiting | undefined, now: number) => !!w && now - Math.max(w.since, w.heard) > STALLED_MS;
+
+/**
+ * The members who are not on the room's channel though their game has loaded the course (the game closed, the
+ * connection lost), and since when. `present`: the ids on the channel (null: not known here, nobody is called
+ * absent). A game that has just loaded joins the channel a moment later: see `GONE_MS`.
+ */
+export function nextAbsent(prev: Readonly<Record<number, number>>, players: readonly WaitMember[], present: readonly number[] | null, now: number): Record<number, number> {
+  const out: Record<number, number> = {};
+  if (present) for (const p of players) if (p.loaded && !present.includes(p.id)) out[p.id] = prev[p.id] ?? now;
+  return out;
+}
+
+/** absent for this long: gone, as far as the room can tell (the host is offered to take the member out) */
+export const GONE_MS = 8_000;
+
+export const gone = (since: number | undefined, now: number) => since !== undefined && now - since > GONE_MS;
 
 /** `client-load` as received: the percent, or null for anything that is not one. */
 export function readLoad(data: unknown): number | null {

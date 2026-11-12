@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { heardLoad, LoadTeller, nextWaits, readLoad, stalled, STALLED_MS, startHold, type WaitMember } from './roomWait';
+import { gone, GONE_MS, heardLoad, LoadTeller, nextAbsent, nextWaits, readLoad, stalled, STALLED_MS, startHold, type WaitMember } from './roomWait';
 
 const m = (id: number, loaded: boolean, ready: boolean): WaitMember => ({ id, name: `P${id}`, loaded, ready });
 
@@ -46,6 +46,24 @@ describe('who is loading', () => {
     expect(stalled(told[2], STALLED_MS + 5000)).toBe(false);
     expect(stalled(told[2], 2 * STALLED_MS + 1)).toBe(true);
     expect(stalled(undefined, 1e9)).toBe(false);
+  });
+});
+
+describe('who is gone', () => {
+  it('is a loaded member who stays off the channel; a loading one is not there yet, and without a channel nobody is', () => {
+    const players = [m(1, true, false), m(2, true, true), m(3, false, false)];
+    expect(nextAbsent({}, players, null, 0)).toEqual({});
+    let a = nextAbsent({}, players, [1], 1000);
+    expect(a).toEqual({ 2: 1000 });
+    expect(gone(a[2], 1000 + GONE_MS)).toBe(false);
+    a = nextAbsent(a, players, [1], 1000 + GONE_MS + 1);
+    expect(a).toEqual({ 2: 1000 });
+    expect(gone(a[2], 1000 + GONE_MS + 1)).toBe(true);
+    // back on the channel: forgotten; away again: counted from then
+    a = nextAbsent(a, players, [1, 2], 20_000);
+    expect(a).toEqual({});
+    expect(nextAbsent(a, players, [1], 30_000)).toEqual({ 2: 30_000 });
+    expect(gone(undefined, 1e9)).toBe(false);
   });
 });
 

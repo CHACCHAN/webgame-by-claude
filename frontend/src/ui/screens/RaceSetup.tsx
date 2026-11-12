@@ -55,9 +55,10 @@ export function ConditionsScreen() {
 /**
  * The list of conditions itself, with the selected one's words and figures: the time & weather screen is this, and
  * so is an online room's change of conditions (`plain`: the words without the figures; `current`: the room's,
- * marked in the list). `onLook`: the condition the cursor rests on, for the scene behind to show.
+ * marked in the list; `over`: it stands over the screen that opened it). `onLook`: the condition the cursor rests
+ * on, for the scene behind to show.
  */
-export function ConditionsSelect({ head, course, initial, current, plain, confirm = '決定', onLook, onChoose, onBack }: { head: ReactNode; course: CourseInfo; initial: TimeOfDay; current?: TimeOfDay; plain?: boolean; confirm?: string; onLook: (tod: TimeOfDay) => void; onChoose: (tod: TimeOfDay) => void; onBack: () => void }) {
+export function ConditionsSelect({ head, course, initial, current, plain, over, confirm = '決定', onLook, onChoose, onBack }: { head: ReactNode; course: CourseInfo; initial: TimeOfDay; current?: TimeOfDay; plain?: boolean; over?: boolean; confirm?: string; onLook: (tod: TimeOfDay) => void; onChoose: (tod: TimeOfDay) => void; onBack: () => void }) {
   const [i, setI] = useState(Math.max(0, CONDITIONS.findIndex((c) => c.id === initial)));
   const look = useRef(onLook);
   look.current = onLook;
@@ -79,7 +80,7 @@ export function ConditionsSelect({ head, course, initial, current, plain, confir
   const sel = CONDITIONS[i];
   const grip = Math.round(course.surface.grip * (sel.id === 'rain' ? WET_GRIP : 1) * 100);
   return (
-    <div className={`screen cond${plain ? ' cond-plain' : ''}`}>
+    <div className={`screen cond${plain ? ' cond-plain' : ''}${over ? ' room-over' : ''}`}>
       {head}
       <div className="cond-list focus-box stagger">
         {CONDITIONS.map((c, k) => (
