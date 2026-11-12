@@ -12,6 +12,7 @@ import { desertMaterial, type LakeMarks } from './airbaseGround';
 import { addSlab, addStrip, PAVE_APRON, PAVE_RUNWAY, PAVE_TAXI, pavementGeometry, pavementMaterial, runwayNumbers } from './airbasePavement';
 import { shadeScene, type ShadeCaster } from './farShade';
 import { makeGlowTexture } from './textures';
+import { beaconPulse, buildBeacons } from './beacons';
 import { parkedJets } from './JetModel';
 import { CAR_SPECS, type CarId } from '../vehicle/carSpecs';
 import type { Float, Vec3 } from './tslNoise';
@@ -27,7 +28,8 @@ import type { Float, Vec3 } from './tslNoise';
  *
  * Lights: the apron's and the finish's masts are lamps of the course's lamp field (their pools on the ground); the
  * airfield's own lights (runway edge, threshold, approach with its running flash, taxiway blue, the tower's beacon,
- * lanterns along the lakebed runways) are sprites that light nothing, as from a cockpit.
+ * lanterns along the lakebed runways) are sprites that light nothing, as from a cockpit. The red obstruction lights
+ * of the roofs and of the tower's mast are the game's own for tall things (`render/beacons.ts`).
  */
 
 /** the pavement's height over the ground: slabs, and the strips that run onto them a little lower */
@@ -66,6 +68,11 @@ export function buildAirbaseScenery(track: Track, terrain: TerrainData, quality:
   const nightEmissive: THREE.MeshStandardMaterial[] = [];
   const lamps: Lamp[] = [];
   const lights: Light[] = [];
+  const roofLamps: THREE.Vector3[] = [], mastLamps: THREE.Vector3[] = [];
+  const at = (a: number, b: number, up: number) => {
+    const p = place(a, b, up);
+    return new THREE.Vector3(p.x, p.y, p.z);
+  };
   const casters: ShadeCaster[] = [];
   const ground = (x: number, z: number) => terrain.heightAt(x, z);
   /** a place of the airfield's frame in the world, `up` metres above the ground */
@@ -175,8 +182,7 @@ export function buildAirbaseScenery(track: Track, terrain: TerrainData, quality:
     const open = k === 1 || k === 4;
     put(open ? lit : solid, new THREE.BoxGeometry(0.5, HH * 0.8, HW * 0.86), open ? '#ffffff' : '#33363a', a, hangarB - HD / 2 - 0.1, HH * 0.4);
     casters.push({ x: place(a, hangarB).x, z: place(a, hangarB).z, r: HW / 2, top: place(a, hangarB).y + HH + 6 });
-    lights.push({ ...place(a - HW / 2, hangarB - HD / 2, HH + 1), color: RED, size: 2.6, anim: 0 });
-    lights.push({ ...place(a + HW / 2, hangarB - HD / 2, HH + 1), color: RED, size: 2.6, anim: 0 });
+    for (const k of [-1, 1]) roofLamps.push(at(a + (k * HW) / 2, hangarB - HD / 2, HH + 1));
   }
   // the control tower: a shaft, the cab's glass, its roof and aerials
   const towerA = fld.apron.a0 + 395, towerB = fld.apron.b1 + 150, TOWER = 38;
@@ -186,7 +192,7 @@ export function buildAirbaseScenery(track: Track, terrain: TerrainData, quality:
   put(solid, new THREE.CylinderGeometry(8, 8, 0.7, 8), '#3c3e42', towerA, towerB, TOWER + 5.9);
   put(solid, new THREE.CylinderGeometry(0.12, 0.12, 7, 6), '#8a8d92', towerA, towerB, TOWER + 9.7);
   casters.push({ x: place(towerA, towerB).x, z: place(towerA, towerB).z, r: 6, top: place(towerA, towerB).y + TOWER + 6 });
-  lights.push({ ...place(towerA, towerB, TOWER + 13.4), color: RED, size: 3.4, anim: 2 });
+  mastLamps.push(at(towerA, towerB, TOWER + 13.4));
   // (an airfield's beacon: white and green in turn; a military field's shows two whites)
   lights.push({ ...place(towerA, towerB, TOWER + 7), color: WHITE, size: 9, anim: 5.0 });
   lights.push({ ...place(towerA, towerB, TOWER + 7), color: WHITE, size: 9, anim: 5.07 });
@@ -205,7 +211,7 @@ export function buildAirbaseScenery(track: Track, terrain: TerrainData, quality:
     put(solid, new THREE.BoxGeometry(70, 22, w), '#74736d', a, b, 11);
     put(solid, new THREE.CylinderGeometry(35.4, 35.4, w + 1.2, 18, 1).rotateX(Math.PI / 2).scale(1, 0.22, 1), '#4e5157', a, b, 22);
     casters.push({ x: place(a, b).x, z: place(a, b).z, r: w / 2, top: place(a, b).y + 28 });
-    lights.push({ ...place(a, b, 31), color: RED, size: 3, anim: 0 });
+    roofLamps.push(at(a, b, 31));
   }
 
   // ---------------------------------------------------------------- lamps (the course's lamp field) and their masts
@@ -288,6 +294,10 @@ export function buildAirbaseScenery(track: Track, terrain: TerrainData, quality:
   }
 
   const field = fieldLights(lights);
+  // the red obstruction lights (`render/beacons.ts`, as on every tall thing in the game): steady on the hangars'
+  // roofs, flashing on the tower's mast
+  const roofBeacons = buildBeacons(roofLamps), mastBeacons = buildBeacons(mastLamps);
+  for (const b of [roofBeacons, mastBeacons]) if (b.object) group.add(b.object);
   group.add(field.object);
   // (the game dims what glows by the time of day through the materials in `nightEmissive`: this one stands for the sprites)
   const dial = new THREE.MeshStandardMaterial({ emissiveIntensity: 1 });
@@ -304,6 +314,10 @@ export function buildAirbaseScenery(track: Track, terrain: TerrainData, quality:
     update(time) {
       field.uniforms.uTime.value = time;
       field.uniforms.uIntensity.value = 0.25 + 0.75 * Math.min(1, dial.emissiveIntensity);
+      // (a photocell, as the wind turbines': on at night and in the rain's dark, off at dawn)
+      const dark = Math.min(1, Math.max(0, (dial.emissiveIntensity - 0.3) / 0.4));
+      roofBeacons.level.value = dark;
+      mastBeacons.level.value = dark * beaconPulse(time);
     },
   };
 }

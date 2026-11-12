@@ -16,8 +16,35 @@ export interface CreatureInfo {
   liveries: { name: string; swatch: string; gain?: [number, number, number]; plain?: string; metal?: boolean }[];
   /** ground covered per cycle of the scuttle animation (m) */
   stride: number;
+  /**
+   * Flight (players' reports, v2.1.0: thrown into the air, the cockroach kept its wings shut): with no leg on the
+   * ground for `after` s the wing cases open and the hind wings come out from under them, unfold and beat, until
+   * a leg has been down for `settle` s. Looks and sound only: the sim knows nothing of it. Per pair of wings, in
+   * degrees: swung out about the vertical, held up, beaten up and down, feathered; `unfold` = how many times wider
+   * the hind wings' fan is in flight than folded (the model has them folded: the bone is scaled across the chord).
+   * The angles are the model's (tools/blender/creatures/roach_anatomy.py FLIGHT / HIND, whose check renders pose
+   * the wings by the same sum): a vitest compares the two.
+   */
+  flight: {
+    tegmen: WingAngles;
+    hind: WingAngles & { unfold: number };
+    /** beats a second (a real one's 25–30 would stand still at 60 frames a second) */
+    rate: number;
+    after: number;
+    settle: number;
+    /** seconds to open and to fold */
+    open: number;
+    fold: number;
+  };
   /** car list figures */
   figures: { legs: number; topSpeed: number; zeroToHundred: number; bodyLength: number };
+}
+
+export interface WingAngles {
+  sweep: number;
+  lift: number;
+  beat: number;
+  twist: number;
 }
 
 export const ROACH_INFO: CreatureInfo = {
@@ -28,6 +55,15 @@ export const ROACH_INFO: CreatureInfo = {
     { name: '黄金のゴキブリ', swatch: '#e2b632', plain: '#e8b54a', metal: true },
   ],
   stride: 1.6,
+  flight: {
+    tegmen: { sweep: 98, lift: 32, beat: 6, twist: 0 },
+    hind: { sweep: 76, lift: 0, beat: 28, twist: 14, unfold: 3.6 },
+    rate: 14,
+    after: 0.1,
+    settle: 0.25,
+    open: 0.22,
+    fold: 0.4,
+  },
   figures: { legs: 6, topSpeed: 1225, zeroToHundred: 0.9, bodyLength: 3.4 },
 };
 

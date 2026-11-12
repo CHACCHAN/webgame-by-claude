@@ -920,7 +920,7 @@ export function buildAutobahnScenery(track: Track, terrain: TerrainData, quality
     style: 'autobahn',
   });
   group.add(clutter);
-  const turbines = buildTurbines(terrain);
+  const turbines = buildTurbines(terrain, nightEmissive);
   group.add(turbines.group);
 
   // ---------------------------------------------------------------- traffic

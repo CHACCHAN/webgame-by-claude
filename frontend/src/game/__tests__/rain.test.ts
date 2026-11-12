@@ -4,8 +4,14 @@ import { coverShare, rainBodyOf, RainSynth, type RainBody } from '../audio/rain'
 const RATE = 48000;
 
 /** render `seconds` of the rain; returns both ears and the RMS (dBFS) after the first `skip` seconds */
-function render(seconds: number, set: { level?: number; speed?: number; cover?: number; body?: RainBody; seed?: number }, skip = 2) {
+function render(
+  seconds: number,
+  set: { level?: number; speed?: number; cover?: number; body?: RainBody; seed?: number; gusts?: number; only?: 'outside' | 'body' | 'spray' },
+  skip = 2,
+) {
   const s = new RainSynth(RATE, set.seed ?? 1);
+  s.gusts = set.gusts ?? 1;
+  if (set.only) s.layers = { outside: 0, body: 0, spray: 0, [set.only]: 1 };
   s.level = set.level ?? 1;
   s.speed = set.speed ?? 0;
   s.cover = set.cover ?? 0;
@@ -48,13 +54,35 @@ describe('rain sound', () => {
     expect(Math.max(...L.map(Math.abs))).toBe(0);
   });
 
-  it('stands still near the old rain\'s level, louder with speed, quieter under a roof', () => {
-    const still = render(20, {}).db;
-    // the filtered noise it replaced measured -24.6 dBFS (tools/rain-wav.ts); gusts move a 20 s stretch by a few dB
-    expect(still).toBeGreaterThan(-29);
-    expect(still).toBeLessThan(-20);
-    expect(render(20, { speed: 40 }).db).toBeGreaterThan(still + 2);
-    expect(render(20, { speed: 22, cover: 1 }).db).toBeLessThan(render(20, { speed: 22 }).db - 5);
+  it('is a bed under the drive: low standing, the spray heard with speed, lower in a train\'s cab and under a roof', () => {
+    // Levels with the gusts held still: with them a 20 s stretch lies ±3 dB by which gusts it happened to have.
+    // Until v2.1.1 the rain stood at −25.7 dBFS (the level of the filtered noise it replaced, −24.6) and these
+    // bounds were −29 … −20. But in the game's mix a car under power is −23 … −25 dB(A) and a commuter train at
+    // 60 km/h −35.5 (tools/rain-mix.ts): the rain was as loud as an engine at full throttle and 12 dB over the
+    // train (a player's report). The rain outside is 10 dB lower now, the spray 7 dB
+    const still = render(20, { gusts: 0 }).db;
+    expect(still).toBeGreaterThan(-37.5);
+    expect(still).toBeLessThan(-33.5);
+    // speed is heard in the spray, and the whole stays under an engine (200 km/h)
+    const fast = render(20, { speed: 55, gusts: 0 }).db;
+    expect(fast).toBeGreaterThan(still + 3);
+    expect(fast).toBeLessThan(-27);
+    // inside a train's cab the rain outside is lower still (the train's own sound is the quietest of all)
+    expect(render(20, { body: 'train', speed: 17, gusts: 0 }).db).toBeLessThan(still - 6);
+    expect(render(20, { speed: 22, cover: 1, gusts: 0 }).db).toBeLessThan(render(20, { speed: 22, gusts: 0 }).db - 5);
+    // the gusts move it around that level, by 6.6 dB at most
+    const gusty = render(20, {}).db;
+    expect(gusty).toBeGreaterThan(still - 7);
+    expect(gusty).toBeLessThan(still + 7);
+  });
+
+  it('gives each layer alone when asked (the tool measures them so)', () => {
+    const only = (layer: 'outside' | 'body' | 'spray') => render(6, { speed: 40, gusts: 0, only: layer }).db;
+    const all = render(6, { speed: 40, gusts: 0 }).db;
+    for (const l of ['outside', 'body', 'spray'] as const) expect(only(l)).toBeLessThan(all);
+    // at speed the spray is the larger part of a car's rain, the drops on its panels the detail
+    expect(only('spray')).toBeGreaterThan(only('outside') - 3);
+    expect(only('body')).toBeLessThan(only('outside'));
   });
 
   it('puts the two ears apart (a diffuse field, not one noise in the middle)', () => {

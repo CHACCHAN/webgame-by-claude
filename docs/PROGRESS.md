@@ -2068,3 +2068,116 @@ to be seen). The films still show the balls until they are recorded again.
   accepted as it is; the black horizontal lines are gone on their side (nothing was changed for them knowingly).
 - Still with agents, stopped twice by the usage limit: the cockroach's wings in the air (a model change: sheet to
   the owner first), the rain's loudness and a 雨音 setting.
+- **Deployed 11-12 as v2.2.1** (bundle `index-C-0J8al6.js`, local = public; leaderboard API 200; `/api/content`
+  says 2.2.1 with the maker and one link). Desk report `PVW7D6` closed. No E2E run for it.
+
+## v2.2.2 (11-12): the rain is a bed under the drive, and has a volume of its own
+
+- **Players' report through the desk** (`5WKASA`: the rain is too loud). Measured by the agent (dB(A), the game's
+  own chain rendered offline per vehicle, speed and state, `tools/rain-mix.ts`): the rain was louder than the
+  drive in 22 of 35 states under power (median +1.8 dB; a commuter train at 60 km/h +9.7, in a gust +15.6) and in
+  30 of 35 coasting. Cause: the new rain's level was matched to the old loop's figure, but the old loop was a hiss
+  at 4–8 kHz and the new rain is broad: at the same figure it had 4–9 dB more in 500 Hz – 2 kHz, where engines
+  and inverters sound. Changed (`audio/rain.ts`): `LEVEL` (the rain outside −10 dB, the spray −9 dB, the drops on
+  the body as they were), `OUTSIDE` per body (a train a further −6.5 dB: heard from the cab); the fallback noise
+  0.16 → 0.05. After: louder than the drive in 3 of 35 under power (E5 at 60, the cockroach at 60 / 120: vehicles
+  that are nearly silent there), median −7.9 dB; coasting 8 of 35, median −4.8 dB. Standing, the rain is 10 dB
+  under what it was (16 dB in a train): this departs from "keep the standing level"; `LEVEL.outside` is the one
+  number to raise if it turns out too faint.
+- **Settings 雨音** (`rainVolume`, サウンド's last row, steps of 10 %, default 100 % = the corrected level; a share
+  of the effects' volume): `AudioEngine.rain` bus; at 0 % no rain source runs at all. Stored settings without the
+  key read as 100 %.
+- Verified by me on the merged build: tsc; vitest 229; backend tests 62 (the desk's knowledge file 7477 bytes of
+  8192); `gpu-errors` 0 / 0 (WebGPU, WebGL 2); the agent's `setcheck.cjs` on the GPU (100 % → worklet running,
+  50 % → gain 0.5, 0 % → no source and silence, back to 100 % by keys → running again, a race started in the rain
+  at 0 % → no source; no page errors); one race picture looked at. By the agent: the tables above
+  (`~/.local/opt/wt/rainvol/before|after`).
+- Not verified: **anything by ear** (the pair to listen to: `new-runup.wav`, `new-train.wav` in both directories);
+  the fallback path without AudioWorklet in a browser; the new row on a phone; a whole lap's mix (music, rival,
+  squeal mask the rain further).
+- **Deployed 11-12 as v2.2.2** (bundle `index-Dc9qiaZ8.js`, local = public; leaderboard API 200; `/api/content`
+  says 2.2.2). Desk report `5WKASA` closed. E2E: the settings test alone, on an isolated stack (1 passed: the row
+  shows 100 %, a step down 90 % and is stored).
+- Also 11-12, with agents: the cockroach's wings are done on a branch (`worktree-agent-a4d9cc6c7fe2e6517`: model
+  script, GLB 901 → 950 kB, `flightStep` / `wingPose`, a flutter sound; sheet sent to the owner, merge on their
+  yes: a minor version); the owner's new requests: the wind turbine's night lamp is "a huge round red lamp" (the
+  props agent resumed: obstruction light, branch brought onto main), the host changes course and conditions in an
+  online room and everyone sees who is loading (`~/.local/opt/wt/ONLINE_BRIEF.md`); Edwards + fighters
+  (`EDWARDS_BRIEF.md`).
+
+## Release 2.3 (11-12): the cockroach opens its wings in the air
+
+- **Players' reports through the desk** (`V4TNGQ`, `4PHH4G`, `2V9D3R`: thrown into the air after a crash it does
+  not flap). A model change (agent): the old model had no hind wings and its wing cases were skinned to the
+  thorax. Now a bone per wing case (`wing_L/R`) and two hind wings folded under them (`hind_L/R`; opaque, on the
+  body's atlas: no new material, the liveries tint them), GLB 901 → 950 kB, 36 872 triangles, 61 bones. In the
+  game (`RoachModel.flightStep` / `wingPose`, `CreatureInfo.flight`): 0.1 s with no leg on the ground → the cases
+  open, the hind wings swing out, unfold and beat at 14 Hz; folded 0.25 s after the landing. A flutter and a low
+  drone while they are out (`BugSound.flight`). Sim, medals, stats unchanged.
+- The owner saw the sheet (`~/.local/opt/wt/roach/roach-wings-sheet.jpg`) and said to put it in (11-12, with the
+  props' sheets: "シート全部見たので入れていいよ").
+- Verified by me on the merged build: tsc; vitest 235 (new: `roachFlight.test.ts`); `gpu-errors` with the
+  cockroach twice in the garage 0 / 0 (WebGPU, WebGL 2); `roach-wings.cjs` on WebGPU and on WebGL 2 with the
+  golden livery (wings 0.00 before, 1.00 in the air, 0.00 after the landing; flutter gain 0 / 0.42 / 0; 0
+  errors); `paint-drawn.cjs roach` (all nine states drawn); the picture of the fall looked at.
+- Not verified: the flutter by ear; a real crash into a wall (the check lifts the body 9 m and drops it); online
+  (peers' wings stay shut by design: drawn from poses without a ground-contact flag; ghosts and the replay
+  likewise); the garage thumbnail was not made again (folded, it looks as before from that angle); no E2E.
+- Known: paused in mid-air the wings keep beating; from the chase camera the hind wings are edge-on for part of
+  the beat.
+- **Deployed 11-12 as v2.3.0** (bundle `index-jIVxcRFV.js`, local = public; leaderboard API 200; `/api/content`
+  says 2.3.0; the public `roach.glb` is the new one, 950 080 bytes). Desk reports `V4TNGQ`, `4PHH4G`, `2V9D3R` closed.
+
+## Release 2.4 (11-12): the thirteen props re-modelled; the turbines' obstruction lights
+
+- **The props** (agent, branch `worktree-agent-a0462d11d1fc0d277`; sheets sent 11-12, the owner: "シート全部見たので
+  入れていいよ"): street light, vending machine, curve mirror, bus stop, cone, torii, stone lantern, wind turbine,
+  sign gantry, emergency phone, village house, farmhouse, church: real construction (footings, base plates and
+  bolts, brackets, gutters) and used surfaces baked per model into one atlas by `tools/blender/props/prop_bake.py`
+  (one material = one draw call a prop). `public/models/props` 0.43 → 4.7 MB. Merged onto main by the agent
+  (one conflict, `TrackScenery.ts`, the vending machines' place and light: main's side taken).
+- **The owner on the live game (11-12)**: the wind turbine looked like the old one (it was: the branch was not in)
+  and its red lamp by night was "a huge round red lamp". It was a far light of `Environment.buildCityLights`
+  (up to 18 px with a wide glow = a 2–4 m ball on a turbine 100–170 m away, on the tower's axis above the nacelle,
+  a square-wave blink, each turbine at its own time, also drawn where no turbine stood). Now (agent): two lamps
+  with 0.3 m lenses on posts on the nacelle (in the model, lit through its emissive map) and `render/beacons.ts`:
+  one camera-facing quad per lamp, 6–12 px of a 1080-line screen at any distance, 30 soft flashes a minute, all
+  turbines together, lit while the road's lamps are (night and rain). The autobahn's turbines share it.
+  Sheet: `~/.local/opt/wt/models-props/sheets/wind_turbine_light.jpg` (before / after at 40 m, 300 m, 1.5 km;
+  sent to the owner).
+- Verified by me on the merged build: tsc; vitest 236; `gpu-errors` 0 / 0 / 0 (WebGPU, WebGL 2, WebGPU with the
+  upscaler); fixed viewpoints looked at: all four courses by night (32), Oboro and Tenrou at dawn (16), the same
+  two by night on the move with the upscaler (16) (`~/.local/opt/quality/cmp/rel240-a.jpg`, `-b.jpg`); the race
+  pictures of `gpu-errors` (the autobahn's new gantry over the start). By the agent: the new turbine is what is
+  drawn (Tenrou 9, autobahn 10 instances, no fallback), the lamp's views in the sheet, the lamp on WebGL 2.
+- Not verified: the flash watched running (stills at fixed moments only); rain and dawn pictures of the lamp;
+  quality low / medium; phones; frame cost and video memory of the new props (no paired run: the machine was
+  busy with three agents; the earlier figure: +4.4 MB of downloads); E2E.
+- **Deployed 11-12 as v2.4.0** (bundle `index-DOXObXix.js`, local = public; leaderboard API 200; `/api/content`
+  says 2.4.0; the public `wind_turbine.glb` is the new one, 249 760 bytes).
+
+## v2.4.1 (11-12): the course select's four films recorded again
+
+- The films were from before the day's changes (props, the lamp field, the exhaust's white balls, Kirifuri's
+  morning sun; the owner 11-12: together with the props). Recorded from the v2.4.0 build with
+  `tools/course-clip.cjs` (hayate, ultra, 960×540 at 1.5; Oboro night 3427 pictures, Kirifuri dawn 2904, Tenrou
+  night 2516, autobahn dawn 5252; no page errors) and encoded with `course-clip-encode.sh` (720p, CRF 34:
+  12.6 / 11.0 / 7.1 / 21.0 MB). Raw frames: `~/.local/opt/wt/clips/raw2`.
+- Verified: eight frames of the Oboro film looked at (no white balls behind the car, the new props); the course
+  select on the GPU with each film at 15 % and 60 % (`~/.local/opt/quality/cmp/rel241/sheet.jpg`: the films play,
+  the relief's ring is where the film's car is, no page errors); tsc, vitest 236.
+- Not verified: the films watched whole; phones.
+- **Deployed 11-12 as v2.4.1** (bundle `index-BE7An1Ro.js`, local = public, API 200) — **and the public address
+  still served the old films**: `/video/` answers `max-age=86400`, Cloudflare's edge had the morning's film
+  (`cf-cache-status: HIT`, age 9 h, the old length) while the track JSON came fresh: old film, new track.
+
+## v2.4.2 (11-12): the films are asked for with a stamp of their content
+
+- `ui/screens/courseFilms.json` (id → the first eight hex digits of the film's SHA-1, written by
+  `tools/course-clip-encode.sh`); `CourseRun` fetches `<id>.mp4|jpg|json?v=<stamp>`. New vitest
+  `courseFilms.test.ts`: every stamp is its film's, every film has one.
+- Verified: tsc; vitest 238; on the GPU the course select asks for all twelve files with their stamps, all answer
+  (200 / 206), the four films play, no page errors (`~/.local/opt/quality/cmp/rel242/filmreq.cjs`); `gpu-errors`
+  on WebGPU 0. After the deploy: see the line below.
+- **Deployed 11-12 as v2.4.2** (bundle `index-B4hwCPUr.js`, local = public; leaderboard API 200; `/api/content`
+  says 2.4.2; the public address answers the four stamped films with the lengths of the files in the tree).

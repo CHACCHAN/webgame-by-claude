@@ -33,8 +33,9 @@ const KINDS = {
   cars: { dir: 'tools/blender/cars', out: 'public/models/cars', palette: false, textureSize: 1024, big: {}, ids: ['hayate', 'raijin', 'shiden', 'supra', 'r34', 's15', 'cybertruck', 'u9'] },
   // the motorcycles: nodes steer / spin_f / spin_r stay apart (render/BikeModel.ts turns and spins them)
   bikes: { dir: 'tools/blender/bikes', out: 'public/models/bikes', palette: false, textureSize: 1024, big: {}, ids: ['nsr250r', 'ninjah2', 'hayabusa'] },
+  // (a prop's script bakes each of its textures at the size it should have, 2048 px at most: tools/blender/props/prop_bake.py)
   props: {
-    dir: 'tools/blender/props', out: 'public/models/props', palette: false, textureSize: 1024, big: {}, outDir: true,
+    dir: 'tools/blender/props', out: 'public/models/props', palette: false, textureSize: 2048, big: {}, outDir: true,
     ids: [
       'street_light', 'wind_turbine', 'curve_mirror', 'vending_machine', 'torii', 'stone_lantern', 'bus_stop', 'traffic_cone',
       // the autobahn's (their textures and the sign atlas: tools/blender/props/paint_autobahn.py)

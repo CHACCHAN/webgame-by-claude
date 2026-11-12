@@ -52,6 +52,12 @@ test('menu navigation, settings persistence and controls screen', async ({ page 
   await expect(page.locator('.app')).toHaveClass(/motion-off/);
   await motion.locator('button[aria-label="increase"]').click();
   await expect(page.locator('.app')).not.toHaveClass(/motion-off/);
+  // the rain has a volume of its own: full by default, a step down is kept
+  const rain = page.locator('.settings-list li', { hasText: '雨音' });
+  await expect(rain).toContainText('100%');
+  await rain.locator('button[aria-label="decrease"]').click();
+  await expect(rain).toContainText('90%');
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('touge-settings')!).state.rainVolume)).toBe(0.9);
   // the shell: the trail says where this is, its back button is the Esc key
   await expect(page.locator('.shell-top .trail li.now')).toContainText('設定');
   await page.locator('.shell-nav .touch-back').click();

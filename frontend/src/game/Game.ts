@@ -1754,6 +1754,8 @@ export class Game {
         // a train's sound follows its tractive effort (it builds up after a notch-on, as in VehicleSim)
         // a train's flanges squeal in tight curves (lateral acceleration = yaw rate × speed)
         if ('cornering' in e) e.cornering(sim.yawRate * sim.forwardSpeed);
+        // a creature's wings are heard as far as they are out (thrown into the air)
+        if ('flight' in e) e.flight(this.player.visual.flight);
         // a fighter leaving after the finish is heard going away, and not at all once it is gone
         const away = this.player.departure;
         if ('distance' in e) e.distance(away && away.stage !== 'roll' ? this.player.visual.root.position.distanceTo(this.camera.position) : 0);
@@ -1767,9 +1769,11 @@ export class Game {
         if (this.rival) {
           const re = this.audio.engine('rival', this.rival.sim.spec);
           const d = this.rival.sim.position.distanceTo(this.camera.position);
+          // (a fighter's engines carry their own fall-off with the distance, far beyond a car's 140 m)
           if ('distance' in re) re.distance(d);
           if ('distance' in re) re.update(this.rival.sim.rpm, 0, 0, this.rival.departure?.stage === 'gone' ? 0 : 0.8, 0);
           else re.update(this.rival.sim.rpm, this.rival.input.throttle, this.rival.sim.boost, clamp(1 - d / 140, 0, 1) * 0.8, this.rival.sim.spec.engine.redline);
+          if ('flight' in re) re.flight(this.rival.visual.flight);
         }
       }
     } else if (this.audio && this.attractCar && this.phase === 'attract') {
@@ -1906,6 +1910,9 @@ export class Game {
     this.departAim.lerp(at, 1 - Math.exp(-dt * 30));
     cam.position.copy(this.departEye);
     cam.lookAt(this.departAim.x, this.departAim.y + 1.5, this.departAim.z);
+    // the results card stands in the middle of the screen: the aircraft climbs through the free upper part of the
+    // picture, a quarter of its height from the top
+    cam.rotateX((-0.27 * cam.fov * Math.PI) / 180);
     // a long lens as it goes away: the aircraft keeps about a fifth of the picture's width for the first 2.5 km
     const fov = clamp((2 * Math.atan(20 / Math.max(cam.position.distanceTo(at), 1)) * 180) / Math.PI, 0.9, 58);
     cam.fov = damp(cam.fov, fov, 3.5, dt);

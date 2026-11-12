@@ -47,6 +47,9 @@ def parse():
     ap.add_argument('--samples', type=int, default=32)
     ap.add_argument('--size', default='1280x720')
     ap.add_argument('--frames', default='0', help='cycle times (0..1) to render the views at')
+    ap.add_argument('--wings', help='also render the views with the wings posed: name:open:beat,… (open 0..1, beat 0..1), '
+                                    'e.g. folded:0:0,open:1:0,up:1:0.25,down:1:0.75; with --sheet <file> one picture of them all')
+    ap.add_argument('--sheet')
     ap.add_argument('--gait', action='store_true', help='render 8 frames of the cycle (top and side)')
     ap.add_argument('--tex', default='2048,2048,2048,1024', help='shell, body, legs, roughness atlas sizes')
     ap.add_argument('--image-format', default='WEBP')
@@ -68,6 +71,8 @@ def build(args):
         p, shape = RB.build_tegmen(side)
         parts.append(p)
         wings.append(shape)
+    for side in (1, -1):
+        parts.append(RB.build_hindwing(side))
     parts.append(RB.build_pronotum())
     parts.append(RB.build_thorax())
     parts.append(RB.build_abdomen())
@@ -212,6 +217,27 @@ def main():
                 suffix = '' if len(times) == 1 else f'_t{t:.3f}'
                 ST.render(v, os.path.join(args.render, f'{v}{suffix}.png'), (w, h), args.samples)
                 print(f'[roach] rendered {v}{suffix}', flush=True)
+        if args.wings:
+            # the flight poses, each from every view; rows of one picture (--sheet) for the owner to look at
+            bpy.context.scene.frame_set(0)
+            rows = []
+            for spec in args.wings.split(','):
+                name, opened, beat = spec.split(':')
+                RG.pose_wings(arm, float(opened), float(beat))
+                # (in the air: the wings beat below the feet)
+                bpy.data.objects['ground'].location.z = -18.0 * RGm.S if float(opened) > 0 else 0.0
+                row = []
+                for v in [v for v in args.views.split(',') if v]:
+                    path = os.path.join(args.render, f'wings_{name}_{v}.png')
+                    ST.render(v, path, (w, h), args.samples)
+                    row.append(path)
+                    print(f'[roach] rendered wings {name} {v}', flush=True)
+                rows.append(row)
+            RG.pose_wings(arm, 0.0)
+            bpy.data.objects['ground'].location.z = 0.0
+            if args.sheet:
+                ST.sheet(rows, args.sheet)
+                print(f'[roach] sheet {args.sheet}', flush=True)
         if args.gait:
             for i in range(8):
                 f = i * A.FRAMES // 8
