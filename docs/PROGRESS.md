@@ -2104,3 +2104,25 @@ to be seen). The films still show the balls until they are recorded again.
   props agent resumed: obstruction light, branch brought onto main), the host changes course and conditions in an
   online room and everyone sees who is loading (`~/.local/opt/wt/ONLINE_BRIEF.md`); Edwards + fighters
   (`EDWARDS_BRIEF.md`).
+
+## Release 2.3 (11-12): the cockroach opens its wings in the air
+
+- **Players' reports through the desk** (`V4TNGQ`, `4PHH4G`, `2V9D3R`: thrown into the air after a crash it does
+  not flap). A model change (agent): the old model had no hind wings and its wing cases were skinned to the
+  thorax. Now a bone per wing case (`wing_L/R`) and two hind wings folded under them (`hind_L/R`; opaque, on the
+  body's atlas: no new material, the liveries tint them), GLB 901 → 950 kB, 36 872 triangles, 61 bones. In the
+  game (`RoachModel.flightStep` / `wingPose`, `CreatureInfo.flight`): 0.1 s with no leg on the ground → the cases
+  open, the hind wings swing out, unfold and beat at 14 Hz; folded 0.25 s after the landing. A flutter and a low
+  drone while they are out (`BugSound.flight`). Sim, medals, stats unchanged.
+- The owner saw the sheet (`~/.local/opt/wt/roach/roach-wings-sheet.jpg`) and said to put it in (11-12, with the
+  props' sheets: "シート全部見たので入れていいよ").
+- Verified by me on the merged build: tsc; vitest 235 (new: `roachFlight.test.ts`); `gpu-errors` with the
+  cockroach twice in the garage 0 / 0 (WebGPU, WebGL 2); `roach-wings.cjs` on WebGPU and on WebGL 2 with the
+  golden livery (wings 0.00 before, 1.00 in the air, 0.00 after the landing; flutter gain 0 / 0.42 / 0; 0
+  errors); `paint-drawn.cjs roach` (all nine states drawn); the picture of the fall looked at.
+- Not verified: the flutter by ear; a real crash into a wall (the check lifts the body 9 m and drops it); online
+  (peers' wings stay shut by design: drawn from poses without a ground-contact flag; ghosts and the replay
+  likewise); the garage thumbnail was not made again (folded, it looks as before from that angle); no E2E.
+- Known: paused in mid-air the wings keep beating; from the chase camera the hind wings are edge-on for part of
+  the beat.
+

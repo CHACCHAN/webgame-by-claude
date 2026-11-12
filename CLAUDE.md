@@ -349,7 +349,16 @@ pending. `docs/PLAN.md` holds the design.
   Mach 1 at the top (the chase camera's lag is capped for it); drawn by `render/RoachModel.ts` from a
   skinned GLB (`public/models/roach/roach.glb`; legs run with the distance covered, eyes are the headlights; colours
   via `CreatureInfo.liveries`), heard through `audio/BugSound.ts`; medals in `ROACH_MEDALS`. The backend's
-  `min_time_ms` per course leaves room for it.
+  `min_time_ms` per course leaves room for it. Wings (v2.3, players' reports: thrown into the air it did not
+  flap): bones `wing_L` / `wing_R` (the wing cases) and `hind_L` / `hind_R` (hind wings, modelled folded; the bone
+  is scaled across the chord to open the fan), opaque, on the body's atlas. `CreatureInfo.flight` holds angles,
+  beat rate and timings; the angles must equal `FLIGHT` / `HIND` in `tools/blender/creatures/roach_anatomy.py` (a
+  vitest compares). `flightStep` / `wingPose` in `RoachModel.ts`: out after 0.1 s with no leg on the ground, folded
+  0.25 s after landing; **only a live sim's `airborne` opens them** (`CarVisual` passes it: player, rival, the
+  title's car; online peers, ghosts and the replay are drawn from poses and keep them shut). The clip's tracks on
+  the wing bones are dropped at load. The flutter is `BugSound.flight(level)`. Check with
+  `node tools/roach-wings.cjs <dir>` (GPU: pose sheet, a drop from 9 m in a race); the model's sheet:
+  `roach.py --wings name:open:beat,… --sheet <file>`.
 - Rain sound (11-12; the old one was one 2 s loop of filtered noise, the same in both ears): AudioWorklet `'rain'`
   (`audio/rain.ts` + `rain.worklet.ts`, stereo, synthesised: the hillside's wash with gusts, drops around the listener,
   drops on the vehicle by kind, tyre spray by speed, drips and a muffled wash under a roof). `AudioEngine.setRain(level)`
