@@ -1957,3 +1957,13 @@ race; the seat's colour stays the member's mark; a change of paint alone keeps `
   off, three courses at mid-film, a film missing; the stack serves the film (200, whole length) and answers 404
   for a missing one. The agents' own checks are in their reports (About: 42 pictures on the GPU with the API
   played by the script; paint: two players on the GPU against an isolated stack, both sides).
+- Deployed 11-12 as v2.1.0 (a dump of the database first: `pre-2.1.0.sql.gz` in the `backups` volume; the
+  migration ran): `gpu-errors.cjs` 0 on WebGPU and WebGL 2, a race picture looked at; the live stack and the
+  public address serve the built bundle, `/api/content` says 2.1.0 and `desk {enabled, ai}`, the four films answer
+  200 (and 206 for a range, through the tunnel too). **The desk against the real gateway** (the agent could not):
+  a question answered in Japanese in 7.4 s, a report filed by the model's tool call in 11 s and read with
+  `desk:reports` (then closed as my test).
+- Not verified: the films' playback on a phone and on a slow line (52 MB in all, 7–23 MB each); Firefox / Safari
+  (container units size the film's box; without them it takes the stage's width); the course select with a
+  gamepad; the rest of the E2E suite; the desk's answers' quality beyond those two, and its limits behind
+  Cloudflare; a member's report; paint for trains / creatures online in a picture.
