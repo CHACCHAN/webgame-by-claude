@@ -254,7 +254,7 @@ export class Game {
   private topSpeed = 0;
   private driftT = 0;
   private bestSplits: number[] | null = null;
-  private cinematic = { shot: 0, t: 0, anchor: new THREE.Vector3(), anchorS: 0, pos: new THREE.Vector3() };
+  private cinematic = { shot: 0, t: 0, anchor: new THREE.Vector3(), anchorS: 0, pos: new THREE.Vector3(), side: 1, fore: 1, last: new THREE.Vector3() };
   private garageCar: CarVisual | null = null;
   /** counts what was asked to be shown: a show that waited for a model goes ahead only if nothing came after it */
   private asked = 0;
@@ -1762,17 +1762,33 @@ export class Game {
       c.shot = (c.shot + 1) % shots;
       // the standing camera of the pan: ahead of the car
       if (c.shot === 1) this.tracksideAnchor(trackS + 70, c.anchor);
+      // (the swing: from ahead of the car this time, from behind it the next)
+      if (c.shot === 0) c.fore = -c.fore;
     }
     // how far from the centre line a camera may stand and still be on the road, inside the rails
     const inside = (s: number) => Math.max(1.2, track.widthAt(s) / 2 - 0.7);
     const cam = this.camera;
+    // The shots that travel with the car are carried along by its own movement first, and eased only in what is
+    // left: eased towards a place ahead of a fast car, the camera fell back by speed / rate (five metres at
+    // 140 km/h) and the low front shot looked down on the bonnet from above it.
+    if (c.shot !== 1 && c.shot !== 3 && c.last.distanceToSquared(car) < 25) cam.position.add(_v.subVectors(car, c.last));
+    c.last.copy(car);
     let fov = 45;
     switch (c.shot) {
       case 0: {
-        // slow orbit, drawn along the road: wide ahead and behind, as wide as the road to the sides
+        // a slow swing along the road, from ahead of the car (or behind it) to beside it, on the side of the car
+        // where the road has room, and never nearer than five metres: a full orbit as wide as the road stood right
+        // over a car that drove along its edge (a picture of a roof, six seconds into the title), and on a narrow
+        // road there is no room beside a car at all
+        track.pointAt(trackS, 0, _v);
+        track.pointAt(trackS, 1, _w);
+        const lateral = (car.x - _v.x) * (_w.x - _v.x) + (car.z - _v.z) * (_w.z - _v.z);
+        if (lateral * c.side > 0.3) c.side = -c.side;
         const a = this.time * 0.25;
-        const s = trackS + Math.cos(a) * 9;
-        track.pointAt(s, Math.sin(a) * inside(s), c.pos);
+        const room = inside(trackS);
+        const gap = Math.abs(clamp(lateral + c.side * Math.abs(Math.sin(a)) * 6, -room, room) - lateral);
+        const s = trackS + c.fore * Math.max(Math.abs(Math.cos(a)) * 9, Math.sqrt(Math.max(0, 27 - gap * gap)));
+        track.pointAt(s, clamp(lateral + c.side * gap, -inside(s), inside(s)), c.pos);
         // (beside the car it is only half a road away: higher there, so that the whole car is in the picture)
         c.pos.y = Math.max(c.pos.y, car.y) + 1.7 + 2.6 * Math.abs(Math.sin(a));
         cam.position.lerp(c.pos, 1 - Math.exp(-dt * 6));
@@ -1791,14 +1807,17 @@ export class Game {
         break;
       }
       case 2: {
-        // low front tracking shot: on the road ahead, in the car's own lane
+        // low front three-quarter tracking shot: ahead of the car and beside its lamps' cones (inside them their
+        // glow in the haze whitens the picture), on the side where the road has room
         track.pointAt(trackS, 0, _v);
         track.pointAt(trackS, 1, _w);
         const lateral = (car.x - _v.x) * (_w.x - _v.x) + (car.z - _v.z) * (_w.z - _v.z);
-        const s = trackS + 7.5;
-        track.pointAt(s, clamp(lateral, -inside(s), inside(s)), c.pos);
-        // (above the headlights' cones: inside them their glow in the haze whitens the picture)
-        c.pos.y = Math.max(c.pos.y + 0.45, car.y) + 0.7;
+        if (lateral * c.side > 0.3) c.side = -c.side;
+        const s = trackS + 5.5;
+        const off = clamp(lateral + c.side * 3.2, -inside(s), inside(s));
+        track.pointAt(s, off, c.pos);
+        // (where the road leaves less room beside the cones: over them)
+        c.pos.y = Math.max(c.pos.y + 0.45, car.y) + 0.6 + Math.max(0, 2.4 - Math.abs(off - lateral)) * 1.1;
         cam.position.lerp(c.pos, 1 - Math.exp(-dt * 8));
         cam.lookAt(car.x, car.y + 0.5, car.z);
         fov = 50;

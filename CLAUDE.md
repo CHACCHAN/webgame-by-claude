@@ -332,13 +332,17 @@ pending. `docs/PLAN.md` holds the design.
   screen shows / the selection's edge); a group is given a `Shape` (points in its own space, placed anew every frame)
   and its grains fly there, a shape let go scatters through the volume. `shapes.ts` makes the shapes: a course's
   relief (`courseRelief`: road, start / finish beams, the land as contour lines; laid across its place, `box` fits
-  it), a glyph from a mask, the edge of a selection (`shellOf`). In the markup: `data-cloud="course:<id>"` or
-  `"glyph"` (`data-cloud-fill="0…1"`: how much has gathered, as on the loading screen) = a thing depicted where the
-  element stands; the emphasis goes to what the pointer is on (anything with `cursor: pointer`), else the screen's
+  it), a glyph from a mask, the edge of a selection (`shellOf`), a sky per time of day (`skyScene`: night / rain /
+  dawn, drawn in units of its place's height for the place's aspect; on the conditions screen's selected card).
+  `Shape.fall` makes the points with an `along` travel (the rain): their grains ride with them, without lag. In the
+  markup: `data-cloud="course:<id>"`, `"sky:<time of day>"` or `"glyph"` (`data-cloud-fill="0…1"`: how much has
+  gathered, as on the loading screen) = a thing depicted where the element stands; the emphasis goes to what the pointer is on (anything with `cursor: pointer`), else the screen's
   `FocusFrame`, else an element with `data-grains` (`"line"` / `"ring"` / its panel; `data-grains-tone`;
   `data-grains-first="<ms>"`). While the grains depict, the app has the class `cloud-on` and the page's own picture
   of the same thing steps back (the title's kanji, the drawn focus frame). The count follows the grains' own cost
-  on the main thread (`BUDGET` 4 ms a frame; 48 000 cost ~3–4 ms here), never the frame time. What is slow in the
+  on the main thread (`BUDGET` 4 ms a frame; 48 000 cost ~3–4 ms here), never the frame time. While the game is in a
+  race (`countdown` / `racing` / `replay`) the grains rest whatever screen the app is on (a tool that starts a race
+  from the title left them simulating: 3 ms a frame in a timing). What is slow in the
   step: `Math.hypot`, sines (a table), anything per grain per frame that could be done for a quarter of them in turn.
   **Nothing else on the page may make a WebGL context while the game is on WebGPU**: it lost the game's device
   (`VK_ERROR_DEVICE_LOST`, 11-11). Whatever else draws uses the game's own API: the grains draw on
@@ -346,7 +350,10 @@ pending. `docs/PLAN.md` holds the design.
   rivals' voice (WebGPU, in a worker) is offered only when the game is drawn with WebGPU (`Speech.usable`).
   The title's and the replay's camera (`Game.cinematicCamera`): every shot is laid along the road or checked against
   the ground (`tracksideAnchor`, `groundClear`); a new shot must be too (an offset from the car alone ends up inside
-  a slope or behind the roadside).
+  a slope or behind the roadside), and must keep its distance from the car itself: measure from the car's own
+  place across the road, not from the centre line, and let a shot that travels be carried by the car's movement
+  (eased towards a place ahead of it, it falls back by speed / rate: a roof and a bonnet filled the title).
+  A camera ahead of the car stays out of its lamps' cones (their glow in the haze whitens the picture).
 - Who plays (owner 11-11: accounts come from Authentik; nothing in the browser keeps an account any more). **Members**
   log in through the owner's Authentik (`AuthController`: authorization code + PKCE, the code is exchanged on the
   server; `config/authentik.php`, `AUTHENTIK_*` in `.env` only: never to the browser, a log or a commit). The account

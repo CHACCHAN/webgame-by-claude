@@ -51,7 +51,8 @@ export function ConditionsScreen() {
       <div className="choice-cards focus-box stagger">
         {CONDITIONS.map((c, k) => (
           <div key={c.id} className={`choice-card tod-${c.id} ${k === i ? 'active' : ''}`} {...hoverSelect(() => setI(k))} onClick={() => { setI(k); choose(k); }}>
-            <div className="ch-sky" />
+            {/* the selected one's sky is a scene of grains (ui/fx/Cloud.tsx) */}
+            <div className="ch-sky" {...(k === i ? { 'data-cloud': `sky:${c.id}` } : {})} />
             <div className="ch-en">{c.en}</div>
             <div className="ch-jp">{c.jp}</div>
             <p>{c.desc}</p>
