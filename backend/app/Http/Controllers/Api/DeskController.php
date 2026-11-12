@@ -6,8 +6,10 @@ use App\Http\Controllers\Controller;
 use App\Services\DeskMind;
 use App\Services\DeskReports;
 use App\Services\MemberSession;
+use Illuminate\Contracts\Cache\Lock;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Validation\Rule;
 
@@ -58,7 +60,15 @@ class DeskController extends Controller
         }
 
         $facts = $this->facts($request);
-        $answer = $mind->answer($messages, $facts);
+        $slot = $this->slot();
+        if ($slot === null) {
+            return response()->json(['message' => '窓口が混み合っています。少し待ってからもう一度お試しください。'], 429);
+        }
+        try {
+            $answer = $mind->answer($messages, $facts);
+        } finally {
+            $slot->release();
+        }
         if ($answer === null) {
             return $this->nobody();
         }
@@ -154,6 +164,22 @@ class DeskController extends Controller
         RateLimiter::hit($key, 3600);
 
         return ['id' => $id, 'kind' => $kind];
+    }
+
+    /**
+     * One of the few places at the model (`desk.concurrent`), or null when all are taken. A place that is never
+     * given back (a worker that was ended) frees itself after 40 s.
+     */
+    private function slot(): ?Lock
+    {
+        for ($i = 0; $i < (int) config('desk.concurrent'); $i++) {
+            $lock = Cache::lock('desk-slot:'.$i, 40);
+            if ($lock->get()) {
+                return $lock;
+            }
+        }
+
+        return null;
     }
 
     /** The player's own last messages, verbatim (cleaned), newest kept when they are too many or too long. */

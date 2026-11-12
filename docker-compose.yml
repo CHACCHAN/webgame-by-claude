@@ -81,6 +81,8 @@ services:
       LLM_DESK_MODELS: ${LLM_DESK_MODELS:-gemini-3.8-flash}
       LLM_DESK_EFFORT: ${LLM_DESK_EFFORT:-high}
       DESK_ENABLED: ${DESK_ENABLED:-true}
+      # reports an hour per address (the E2E run files one each time: a test stack may want more)
+      DESK_REPORTS_PER_HOUR: ${DESK_REPORTS_PER_HOUR:-6}
       # who made the game, as the About screen shows it (backend/config/about.php); empty = the project's name, no links
       ABOUT_CREATOR: ${ABOUT_CREATOR:-}
       ABOUT_CREATOR_NOTE: ${ABOUT_CREATOR_NOTE:-}

@@ -25,6 +25,9 @@ const QUICK: [string, string][] = [
   ['速く走るコツ', '速く走るコツを教えてください。'],
 ];
 
+/** what is being written, kept while the player looks at another section (the page's memory, as the conversation) */
+const drafts = { chat: '', form: '' };
+
 /**
  * A field's keys stay in the field: the menus (arrows, W A S D, Enter, Backspace), the game (H is the horn) and
  * the fullscreen key (F) all listen on the window, which these events never reach.
@@ -88,7 +91,11 @@ export function DeskSection() {
 }
 
 function Chat({ lines, busy, toForm }: { lines: DeskLine[]; busy: boolean; toForm: (text?: string) => void }) {
-  const [text, setText] = useState('');
+  const [text, setDraft] = useState(drafts.chat);
+  const setText = (t: string) => {
+    drafts.chat = t;
+    setDraft(t);
+  };
   const log = useRef<HTMLDivElement>(null);
   const ask = (t: string) => void useDesk.getState().ask(t, deskFacts());
   const send = () => {
@@ -203,7 +210,11 @@ function Receipt({ id, kind }: { id: string; kind: DeskKind }) {
 function ReportForm({ start, ai }: { start: string; ai: boolean }) {
   const form = useDesk((s) => s.form);
   const [kind, setKind] = useState<DeskKind>('bug');
-  const [text, setText] = useState(start.slice(0, DESK_LIMITS.reportChars));
+  const [text, setDraft] = useState((start || drafts.form).slice(0, DESK_LIMITS.reportChars));
+  const setText = (t: string) => {
+    drafts.form = t;
+    setDraft(t);
+  };
   const send = async () => {
     if (!text.trim() || form.sending) return;
     sfx.confirm();

@@ -26,6 +26,9 @@ return [
     // one model's time, and the time of the whole answer (PHP-FPM ends a request after 30 s)
     'timeout' => (float) env('LLM_DESK_TIMEOUT', 20),
     'deadline' => 24.0,
+    // how many answers may be waited for at once, all players together: each holds a PHP worker for up to
+    // `deadline` seconds, and the game (rooms, records) needs the other workers (16 in all: docker/php/Dockerfile)
+    'concurrent' => (int) env('DESK_CONCURRENT', 4),
 
     // what a conversation may hold (the client keeps to the same numbers: api/client.ts `DESK_LIMITS`)
     'max_messages' => 16,

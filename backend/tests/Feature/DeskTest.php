@@ -9,6 +9,7 @@ use App\Services\MemberSession;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
@@ -224,6 +225,22 @@ class DeskTest extends TestCase
         $this->postJson('/api/desk/report', ['kind' => 'other', 'text' => 'こんにちは、楽しいです'])->assertCreated();
         // another address is not held up
         $this->withServerVariables(['REMOTE_ADDR' => '10.9.8.7'])->postJson('/api/desk/chat', ['messages' => [['role' => 'user', 'content' => 'a']]])->assertOk();
+    }
+
+    public function test_only_a_few_answers_are_waited_for_at_once(): void
+    {
+        config(['desk.concurrent' => 2]);
+        Http::fake(['llm.test/*' => Http::response($this->says('はい。'))]);
+        // two answers under way elsewhere hold both places
+        $held = [Cache::lock('desk-slot:0', 40), Cache::lock('desk-slot:1', 40)];
+        $this->assertTrue($held[0]->get() && $held[1]->get());
+        $this->ask('a')->assertStatus(429)->assertJsonPath('message', '窓口が混み合っています。少し待ってからもう一度お試しください。');
+        Http::assertNothingSent();
+        $held[1]->release();
+        $this->ask('a')->assertOk();
+        // the place is given back after the answer: the next question finds it, and so does this test
+        $this->ask('a')->assertOk();
+        $this->assertTrue(Cache::lock('desk-slot:1', 40)->get());
     }
 
     public function test_a_day_has_its_limit_too(): void
