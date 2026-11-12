@@ -311,6 +311,13 @@ pending. `docs/PLAN.md` holds the design.
   skinned GLB (`public/models/roach/roach.glb`; legs run with the distance covered, eyes are the headlights; colours
   via `CreatureInfo.liveries`), heard through `audio/BugSound.ts`; medals in `ROACH_MEDALS`. The backend's
   `min_time_ms` per course leaves room for it.
+- Rain sound (11-12; the old one was one 2 s loop of filtered noise, the same in both ears): AudioWorklet `'rain'`
+  (`audio/rain.ts` + `rain.worklet.ts`, stereo, synthesised: the hillside's wash with gusts, drops around the listener,
+  drops on the vehicle by kind, tyre spray by speed, drips and a muffled wash under a roof). `AudioEngine.setRain(level)`
+  starts it (the old noise is the fallback without AudioWorklet), `updateRain(speed, cover, body)` steers it per frame
+  from `Game` (`coverShare` on `scenery.covers`, `rainBodyOf(kindOf(spec))`). Check a change with
+  `npx tsx tools/rain-wav.ts <dir>` (WAVs + spectrograms, levels, modulation, correlation between the ears, old
+  against new); `MASTER` in `rain.ts` holds the long-term level standing still at the old −24.6 dBFS.
 - Particles: any per-particle value raised to a power must have its base clamped (a NaN alpha on a puff drawn next to
   the camera covers the screen, and bloom turns a NaN frame black).
 - The rival's language model (rival battles; `ai/RivalMind.ts`): a model never drives. It gives the rival's line

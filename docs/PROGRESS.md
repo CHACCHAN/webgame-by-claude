@@ -1898,3 +1898,21 @@ drawn every frame, no culling), street-lamp point lights 0.4–0.7 ms.
 - Car models could be replaced by artist GLBs following the contract in docs/ASSETS.md.
 - Engine sound, corner warning beeps and the music loop points are unverified by ear in this environment.
 - Touch controls (mobile) are not implemented (PC is the target).
+
+## Rain sound remade (11-12, v2.0.1)
+
+The owner's report: the rain sounds uniform. Measured on the old one: a 2 s loop of white noise through two filters
+(correlation with itself 2 s later 1.000), level spread 0.03 dB, the same signal in both ears, almost nothing below
+1 kHz, the same at any speed and under a roof. Now an AudioWorklet (`audio/rain.ts`): far wash with gusts (7 s and
+16 s walks), ~2 500 drops a second around the listener, drops on the vehicle (roof and glass for a car, the helmet on
+a bike, cab glass on a train, none on the cockroach), tyre spray growing with speed, drips and a muffled wash under
+a rock shed. Standing still it keeps the old long-term level (−25.2 against −24.6 dBFS); +2.5 dB at 100 km/h,
++5 dB at 150 km/h; 12–15 dB quieter under a roof. 35–58 µs per 128 samples in Node (1.3–2.2 % of a core).
+
+- Verified: offline renders and their figures (`tools/rain-wav.ts`: old against new, eight scenarios), spectrograms
+  looked at, six vitests (bounded, deterministic per seed, silent when dry, levels, ears apart), tsc, 196 vitests;
+  in the game on the GPU: the node appears with the first rain, gets the car's speed and kind in a race, fades to
+  zero after the weather changes.
+- Not verified: **how it sounds** (nobody has listened: the WAVs went to the owner), the roof in the browser (the
+  20 s drive passed none), bike / train / cockroach in the browser, phones' cost, the fallback without AudioWorklet,
+  the level in the full mix against engine and music.
