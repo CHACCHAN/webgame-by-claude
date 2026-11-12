@@ -24,6 +24,8 @@ import { keyShadowNode } from './render/keyShadow';
 import { LAMP_BEAM, LAMP_CANDELA } from './render/lampField';
 import { registerLampField } from './render/lampFieldNode';
 import { LightRig } from './render/LightRig';
+import { lampsAround, mirrorLamps, showSurroundings } from './render/carSurface';
+import { registerRigLights } from './render/coatGlint';
 import { ensureVehicleModels, onModelWait, preloadVehicleModels, vehicleModelReady } from './render/vehicleModels';
 import { loadTrafficModels } from './render/trafficModels';
 import { loadSurfaceTextures } from './render/surfaceTextures';
@@ -398,7 +400,10 @@ export class Game {
     this.remotes = new RemoteRacers(this.root, (id) => this.rideHeightOf(id), false, this.net);
     // the lights: all of them now, none later (the street lamps are one of them, whatever the course)
     registerLampField(this.renderer);
+    registerRigLights(this.renderer);
     this.lights = new LightRig(this.quality);
+    // (a car's paint and glass show the lamps as a mirror does; the lowest quality keeps the plain environment map)
+    if (this.quality.surfaceDetail) mirrorLamps(this.lights.lamps);
     // (the sun's / moon's shadow: the map near the camera, the course's baked shade beyond it)
     if (this.quality.shadows) this.lights.key.shadow.shadowNode = keyShadowNode(this.lights.key, this.lights.farShade, this.lights.keyMap);
     // (the trees' shadow meshes are drawn into this light's shadow map only)
@@ -624,6 +629,9 @@ export class Game {
     this.env.apply(tod, this.scene, this.renderer);
     const envMap = this.env.buildEnvMap(this.renderer);
     this.scene.environment = envMap;
+    showSurroundings(this.env.preset, tod === 'dawn', { dir: this.terrain.landform.cityGlowDir, glow: this.terrain.landform.cityGlow ?? 1 });
+    // (the moon's light here is far brighter than the moon: its highlight in a clear coat is next to nothing)
+    this.lights.key.coat.gain = tod === 'dawn' ? 1 : 0.04;
     this.scene.background = null;
     // the lamps' light (by day they are off: what is left of them is their glass and the pools under them, faint),
     // and their glow in the haze, as bright
@@ -1062,6 +1070,7 @@ export class Game {
     }
     this.updateVisuals(dt);
     this.env.update(this.time, this.camera.position, this.camera.getWorldDirection(_f));
+    lampsAround(this.camera.position);
     this.rain.update(this.time, this.camera.position, this.player?.sim.velocity ?? _zero);
     this.scenery.update(this.time, this.camera.position, this.camera);
     this.updateBeams();

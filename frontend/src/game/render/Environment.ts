@@ -15,7 +15,7 @@ import type { LightRig } from './LightRig';
 
 export type TimeOfDay = 'night' | 'rain' | 'dawn';
 
-interface Preset {
+export interface Preset {
   zenith: string;
   horizon: string;
   glow: string;

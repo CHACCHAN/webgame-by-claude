@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import type { PMREMGenerator } from 'three/webgpu';
+import { BeamLight, KeyLight } from './coatGlint';
 import { FarShade } from './farShade';
 import { LampField } from './lampField';
 import { LightAtlas } from './lightAtlas';
@@ -46,14 +47,14 @@ export interface BeamSource {
  */
 export class LightRig {
   readonly group = new THREE.Group();
-  readonly key = new THREE.DirectionalLight('#ffffff', 1);
+  readonly key = new KeyLight('#ffffff', 1);
   readonly hemi = new THREE.HemisphereLight('#ffffff', '#000000', 1);
   readonly fog = new THREE.FogExp2('#000000', 0.0005);
   /** the course's fixed light as numbers for the shaders: the lamps' grid and the far shade share one texture */
   readonly atlas = new LightAtlas();
   readonly lamps = new LampField(this.atlas);
   readonly vending = new THREE.PointLight('#e8f4ff', 0, 14, 1.6);
-  private readonly spots: THREE.SpotLight[] = [];
+  private readonly spots: BeamLight[] = [];
   /** the first spot is the garage's light from above (set its values on `showroom`), not a car's headlights */
   showroomOn = false;
   /** the shade beyond the shadow map, and of the land (the course's baked field: `Game.applyTimeOfDay` shows it) */
@@ -81,7 +82,7 @@ export class LightRig {
     this.group.add(key, key.target, this.hemi);
     this.group.add(this.lamps, this.vending);
     for (let i = 0; i < 3; i++) {
-      const spot = new THREE.SpotLight(HEADLIGHT.color, 0, HEADLIGHT.distance, HEADLIGHT.angle, HEADLIGHT.penumbra, HEADLIGHT.decay);
+      const spot = new BeamLight(HEADLIGHT.color, 0, HEADLIGHT.distance, HEADLIGHT.angle, HEADLIGHT.penumbra, HEADLIGHT.decay);
       spot.castShadow = i === 0 && q.headlightShadows;
       spot.shadow.mapSize.set(1024, 1024);
       spot.shadow.camera.near = 0.5;
