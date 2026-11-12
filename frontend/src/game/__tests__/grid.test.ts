@@ -126,6 +126,8 @@ describe('online start grid', () => {
     expect(deepest).toBeLessThan(200);
     // every released vehicle alone and five of a kind
     for (const id of VEHICLE_ORDER) {
+      // (a fighter's wings are wider than a road: it stands only on the ramp at Edwards, edwards.test.ts)
+      if (CAR_SPECS[id].jet) continue;
       check([id], START);
       check([id, id, id, id, id], START);
     }

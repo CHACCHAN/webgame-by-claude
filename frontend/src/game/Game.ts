@@ -143,6 +143,9 @@ export interface HudState {
   driftScore: number;
   boost: number;
   turbo: boolean;
+  /** a fighter: the engine box shows its engines' speed (N2 %) and the afterburner (0…1) instead of a gear */
+  jet: boolean;
+  afterburner: number;
   sectorFlashT: number;
   /** pace note for the next tight bend; null when none is close */
   corner: { dir: 1 | -1; kind: CornerKind; dist: number; seq: number } | null;
@@ -226,7 +229,7 @@ export class Game {
   hud: HudState = {
     speedKmh: 0, rpm: 0, redline: 8000, gear: 1, raceTime: 0, countdown: 0, splits: [], lastSplitDelta: null, lastSplitIndex: -1,
     progress: 0, rivalProgress: null, rivalLine: null, ghostProgress: null, position: 1, gapMeters: 0, wrongWay: false, driftCombo: 0, driftScore: 0,
-    boost: 0, turbo: false, sectorFlashT: 0, corner: null, online: null,
+    boost: 0, turbo: false, jet: false, afterburner: 0, sectorFlashT: 0, corner: null, online: null,
   };
 
   private listeners = new Set<Listener>();
@@ -1019,6 +1022,7 @@ export class Game {
     this.cornerIdx = 0;
     this.warnedCorner = -1;
     this.hud.turbo = CAR_SPECS[cfg.carId].engine.turbo;
+    this.hud.jet = !!CAR_SPECS[cfg.carId].jet;
     this.hud.redline = CAR_SPECS[cfg.carId].engine.redline;
     this.topSpeed = 0;
     this.chase.reset();
@@ -1520,6 +1524,9 @@ export class Game {
       th: pl.sim.input.throttle,
       rp: clamp(pl.sim.rpm / pl.sim.spec.engine.redline, 0, 1),
     };
+    // a fighter's take-off after the finish: the others draw its gear by it, and cannot touch it any more
+    const d = pl.departure;
+    if (d && d.stage !== 'roll') st.dep = d.stage === 'gone' ? 3 : d.gear > 0 ? 2 : 1;
     if (pl.finished) st.fin = Math.round(pl.finishTime * 1000);
     return st;
   }
@@ -1738,6 +1745,7 @@ export class Game {
       this.hud.rpm = sim.rpm;
       this.hud.gear = sim.gear;
       this.hud.boost = sim.boost;
+      this.hud.afterburner = sim.afterburner;
       // camera shake and contact bookkeeping must run with or without sound
       if (!this.paused) this.carContactFeedback(dt);
       if (this.audio && !this.paused) {

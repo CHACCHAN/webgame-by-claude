@@ -3,7 +3,7 @@ import { clamp, damp, lerp, smoothstep } from '../util/math';
 import { type CarSpec, torqueAt } from './carSpecs';
 import { TRACTION_RISE } from './vvvf';
 import { bikeLimits } from './bikes';
-import { EDWARDS_AIR, jetThrust } from './jets';
+import { EDWARDS_AIR, jetRpm, jetThrust } from './jets';
 import { GROUP_CAR, GROUP_GROUND, GROUP_PROXY, GROUP_WALL, PhysicsWorld, RAPIER, groups } from './PhysicsWorld';
 
 export interface VehicleInput {
@@ -298,7 +298,7 @@ export class VehicleSim {
       this.speed = this.forwardSpeed = this.velocity.length();
       this.slipAngle = this.yawRate = this.driftAmount = this.liftShare = 0;
       this.airborne = true;
-      this.rpm = (65 + 35 * this.spool + 2 * this.afterburner) * 100;
+      this.rpm = jetRpm(this.spool, this.afterburner);
       if (spec.jet) this.thrust = jetThrust(spec.jet.engines, this.spool, this.afterburner, this.speed / EDWARDS_AIR.sound);
       for (const w of this.wheels) w.angularVelocity *= Math.exp(-dt * 0.8), (w.rotation += w.angularVelocity * dt);
       return;
@@ -766,7 +766,7 @@ export class VehicleSim {
     this.spool += clamp(wantN - this.spool, -dt / e.spoolDown, dt / e.spoolUp);
     this.afterburner += clamp(wantAb - this.afterburner, -dt / 0.3, dt / 1.2);
     // the sound and the gauge: N2 from 65 % at idle to 100 % at military power (a touch more in reheat)
-    this.rpm = (65 + 35 * this.spool + 2 * this.afterburner) * 100;
+    this.rpm = jetRpm(this.spool, this.afterburner);
     this.thrust = jetThrust(e, this.spool, this.afterburner, this.speed / EDWARDS_AIR.sound);
     if (!hold) this.body.applyImpulse(_imp.copy(this.forward).multiplyScalar(this.thrust * dt), true);
   }

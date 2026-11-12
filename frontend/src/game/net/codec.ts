@@ -26,6 +26,11 @@ export interface NetState {
   br: 0 | 1;
   /** counts the sender's respawns (2 bit, wraps): a new value means the car was moved, not driven, to its place */
   ep: number;
+  /**
+   * a fighter's take-off after the finish (`race/Departure.ts`; 2 bit): 1 = off its wheels' simulation (the nose
+   * coming up, in the air), 2 = the gear going up, 3 = gone. From 1 on nobody can touch it.
+   */
+  dep?: number;
   /** throttle and engine speed as a share of the redline (for the exhaust) */
   th: number;
   rp: number;
@@ -58,7 +63,7 @@ export function encodeState(s: NetState): number[] {
     r(s.vel[0] * 100), r(s.vel[1] * 100), r(s.vel[2] * 100),
     r(s.acc[0] * 100), r(s.acc[1] * 100), r(s.acc[2] * 100),
     r(s.w[0] * 1e3), r(s.w[1] * 1e3), r(s.w[2] * 1e3),
-    r(s.st * 1e3), r(s.s * 10), (s.br ? 1 : 0) | ((s.ep & 3) << 1),
+    r(s.st * 1e3), r(s.s * 10), (s.br ? 1 : 0) | ((s.ep & 3) << 1) | (((s.dep ?? 0) & 3) << 3),
     r(s.th * 100), r(s.rp * 100), s.fin === undefined ? -1 : r(s.fin),
   ];
   if (s.echo) out.push(s.echo.id, r(s.echo.t * 10), r(s.echo.hold * 10));
@@ -83,6 +88,7 @@ export function decodeState(a: unknown): NetState | null {
     st: n[20] / 1e3, s: n[21] / 10, br: (n[22] & 1) as 0 | 1, ep: (n[22] >> 1) & 3,
     th: n[23] / 100, rp: n[24] / 100,
   };
+  if ((n[22] >> 3) & 3) st.dep = (n[22] >> 3) & 3;
   if (n[25] >= 0) st.fin = n[25];
   if (n.length === FIXED + 3 && n[26] > 0) st.echo = { id: n[26], t: n[27] / 10, hold: n[28] / 10 };
   return st;

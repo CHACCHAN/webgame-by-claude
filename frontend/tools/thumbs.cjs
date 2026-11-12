@@ -9,6 +9,8 @@
 // (to the eye: the GPU's rounding may differ by a level here and there).
 // Env: URL (default http://localhost:4173/; serve with `API_PROXY=http://127.0.0.1:9 npx vite preview`, /api is also
 // aborted in the browser), CHROME, PW_MODULE, QUALITY (high), TOD (night), WEBP (quality 0–1, default 0.8),
+// COURSE (oboro-downhill; the fighters stand on no road: `COURSE=edwards node tools/thumbs.cjs f15j f15c su47`, on a
+// build that has the course: `VITE_EDWARDS=1 npm run build` until its release),
 // RAW=<dir> (also keeps the full frames as PNG), SOFTWARE=1 (SwiftShader instead of the GPU: slow, for a check only).
 // On the owner's PC the GPU needs the render group: ~/.local/opt/quality/gpurun.sh URL=… node tools/thumbs.cjs
 const { chromium } = require(process.env.PW_MODULE || 'playwright');
@@ -82,7 +84,7 @@ async function render(browser, ids) {
   page.on('console', (m) => {
     if (m.type() === 'error' && !/net::ERR_FAILED|Failed to load resource/.test(m.text()) && errors.length < 20) errors.push(m.text().slice(0, 400));
   });
-  const settings = { quality: QUALITY, resolutionScale: 1, timeOfDay: TOD, masterVolume: 0, sfxVolume: 0, musicVolume: 0, assist: 1, autoShift: true, showGhost: false, cornerGuide: false, controlsGuide: false, showFps: false, courseId: 'oboro-downhill', upscale: false };
+  const settings = { quality: QUALITY, resolutionScale: 1, timeOfDay: TOD, masterVolume: 0, sfxVolume: 0, musicVolume: 0, assist: 1, autoShift: true, showGhost: false, cornerGuide: false, controlsGuide: false, showFps: false, courseId: process.env.COURSE || 'oboro-downhill', upscale: false };
   await page.addInitScript((s) => localStorage.setItem('touge-settings', JSON.stringify({ state: s, version: 1 })), settings);
   await page.goto(URL_);
   await page.waitForFunction(() => window.__game && window.__game.phase === 'attract', null, { timeout: 180000 });

@@ -12,7 +12,8 @@ describe('measured vehicle figures (tools/vehicle-stats.ts)', () => {
       const s = VEHICLE_STATS[id];
       expect(s, `${id}: run npx tsx tools/vehicle-stats.ts ${id}`).toBeDefined();
       expect(s!.topSpeed, id).toBeGreaterThan(100);
-      expect(s!.topSpeed, id).toBeLessThan(1300);
+      // (Mach 1 for the cockroach; a fighter in full afterburner on the ground a little more)
+      expect(s!.topSpeed, id).toBeLessThan(CAR_SPECS[id].jet ? 1500 : 1300);
       // everything in the game gets to 100 km/h (a commuter train in about a minute)
       expect(s!.zeroTo100, id).not.toBeNull();
       expect(s!.zeroTo100!, id).toBeGreaterThan(0.5);
@@ -75,7 +76,8 @@ describe('car select', () => {
     const by = (key: 'accel' | 'speed' | 'corner' | 'power' | 'weight') => sortVehicles(VEHICLE_ORDER, key);
     // the cheat entry leads everything but the weight
     expect(by('accel')[0]).toBe('roach');
-    expect(by('speed')[0]).toBe('roach');
+    // (but a fighter in full afterburner, once they are in the list)
+    expect(by('speed')[0]).toBe(RELEASED.edwards ? 'su47' : 'roach');
     expect(by('corner')[0]).toBe('roach');
     expect(by('weight')[0]).toBe('nsr250r');
     const t = by('accel').map((id) => VEHICLE_STATS[id]!.zeroTo100!);

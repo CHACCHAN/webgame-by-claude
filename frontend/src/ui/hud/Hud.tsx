@@ -15,6 +15,7 @@ import { leaveRoom } from '../../store/online';
 import { SLOT_COLORS } from '../../game/net/RemoteRacers';
 import { FocusFrame, Hint } from '../kit';
 import { motionOn } from '../motion';
+import { EDWARDS_AIR } from '../../game/vehicle/jets';
 
 /**
  * The rev band: a flat arc over the speed, its centre far below the cluster. Angles in degrees from straight up;
@@ -180,9 +181,11 @@ export function Hud() {
     standings: useRef<HTMLOListElement>(null),
     net: useRef<HTMLPreElement>(null),
     guide: useRef<HTMLDivElement>(null),
+    unit: useRef<HTMLDivElement>(null),
   };
   const [redline, setRedline] = useState(8000);
   const [turbo, setTurbo] = useState(false);
+  const [jet, setJet] = useState(false);
   const [sectors, setSectors] = useState<number[]>([]);
 
   useEffect(() => {
@@ -190,6 +193,7 @@ export function Hud() {
     if (!game) return;
     setRedline(game.hud.redline);
     setTurbo(game.hud.turbo);
+    setJet(game.hud.jet);
     const track = game.track;
     const timed = track.finishS - track.startS;
     // where the sector lines cross the progress bar (the last one is the finish)
@@ -234,6 +238,7 @@ export function Hud() {
     const deltas: (number | null)[] = [];
     let wasCounting = false, booted = false, goUntil = 0, lastCount = '';
     let typed = { seq: '', at: 0, n: -1 };
+    let lastUnit = 'km/h';
     let lastGear = '', lastSpeed = '', lastTime = '', lastGap = '', lastPos = 0, hot = false, lastDash = -1, lastProg = -1, lastBoost = -1, lastBar = -1;
     const streaks = Array.from({ length: 46 }, () => ({ a: Math.random() * Math.PI * 2, r: Math.random(), v: 0.6 + Math.random() }));
     let frames = 0, fpsT = performance.now();
@@ -266,12 +271,23 @@ export function Hud() {
         // four digits (the cockroach at Mach 1) in a smaller face
         r.speed.current.classList.toggle('wide', h.speedKmh >= 999.5);
       }
-      const gear = h.gear === -1 ? 'R' : h.gear === 0 ? 'N' : String(h.gear);
-      if (r.gear.current && gear !== lastGear) r.gear.current.textContent = lastGear = gear;
+      // a fighter has no gears: its engines' speed (N2, % of the full dry speed) or AB with the afterburner lit, and
+      // the Mach number beside the unit from Mach 0.5 on
+      const gear = h.jet ? (h.afterburner > 0.5 ? 'AB' : String(Math.min(100, Math.round(h.rpm / 100)))) : h.gear === -1 ? 'R' : h.gear === 0 ? 'N' : String(h.gear);
+      if (r.gear.current && gear !== lastGear) {
+        r.gear.current.textContent = lastGear = gear;
+        r.gear.current.classList.toggle('wide', gear.length > 2);
+        r.gear.current.classList.toggle('ab', gear === 'AB');
+      }
+      if (h.jet && r.unit.current) {
+        const mach = h.speedKmh / 3.6 / EDWARDS_AIR.sound;
+        const unit = mach >= 0.5 ? `km/h ・ M ${mach.toFixed(2)}` : 'km/h';
+        if (unit !== lastUnit) r.unit.current.textContent = lastUnit = unit;
+      }
       const dash = Math.round((1 - Math.min(1, h.rpm / (h.redline + 500))) * 400) / 4;
       if (r.rpmFill.current && dash !== lastDash) r.rpmFill.current.style.strokeDashoffset = String((lastDash = dash));
       // the shift point: the band and the gear turn hot just before the red
-      const isHot = h.rpm > h.redline * 0.93;
+      const isHot = !h.jet && h.rpm > h.redline * 0.93;
       if (isHot !== hot) r.cluster.current?.classList.toggle('hot', (hot = isHot));
       const boost = Math.round(h.boost * 50) / 50;
       if (r.boost.current && boost !== lastBoost) r.boost.current.style.transform = `scaleX(${(lastBoost = boost)})`;
@@ -579,12 +595,12 @@ export function Hud() {
         </svg>
         <div className="speedo">
           <div className="gear-box">
-            <small>GEAR</small>
+            <small>{jet ? 'N2 %' : 'GEAR'}</small>
             <div className="gear" ref={refs.gear}>1</div>
           </div>
           <div className="speed-box">
             <div className="speed" ref={refs.speed}>0</div>
-            <div className="unit">km/h</div>
+            <div className="unit" ref={refs.unit}>km/h</div>
           </div>
           {turbo && (
             <div className="boost">

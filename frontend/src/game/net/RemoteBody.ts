@@ -46,6 +46,8 @@ export class RemoteBody {
       return;
     }
     if (now - rx.lastHeard > SILENT_MS) proxy.ghost(now + 500);
+    // a fighter taking off is no longer on the ground on its own screen: nothing can touch it from here on
+    if (pose.depart) proxy.ghost(now + 500);
     proxy.drive(pose.position, pose.quaternion, pose.velocity.multiplyScalar(1 / timeScale), now, gap);
   }
 

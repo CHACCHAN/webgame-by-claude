@@ -28,7 +28,7 @@ const LIFT_OFF_ATTITUDE = 8 * DEG;
 const PULL = 2;
 /** gear: up from this height (m), in this many seconds */
 const GEAR_FROM = 4;
-const GEAR_TIME = 4.5;
+export const GEAR_TIME = 4.5;
 /** seconds in the air until it is out of the picture */
 const AWAY = 26;
 const _pitch = new Quaternion(), _axis = new Vector3();

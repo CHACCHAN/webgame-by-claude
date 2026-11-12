@@ -9,6 +9,8 @@
 //     players=2 fps=60 seconds=90 seed=1
 //     path=both|new|old           the current code, the code before Phase G (tools/net-legacy.ts), or both
 //     mode=present|buffered       how the current code times the peers (see PeerReceiver.LagMode)
+//     depart=1                    a fighter goes on past the finish into its take-off (race/Departure.ts), and the
+//                                 numbers are of that part alone: the last `tail` seconds (default 30)
 //     duel=1 [power=0.6 gap=10 runs=6]   instead: two cars, the first (short of power) caught by the second from
 //                                 `gap` m behind, each simulated on its own client with the other as its solid
 //                                 stand-in: when does each screen see the first touch, and how far apart are the
@@ -37,6 +39,7 @@ import { RacingLine } from '../src/game/ai/RacingLine';
 import { trainBogiePath } from '../src/game/vehicle/trains';
 import { TrainPath } from '../src/game/render/TrainPath';
 import { NetLink, type LocalState } from '../src/game/net/NetLink';
+import { Departure } from '../src/game/race/Departure';
 import { RemoteBody } from '../src/game/net/RemoteBody';
 import { ProxyCar } from '../src/game/net/ProxyCar';
 import { newPose } from '../src/game/net/PeerTrack';
@@ -56,6 +59,7 @@ const PLAYERS = Math.max(2, num('players', Math.max(2, vehicles.length)));
 const PATHS = (opt.get('path') ?? 'both') === 'both' ? (['old', 'new'] as const) : ([opt.get('path')] as ('old' | 'new')[]);
 const MODE = (opt.get('mode') ?? 'present') as LagMode;
 const impairment: Impairment = { delay: RTT / 2, jitter: JITTER, loss: LOSS / 100, ...(opt.has('resend') ? { resend: num('resend', 200) } : {}) };
+const DEPART = num('depart', 0) > 0;
 const DT_MS = PHYSICS_DT * 1000;
 const SEND_INTERVAL = 1 / 30;
 
@@ -149,6 +153,8 @@ interface CarState {
   steer: number;
   s: number;
   ep: number;
+  /** a fighter's take-off (NetState.dep) */
+  dep?: number;
   /** this step was a hit (wall): the game sends such a state at once */
   hit: boolean;
 }
@@ -189,9 +195,30 @@ function record(carId: CarId, seconds: number): CarState[] {
       last.copy(sim.velocity);
     }
   }
+  // a fighter's take-off after the finish, carried as the game carries it (Game.depart): the peers get it as packets
+  // like the drive before it
+  if (DEPART && CAR_SPECS[carId].jet && ai.s >= track.finishS) {
+    const dep = new Departure(CAR_SPECS[carId]);
+    dep.rotate(sim.position, Math.atan2(sim.forward.x, sim.forward.z), sim.speed);
+    departAt.set(carId, out.length);
+    for (let k = 0; dep.stage !== 'gone' && k < 40 / PHYSICS_DT; k++) {
+      dep.step(PHYSICS_DT);
+      sim.carry(dep.position, dep.quaternion, { spool: 1, afterburner: 1 });
+      sim.preStep(PHYSICS_DT);
+      physics.step();
+      sim.postStep(PHYSICS_DT);
+      acc.lerp(d.subVectors(sim.velocity, last).divideScalar(PHYSICS_DT).clampLength(0, 40), 1 - Math.exp(-PHYSICS_DT / 0.06));
+      last.copy(sim.velocity);
+      const w = sim.body.angvel();
+      out.push({ p: sim.position.clone(), q: sim.quaternion.clone(), vel: sim.velocity.clone(), w: new Vector3(w.x, w.y, w.z), acc: acc.clone(), fwd: sim.speed, steer: 0, s: ai.s, ep, dep: dep.gear > 0 ? 2 : 1, hit: false });
+    }
+    console.log(`  ${carId}: take-off from ${(out[departAt.get(carId)!].fwd * 3.6).toFixed(0)} km/h, ${((out.length - departAt.get(carId)!) * PHYSICS_DT).toFixed(1)} s, ends ${(out[out.length - 1].p.y - out[departAt.get(carId)!].p.y).toFixed(0)} m up at ${(out[out.length - 1].fwd * 3.6).toFixed(0)} km/h`);
+  }
   physics.dispose();
   return out;
 }
+/** the step each vehicle's take-off begins at */
+const departAt = new Map<CarId, number>();
 
 // ------------------------------------------------------------------ measuring
 const pct = (a: number[], p: number) => (a.length ? [...a].sort((x, y) => x - y)[Math.min(a.length - 1, Math.floor(a.length * p))] : 0);
@@ -496,7 +523,7 @@ class Player {
       if ((urgent && !opt.has('nourgent')) || this.sendT >= SEND_INTERVAL - 0.002) {
         this.sendT = urgent && !opt.has('nourgent') ? 0 : Math.min(this.sendT - SEND_INTERVAL, SEND_INTERVAL);
         const s = this.car.state();
-        const st: LocalState = { at: this.car.stateWall() + this.off, p: v3(s.p), q: [s.q.x, s.q.y, s.q.z, s.q.w], vel: v3(s.vel), w: v3(s.w), acc: opt.has('noacc') ? [0, 0, 0] : v3(s.acc), st: s.steer, s: s.s, br: 0, ep: s.ep, th: 0, rp: 0 };
+        const st: LocalState = { at: this.car.stateWall() + this.off, p: v3(s.p), q: [s.q.x, s.q.y, s.q.z, s.q.w], vel: v3(s.vel), w: v3(s.w), acc: opt.has('noacc') ? [0, 0, 0] : v3(s.acc), st: s.steer, s: s.s, br: 0, ep: s.ep, th: 0, rp: 0, ...(s.dep ? { dep: s.dep } : {}) };
         this.link.send(st);
       }
     }
@@ -541,10 +568,12 @@ function replay(path: Path, truths: Map<CarId, CarState[]>) {
   });
   for (const p of players) p.join(hub, legacyHub, players);
   const end = Math.min(SECONDS, Math.min(...[...truths.values()].map((s) => s.length)) * PHYSICS_DT - 2 * PLAYERS) * 1000;
+  // (depart=1: from two seconds before the first take-off on)
+  const from = DEPART && departAt.size ? Math.min(...departAt.values()) * DT_MS - 2000 : 3000;
   for (const p of players) {
     const phase = random() * frame;
     const tick = (t: number) => {
-      p.frame(t, t > 3000);
+      p.frame(t, t > from);
       if (t + frame < end) sched.at(t + frame, () => tick(t + frame));
     };
     sched.at(phase, () => tick(phase));

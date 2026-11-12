@@ -29,6 +29,8 @@ export interface CarPose {
   steer?: number;
   braking?: boolean;
   reversing?: boolean;
+  /** a fighter's engines (the flames), when no simulation is behind the pose */
+  engines?: { spool: number; afterburner: number };
 }
 
 /**
@@ -72,6 +74,7 @@ export class CarVisual {
   private tailBase = 0.9;
   /** the live sim this visual follows (a bike's wheelie / stoppie), if any */
   private live: VehicleSim | null = null;
+  private engines: { spool: number; afterburner: number } | null = null;
 
   constructor(spec: CarSpec, opts: { headlights: boolean; shadows: boolean; ghost?: boolean; bodyColor?: string; rideHeight: number }) {
     this.spec = spec;
@@ -294,7 +297,7 @@ export class CarVisual {
     this.rig.creature?.update(this.root, dt);
     this.rig.bike?.update(this.root, dt, this.live ?? undefined);
     this.rig.tank?.update(this.root, dt);
-    this.rig.jet?.update(this.root, dt, this.live);
+    this.rig.jet?.update(this.root, dt, this.live ?? this.engines);
     if (!this.pods.length || this.podOpen === this.podTarget) return;
     const step = dt / 0.6;
     this.podOpen = this.podTarget > this.podOpen ? Math.min(this.podTarget, this.podOpen + step) : Math.max(this.podTarget, this.podOpen - step);
@@ -361,6 +364,7 @@ export class CarVisual {
   /** Update from a ghost pose. */
   syncFromPose(p: CarPose, dt: number) {
     this.live = null;
+    this.engines = p.engines ?? null;
     this.root.position.copy(p.position);
     this.root.quaternion.copy(p.quaternion);
     if (p.wheelRotations) this.rig.wheels.forEach((w, i) => (w.spin.rotation.x = p.wheelRotations![i]));

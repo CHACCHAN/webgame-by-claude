@@ -263,6 +263,10 @@ export function jetForLivery(spec: CarSpec, color?: string): CarSpec {
  * afterburner (0…1), less with the thinner air (σ^0.75) and changing with the Mach number as an afterburning
  * low-bypass turbofan's does (estimated lapse).
  */
+/** The engine speed a fighter's instruments show (rpm), and the engines' state read back from it (a peer's packet). */
+export const jetRpm = (spool: number, afterburner: number) => (65 + 35 * spool + 2 * afterburner) * 100;
+export const enginesAt = (rpm: number) => ({ spool: Math.min(Math.max((rpm - 6500) / 3500, 0), 1), afterburner: Math.min(Math.max((rpm - 10000) / 200, 0), 1) });
+
 export function jetThrust(e: JetInfo['engines'], spool: number, afterburner: number, mach: number) {
   const lapse = Math.pow(EDWARDS_AIR.density / 1.225, 0.75);
   const dry = (e.idle + (e.dry - e.idle) * spool) * (1 - 0.15 * mach + 0.3 * mach * mach);
