@@ -31,10 +31,39 @@
 .ol-code-big small { grid-column: 1 / -1; font-family: var(--font-display); font-stretch: var(--w-norm); font-weight: 500; font-size: var(--fs-xs); letter-spacing: 0.3em; color: var(--cyan); }
 .ol-code-big b { font-family: var(--font-display); font-stretch: var(--w-cond); font-weight: 800; font-size: 3.6rem; line-height: 1.05; letter-spacing: 0.26em; text-shadow: var(--glow-cyan-text); user-select: text; }
 .ol-code-big span { font-size: var(--fs-s); color: var(--muted); }
+/* the host's change of course or conditions: the course select / the conditions list as a screen over the room
+   (or the results), which waits hidden under it, as under the car select (picker.css) */
+.room-over { z-index: 6; }
+.overlay:has(> .room-over) > .screen:not(.room-over) { visibility: hidden; }
+
+/* the room's course and its time & weather: what they are, and for the host the way to change each */
+.ol-top { display: contents; }
+.ol-setup { display: grid; grid-template-columns: 1.3fr 1fr; gap: 0.4rem; }
+.ol-set { --c: var(--cut-s); --tex: none; --fill: rgb(var(--c-ink-2) / 0.55); display: flex; align-items: center; gap: 0.6rem; min-width: 0; padding: 0.4rem 0.8rem; text-align: left; }
+button.ol-set:hover { --edge: var(--cyan); }
+.ol-set.fixed { --edge: var(--line-soft); }
+.ol-set-name { flex: 1; min-width: 0; }
+.ol-set-name small { display: block; font-size: var(--fs-2xs); letter-spacing: 0.14em; color: var(--muted); }
+.ol-set-name b { display: block; font-size: var(--fs-m); font-weight: 700; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ol-set em { flex: none; font-style: normal; font-size: var(--fs-s); font-weight: 700; color: var(--cyan); white-space: nowrap; }
 .ol-slots, .ol-standings { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.3rem; }
 .ol-slots li { --c: 5px; --tex: none; --fill: rgb(var(--c-ink-2) / 0.5); display: flex; align-items: center; gap: 0.6rem; min-height: 2.3rem; padding: 0.3rem 0.8rem 0.3rem 0.7rem; }
 .ol-slots li.me { --edge: var(--line-hot); }
 .ol-slots li.empty { --edge: var(--line-soft); --fill: rgb(var(--c-ink) / 0.2); }
+/* a seat's state at a glance: amber while its game loads the course (the whole room waits for it), green once ready */
+.ol-slots li { position: relative; }
+.ol-slots li.loading { --edge: rgb(var(--c-amber) / 0.75); --fill: rgb(var(--c-amber) / 0.1); }
+.ol-slots li.ready { --edge: rgb(var(--c-green) / 0.6); --fill: rgb(var(--c-green) / 0.07); }
+.ol-slots li.gone { --edge: rgb(var(--c-magenta) / 0.6); }
+.ol-slots li.gone > b, .ol-slots li.gone > span { opacity: 0.55; }
+/* how far that game has come, along the row's foot (a sweep while it has not told) */
+.ol-load { position: absolute; left: 0; right: 0; bottom: 0; height: 3px; overflow: hidden; background: rgb(var(--c-amber) / 0.2); }
+.ol-load > div { height: 100%; background: var(--amber); transform-origin: left center; transition: transform 0.5s var(--e-out); }
+.ol-load.blind > div { width: 28%; transform: none !important; animation: ol-load-sweep 1.5s linear infinite; }
+.motion-off .ol-load.blind > div { width: 100%; animation: kf-blink 1.2s steps(2) infinite; }
+@keyframes ol-load-sweep { from { translate: -100% 0; } to { translate: 360% 0; } }
+.ol-kick { flex: none; padding: 0.05rem 0.6rem; }
+.ol-kick:hover { --edge: var(--magenta); color: var(--magenta); }
 /* the paint of the seat's grid slot */
 .ol-slots li > i, .ol-standings li > i, .lobby-tag > i { flex: none; width: 0.7rem; height: 0.7rem; transform: rotate(45deg); }
 .ol-slots li.empty > i { opacity: 0.35; }
@@ -45,7 +74,9 @@
 .ol-slots em, .lobby-tag em { flex: none; padding: 0 0.45rem; border: 1px solid currentColor; font-style: normal; font-size: var(--fs-xs); font-weight: 700; line-height: 1.55; white-space: nowrap; }
 em.ready { color: var(--green); }
 em.not-ready { color: var(--muted); }
-em.loading { color: var(--muted); animation: kf-blink 1.2s ease-in-out infinite; animation-play-state: var(--kf-idle); }
+em.loading { display: inline-flex; align-items: center; gap: 0.4em; color: var(--amber); }
+em.loading .busy-glyph { width: 0.7em; height: 0.7em; border-color: rgb(var(--c-amber) / 0.3); border-top-color: var(--amber); border-right-color: var(--amber); }
+em.gone { color: var(--magenta); }
 em.choosing { color: var(--cyan); }
 em.host { color: var(--void); background: var(--text); border-color: var(--text); font-family: var(--font-display); letter-spacing: 0.1em; }
 em.you { color: var(--on-cyan); background: var(--cyan); border-color: var(--cyan); font-family: var(--font-display); letter-spacing: 0.1em; }
@@ -53,6 +84,10 @@ em.you { color: var(--on-cyan); background: var(--cyan); border-color: var(--cya
 .ol-actions .ol-start, .ol-actions .ol-ready { flex: 1; }
 .ol-ready.on { --edge: var(--green); --fill: rgb(var(--c-green) / 0.14); color: var(--green); }
 .ol-waiting { order: 3; flex-basis: 100%; font-size: var(--fs-s); color: var(--muted); animation: kf-blink 1.8s ease-in-out infinite; animation-play-state: var(--kf-idle); }
+/* what the start still waits for, by name (steady: it is to be read) */
+.ol-hold { animation: none; color: var(--text-2); }
+.ol-hold.amber { color: var(--amber); }
+.ol-hold.alert { color: var(--magenta); }
 .online-results .ol-actions { justify-content: center; }
 .online-results .ol-waiting { order: 0; flex-basis: auto; }
 
@@ -103,10 +138,18 @@ em.you { color: var(--on-cyan); background: var(--cyan); border-color: var(--cya
   .ol-split { grid-template-columns: 1.5fr 1fr; gap: 14px; }
   .ol-section { gap: 5px; }
   .ol-me b { font-size: 16px; }
-  .ol-code-big { grid-template-columns: auto auto 1fr; column-gap: 10px; }
-  .ol-code-big small { grid-column: auto; }
-  .ol-code-big b { font-size: 24px; }
-  .ol-code-big span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  /* one row: the code, then the room's course and conditions (five seats and the buttons must fit under it;
+     the labels and the code's hint give way: the values say what they are, the bar above says ルーム + the code) */
+  .ol-top { display: flex; align-items: stretch; gap: 8px; min-width: 0; }
+  .ol-code-big { flex: none; display: block; }
+  .ol-code-big small, .ol-code-big span { display: none; }
+  .ol-code-big b { display: block; font-size: 24px; }
+  .ol-setup { flex: 1; min-width: 0; gap: 4px; }
+  .ol-set { padding: 0 8px; gap: 6px; }
+  .ol-set-name small, .ol-set em span { display: none; }
+  .ol-set-name b { font-size: 12px; }
+  .ol-set em { font-size: 11px; }
+  .ol-load { height: 2px; }
   .ol-slots, .ol-standings { gap: 3px; }
   .ol-slots li { min-height: 26px; padding: 1px 8px; gap: 6px; font-size: 12px; }
   .ol-standings li { padding: 2px 10px 2px 5px; gap: 7px; font-size: 12px; }

@@ -38,6 +38,11 @@
 .course-loading .cl-name { font-family: var(--font-name); font-weight: 800; font-size: clamp(3.4rem, 8vw, 6.6rem); line-height: 1.15; text-shadow: var(--glow-cyan-text); }
 .course-loading .cl-tag { color: var(--text-2); letter-spacing: 0.2em; }
 .course-loading .boot-art { opacity: 0.45; }
+/* an online room's course being built: whose doing it is, and what comes after */
+.cl-room { display: grid; gap: 0.2rem; max-width: 36rem; margin-top: 1.5rem; padding-left: 1rem; border-left: 2px solid var(--amber); }
+.cl-room small { font-family: var(--font-display); font-stretch: var(--w-norm); font-weight: 600; font-size: var(--fs-xs); letter-spacing: 0.3em; color: var(--amber); }
+.cl-room b { font-size: var(--fs-l); font-weight: 700; }
+.cl-room span { font-size: var(--fs-s); line-height: 1.7; color: var(--text-2); }
 
 /* ------------------------------------------------------------- title */
 .title { cursor: pointer;
@@ -149,6 +154,8 @@
 .cond-row .cw-jp { font-size: var(--fs-2xl); font-weight: 700; letter-spacing: 0.06em; line-height: 1.15; color: rgb(var(--c-text) / 0.55); transition: color var(--t-fast); }
 .cond-row .cw-en { font-family: var(--font-display); font-stretch: var(--w-cond); font-weight: 600; font-size: var(--fs-s); letter-spacing: 0.26em; color: var(--muted); padding-left: 0.9rem; transition: color var(--t-fast); }
 .cond-row.active { transform: translateX(0.5rem); }
+/* the one an online room has now, in its host's list */
+.row-now { margin-left: 0.8em; padding: 0 0.5em; border: 1px solid currentColor; font-family: var(--font-jp); font-style: normal; font-size: var(--fs-xs); font-weight: 700; letter-spacing: 0.1em; line-height: 1.6; vertical-align: 0.4em; color: var(--green); text-shadow: none; }
 .cond-row.active .cw-jp { color: var(--text); text-shadow: var(--glow-cyan-text); }
 .cond-row.active .cw-en, .cond-row.active .cw-no { color: var(--cyan); }
 .cond-panel { position: absolute; left: var(--gutter); bottom: calc(var(--bar) + 2.2rem); width: min(40rem, 90vw); padding-left: 1.4rem; border-left: 2px solid var(--cyan); animation: var(--kf-cut) var(--t-wipe) var(--e-out) both; }

@@ -37,6 +37,31 @@ describe('the release switch', () => {
     expect(c![1]).toBe(s![1]);
   });
 
+  it('the server offers the vehicles on every course that the game does (config/game.php `courses`, `vehiclesFor`)', () => {
+    const php = readFileSync(new URL('../../../../backend/config/game.php', import.meta.url), 'utf8');
+    // the `$cars` list: one entry a line, 'id' => ['name' => …, 'courses' => ['a', 'b'], 'release' => 'x']
+    const block = /\$cars = \[\n([\s\S]*?)\n\];/.exec(php)![1];
+    const server: { id: string; courses?: string[]; release?: string }[] = [];
+    for (const line of block.split('\n')) {
+      const m = /^\s*'([a-z0-9]+)' => \[(.*)\],\s*$/.exec(line);
+      if (!m) continue;
+      const courses = /'courses' => \[([^\]]*)\]/.exec(m[2]);
+      server.push({ id: m[1], courses: courses ? [...courses[1].matchAll(/'([^']+)'/g)].map((c) => c[1]) : undefined, release: /'release' => '([a-z]+)'/.exec(m[2])?.[1] });
+    }
+    expect(server.length).toBeGreaterThan(20);
+    // (App\Support\Vehicles::on, with the switch as this run has it)
+    const open = server.filter((c) => !c.release || RELEASED[c.release as keyof typeof RELEASED]);
+    const on = (course: string) => open.filter((c) => !c.courses || c.courses.includes(course)).map((c) => c.id);
+    for (const course of ALL_COURSES) {
+      expect([...on(course)].sort(), course).toEqual([...vehiclesFor(course)].sort());
+      // the vehicle a member is seated in when theirs does not run there: the first on both sides
+      expect(on(course)[0], course).toBe(vehiclesFor(course)[0]);
+    }
+    // whatever the server binds to courses is bound to the same ones in the game, released or not
+    for (const c of server.filter((x) => x.courses)) expect(CAR_SPECS[c.id as CarId].jet?.courses, c.id).toEqual(c.courses);
+    for (const id of JET_ORDER) expect(server.find((c) => c.id === id)?.courses, id).toEqual(CAR_SPECS[id].jet!.courses);
+  });
+
   it('keeps the course and the fighters out of every list until then, and the fighters at Edwards afterwards', () => {
     expect(ALL_COURSES).toContain('edwards');
     expect(COURSE_ORDER.includes('edwards')).toBe(RELEASED.edwards);

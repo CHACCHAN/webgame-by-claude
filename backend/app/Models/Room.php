@@ -25,17 +25,25 @@ class Room extends Model
         static::updated(function (Room $room) {
             if ($room->wasChanged('track_id')) {
                 $room->members()->update(['loaded' => false, 'ready' => false]);
-                // a vehicle that does not run on the new course (a fighter away from Edwards) gives way to the
-                // first that does, its paint with it
-                foreach ($room->members()->get() as $member) {
-                    if (! Vehicles::allowedOn($member->car_id, $room->track_id)) {
-                        $member->update(['car_id' => Vehicles::fallback($room->track_id), 'color' => null]);
-                    }
-                }
             } elseif ($room->wasChanged('time_of_day')) {
                 $room->members()->update(['ready' => false]);
             }
         });
+    }
+
+    /**
+     * The host's change of course and / or conditions (null: as it is): the one way a room's course changes. A
+     * member whose vehicle the new course does not offer (`App\Support\Vehicles`: a fighter away from its air base)
+     * gets the course's first one, without a paint (it was the other vehicle's); what a change takes back of
+     * `loaded` / `ready` is this model's `updated` hook.
+     */
+    public function change(?string $trackId, ?string $timeOfDay): void
+    {
+        $trackId ??= $this->track_id;
+        if ($trackId !== $this->track_id) {
+            $this->members()->whereNotIn('car_id', Vehicles::on($trackId))->update(['car_id' => Vehicles::fallback($trackId), 'color' => null]);
+        }
+        $this->update(['track_id' => $trackId, 'time_of_day' => $timeOfDay ?? $this->time_of_day ?? 'night']);
     }
 
     public function members(): HasMany

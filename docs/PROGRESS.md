@@ -2181,3 +2181,33 @@ to be seen). The films still show the balls until they are recorded again.
   on WebGPU 0. After the deploy: see the line below.
 - **Deployed 11-12 as v2.4.2** (bundle `index-B4hwCPUr.js`, local = public; leaderboard API 200; `/api/content`
   says 2.4.2; the public address answers the four stamped films with the lengths of the files in the tree).
+
+## Release 2.5 (11-12): in an online room the host changes course and conditions; everyone sees who is loading
+
+- **The owner (11-12)**: map and weather cannot be changed in an online battle: make them changeable; and tell,
+  by a notice or something, that the other players are loading. Built by an agent
+  (`~/.local/opt/wt/ONLINE_BRIEF.md`, branch `worktree-agent-a13d503fcd759c88f`).
+- **Server**: `PATCH /api/rooms/{code}` (host only → 403, `waiting` only → 409; `track_id` / `time_of_day`);
+  `POST …/rematch` takes the same two; another course takes everyone's `loaded` and `ready` back and replaces a
+  vehicle the course does not offer (`Room::vehiclesOn`: none set yet), other conditions take the readies; a
+  `loaded` report carries the course's id and one for a course the room has left is dropped; the start blocker
+  names who is loading; `POST …/kick` (host, waiting): offered only after 45 s without news from a member or 8 s
+  off the channel.
+- **Client**: the room's two cells (course, time & weather) are the host's buttons (X / C, click, tap) and open
+  the single-player course select and conditions list over the room (confirm = one request; the conditions list
+  previews in the host's own game); on the results the host has コースを変えて走る. Every game follows the room
+  (`followRoom`). A loading member's row: amber edge, 読み込み中 and a bar (percent told over the presence channel,
+  `client-load`, ≤ 2 Hz); under the start button, by name, who is loading or not ready; a notice to the others
+  when the host changes something; the loading member's own loading screen says why.
+- Verified by me on the merged tree (v2.4.2 + the branch): tsc; vitest 245; backend tests 67 (883 assertions) on
+  an isolated stack; E2E there: `online.spec.ts` (4, the new test among them: conditions preview / Esc /
+  confirm, notices, course change, hold lines by name, stale report dropped, race, next course from the results,
+  second start) and `mobile.spec.ts` (1): 5 passed in 26 min; `gpu-errors` 0 / 0 (WebGPU, WebGL 2); the
+  single-player course select (films with their stamps) and conditions screen after the extraction of
+  `CourseSelect` / `ConditionsSelect` (pictures looked at, no page errors); the agent's two sheets looked at
+  (`~/.local/opt/wt/online/sheet-1920.jpg`, `sheet-phone.jpg`). By the agent: three games on GPU Chrome
+  (two desktops, one phone) through the whole flow; the full E2E suite before my merge (15 of 15).
+- Not verified: Safari / Firefox, a real phone (the overlay uses `:has()`); a controller; Authentik members in a
+  room; vehicle replacement beyond the backend test. Known: on a phone the notice covers the room's top row for
+  its 8 s.
+

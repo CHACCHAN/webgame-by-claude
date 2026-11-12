@@ -35,14 +35,6 @@ class RoomController extends Controller
         return isset($data['color']) ? strtolower($data['color']) : null;
     }
 
-    /** A vehicle that runs only on certain courses (a fighter: Edwards) is refused on any other. */
-    private static function mustBeAllowed(string $carId, string $trackId): void
-    {
-        if (! Vehicles::allowedOn($carId, $trackId)) {
-            throw ValidationException::withMessages(['car_id' => 'この車両はこのコースでは使えません']);
-        }
-    }
-
     public function store(Request $request): JsonResponse
     {
         $data = $request->validate([
@@ -51,7 +43,7 @@ class RoomController extends Controller
             'car_id' => ['required', 'string', Rule::in(array_keys(config('game.cars')))],
             'color' => self::COLOR_RULE,
         ]);
-        self::mustBeAllowed($data['car_id'], $data['track_id']);
+        $this->offered($data['car_id'], $data['track_id']);
         $player = $this->player($request);
 
         Room::where('updated_at', '<', now()->subMinutes((int) config('game.online.room_ttl_minutes')))->delete();
@@ -88,8 +80,8 @@ class RoomController extends Controller
         $player = $this->player($request);
         $room = $this->room($code);
         // whoever comes in by a code cannot know the room's course: a vehicle that does not run there (a fighter
-        // anywhere but at Edwards) is not refused, its driver is seated in the first that does, without a paint, and
-        // picks another in the room
+        // anywhere but at Edwards) is not refused, its driver is seated in the course's first one, without a paint
+        // (as when the host changes the course: `Room::change`), and picks another in the room
         if (! Vehicles::allowedOn($data['car_id'], $room->track_id)) {
             $data['car_id'] = Vehicles::fallback($room->track_id);
             $data['color'] = null;
@@ -145,6 +137,8 @@ class RoomController extends Controller
      * (the 準備完了 button, a toggle). Another car takes the ready back; nobody is ready before their game has loaded.
      * `color`: the vehicle's paint (null: none, the seat's colour). Another car sent without one drops the old paint
      * (it was that vehicle's); another paint alone keeps the ready: it changes nothing of the race.
+     * `track_id` with `loaded`: the course that game has loaded. A report for a course the room has left meanwhile
+     * (the host changed it while the report was on its way) is dropped: that game is loading again.
      */
     public function update(Request $request, string $code): JsonResponse
     {
@@ -154,6 +148,7 @@ class RoomController extends Controller
             'color' => self::COLOR_RULE,
             'loaded' => ['sometimes', 'boolean'],
             'ready' => ['sometimes', 'boolean'],
+            'track_id' => ['sometimes', 'string', 'max:64'],
         ]);
         if (! array_intersect_key($data, array_flip(['car_id', 'color', 'loaded', 'ready']))) {
             throw ValidationException::withMessages(['car_id' => '車両を指定してください']);
@@ -162,17 +157,16 @@ class RoomController extends Controller
         if ((isset($data['car_id']) || array_key_exists('color', $data)) && $room->status === 'racing') {
             return response()->json(['message' => 'レース中は車を変更できません'], 409);
         }
-        if (isset($data['car_id'])) {
-            self::mustBeAllowed($data['car_id'], $room->track_id);
-        }
         $changes = [];
         if (isset($data['car_id']) && $data['car_id'] !== $member->car_id) {
+            $this->offered($data['car_id'], $room->track_id);
             $changes += ['car_id' => $data['car_id'], 'color' => null, 'ready' => false];
         }
         if (array_key_exists('color', $data)) {
             $changes['color'] = self::color($data);
         }
-        if ($request->has('loaded')) {
+        $stale = isset($data['track_id']) && $data['track_id'] !== $room->track_id;
+        if ($request->has('loaded') && ! ($stale && $request->boolean('loaded'))) {
             $changes['loaded'] = $request->boolean('loaded');
             if (! $changes['loaded']) {
                 $changes['ready'] = false;
@@ -194,6 +188,55 @@ class RoomController extends Controller
         $this->broadcastRoom($room);
 
         return response()->json($room->payload());
+    }
+
+    /**
+     * The host changes the room's course and / or its time & weather, while the room waits (before the first race
+     * and between races). Another course: every game loads it again (`loaded` and `ready` go back for everyone) and
+     * a vehicle the course does not offer is replaced; other conditions alone: the readies go back.
+     */
+    public function settings(Request $request, string $code): JsonResponse
+    {
+        $data = $request->validate(self::settingsRules());
+        if (! isset($data['track_id']) && ! isset($data['time_of_day'])) {
+            throw ValidationException::withMessages(['track_id' => 'コースか時間帯・天候を指定してください']);
+        }
+        [$room] = $this->membership($request, $code);
+        if ($room->host_player_id !== $this->player($request)->id) {
+            return response()->json(['message' => 'コースと天候を変更できるのはホストだけです'], 403);
+        }
+        if ($room->status !== 'waiting') {
+            return response()->json(['message' => 'コースと天候を変更できるのはレースの前だけです'], 409);
+        }
+        DB::transaction(fn () => $room->change($data['track_id'] ?? null, $data['time_of_day'] ?? null));
+        $room->touch();
+        $this->broadcastRoom($room);
+
+        return response()->json($room->fresh()->payload());
+    }
+
+    /**
+     * The host takes a member out of the waiting room (a game that never finishes loading, a tab left asleep: the
+     * start waits for every member). Only while the room waits; the member can come back with the code.
+     */
+    public function kick(Request $request, string $code): JsonResponse
+    {
+        $data = $request->validate(['player_id' => ['required', 'integer']]);
+        [$room] = $this->membership($request, $code);
+        $host = $this->player($request);
+        if ($room->host_player_id !== $host->id) {
+            return response()->json(['message' => 'メンバーを外せるのはホストだけです'], 403);
+        }
+        if ($room->status !== 'waiting') {
+            return response()->json(['message' => 'メンバーを外せるのはレースの前だけです'], 409);
+        }
+        $member = $data['player_id'] === $host->id ? null : $room->members()->with('player')->where('player_id', $data['player_id'])->first();
+        if (! $member) {
+            return response()->json(['message' => 'そのプレイヤーはこのルームにいません'], 404);
+        }
+        $this->removeMember($room, $member->player);
+
+        return response()->json($room->fresh()->payload());
     }
 
     public function leave(Request $request, string $code): JsonResponse
@@ -269,17 +312,22 @@ class RoomController extends Controller
         return response()->json($room->payload());
     }
 
-    /** Back to the lobby for another race with the same people. */
+    /**
+     * Back to the lobby for another race with the same people; with `track_id` / `time_of_day` on another course or
+     * in other conditions at once (the host picks the next course on the results screen: one step for everyone).
+     */
     public function rematch(Request $request, string $code): JsonResponse
     {
+        $data = $request->validate(self::settingsRules());
         [$room] = $this->membership($request, $code);
         if ($room->host_player_id !== $this->player($request)->id) {
             return response()->json(['message' => 'ホストだけが操作できます'], 403);
         }
-        DB::transaction(function () use ($room) {
-            // `loaded` stays: the course is still on everybody's screen
+        DB::transaction(function () use ($room, $data) {
+            // `loaded` stays: the course is still on everybody's screen (unless it is another one now)
             $room->members()->update(['finish_ms' => null, 'ready' => false]);
             $room->update(['status' => 'waiting', 'start_at_ms' => null]);
+            $room->change($data['track_id'] ?? null, $data['time_of_day'] ?? null);
         });
         $this->broadcastRoom($room);
 
@@ -314,6 +362,23 @@ class RoomController extends Controller
         $signature = hash_hmac('sha256', $data['socket_id'].':'.$data['channel_name'].':'.$channelData, $secret);
 
         return response()->json(['auth' => $key.':'.$signature, 'channel_data' => $channelData]);
+    }
+
+    /** @return array<string, list<mixed>> a room's course and conditions, each optional (as `store` takes them) */
+    private static function settingsRules(): array
+    {
+        return [
+            'track_id' => ['sometimes', 'string', Rule::in(array_keys(config('game.tracks')))],
+            'time_of_day' => ['sometimes', 'string', Rule::in(config('game.times_of_day'))],
+        ];
+    }
+
+    /** Refuses a vehicle that may not race on the course (the game does not offer it there either). */
+    private function offered(string $carId, string $trackId): void
+    {
+        if (! Vehicles::allowedOn($carId, $trackId)) {
+            throw ValidationException::withMessages(['car_id' => config("game.cars.{$carId}.name").'はこのコースでは走れません']);
+        }
     }
 
     private function player(Request $request): Player
@@ -368,8 +433,9 @@ class RoomController extends Controller
     /** Why the host cannot start yet (a message for the host), or null when everyone is loaded and every guest ready. */
     private function startBlocker(Room $room): ?string
     {
-        if ($room->members()->where('loaded', false)->exists()) {
-            return 'まだコースを読み込んでいるプレイヤーがいます';
+        $loading = $room->members()->with('player')->where('loaded', false)->get();
+        if ($loading->isNotEmpty()) {
+            return $loading->map(fn (RoomPlayer $m) => $m->player->name)->implode('、').' がコースを読み込んでいます';
         }
         $waiting = $room->members()->where('ready', false)->where('player_id', '!=', $room->host_player_id)->count();
 

@@ -114,6 +114,11 @@ export function showRoomLineup(keep = false) {
   publish();
 }
 
+/** The line-up is gone from the scene (the game builds another course): nothing is shown until `showRoomLineup`. */
+export function hideRoomLineup() {
+  lineup = false;
+}
+
 /** A vehicle looked at in a picker that leaves the line-up on screen: shown in the player's seat, told to the others. */
 export function previewCar(carId: CarId, livery?: string) {
   if (!waiting()) return;
@@ -173,7 +178,9 @@ function publish() {
   const was = useLobby.getState().choosing;
   const same = Object.keys(was).length === Object.keys(choosing).length && Object.entries(choosing).every(([id, car]) => was[Number(id)] === car);
   if (!same) useLobby.setState({ choosing });
-  if (lineup && entries.length) gameHolder.game?.showLobby(entries);
+  // (never into a course that is being built, or one the room has left)
+  const game = gameHolder.game;
+  if (lineup && entries.length && game && game.course?.id === room!.track_id && !useApp.getState().loading) game.showLobby(entries);
 }
 
 /** A picker's choice reaching the engine (`showGarage`, `setGarageColor`) while in a room: that is browsing. */

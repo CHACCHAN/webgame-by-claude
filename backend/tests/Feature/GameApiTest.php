@@ -186,7 +186,7 @@ class GameApiTest extends TestCase
         $token = $this->register();
         $this->assertFalse(config('game.release.edwards'));
         $this->assertArrayHasKey('edwards', config('game.catalog.tracks'));
-        $this->assertSame(['edwards'], config('game.catalog.cars.f15j.tracks'));
+        $this->assertSame(['edwards'], config('game.catalog.cars.f15j.courses'));
         $this->assertArrayNotHasKey('edwards', config('game.tracks'));
         $this->assertArrayNotHasKey('su47', config('game.cars'));
         // nothing can be recorded or looked up there yet

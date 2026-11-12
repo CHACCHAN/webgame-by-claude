@@ -15,7 +15,7 @@ import { CarsScreen } from './ui/screens/Cars';
 import { TouchControls } from './ui/hud/TouchControls';
 import { useTouch } from './ui/touch';
 import { toggleFullscreen } from './ui/fullscreen';
-import { AccountNotice, BusyMark, ShellNav, ShellTop } from './ui/Shell';
+import { AccountNotice, BusyMark, RoomNotice, ShellNav, ShellTop } from './ui/Shell';
 import { useScreenWipe } from './ui/motion';
 import { noteInput } from './ui/inputDevice';
 import { Cloud } from './ui/fx/Cloud';
@@ -141,6 +141,7 @@ export function App() {
       {!calm && screen !== 'race' && screen !== 'replay' && screen !== 'boot' && <Cloud />}
       <BusyMark />
       <AccountNotice />
+      <RoomNotice />
       {touch && (
         <div className="rotate-hint">
           <svg viewBox="0 0 48 48" aria-hidden>

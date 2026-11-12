@@ -38,6 +38,9 @@ async function apiPlayer(request: APIRequestContext, name: string) {
     join: (code: string, car = 'hayate') => request.post(`/api/rooms/${code}/join`, { data: { car_id: car }, headers }),
     leave: (code: string) => request.post(`/api/rooms/${code}/leave`, { headers }),
     loaded: (code: string) => me(code, { loaded: true }),
+    /** as a game reports it: the course it has loaded (dropped by the server when the room is on another one) */
+    loadedOn: (code: string, track: string) => me(code, { loaded: true, track_id: track }),
+    change: (code: string, data: object) => request.patch(`/api/rooms/${code}`, { data, headers }),
     ready: (code: string) => me(code, { ready: true }),
     finish: async (code: string, timeMs: number) => {
       const room = await (await request.get(`/api/rooms/${code}`, { headers })).json();
@@ -375,6 +378,145 @@ test('online waiting room: the members\' vehicles stand on the course; one being
   expect(roachPaint).toMatch(/^#[0-9a-f]{6}$/);
   const paints = (await game(host.page)).remotes.map((r: any) => [r.slot, r.paint]).sort();
   expect(paints).toEqual([[1, '#d6283c'], [2, roachPaint]]);
+  for (const p of both) expect(p.errors).toEqual([]);
+  for (const p of both) await p.ctx.close();
+});
+
+test('online room: the host changes the conditions and the course, every game follows and the room says who is loading; the next race on another course', async ({ browser, request }) => {
+  test.setTimeout(2_400_000);
+  const tag = String(Date.now() % 10000);
+  const host = await openPlayer(browser, `HOST${tag}`);
+  await host.page.locator('button', { hasText: 'ルームを作成' }).click();
+  const code = (await host.page.locator('.ol-code-big b').textContent({ timeout: 420_000 }))!.trim();
+  await expect(host.page.locator('.rt-badge')).toHaveText('LIVE', { timeout: 120_000 });
+  const guest = await openPlayer(browser, `G${tag}`);
+  await guest.page.locator('.ol-code').fill(code);
+  await guest.page.locator('button', { hasText: '参加' }).click();
+  await expect(guest.page.locator('.ol-code-big b')).toHaveText(code, { timeout: 420_000 });
+  await expect(guest.page.locator('.rt-badge')).toHaveText('LIVE', { timeout: 120_000 });
+  const silent = await apiPlayer(request, `T${tag}`);
+  expect((await silent.join(code)).status()).toBe(200);
+  expect((await silent.loaded(code)).status()).toBe(200);
+  expect((await silent.ready(code)).status()).toBe(200);
+  const both = [host, guest];
+  const start = host.page.locator('.ol-start');
+  const ready = guest.page.locator('.ol-ready');
+  const world = (page: Page) => page.evaluate(() => {
+    const g = (window as any).__game;
+    return { course: g.course.id as string, tod: g.timeOfDay as string, phase: g.phase as string, seats: (g.lobbyState?.length ?? null) as number | null };
+  });
+  await expect(ready).toBeEnabled({ timeout: 240_000 });
+  await ready.click();
+  await expect(start).toHaveText('レース開始', { timeout: 120_000 });
+
+  // the room's course and conditions are on both screens; only the host has the way to change them
+  await expect(host.page.locator('button.ol-set')).toHaveCount(2);
+  await expect(guest.page.locator('button.ol-set')).toHaveCount(0);
+  await expect(guest.page.locator('.ol-set.fixed')).toHaveText(['コース朧峠', '時間帯・天候深夜・晴れ']);
+  await guest.page.keyboard.press('x');
+  await guest.page.keyboard.press('c');
+  await expect(guest.page.locator('.cond-list')).toHaveCount(0);
+  expect((await silent.change(code, { track_id: 'autobahn' })).status()).toBe(403);
+
+  // the host looks through the conditions: its own scene follows, nothing is sent; Esc leaves the room as it was
+  await host.page.locator('.ol-set-color').click();
+  await expect(host.page.locator('.cond-row')).toHaveCount(3);
+  await expect(host.page.locator('.cond-row .row-now')).toHaveCount(1);
+  await expect(host.page.locator('.touch-back')).toContainText('戻る');
+  await host.page.keyboard.press('ArrowDown');
+  await host.page.waitForFunction(() => (window as any).__game.timeOfDay === 'rain', null, { timeout: 120_000 });
+  expect((await world(guest.page)).tod).toBe('night');
+  await host.page.keyboard.press('Escape');
+  await expect(host.page.locator('.ol-panel')).toBeVisible();
+  await host.page.waitForFunction(() => (window as any).__game.timeOfDay === 'night', null, { timeout: 120_000 });
+  await expect(start).toHaveText('レース開始');
+  await expect(ready).toHaveText('準備完了を取り消す');
+
+  // chosen: everyone's scene changes at once (no load), the readies go back, and the guest is told why
+  await host.page.keyboard.press('c');
+  await host.page.locator('.cond-row', { hasText: '深夜・雨' }).click();
+  // (the notice first: it goes by itself after a few seconds)
+  await expect(guest.page.locator('.room-notice')).toContainText('ホストが時間帯・天候を「深夜・雨」に変更しました準備完了は取り消されました', { timeout: 60_000 });
+  await expect(host.page.locator('.room-notice')).toHaveCount(0);
+  await expect(host.page.locator('.ol-panel')).toBeVisible();
+  for (const p of both) {
+    await p.page.waitForFunction(() => (window as any).__game.timeOfDay === 'rain', null, { timeout: 120_000 });
+    await expect(p.page.locator('.ol-set').nth(1)).toContainText('深夜・雨');
+    expect((await world(p.page)).course).toBe('oboro-downhill');
+    await expect(p.page.locator('.ol-slots em.loading')).toHaveCount(0);
+  }
+  await expect(ready).toHaveText('準備完了', { timeout: 60_000 });
+  await expect(start).toHaveText('準備完了待ち… あと2人', { timeout: 60_000 });
+  // (the member without a game is on no channel: the host sees that, and whom the start waits for)
+  await expect(host.page.locator('.ol-slots li.gone')).toHaveCount(1, { timeout: 60_000 });
+  await expect(host.page.locator('.ol-hold')).toHaveText(`T${tag} は接続が切れています。ルームから外せます。`);
+  await expect(host.page.locator('.ol-kick')).toHaveCount(1);
+  await expect(guest.page.locator('.ol-kick')).toHaveCount(0);
+
+  // another course: both games build it behind the loading screen and come back to the room on it
+  await host.page.keyboard.press('x');
+  await expect(host.page.locator('.crs-row')).toHaveCount(4);
+  await host.page.locator('.crs-row', { hasText: '霧降湖' }).click();
+  await expect(guest.page.locator('.room-notice')).toContainText('ホストがコースを「霧降湖」に変更しました', { timeout: 120_000 });
+  for (const p of both) {
+    await p.page.waitForFunction(() => (window as any).__game.course.id === 'kirifuri-lakeside' && (window as any).__game.lobbyState?.length === 3, null, { timeout: 600_000 });
+    await expect(p.page.locator('.ol-code-big b')).toHaveText(code, { timeout: 120_000 });
+    await expect(p.page.locator('.ol-set').first()).toContainText('霧降湖');
+    expect(await world(p.page)).toMatchObject({ tod: 'rain', phase: 'garage', seats: 3 });
+  }
+  // the member whose game has not loaded it yet holds the start up, by name, on both screens
+  await expect(host.page.locator('.ol-slots li.loading')).toHaveCount(1, { timeout: 120_000 });
+  await expect(start).toHaveText('読み込み待ち… あと1人');
+  await expect(start).toBeDisabled();
+  await expect(guest.page.locator('.ol-hold')).toHaveText(`T${tag} がコースを読み込んでいます`, { timeout: 60_000 });
+  // (the host is also told when it has been going on for long, and offered to take the member out)
+  await expect(host.page.locator('.ol-hold')).toHaveText(new RegExp(`^T${tag} (がコースを読み込んでいます|の読み込みに時間がかかっています。待つか、ルームから外せます。)$`), { timeout: 60_000 });
+  // (a report for the course the room has left is not taken)
+  expect((await (await silent.loadedOn(code, 'oboro-downhill')).json()).players[2].loaded).toBe(false);
+  expect((await (await silent.loadedOn(code, 'kirifuri-lakeside')).json()).players[2].loaded).toBe(true);
+  await expect(host.page.locator('.ol-slots li.loading')).toHaveCount(0, { timeout: 60_000 });
+  await expect(start).toHaveText('準備完了待ち… あと2人');
+  expect((await silent.ready(code)).status()).toBe(200);
+  await expect(ready).toHaveText('準備完了');
+  await ready.click();
+  await expect(start).toHaveText('レース開始', { timeout: 120_000 });
+
+  // the race runs on the new course, in the rain
+  await host.page.keyboard.press('Enter');
+  for (const p of both) {
+    await p.page.waitForFunction(() => (window as any).__game.phase === 'racing', null, { timeout: 420_000 });
+    expect(await world(p.page)).toMatchObject({ course: 'kirifuri-lakeside', tod: 'rain' });
+  }
+  // (to the finish once the race clock has passed the course's minimum, which the server holds a finish to)
+  for (const p of both) {
+    await p.page.waitForFunction(() => (window as any).__game.hud.raceTime > 30, null, { timeout: 480_000, polling: 500 });
+    await nearFinish(p.page);
+  }
+  expect((await silent.finish(code, 95_000)).status()).toBe(200);
+  for (const p of both) await expect(p.page.locator('.online-results')).toBeVisible({ timeout: 600_000 });
+  await expect(host.page.locator('.ol-standings .time').filter({ hasText: TIME })).toHaveCount(3, { timeout: 420_000 });
+
+  // from the results the host picks the next course (one both games have kept): everyone is back in the room on it
+  await expect(guest.page.locator('.ol-next')).toHaveCount(0);
+  await host.page.locator('.ol-next').click();
+  await expect(host.page.locator('.crs-row .row-now')).toHaveCount(1);
+  await host.page.locator('.crs-row', { hasText: '朧峠' }).click();
+  await expect(guest.page.locator('.room-notice')).toContainText('ホストがコースを「朧峠」に変更しました', { timeout: 120_000 });
+  for (const p of both) {
+    await p.page.waitForFunction(() => (window as any).__game.course.id === 'oboro-downhill' && (window as any).__game.lobbyState?.length === 3, null, { timeout: 600_000 });
+    await expect(p.page.locator('.ol-code-big b')).toHaveText(code, { timeout: 120_000 });
+    await expect(p.page.locator('.ol-set').first()).toContainText('朧峠');
+  }
+  expect((await silent.loadedOn(code, 'oboro-downhill')).status()).toBe(200);
+  expect((await silent.ready(code)).status()).toBe(200);
+  await expect(ready).toBeEnabled({ timeout: 120_000 });
+  await ready.click();
+  await expect(start).toHaveText('レース開始', { timeout: 120_000 });
+  await host.page.keyboard.press('Enter');
+  for (const p of both) {
+    await p.page.waitForFunction(() => ['countdown', 'racing'].includes((window as any).__game.phase), null, { timeout: 420_000 });
+    expect((await world(p.page)).course).toBe('oboro-downhill');
+  }
   for (const p of both) expect(p.errors).toEqual([]);
   for (const p of both) await p.ctx.close();
 });

@@ -87,15 +87,16 @@ $cars = [
     'l0' => ['name' => 'L0系'],
     // joke entry: the giant cockroach (frontend vehicle/roach.ts), the quickest on the mountain passes
     'roach' => ['name' => 'ゴキブリ'],
-    // fighters, driven on the ground (frontend vehicle/jets.ts): 'tracks' = the only courses they may be used on
-    // (App\Support\Vehicles::allowedOn: rooms and runs are refused elsewhere)
-    'f15j' => ['name' => 'F-15J イーグル', 'tracks' => ['edwards'], 'release' => 'edwards'],
-    'f15c' => ['name' => 'F-15C イーグル', 'tracks' => ['edwards'], 'release' => 'edwards'],
-    'su47' => ['name' => 'Su-47 ベールクト', 'tracks' => ['edwards'], 'release' => 'edwards'],
+    // fighters, driven on the ground (frontend vehicle/jets.ts): 'courses' = the only courses they may be used on
+    // (App\Support\Vehicles, the one place that asks: rooms and runs are refused elsewhere; the client's
+    // `vehiclesFor` says the same, a vitest compares)
+    'f15j' => ['name' => 'F-15J イーグル', 'courses' => ['edwards'], 'release' => 'edwards'],
+    'f15c' => ['name' => 'F-15C イーグル', 'courses' => ['edwards'], 'release' => 'edwards'],
+    'su47' => ['name' => 'Su-47 ベールクト', 'courses' => ['edwards'], 'release' => 'edwards'],
 ];
 
 return [
-    'version' => env('GAME_VERSION', '2.4.2'),
+    'version' => env('GAME_VERSION', '2.5.0'),
 
     'release' => $release,
     'catalog' => ['tracks' => $tracks, 'cars' => $cars],

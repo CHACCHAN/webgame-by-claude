@@ -34,6 +34,8 @@ interface AppState {
   /** what the rival said last (before the start, after the finish) */
   rivalLine: { moment: 'before' | 'won' | 'lost'; text: string } | null;
   paused: boolean;
+  /** a picker is up over the screen (ui/Shell.tsx `useOverScreen`): the shell's back button closes it */
+  over: boolean;
   go: (s: Screen) => void;
   set: (patch: Partial<AppState>) => void;
 }
@@ -54,6 +56,7 @@ export const useApp = create<AppState>((set, get) => ({
   busy: null,
   rivalLine: null,
   paused: false,
+  over: false,
   go: (s) => set({ prevScreen: get().screen, screen: s }),
   set: (patch) => set(patch),
 }));
