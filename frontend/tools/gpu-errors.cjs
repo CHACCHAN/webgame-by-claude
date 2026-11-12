@@ -5,6 +5,7 @@
 // Also reported: a race camera that is not with the car.
 //   node tools/gpu-errors.cjs            exit code 1 when anything was reported
 // Env: URL (http://localhost:4173/), QUERY (e.g. ?webgl=1), VEHICLES (comma list shown in the garage),
+// SET (JSON merged into the stored settings, e.g. '{"upscale":true,"upscaleMode":"quality"}'),
 // OUT (directory for three pictures: race, rival race, attract), CHROME, PW_MODULE.
 // Serve with `API_PROXY=http://127.0.0.1:9 npx vite preview`; /api is also aborted in the browser.
 const { chromium } = require(process.env.PW_MODULE || 'playwright');
@@ -30,7 +31,8 @@ const OUT = process.env.OUT;
     seen[t] = (seen[t] || 0) + 1;
   });
   page.on('pageerror', (e) => (seen[`${step}: PAGE ERROR ${e.message.slice(0, 200)}`] = 1));
-  await page.addInitScript(() => localStorage.setItem('touge-settings', JSON.stringify({ state: { quality: 'high', timeOfDay: 'night', masterVolume: 0 }, version: 1 })));
+  const settings = { quality: 'high', timeOfDay: 'night', masterVolume: 0, ...JSON.parse(process.env.SET || '{}') };
+  await page.addInitScript((s) => localStorage.setItem('touge-settings', JSON.stringify({ state: s, version: 1 })), settings);
   await page.goto((process.env.URL || 'http://localhost:4173/') + (process.env.QUERY || ''));
   await page.waitForFunction(() => window.__game && window.__game.phase === 'attract', null, { timeout: 240000 });
   const backend = await page.evaluate(() => (window.__game.renderer.backend.isWebGPUBackend ? 'webgpu' : 'webgl2'));
