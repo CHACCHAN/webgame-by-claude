@@ -36,8 +36,17 @@ function makePool(n: number, additive: boolean): Pool {
 }
 
 /**
- * Exhaust gas: thin puffs from the tailpipe (more on throttle and high revs, mostly visible at low
- * speed), and short backfire flames when the throttle is snapped shut at high revs.
+ * How much of the exhaust gas is seen at a speed (m/s), 0…1: all of it standing still, half at 22 km/h, a tenth
+ * at 65 km/h, none from 90 km/h on.
+ */
+export function exhaustSeen(speed: number) {
+  const seen = 1 / (1 + (speed / 6) ** 2);
+  return seen < 0.055 ? 0 : seen;
+}
+
+/**
+ * Exhaust gas: thin puffs from the tailpipe (more on throttle and high revs, seen at low speed only:
+ * `exhaustSeen`), and short backfire flames when the throttle is snapped shut at high revs.
  */
 export class ExhaustFX {
   readonly group = new THREE.Group();
@@ -73,13 +82,17 @@ export class ExhaustFX {
    */
   emit(s: ExhaustState, tip: THREE.Vector3, back: THREE.Vector3, carVel: THREE.Vector3, throttle: number, rpm: number, turbo: boolean, dt: number) {
     const speed = carVel.length();
-    // puffs: a light idle trickle, more under load; thinned out at speed where the gas disperses at once
-    const rate = (9 + 34 * throttle * rpm) * this.density * (1 / (1 + speed / 12));
-    s.carry += rate * dt;
-    while (s.carry >= 1) {
-      s.carry -= 1;
-      this.spawn(this.puffs, tip, carVel, back, 1.5 + 3.5 * throttle, 0.16, 0.8 + Math.random() * 0.8, 0.34 + 0.32 * throttle * rpm);
-    }
+    // puffs: a light idle trickle, more under load. What is seen of the gas falls with the speed: standing and
+    // pulling away it is a plume, on the move the airstream takes it apart at once. (It used to be thinned out in
+    // number only: a few puffs a second at full opacity, which trailed the car as a row of white balls, 11-12.)
+    const seen = exhaustSeen(speed);
+    if (seen > 0) {
+      s.carry += (9 + 34 * throttle * rpm) * this.density * dt;
+      while (s.carry >= 1) {
+        s.carry -= 1;
+        this.spawn(this.puffs, tip, carVel, back, 1.5 + 3.5 * throttle, 0.16, 0.8 + Math.random() * 0.8, (0.3 + 0.3 * throttle * rpm) * seen);
+      }
+    } else s.carry = 0;
     // backfire: throttle snapped shut at high revs
     let bang = false;
     if (s.lastThrottle > 0.6 && throttle < 0.15 && rpm > 0.62 && Math.random() < (turbo ? 0.75 : 0.45)) {
