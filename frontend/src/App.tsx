@@ -90,7 +90,8 @@ export function App() {
   useEffect(() => {
     const apply = () => {
       const s = useSettings.getState();
-      gameHolder.game?.audio?.setVolumes(s.masterVolume, s.sfxVolume, s.musicVolume);
+      // (settings stored before the rain had a volume carry none: full)
+      gameHolder.game?.audio?.setVolumes(s.masterVolume, s.sfxVolume, s.musicVolume, s.rainVolume ?? 1);
     };
     apply();
     const id = setInterval(apply, 500);

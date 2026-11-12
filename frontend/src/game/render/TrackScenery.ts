@@ -19,6 +19,7 @@ import { groundMaterial, type GroundDetail, type GroundLook } from './terrainMat
 import { roadMaterial as roadSurface } from './roadMaterial';
 import { findCorners } from '../track/corners';
 import { placeProp, prop, type PropModel } from './props';
+import { beaconPulse, buildBeacons } from './beacons';
 import type { CourseStyle } from '../track/courses';
 import { ChunkedLods, cutout } from './instancing';
 import { Forest, vegetationFrame, type VegetationQuality } from './vegetation';
@@ -151,7 +152,7 @@ export function buildScenery(track: Track, terrain: TerrainData, quality: Scener
   group.add(trees);
   const clutter = buildClutter(track, terrain, quality.treeDensity, surfaceTexture, keepOut, { vegetation: quality.vegetation, views });
   group.add(clutter);
-  const turbines = buildTurbines(terrain);
+  const turbines = buildTurbines(terrain, nightEmissive);
   group.add(turbines.group);
 
   return {
@@ -694,14 +695,17 @@ export function buildLampMeshes(track: Track, lamps: Lamp[], group: THREE.Group,
   inst(ceilingGeo, sodiumMat, ceiling);
 }
 
-/** Light position of the street light model: two thirds out along its arm (local −X), just under the top. */
+/**
+ * Light position of the street light model: under the luminaire's glass bowl, whose centre is 0.886 of the model's
+ * reach along its arm (local −X; tools/blender/props/street_light.py), just under the top.
+ */
 function lampHead(model: PropModel) {
   const box = new THREE.Box3();
   for (const p of model.pieces) {
     p.geometry.computeBoundingBox();
     box.union(p.geometry.boundingBox!);
   }
-  return new THREE.Vector3(box.min.x * 0.67, box.max.y - 0.25, 0);
+  return new THREE.Vector3(box.min.x * 0.886, box.max.y - 0.25, 0);
 }
 
 /**
@@ -1279,33 +1283,67 @@ export function buildClutter(
   return group;
 }
 
-/** Wind turbines on the skyline ridge (rotors animate in Scenery.update). */
-export function buildTurbines(terrain: TerrainData) {
+/** the two obstruction lights on a turbine's nacelle, in the model's frame (tools/blender/props/wind_turbine.py) */
+const TURBINE_LAMPS: [number, number, number][] = [[-1.1, 63.52, -1.5], [1.1, 63.52, -1.5]];
+/** the lit lens at a flash's height (× its red) */
+const TURBINE_LENS = 1.1;
+
+/**
+ * Wind turbines on the skyline ridge (rotors animate in Scenery.update), with their red obstruction lights
+ * (`render/beacons.ts`): lit while the road's lamps are, flashing together.
+ */
+export function buildTurbines(terrain: TerrainData, nightEmissive: THREE.MeshStandardMaterial[]) {
   const group = new THREE.Group();
   group.name = 'turbines';
   const model = prop('windTurbine');
+  const facing = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), 0.6);
+  const towers: THREE.Matrix4[] = [];
+  for (const [x, z] of terrain.landform.features.turbines ?? []) {
+    if (terrain.roadDistAt(x, z) < 45) continue;
+    towers.push(new THREE.Matrix4().compose(new THREE.Vector3(x, terrain.heightAt(x, z) - 1, z), facing, new THREE.Vector3(1, 1, 1)));
+  }
+  const beacons = buildBeacons(towers.flatMap((m) => TURBINE_LAMPS.map((p) => new THREE.Vector3(...p).applyMatrix4(m))));
+  if (beacons.object) group.add(beacons.object);
+  // Game gives every night-emissive material the level of the road's lamps (`preset.lampsOn`): this one is never
+  // drawn, it is only asked for that level (a photocell: on at night and in the rain's dark, off at dawn's 0.15)
+  const dusk = new THREE.MeshStandardMaterial();
+  dusk.emissiveIntensity = 1;
+  nightEmissive.push(dusk);
+  const lenses: THREE.MeshStandardMaterial[] = [];
+  const flash = (time: number) => {
+    const level = Math.min(1, Math.max(0, (dusk.emissiveIntensity - 0.3) / 0.4)) * beaconPulse(time);
+    beacons.level.value = level;
+    for (const m of lenses) m.emissiveIntensity = level * TURBINE_LENS;
+  };
   if (model) {
-    const towers: THREE.Matrix4[] = [];
-    const facing = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), 0.6);
-    for (const [x, z] of terrain.landform.features.turbines ?? []) {
-      if (terrain.roadDistAt(x, z) < 45) continue;
-      towers.push(new THREE.Matrix4().compose(new THREE.Vector3(x, terrain.heightAt(x, z) - 1, z), facing, new THREE.Vector3(1, 1, 1)));
-    }
     const phase = towers.map(() => Math.random() * 6);
-    const placed = placeProp(model, towers, { castShadow: true, name: 'turbine-models' });
+    // the model's only glowing parts are the two lamps' lenses (its emissive map): they flash with their glare
+    const lens = (m: THREE.MeshStandardMaterial) => {
+      const c = m.clone();
+      // (a deep red: at this brightness the tone mapping takes a lighter red to salmon)
+      if (c.emissiveMap) c.emissive.setRGB(1, 0.3, 0.25);
+      c.emissiveIntensity = 0;
+      lenses.push(c);
+      return c;
+    };
+    const placed = placeProp(model, towers, { castShadow: true, name: 'turbine-models', material: lens });
     group.add(placed.group);
-    return { group, update: (time: number) => placed.spin((k) => time * 0.9 + phase[k]) };
+    return {
+      group,
+      update(time: number) {
+        placed.spin((k) => time * 0.9 + phase[k]);
+        flash(time);
+      },
+    };
   }
   const rotors: THREE.Object3D[] = [];
   const mat = new THREE.MeshStandardMaterial({ color: '#d9dde2', roughness: 0.55, metalness: 0.2 });
   const towerGeo = new THREE.CylinderGeometry(1.1, 2.0, 60, 12).translate(0, 30, 0);
   const nacelleGeo = new THREE.BoxGeometry(2.4, 2.4, 7).translate(0, 0, -1.5);
   const bladeGeo = new THREE.BoxGeometry(0.8, 26, 0.25).translate(0, 13.5, 0);
-  for (const [x, z] of terrain.landform.features.turbines ?? []) {
-    if (terrain.roadDistAt(x, z) < 45) continue;
-    const y = terrain.heightAt(x, z) - 1;
+  for (const m of towers) {
     const t = new THREE.Group();
-    t.position.set(x, y, z);
+    t.position.setFromMatrixPosition(m);
     t.rotation.y = 0.6;
     const tower = new THREE.Mesh(towerGeo, mat);
     tower.castShadow = true;
@@ -1329,6 +1367,7 @@ export function buildTurbines(terrain: TerrainData) {
     group,
     update(time: number) {
       for (const r of rotors) r.rotation.z = time * 0.9 + r.userData.phase;
+      flash(time);
     },
   };
 }
@@ -1379,11 +1418,23 @@ function buildLandmarks(track: Track, terrain: TerrainData, sides: ReturnType<ty
   const avoid = [...lamps.map((l) => l.position), ...curveMirrorSpots(track).map((m) => track.pointAt(m.i, m.lateral))];
   const UP = new THREE.Vector3(0, 1, 0), one = new THREE.Vector3(1, 1, 1);
   /** frame at a spot: origin `depth` from the footprint's road edge, local +Z towards the road */
-  const frame = (spot: { i: number; side: 1 | -1 }, gap: number, depth: number) => {
+  const frame = (spot: { i: number; side: 1 | -1 }, gap: number, depth: number, footprint?: [number, number, number, number]) => {
     const at = track.pointAt(spot.i, spot.side * (track.width[spot.i] / 2 + SHOULDER + gap + depth));
     at.y = terrain.heightAt(at.x, at.z) - 0.05;
     const toRoad = track.getRight(spot.i, new THREE.Vector3()).multiplyScalar(-spot.side);
     const q = new THREE.Quaternion().setFromAxisAngle(UP, Math.atan2(toRoad.x, toRoad.z));
+    if (footprint) {
+      // a building stands level, on the highest ground under it (x0, x1, z0, z1 in this frame): its foundation goes
+      // down into the rest (the ground came up through the shelter's floor on a slope). Asked in a grid, a metre
+      // wider than the building: the ground's mesh is coarser than its height function and cuts corners between
+      const [x0, x1, z0, z1] = footprint, c = new THREE.Vector3();
+      for (let x = x0 - 1; x <= x1 + 1.001; x += (x1 - x0 + 2) / 6) {
+        for (let z = z0 - 1; z <= z1 + 1.001; z += (z1 - z0 + 2) / 4) {
+          c.set(x, 0, z).applyQuaternion(q).add(at);
+          at.y = Math.max(at.y, terrain.heightAt(c.x, c.z));
+        }
+      }
+    }
     return (x: number, z: number, yaw = 0) =>
       new THREE.Matrix4().compose(new THREE.Vector3(x, 0, z).applyQuaternion(q).add(at), q.clone().multiply(new THREE.Quaternion().setFromAxisAngle(UP, yaw)), one);
   };
@@ -1403,7 +1454,7 @@ function buildLandmarks(track: Track, terrain: TerrainData, sides: ReturnType<ty
     const spot = roadsideSpot(track, terrain, sides, { range: [Math.round(track.count * 0.45), Math.round(track.finishS - 100)], halfWidth: 4.5, depth: 5, gap: 0.5, avoid, tol: 1.2 });
     if (spot) {
       // the shelter reaches 1.13 m ahead of its origin (open side to the road; 2.25 m deep)
-      const at = frame(spot, 0.5, 1.75);
+      const at = frame(spot, 0.5, 1.75, [-2.3, 2.3, -1.25, 1.15]);
       group.add(placeProp(shelter, [at(0, 0)], { castShadow: true, name: 'bus-stop' }).group);
       const c = new THREE.Vector3().setFromMatrixPosition(at(0, 0));
       keepOut.push({ x: c.x, z: c.z, r: 6 });

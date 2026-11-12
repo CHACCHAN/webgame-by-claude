@@ -291,7 +291,7 @@ export class CarVisual {
   /** Per-frame animation (pop-up lamps take ~0.6 s; a train's cars follow the leading bogie; a creature's legs run). */
   private tick(dt: number) {
     this.rig.train?.update(this.rig.root, dt);
-    this.rig.creature?.update(this.root, dt);
+    this.rig.creature?.update(this.root, dt, this.live?.airborne);
     this.rig.bike?.update(this.root, dt, this.live ?? undefined);
     this.rig.tank?.update(this.root, dt);
     this.rig.jet?.update(this.root, dt, this.live);
@@ -356,6 +356,11 @@ export class CarVisual {
   /** a bike's lean (rad, + = left; 0 for anything else): the rider's view rolls with it */
   get lean() {
     return this.rig.bike?.lean ?? 0;
+  }
+
+  /** how far a creature's wings are out (0…1; 0 for anything else): its sound flutters with them */
+  get flight() {
+    return this.rig.creature?.flight ?? 0;
   }
 
   /** Update from a ghost pose. */

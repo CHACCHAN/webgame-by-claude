@@ -99,6 +99,21 @@ def save_image(name, rgba, path):
     return load_image(path)
 
 
+def write_png(path, rgba, srgb_colour=True):
+    """a numpy float array (h, w, 3 or 4) with row 0 at the BOTTOM (Blender's order), values as they go into the file"""
+    import numpy as np
+    h, w = rgba.shape[:2]
+    px = np.ones((h, w, 4), dtype='float32')
+    px[..., :rgba.shape[2]] = np.clip(rgba, 0.0, 1.0)
+    img = bpy.data.images.new('png', w, h, alpha=False)
+    img.colorspace_settings.name = 'sRGB' if srgb_colour else 'Non-Color'
+    img.pixels.foreach_set(px.ravel())
+    img.filepath_raw = path
+    img.file_format = 'PNG'
+    img.save()
+    bpy.data.images.remove(img)
+
+
 def host_python():
     """the system python3 (with PIL) for the painted textures; None when there is none"""
     for c in ('/usr/bin/python3', shutil.which('python3')):
@@ -160,10 +175,17 @@ class M:
         self.stack = [Matrix.Identity(4)]
         self.uv_ctx = []      # [(fn(list of coords) -> list of (u, v), only material or None)]
         self.uv_done = set()
+        # texel density of a face relative to the rest, for the baked atlas (prop_bake.unwrap)
+        self.dens = self.bm.faces.layers.float.new('dense')
+        self.dense_now = 1.0
 
     # -- transforms: everything added inside `with m.at(matrix):` is moved by it
     def at(self, matrix):
         return _Xf(self, matrix)
+
+    def dense(self, k):
+        """with m.dense(2): faces added inside get k times the texels per metre in the baked atlas"""
+        return _Dense(self, k)
 
     def slot(self, mat):
         if mat not in self.slots:
@@ -192,6 +214,7 @@ class M:
             nf = self.bm.faces.new([vmap[v] for v in f.verts])
             nf.material_index = fidx if (fidx is not None and f.normal.z > 0.99) else idx
             nf.smooth = True
+            nf[self.dens] = self.dense_now
             for fn, only in self.uv_ctx:
                 if only is not None and self.slots[nf.material_index] is not only:
                     continue
@@ -209,6 +232,7 @@ class M:
             nf = self.bm.faces.new([vmap[v] for v in f.verts])
             nf.material_index = self.slot(other.slots[f.material_index])
             nf.smooth = True
+            nf[self.dens] = f[other.dens]
         other.bm.free()
 
     # -- primitives
@@ -270,7 +294,7 @@ class M:
             bm.faces.new(vr[-1][::-1])
         self.add(bm, mat)
 
-    def lathe(self, mat, profile, seg=16, cx=0.0, cz=0.0, y_of=None):
+    def lathe(self, mat, profile, seg=16, cx=0.0, cz=0.0, y_of=None, caps=(True, True)):
         """revolve [(radius, y), ...] (bottom to top) about the Y axis through (cx, cz); a radius 0 end is a point"""
         bm = bmesh.new()
         rings = []
@@ -291,10 +315,10 @@ class M:
                     bm.faces.new([a[k], a[k2], b[0]])
                 else:
                     bm.faces.new([a[k], a[k2], b[k2], b[k]])
-        for ring in (rings[0], rings[-1]):
-            if len(ring) > 2:
+        for ring, want in ((rings[0], caps[0]), (rings[-1], caps[1])):
+            if want and len(ring) > 2:
                 bm.faces.new(ring)
-        self.add(bm, mat)
+        self.add(bm, mat, closed=caps[0] and caps[1], flip=True)   # (as built, the faces look inwards)
 
     def prism(self, mat, outline, y0, y1, scale0=1.0, scale1=1.0, cap0=True, cap1=True):
         """plan outline [(x, z)] extruded from y0 to y1, scaled about its centre by scale0 → scale1"""
@@ -350,6 +374,17 @@ class M:
                 ring.append((centre[0] + p[0], centre[1] + p[1], centre[2] + p[2]))
             rings.append(ring)
         self.loft(mat, rings, loop=True)
+
+    def bolt(self, mat, at, axis, r=0.018, h=0.014, washer=0.0, stud=0.0):
+        """a hexagon head (or a nut on its stud: `stud` metres standing out of it) at `at`, pointing along `axis`"""
+        a = Vector(at)
+        d = Vector(axis).normalized()
+        if washer:
+            self.cyl(mat, a, a + d * 0.004, washer, seg=12, caps=(False, True))
+            a = a + d * 0.004
+        self.cyl(mat, a, a + d * h, r, seg=6, caps=(False, True))
+        if stud:
+            self.cyl(mat, a + d * h, a + d * (h + stud), r * 0.55, seg=8, caps=(False, True))
 
     def quad(self, mat, pts, flip=False):
         """one flat quad / polygon (an open surface: the winding gives the normal; flip reverses it)"""
@@ -408,6 +443,18 @@ class M:
         ob.location = B(*origin)
         ob['tris'] = n
         return ob
+
+
+class _Dense:
+    def __init__(self, m, k):
+        self.m, self.k = m, k
+
+    def __enter__(self):
+        self.old = self.m.dense_now
+        self.m.dense_now = self.k
+
+    def __exit__(self, *a):
+        self.m.dense_now = self.old
 
 
 class _Uv:
@@ -565,6 +612,7 @@ def render_glb(glb, out_png, eye, target, lens=40, night=False, size=(960, 720),
     scene.render.threads_mode = 'FIXED'
     scene.render.threads = 4
     scene.view_settings.view_transform = 'AgX'
+    scene.view_settings.exposure = 0.0 if night else -1.0   # (the sky and sun above come out a stop too bright)
     scene.render.resolution_x, scene.render.resolution_y = min(size[0], 1280), min(size[1], 720)
     scene.render.filepath = out_png
     bpy.ops.render.render(write_still=True)

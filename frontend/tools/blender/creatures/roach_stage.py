@@ -6,6 +6,7 @@ import math
 
 import bmesh
 import bpy
+import numpy as np
 
 from roach_geom import B, S
 
@@ -19,6 +20,11 @@ VIEWS = {
     'head': ((26.0, 13.0, 21.0), (0.0, 3.6, -1.8), 70),
     'leg': ((38.0, 13.0, -12.0), (10.5, 3.0, -25.5), 60),
     'front': ((0.0, 12.0, 120.0), (0.0, 4.0, -10.0), 60),
+    # the wings out (they reach 30 mm to each side): from above, from the front, from behind and above
+    'wings_top': ((0.0, 330.0, -16.0), (0.0, 0.0, -16.0), 95),
+    'wings_front': ((0.0, 22.0, 150.0), (0.0, 9.0, -10.0), 50),
+    'wings_rear34': ((-85.0, 60.0, -110.0), (0.0, 7.0, -14.0), 45),
+    'wings_side': ((150.0, 14.0, -15.0), (0.0, 8.0, -15.0), 50),
     # like the reference photos: Alex Wild's dorsal (25859665686) and oblique (25765232092) shots
     'match_top': ((0.0, 260.0, -19.0), (0.0, 0.0, -19.0), 60),
     'match_34': ((95.0, 85.0, -35.0), (0.0, 3.0, -18.0), 60),
@@ -153,3 +159,23 @@ def render(view, path, size=(1280, 720), samples=32, sun_offset=40.0):
     sc.render.resolution_x, sc.render.resolution_y = size
     sc.render.filepath = path
     bpy.ops.render.render(write_still=True)
+
+
+def sheet(rows, path):
+    """one picture of rendered pictures: rows of files, all of one size"""
+    tiles = []
+    for row in rows:
+        line = []
+        for f in row:
+            img = bpy.data.images.load(f)
+            w, h = img.size
+            line.append(np.array(img.pixels[:], np.float32).reshape(h, w, 4))
+            bpy.data.images.remove(img)
+        tiles.append(np.concatenate(line, axis=1))
+    # (pixel rows run bottom-up: the first row of pictures goes on top)
+    arr = np.concatenate(tiles[::-1], axis=0)
+    out = bpy.data.images.new('sheet', arr.shape[1], arr.shape[0], alpha=False)
+    out.pixels.foreach_set(arr.ravel())
+    out.filepath_raw = path
+    out.file_format = 'PNG' if path.lower().endswith('.png') else 'JPEG'
+    out.save()

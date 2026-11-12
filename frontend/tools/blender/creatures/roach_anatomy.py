@@ -33,6 +33,18 @@ WING_THICK = 0.2
 OVERLAP_LEFT = 2.1            # the left tegmen's inner margin, mm right of the midline (visible)
 OVERLAP_RIGHT = 1.0           # the right tegmen's inner margin, under the left one
 
+# ---- flight (players asked for wings that beat when the cockroach is thrown into the air). The tegmina turn on a
+# hinge each, just behind the pronotum's rear edge (what lies before it stays under the pronotum). The hind wings are
+# modelled as they lie at rest: folded like a fan under the tegmina, on the same envelope `depth` mm below it, their
+# leading edge outside. In flight a hind wing swings out about its hinge and its fan opens: the game scales the bone
+# across the chord by `unfold`, the leading edge (x = hinge x) staying where it is.
+TEGMEN_HINGE = (2.2, -9.2)    # x, z (left; the right one mirrored)
+HIND = dict(hinge=(4.0, -9.5), length=27.5, chord=3.6, tip_inset=2.2, depth=0.3, thick=0.05, unfold=3.6)
+# the flight pose: degrees the wing swings out (about the vertical), is held up, beats up and down and feathers
+# (the tegmina a little forward of straight out and held high, the hind wings behind and below them: they beat in
+# step, so the hind wings' upstroke ends under the tegmina)
+FLIGHT = dict(tegmen=dict(sweep=98.0, lift=32.0, beat=6.0, twist=0.0), hind=dict(sweep=76.0, lift=0.0, beat=28.0, twist=14.0))
+
 # ---- abdomen (under the tegmina): z, half width, underside y, top y
 ABDOMEN = [(-10.0, 3.9, 3.35, 6.2), (-12.5, 5.0, 3.0, 6.6), (-16.0, 5.7, 2.75, 6.75), (-20.0, 5.85, 2.7, 6.6),
            (-24.0, 5.55, 2.75, 6.2), (-27.5, 4.75, 2.9, 5.6), (-30.5, 3.6, 3.15, 4.95), (-32.6, 2.3, 3.45, 4.5),
@@ -131,6 +143,20 @@ def env_slope(x, z):
     if x == 0:
         return 0.0
     return -math.copysign(drop * ENV_P * abs(x) ** (ENV_P - 1) / ENV_A ** ENV_P, x)
+
+
+def hind_planform(l):
+    """a folded hind wing at l (0 base .. 1 tip): how far its leading edge has come in, and its chord (mm)"""
+    H = HIND
+    inset = H['tip_inset'] * max(0.0, (l - 0.75) / 0.25) ** 2
+    if l < 0.4:
+        t = l / 0.4
+        f = 0.3 + 0.7 * t * t * (3 - 2 * t)
+    elif l < 0.7:
+        f = 1.0
+    else:
+        f = math.sqrt(max(0.0, 1 - ((l - 0.7) / 0.3) ** 2))
+    return inset, H['chord'] * f
 
 
 def wing_half_width(z):

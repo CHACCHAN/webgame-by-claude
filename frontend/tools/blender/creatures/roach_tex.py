@@ -31,6 +31,8 @@ LAYOUT = {
     'palp': (0.55, 0.3, 0.62, 1.0),
     'lpalp': (0.62, 0.3, 0.68, 1.0),
     'mouth': (0.68, 0.3, 1.0, 0.6),
+    # (both hind wings: the free strip above the abdomen's patch; the eyes' patch is told by its place, see RoachModel)
+    'hindwing': (0.0, 0.77, 0.5, 1.0),
     # roach_legs
     'spine': (0.9, 0.0, 1.0, 0.5),
     'claw': (0.9, 0.5, 1.0, 0.7),
@@ -39,7 +41,7 @@ LAYOUT = {
 LEG_V = {'coxa': (0.0, 0.15), 'femur': (0.15, 0.42), 'tibia': (0.42, 0.74), 'tarsus1': (0.74, 0.85),
          'tarsus2': (0.85, 1.0)}
 ATLAS_OF = {'roach_shell': ('tegmen_L', 'tegmen_R', 'pronotum', 'head'),
-            'roach_body': ('abdomen', 'thorax', 'eye', 'cercus', 'antenna', 'palp', 'lpalp', 'mouth'),
+            'roach_body': ('abdomen', 'thorax', 'eye', 'cercus', 'antenna', 'palp', 'lpalp', 'mouth', 'hindwing'),
             'roach_legs': ('spine', 'claw', 'pad')}
 
 
@@ -166,6 +168,35 @@ def paint_tegmen(U, V, shape):
     col = mix(col, (0.18, 0.08, 0.06), ss(0.12, 0.0, ell) * 0.6)
     col = col * (0.93 + 0.12 * n1)[..., None] * (0.97 + 0.14 * main + 0.05 * fine)[..., None]
     rough = 0.30 + 0.04 * (n2 - 0.5) + 0.04 * ss(0.75, 1.0, ell) + 0.03 * main
+    return col, h, rough
+
+
+# ---------------------------------------------------------------- hind wings
+
+def paint_hindwing(U, V):
+    """
+    A hind wing's membrane: smoky amber, a stiff red-brown leading edge, the fan's veins running out from the base
+    and a faint net of cross veins. U along the wing, V across it from the leading edge's line, both as it lies
+    folded (the fan is `unfold` times as wide in flight). Opaque: the game draws no see-through surfaces here.
+    """
+    H = A.HIND
+    b = U * H['length']                              # mm from the base
+    a = V * (H['chord'] + H['tip_inset'])            # mm in from the leading edge's line (folded)
+    n1 = fbm(U * 9.0, V * 5.0, 41)
+    n2 = fbm(U * 40.0, V * 22.0, 47)
+    # the fan: veins on rays from the wing's base, a little way in from the leading edge
+    ang = np.arctan2(a - 0.25, b + 1.2)
+    fan = ridge(ang, math.radians(2.6), math.radians(0.42))
+    fine = ridge(ang + math.radians(1.3), math.radians(2.6), math.radians(0.2))
+    cross = ridge(np.hypot(a - 0.25, b + 1.2), 0.9, 0.035) * (0.3 + 0.7 * (n2 > 0.5))
+    lead = np.exp(-(a / 0.3) ** 2)                   # costa and radius: the stiff front of the wing
+    h = 0.012 * fan + 0.004 * fine + 0.002 * cross + 0.02 * lead + 0.004 * (n1 - 0.5)
+    col = mix((0.6, 0.44, 0.25), (0.72, 0.56, 0.34), ss(0.2, 0.95, U))
+    col = mix(col, (0.36, 0.17, 0.08), np.clip(0.75 * fan + 0.3 * fine + 0.2 * cross, 0, 1))
+    col = mix(col, (0.4, 0.17, 0.07), ss(0.0, 1.0, lead) * 0.9)
+    col = mix(col, (0.3, 0.14, 0.07), ss(0.1, 0.0, U) * 0.7)
+    col = col * (0.94 + 0.12 * n1)[..., None]
+    rough = 0.24 + 0.05 * (n2 - 0.5) + 0.08 * fan
     return col, h, rough
 
 
@@ -564,6 +595,7 @@ def build_materials(out_dir, wings, sizes):
     at.region(LAYOUT['palp'], lambda U, V: paint_palp(U, V, A.MAX_PALP), (1.1, sum(A.MAX_PALP)))
     at.region(LAYOUT['lpalp'], lambda U, V: paint_palp(U, V, A.LAB_PALP), (0.8, sum(A.LAB_PALP)))
     at.region(LAYOUT['mouth'], paint_mouth, (6.0, 2.0))
+    at.region(LAYOUT['hindwing'], paint_hindwing, (A.HIND['length'], A.HIND['chord'] + A.HIND['tip_inset']))
     mats['roach_body'] = material('roach_body', *at.images(out_dir, sizes.get('mr')))
     # legs
     at = Atlas('roach_legs', sizes['legs'])

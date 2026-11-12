@@ -144,7 +144,8 @@ def build_tegmen(side):
     pole_b = ENV.point(xa, za, wing_lift(xa, side) + A.WING_THICK * 0.2 - 0.12)
     sa = ENV.sigma(xa, za)[0]
     pole_uv = uv(sa, za)
-    w = {'thorax': 1.0}
+    # the tegmen turns on its own bone (flight); at rest that bone sits still on the thorax
+    w = {('wing_L' if side > 0 else 'wing_R'): 1.0}
     nr = len(top)
     T = [[part.vert(p, w) for p in row] for row in top]
     Bt = [[part.vert(p, w) for p in row] for row in bot]
@@ -173,6 +174,78 @@ def build_tegmen(side):
         t1, b1, uv1 = ids((k + 1) % len(loop))
         part.face((t0, b0, b1, t1), (uv0, uv0, uv1, uv1))
     return part, shape
+
+
+# ---------------------------------------------------------------- hind wings
+
+def hind_hinge(side):
+    """where a hind wing turns: on its leading edge at the base, on the level it lies at under the tegmen"""
+    x, z = A.HIND['hinge']
+    return ENV.point(side * x, z, -A.HIND['depth'])
+
+
+def tegmen_hinge(side):
+    x, z = A.TEGMEN_HINGE
+    return ENV.point(side * x, z, 0.1)
+
+
+def build_hindwing(side):
+    """a hind wing as it lies folded under its tegmen: a thin closed leaf, leading edge outside, tip to the rear"""
+    H = A.HIND
+    name = 'hind_L' if side > 0 else 'hind_R'
+    part = Part(name, 'roach_body')
+    u0, v0, u1, v1 = LAYOUT['hindwing']
+    xh, zh = H['hinge']
+    across = H['chord'] + H['tip_inset']
+    nr, nc = 22, 8
+    ls = [0.985 * (1 - (1 - k / (nr - 1)) ** 1.25) for k in range(nr)]      # denser at the rounded tip
+    top, bot, uvs = [], [], []
+    for l in ls:
+        inset, c = A.hind_planform(l)
+        z = zh - H['length'] * l
+        rt, rb, ru = [], [], []
+        for j in range(nc):
+            d = inset + c * j / (nc - 1)                   # mm in from the leading edge's line
+            x = side * (xh - d)
+            rt.append(ENV.point(x, z, -H['depth'] + H['thick'] / 2))
+            rb.append(ENV.point(x, z, -H['depth'] - H['thick'] / 2))
+            # the texture is laid out as the wing lies: along its length, and across from the leading edge's line
+            ru.append((u0 + (u1 - u0) * l, v0 + (v1 - v0) * d / across))
+        top.append(rt)
+        bot.append(rb)
+        uvs.append(ru)
+    inset, _ = A.hind_planform(1.0)
+    xa, za = side * (xh - inset), zh - H['length']
+    pole_uv = (u1, v0 + (v1 - v0) * inset / across)
+    w = {name: 1.0}
+    T = [[part.vert(p, w) for p in row] for row in top]
+    Bt = [[part.vert(p, w) for p in row] for row in bot]
+    pt = part.vert(ENV.point(xa, za, -H['depth'] + H['thick'] / 4), w)
+    pb = part.vert(ENV.point(xa, za, -H['depth'] - H['thick'] / 4), w)
+    for i in range(nr - 1):
+        for j in range(nc - 1):
+            q = (uvs[i][j], uvs[i][j + 1], uvs[i + 1][j + 1], uvs[i + 1][j])
+            part.face((T[i][j], T[i][j + 1], T[i + 1][j + 1], T[i + 1][j]), q)
+            part.face((Bt[i][j], Bt[i + 1][j], Bt[i + 1][j + 1], Bt[i][j + 1]), (q[0], q[3], q[2], q[1]))
+    i = nr - 1
+    for j in range(nc - 1):
+        part.face((T[i][j], T[i][j + 1], pt), (uvs[i][j], uvs[i][j + 1], pole_uv))
+        part.face((Bt[i][j + 1], Bt[i][j], pb), (uvs[i][j + 1], uvs[i][j], pole_uv))
+    # the rim: base, trailing edge, tip, leading edge
+    loop = [(0, j) for j in range(nc)] + [(i, nc - 1) for i in range(1, nr)] + [('pole', 0)] + \
+           [(i, 0) for i in range(nr - 1, 0, -1)]
+
+    def ids(k):
+        a, b = loop[k]
+        if a == 'pole':
+            return pt, pb, pole_uv
+        return T[a][b], Bt[a][b], uvs[a][b]
+
+    for k in range(len(loop)):
+        t0, b0, uv0 = ids(k)
+        t1, b1, uv1 = ids((k + 1) % len(loop))
+        part.face((t0, b0, b1, t1), (uv0, uv0, uv1, uv1))
+    return part
 
 
 # ---------------------------------------------------------------- pronotum

@@ -207,7 +207,14 @@ pending. `docs/PLAN.md` holds the design.
   <trains|cars|props|creatures|nature> [ids] [--render [dir]]` (Blender 5.2 headless → GLB → glTF-Transform: meshopt, WebP;
   trains also palette textures). Scenery: `tools/blender/props/<id>.py` → `public/models/props/<id>.glb`; size,
   facing (+Z = front) and origin are set in `PROPS` (`render/props.ts`), placement in `TrackScenery.ts`. Each model
-  falls back to the procedural shape when it fails to load. The cockroach: `tools/blender/creatures/roach.py` (skinned,
+  falls back to the procedural shape when it fails to load. The props' surfaces (re-modelled 11-12, v2.4) are
+  procedural materials baked into one atlas per model by `props/prop_bake.py` (`surface()` materials → `finish()`:
+  base colour, occlusion / roughness / metalness, normal, glow; Cycles on the CPU), so a prop is one material = one
+  draw call; what is written on them is painted by `paint.py` (invented names, no brands). A tall thing's red
+  obstruction light is `render/beacons.ts` (`buildBeacons` with the lamp positions: one camera-facing quad per
+  lamp, sized in pixels in both directions (6–12 px of a 1080-line screen), `BEACON_RATE` flashes a minute, all
+  together, lit while the road's lamps are; a turbine's two lenses flash through the model's emissive map), never
+  a far light of `Environment.buildCityLights` (that was an 18 px red ball over every turbine). The cockroach: `tools/blender/creatures/roach.py` (skinned,
   scuttle cycle resampled at export). A train's line variants (`KINDS.trains.variants`) are the same script with
   `--variant <name>` → `<id>-<name>.glb`.
 - Cars are all our own Blender models (`tools/blender/cars/<id>.py` + `<id>_*.py`, fitted to photos with the files in
@@ -349,14 +356,33 @@ pending. `docs/PLAN.md` holds the design.
   Mach 1 at the top (the chase camera's lag is capped for it); drawn by `render/RoachModel.ts` from a
   skinned GLB (`public/models/roach/roach.glb`; legs run with the distance covered, eyes are the headlights; colours
   via `CreatureInfo.liveries`), heard through `audio/BugSound.ts`; medals in `ROACH_MEDALS`. The backend's
-  `min_time_ms` per course leaves room for it.
+  `min_time_ms` per course leaves room for it. Wings (v2.3, players' reports: thrown into the air it did not
+  flap): bones `wing_L` / `wing_R` (the wing cases) and `hind_L` / `hind_R` (hind wings, modelled folded; the bone
+  is scaled across the chord to open the fan), opaque, on the body's atlas. `CreatureInfo.flight` holds angles,
+  beat rate and timings; the angles must equal `FLIGHT` / `HIND` in `tools/blender/creatures/roach_anatomy.py` (a
+  vitest compares). `flightStep` / `wingPose` in `RoachModel.ts`: out after 0.1 s with no leg on the ground, folded
+  0.25 s after landing; **only a live sim's `airborne` opens them** (`CarVisual` passes it: player, rival, the
+  title's car; online peers, ghosts and the replay are drawn from poses and keep them shut). The clip's tracks on
+  the wing bones are dropped at load. The flutter is `BugSound.flight(level)`. Check with
+  `node tools/roach-wings.cjs <dir>` (GPU: pose sheet, a drop from 9 m in a race); the model's sheet:
+  `roach.py --wings name:open:beat,… --sheet <file>`.
 - Rain sound (11-12; the old one was one 2 s loop of filtered noise, the same in both ears): AudioWorklet `'rain'`
   (`audio/rain.ts` + `rain.worklet.ts`, stereo, synthesised: the hillside's wash with gusts, drops around the listener,
   drops on the vehicle by kind, tyre spray by speed, drips and a muffled wash under a roof). `AudioEngine.setRain(level)`
   starts it (the old noise is the fallback without AudioWorklet), `updateRain(speed, cover, body)` steers it per frame
   from `Game` (`coverShare` on `scenery.covers`, `rainBodyOf(kindOf(spec))`). Check a change with
   `npx tsx tools/rain-wav.ts <dir>` (WAVs + spectrograms, levels, modulation, correlation between the ears, old
-  against new); `MASTER` in `rain.ts` holds the long-term level standing still at the old −24.6 dBFS.
+  against new). **The rain is a bed under the drive** (v2.2.2, a player's report: it was as loud as a car at full
+  throttle and 10 dB over a commuter train at 60 km/h): its levels are `LEVEL` (outside / body / spray) and
+  `OUTSIDE` per body (a train 0.47: heard from the cab) in `rain.ts`, set against the vehicles' own sound in the
+  game's mix, not against the old loop (that was a hiss at 4–8 kHz; this rain is broad and at the same dB(A) lay
+  over the engines' octaves). After a change of level: `rain-wav.ts` (layers alone, over time, in a gust's peak,
+  gusts held still: with them a 30 s stretch moves ±3 dB), then `gpurun.sh URL=<preview> npx tsx tools/rain-mix.ts
+  <dir> [--wet]` (rain minus drive per vehicle, speed and state; vehicle renders are cached in
+  `<dir>/vehicles.json`, `--fresh` after a change of a vehicle's sound; `?export=1` gives `window.__renderMix`).
+  Target: under the drive under power for every vehicle that sounds (−6 … −17 dB now); louder only where the
+  vehicle is nearly silent. Settings 雨音 (`rainVolume`, a share of the effects' volume; `AudioEngine.rain` bus,
+  `setVolumes`' fourth argument): at 0 no rain source runs; stored settings without the key read as 100 %.
 - Particles: any per-particle value raised to a power must have its base clamped (a NaN alpha on a puff drawn next to
   the camera covers the screen, and bloom turns a NaN frame black).
 - The rival's language model (rival battles; `ai/RivalMind.ts`): a model never drives. It gives the rival's line

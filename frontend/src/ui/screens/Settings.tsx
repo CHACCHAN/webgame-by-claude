@@ -115,6 +115,7 @@ export function SettingsScreen() {
         { kind: 'level', label: 'マスター音量', value: pct(s.masterVolume), level: s.masterVolume, note: 'すべての音の大きさ', change: (d) => s.set({ masterVolume: step(s.masterVolume, d) }) },
         { kind: 'level', label: '効果音', value: pct(s.sfxVolume), level: s.sfxVolume, note: 'エンジン・タイヤ・風・衝突の音', change: (d) => s.set({ sfxVolume: step(s.sfxVolume, d) }) },
         { kind: 'level', label: '音楽', value: pct(s.musicVolume), level: s.musicVolume, note: 'メニューとレースの音楽', change: (d) => s.set({ musicVolume: step(s.musicVolume, d) }) },
+        { kind: 'level', label: '雨音', value: pct(s.rainVolume ?? 1), level: s.rainVolume ?? 1, note: '雨の音だけの大きさ（効果音のうち）。0% で雨音なし', change: (d) => s.set({ rainVolume: step(s.rainVolume ?? 1, d) }) },
       ],
     },
   ];

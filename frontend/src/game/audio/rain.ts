@@ -124,15 +124,43 @@ const BODY: Record<RainBody, { rate: number; vDouble: number; gain: number; glas
 };
 /** the tyres' spray per body (a train runs on rails, the cockroach throws a little) */
 const SPRAY: Record<RainBody, number> = { car: 1, bike: 0.65, train: 0, none: 0.12 };
+/**
+ * How much of the rain outside (the wash, the near fall) reaches the listener through the vehicle's shell. A train is
+ * heard from inside its cab, and its own sound is the quietest of all (a commuter train at 60 km/h: −35.5 dB(A),
+ * 11 dB under a car under power): the rain outside is 6.5 dB lower there, so that the inverter stands over it
+ * (6 dB over a long time, level with it in a gust's peak).
+ */
+const OUTSIDE: Record<RainBody, number> = { car: 1, bike: 1, train: 0.47, none: 1 };
 
-/** overall level: the long-term RMS standing still in full rain matches the old filtered-noise rain (tools/rain-wav.ts) */
-const MASTER = 2.6;
+/**
+ * The layers' levels, set against the vehicles' own sound in the game's mix (tools/rain-mix.ts: A-weighted, before
+ * the master's compressor; a car under power is −23 … −25 dB(A) at any speed, −27 … −31 coasting). The rain is a
+ * bed under the drive:
+ *  - outside: −36.6 dB(A) with the gusts held still, −35.8 over a long time with them, −30 in a gust's peak.
+ *    It was 10 dB higher until v2.1.1 (all three were 2.6), at the A-weighted level of the filtered noise it had
+ *    replaced. But that noise was a hiss at 4–8 kHz, above where an engine or an inverter sounds, and this rain is
+ *    broad: at the same figure it had 4–9 dB more in the octaves 500 Hz … 2 kHz, was as loud as a car at full
+ *    throttle and 10 dB over a commuter train at 60 km/h (a player's report: a train in the rain). Now it is
+ *    3–6 dB under the old noise at 1–2 kHz and 10 dB under it above; only from 500 Hz down, where the old noise
+ *    had next to nothing, it has more.
+ *  - spray: −38.5 dB(A) at 120 km/h, −36 from 137 km/h on for a car (9 dB lower than it was): with speed it
+ *    becomes the larger part and lifts the rain by 4–5 dB, and the whole stays 7–8 dB under the engine.
+ *  - body: the drops on the vehicle's own panels and glass, as they were (−48 … −40 dB(A) on a car): 14–22 dB
+ *    under the rain outside they were hardly heard; now they are the detail on the bed.
+ * A change here: `npx tsx tools/rain-wav.ts <dir>` (the layers alone, over time, in a gust), then
+ * `tools/rain-mix.ts` (against the vehicles), and the bounds in rain.test.ts.
+ */
+const LEVEL = { outside: 0.82, body: 2.6, spray: 0.92 };
 
 export class RainSynth {
   level = 0;
   speed = 0;
   cover = 0;
   body: RainBody = 'none';
+  /** the gusts' and the water film's swing (1 = as heard; 0 holds them still, to measure a level: tools/rain-wav.ts) */
+  gusts = 1;
+  /** the layers' shares (all 1 = as heard; the tool sets two of them to 0 to measure the third alone) */
+  layers = { outside: 1, body: 1, spray: 1 };
 
   private rate: number;
   private s: number;
@@ -258,24 +286,26 @@ export class RainSynth {
     this.g1 += -this.g1 * (dt / 7) + Math.sqrt((2 * dt) / 7) * gauss();
     this.g2 += -this.g2 * (dt / 16) + Math.sqrt((2 * dt) / 16) * gauss();
     this.film += -this.film * (dt / 0.35) + Math.sqrt((2 * dt) / 0.35) * gauss();
-    const gust = Math.max(-2.2, Math.min(2.2, 0.55 * this.g1 + 0.85 * this.g2));
+    const gust = Math.max(-2.2, Math.min(2.2, 0.55 * this.g1 + 0.85 * this.g2)) * this.gusts;
     const v = this.v, open = 1 - this.cv, shelter = 1 - this.cvSlow;
+    const bm = this.bodyMix;
+    // what is outside the vehicle (the wash, the near fall, the drips), as much of it as its shell lets through
+    const outside = (bm.car * OUTSIDE.car + bm.bike * OUTSIDE.bike + bm.train * OUTSIDE.train + bm.none * OUTSIDE.none) * this.layers.outside * LEVEL.outside;
 
     // wash: level ±3 dB and brightness with the gusts; muffled and lower under a roof
-    const washGain = 0.075 * lv * Math.pow(10, (3 * gust) / 20) * (0.4 + 0.6 * shelter) * MASTER;
+    const washGain = 0.075 * lv * Math.pow(10, (3 * gust) / 20) * (0.4 + 0.6 * shelter) * outside;
     const lpA = onePole(Math.min(16000, 7000 * Math.pow(2, 0.5 * gust)) * shelter + 750 * (1 - shelter), rate);
-    const rumGain = 0.05 * lv * (0.6 + 0.4 * shelter) * Math.pow(10, (2 * gust) / 20) * MASTER;
+    const rumGain = 0.05 * lv * (0.6 + 0.4 * shelter) * Math.pow(10, (2 * gust) / 20) * outside;
     const rumA = onePole(160, rate);
 
     // the near fall: rate with the gusts; under a roof only what still reaches the open sides
     const gustRate = Math.exp(0.35 * gust);
     const nearRate = 2500 * lv * gustRate * (0.12 + 0.88 * open);
-    const nearGain = 0.095 * MASTER;
+    const nearGain = 0.095 * outside;
     const pingRate = 5 * lv * gustRate * open;
     const dripRate = 4.5 * lv * this.cv;
 
     // the body: more drops with speed (it drives into the falling rain), none under a roof
-    const bm = this.bodyMix;
     let bodyRate = 0;
     for (const b of ['car', 'bike', 'train'] as const) bodyRate += bm[b] * BODY[b].rate * (1 + v / BODY[b].vDouble);
     bodyRate *= lv * open * gustRate;
@@ -285,14 +315,14 @@ export class RainSynth {
     // spray: hiss grows with speed, the arches' wash with it, puddles now and then
     const spray = (bm.car * SPRAY.car + bm.bike * SPRAY.bike + bm.train * SPRAY.train + bm.none * SPRAY.none) * lv * (0.55 + 0.45 * shelter);
     const sv = Math.min(1, v / 38);
-    const sprayLevel = spray * sv * Math.sqrt(sv) * Math.pow(10, (2.5 * Math.max(-2, Math.min(2, this.film))) / 20) * MASTER;
+    const sprayLevel = spray * sv * Math.sqrt(sv) * Math.pow(10, (2.5 * this.gusts * Math.max(-2, Math.min(2, this.film))) / 20) * this.layers.spray * LEVEL.spray;
     const puddleRate = v > 6 ? 0.35 * (v / 25) * lv * shelter * (bm.car + bm.bike) : 0;
     const puddleDecay = Math.exp(-dt / 0.45);
 
     const pNear = nearRate / rate, pPing = pingRate / rate, pBody = bodyRate / rate, pDrip = dripRate / rate;
     const wb = this.wb, sh = this.sh, sa = this.sa, wL = this.wbL, wR = this.wbR, hL = this.shL, hR = this.shR, aS = this.saS;
     const near = this.near, roof = this.roof, glass = this.glass, helmet = this.helmet, cab = this.cab;
-    const bodyGain = (car * BODY.car.gain + bike * BODY.bike.gain + train * BODY.train.gain) * 0.16 * MASTER;
+    const bodyGain = (car * BODY.car.gain + bike * BODY.bike.gain + train * BODY.train.gain) * 0.16 * this.layers.body * LEVEL.body;
     // the banks that sound (a bank left behind rings out within ~0.3 s, while its body's share fades)
     if (this.u() < puddleRate * dt) this.puddleRise = 0.5 + this.u();
     const live = 1 | (car > 1e-3 ? 6 : 0) | (bike > 1e-3 ? 8 : 0) | (train > 1e-3 ? 16 : 0);
@@ -311,13 +341,13 @@ export class RainSynth {
       if (this.ePing <= 0) {
         this.ePing += this.exp();
         const r = 1.5 + this.u() * 12;
-        this.ping(900 * Math.pow(4, this.u()), 15 + this.u() * 35, 0.006 + this.u() * 0.012, (0.05 / r) * MASTER, this.u() * 2 - 1);
+        this.ping(900 * Math.pow(4, this.u()), 15 + this.u() * 35, 0.006 + this.u() * 0.012, (0.05 / r) * outside, this.u() * 2 - 1);
       }
       this.eDrip -= pDrip;
       if (this.eDrip <= 0) {
         this.eDrip += this.exp();
         const pan = this.u() * 2 - 1;
-        this.ping(650 * Math.pow(3, this.u()), 8 + this.u() * 20, 0.015 + this.u() * 0.025, (0.012 + this.u() * 0.02) * MASTER, pan);
+        this.ping(650 * Math.pow(3, this.u()), 8 + this.u() * 20, 0.015 + this.u() * 0.025, (0.012 + this.u() * 0.02) * outside, pan);
         this.strike(near, this.u() * 3, (0.25 + 0.4 * this.u()) * nearGain, pan);
       }
       this.eBody -= pBody;

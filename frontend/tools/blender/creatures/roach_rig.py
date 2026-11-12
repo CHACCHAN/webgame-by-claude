@@ -191,6 +191,12 @@ def bone_specs():
         specs.append((f'palp_{sd}_1', f'palp_{sd}_0', tuple(j[2]), tuple(j[5]), tuple(hf.Z)))
         j = RB.lab_palp_joints(side)
         specs.append((f'lpalp_{sd}', 'head', tuple(j[0]), tuple(j[3]), tuple(hf.Z)))
+    # the wings (flight): each on a hinge of its own, the bone lying along the wing as it rests (tip to the rear),
+    # its Z up, so its X is the insect's left for both sides: the hind wings' fan opens along X
+    for side in (1, -1):
+        sd = 'L' if side > 0 else 'R'
+        for nm, h in ((f'wing_{sd}', RB.tegmen_hinge(side)), (f'hind_{sd}', RB.hind_hinge(side))):
+            specs.append((nm, 'thorax', tuple(h), tuple(h + np.array((0.0, 0.0, -8.0))), (0, 1, 0)))
     specs.append(('abdomen', 'thorax', (0, 4.8, -11.0), (0, 4.8, -20.0), (0, 1, 0)))
     for side in (1, -1):
         sd = 'L' if side > 0 else 'R'
@@ -229,6 +235,51 @@ def build_armature(specs):
         b.use_deform = True
     bpy.ops.object.mode_set(mode='OBJECT')
     return arm
+
+
+# ---------------------------------------------------------------- the wings
+
+WING_BONES = ('wing_L', 'wing_R', 'hind_L', 'hind_R')
+
+
+def flight_angles(opened, phase):
+    """
+    The wings' pose by how far they are open (0 folded .. 1 flying) and where the beat is (0..1): degrees swung
+    out, held up and feathered for the tegmina and the hind wings, and how far the hind wings' fan is open (the
+    scale across the chord). The tegmina go first, the hind wings come out from under them and unfold; the beat
+    only comes with the wings out. The game does the same sum (render/RoachModel.ts `wingPose`): keep both alike.
+    """
+    def sm(a, b, x):
+        t = min(1.0, max(0.0, (x - a) / (b - a)))
+        return t * t * (3 - 2 * t)
+
+    F = A.FLIGHT
+    at, ah, beat = sm(0.0, 0.6, opened), sm(0.3, 1.0, opened), sm(0.7, 1.0, opened)
+    s, c = math.sin(2 * math.pi * phase), math.cos(2 * math.pi * phase)
+    out = {}
+    for key, a in (('tegmen', at), ('hind', ah)):
+        f = F[key]
+        out[key] = dict(sweep=f['sweep'] * a, lift=f['lift'] * a + f['beat'] * beat * s, twist=f['twist'] * beat * c)
+    out['hind']['unfold'] = 1 + (A.HIND['unfold'] - 1) * ah * ah
+    return out
+
+
+def pose_wings(arm, opened, phase=0.0):
+    """put the wing bones in the flight pose (they have no keys: the cycle leaves them alone)"""
+    ang = flight_angles(opened, phase)
+    for name in WING_BONES:
+        side = 1 if name.endswith('L') else -1
+        a = ang['tegmen' if name.startswith('wing') else 'hind']
+        # about the insect's axes: swung out about the vertical, lifted about the chord, feathered about the length
+        W = rot(UP, -side * math.radians(a['sweep'])) @ rot((1, 0, 0), math.radians(a['lift'])) @ \
+            rot((0, 0, 1), side * math.radians(a['twist']))
+        # … said in the bone's own axes (its rest axes in the game frame)
+        Mb = np.array(R_GB.transposed() @ arm.data.bones[name].matrix_local.to_3x3())
+        L = Matrix((Mb.T @ W @ Mb).tolist()).to_4x4()
+        pb = arm.pose.bones[name]
+        pb.rotation_mode = 'QUATERNION'
+        pb.matrix_basis = L @ Matrix.Diagonal((a.get('unfold', 1.0), 1.0, 1.0, 1.0))
+    bpy.context.view_layer.update()
 
 
 # ---------------------------------------------------------------- the cycle
@@ -328,6 +379,9 @@ def animate(arm, frames=A.FRAMES):
         vals = {}
         for b in arm.data.bones:
             n = b.name
+            if n in WING_BONES:
+                # no keys: the game poses the wings itself (flight), the cycle must not hold them
+                continue
             if b.parent is None:
                 basis = Matrix.Identity(4)
             else:

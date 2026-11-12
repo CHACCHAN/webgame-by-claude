@@ -12,10 +12,16 @@
  * and prints for each: level (RMS, dBFS), octave bands, crest factor, the correlation of the two ears (all, and
  * above 1 kHz), the level over time in 0.5 s windows (spread), the modulation spectrum of the envelope
  * (0.125–16 Hz, octaves), how alike the sound is 2 s later (the old loop repeats exactly), and the synthesis' speed.
+ * Then the level table (also in summary.json as `levels`): what the rain falls on (`rainBodyOf`) × speed, 30 s
+ * each, A-weighted (dB(A) re full scale: the power spectrum weighted bin by bin with the A curve of IEC 61672, the
+ * ear's sensitivity at moderate levels): the three layers alone with the gusts held still (the rain outside, the
+ * drops on the body, the spray), their sum, the level over a long time with the gusts and in a gust's peak, under
+ * a roof, next to the old loop's. tools/rain-mix.ts sets these against the vehicles' own sound in the game's mix.
  *   npx tsx tools/rain-wav.ts --analyse <file.wav> — the same measurements of any stereo or mono WAV.
  */
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { deflateSync } from 'node:zlib';
 import { coverShare, RainSynth, type RainBody } from '../src/game/audio/rain';
 import { rng } from '../src/game/util/math';
@@ -44,7 +50,7 @@ function biquad(type: 'bandpass' | 'lowpass', f: number, q: number) {
 }
 
 /** the old chain: a 2 s buffer of white noise looped → band-pass 5200 Hz Q 0.5 → low-pass 9 kHz → gain 0.16 × level (eased 0.5 s); mono */
-function renderOld(seconds: number, level: (t: number) => number, seed: number) {
+export function renderOld(seconds: number, level: (t: number) => number, seed: number) {
   const r = rng(seed), buf = new Float32Array(RATE * 2);
   for (let i = 0; i < buf.length; i++) buf[i] = r() * 2 - 1;
   const bp = biquad('bandpass', 5200, 0.5), lp = biquad('lowpass', 9000, 1);
@@ -59,17 +65,25 @@ function renderOld(seconds: number, level: (t: number) => number, seed: number) 
 }
 
 // ------------------------------------------------------------------ the new rain
+type Layer = 'outside' | 'body' | 'spray';
+
 interface Plan {
   level: (t: number) => number;
   speed: (t: number) => number;
   cover?: (t: number) => number;
   body: RainBody;
+  /** 0: the gusts held still (a level that does not depend on which gusts the stretch happened to have) */
+  gusts?: number;
+  /** one layer alone: the rain outside (wash, near fall), the drops on the body, the tyres' spray */
+  only?: Layer;
 }
 
-function renderNew(seconds: number, plan: Plan, seed: number) {
+export function renderNew(seconds: number, plan: Plan, seed: number) {
   const syn = new RainSynth(RATE, seed);
   const n = Math.floor((seconds * RATE) / BLOCK) * BLOCK, L = new Float32Array(n), R = new Float32Array(n);
   syn.body = plan.body;
+  syn.gusts = plan.gusts ?? 1;
+  if (plan.only) syn.layers = { outside: 0, body: 0, spray: 0, [plan.only]: 1 };
   const t0 = performance.now();
   for (let o = 0; o < n; o += BLOCK) {
     const t = o / RATE;
@@ -82,7 +96,32 @@ function renderNew(seconds: number, plan: Plan, seed: number) {
 }
 
 // ------------------------------------------------------------------ measurements
-const OCT = [63, 125, 250, 500, 1000, 2000, 4000, 8000, 16000];
+export const OCT = [63, 125, 250, 500, 1000, 2000, 4000, 8000, 16000];
+
+/** the A curve (IEC 61672) as a power weight at f (Hz): 1 at 1 kHz */
+export function aWeight(f: number) {
+  const f2 = f * f;
+  const ra = (12194 ** 2 * f2 * f2) / ((f2 + 20.6 ** 2) * Math.sqrt((f2 + 107.7 ** 2) * (f2 + 737.9 ** 2)) * (f2 + 12194 ** 2));
+  return ra * ra * 1.2589;
+}
+
+/**
+ * Level of a stretch of sound (the two ears' mean power): RMS (dBFS), A-weighted (dB(A) re full scale) and octave
+ * bands (dBFS), all from the Welch spectrum.
+ */
+export function levels(L: Float32Array, R: Float32Array = L, rate = RATE) {
+  const pl = psd(L, rate), pr = L === R ? pl : psd(R, rate);
+  let all = 0, a = 0;
+  const oct = OCT.map(() => 0);
+  for (let k = 1; k < pl.p.length; k++) {
+    const f = k * pl.df, e = (pl.p[k] + pr.p[k]) / 2;
+    all += e;
+    a += e * aWeight(f);
+    const o = OCT.findIndex((c) => f >= c / Math.SQRT2 && f < c * Math.SQRT2);
+    if (o >= 0) oct[o] += e;
+  }
+  return { rms: dB(all), dBA: dB(a), octaves: oct.map(dB) };
+}
 
 /** first-order high-pass (for the correlation above ~1 kHz) */
 function highpass(x: Float32Array, f: number) {
@@ -156,9 +195,8 @@ function analyse(name: string, L: Float32Array, R: Float32Array, skip = 0) {
   const lag = 2 * RATE;
   const rep = n > lag * 2 ? corr(L.subarray(0, n - lag), L.subarray(lag)) : NaN;
   const hl = highpass(L, 1000), hr = highpass(R, 1000);
-  // A-weighted level from the octave bands (the ear's loudness, roughly)
-  const AW = [-26.2, -16.1, -8.6, -3.2, 0, 1.2, 1, -1.1, -6.6];
-  const dBA = dB(bands.reduce((a, b, i) => a + Math.pow(10, (b + AW[i]) / 10), 0));
+  // A-weighted level (the ear's sensitivity, roughly)
+  const dBA = levels(L, R).dBA;
   const r = {
     name,
     rms: +dB(ms).toFixed(1),
@@ -331,9 +369,71 @@ function fftInPlace(re: Float64Array, im: Float64Array) {
   }
 }
 
+/** speeds (km/h) the level table is taken at, per body: the ordinary ones and the fastest vehicles of the kind */
+export const TABLE_SPEEDS: Record<RainBody, number[]> = {
+  car: [0, 60, 120, 200, 300],
+  bike: [0, 60, 120, 200, 300],
+  // (the Keikyu's 130, the E5's 320, the L0's 500)
+  train: [0, 60, 120, 130, 200, 320, 500],
+  // (the cockroach: Mach 1)
+  none: [0, 60, 120, 200, 1235],
+};
+
+/**
+ * The rain's level standing or at a steady speed (km/h) in full rain, 30 s after 3 s of settling. The gusts are held
+ * still (`gusts` 0): with them a 20 s stretch lies anywhere within ±3 dB by which gusts it happened to have, and two
+ * speeds could not be compared. It is the level the rain swings around (`rainOverTime` adds the gusts).
+ */
+export function rainLevel(body: RainBody, kmh: number, cover = 0, seed = 7, gusts = 0, only?: Layer) {
+  const { L, R } = renderNew(33, { level: () => 1, speed: () => kmh / 3.6, cover: () => cover, body, gusts, only }, seed);
+  return levels(L.subarray(3 * RATE), R.subarray(3 * RATE));
+}
+
+/** the most a gust lifts the rain outside (dB): the wash's 3 dB per unit of gust, held within ±2.2 units */
+export const GUST_PEAK = 6.6;
+let gustMean: number | null = null;
+
+/**
+ * What the gusts add to the wash's power over a long time (dB over the still level): the mean of 10^(3 × gust / 10)
+ * along the synthesiser's own gust walk (two Ornstein–Uhlenbeck walks of 7 s and 16 s, a step per block, held within
+ * ±2.2), ten hours of it. Rendered sound cannot give this figure: eight stretches of 30 s gave 1.5 dB with one set
+ * of seeds and 3.0 dB with another (the walks are slow).
+ */
+export function gustsAdd() {
+  if (gustMean === null) {
+    const r = rng(11), dt = BLOCK / RATE, gauss = () => (r() + r() + r() - 1.5) * 2;
+    let g1 = 0, g2 = 0, sum = 0;
+    const steps = Math.round(36000 / dt);
+    for (let i = 0; i < steps; i++) {
+      g1 += -g1 * (dt / 7) + Math.sqrt((2 * dt) / 7) * gauss();
+      g2 += -g2 * (dt / 16) + Math.sqrt((2 * dt) / 16) * gauss();
+      sum += Math.pow(10, (3 * Math.max(-2.2, Math.min(2.2, 0.55 * g1 + 0.85 * g2))) / 10);
+    }
+    gustMean = dB(sum / steps);
+  }
+  return gustMean;
+}
+
+/**
+ * The rain in the open at a steady speed, dB(A), gusts held still: the whole (`still`) and its three layers alone
+ * (they share noise sources, the spray's hiss with the wash: the whole is up to 1.7 dB more than their powers
+ * added). From these the level over a long time (`long`: the rain outside lifted by what the gusts add, the rest
+ * as it is) and in a gust's peak (`peak`: lifted by GUST_PEAK; the most it is, for some seconds).
+ */
+export function rainOverTime(body: RainBody, kmh: number, seed = 7) {
+  const whole = rainLevel(body, kmh, 0, seed);
+  const [outside, drops, spray] = (['outside', 'body', 'spray'] as const).map((only) => rainLevel(body, kmh, 0, seed, 0, only).dBA);
+  const pw = (x: number) => Math.pow(10, x / 10);
+  const rest = Math.max(0, pw(whole.dBA) - pw(outside));
+  const lifted = (add: number) => dB(pw(outside + add) + rest);
+  return { outside, drops, spray, still: whole.dBA, octaves: whole.octaves, long: lifted(gustsAdd()), peak: lifted(GUST_PEAK) };
+}
+
 // ------------------------------------------------------------------ main
 const args = process.argv.slice(2);
-if (args[0] === '--analyse') {
+if (!process.argv[1] || fileURLToPath(import.meta.url) !== process.argv[1]) {
+  // (imported: tools/rain-mix.ts)
+} else if (args[0] === '--analyse') {
   const { L, R } = readWavStereo(readFileSync(args[1]));
   analyse(args[1], L, R);
 } else {
@@ -364,5 +464,26 @@ if (args[0] === '--analyse') {
     if (name === 'new-runup' || name === 'new-cover' || name === 'new-weather') console.log(`  level per second: ${lev.filter((_, i) => i % 2 === 0).map((l) => l.toFixed(1)).join(' ')}`);
     summary[name] = r;
   }
+  // the level table
+  const oldLv = levels(renderOld(23, full, seed).L.subarray(3 * RATE));
+  const f1 = (x: number) => x.toFixed(1).padStart(6);
+  const g = gustsAdd();
+  console.log(`\n== levels in full rain, dB(A) (the old loop: ${oldLv.dBA.toFixed(1)} dB(A), ${oldLv.rms.toFixed(1)} dBFS, at any speed, for any vehicle, roof or not)`);
+  console.log(`   the gusts add ${g.toFixed(1)} dB to the rain outside over a long time, ${GUST_PEAK} dB at a peak`);
+  console.log('  body   km/h   layers, gusts still: outside   drops   spray | whole   over time   re old   gust peak | under a roof (still)');
+  const table: Record<string, unknown>[] = [];
+  const r1 = (x: number) => +x.toFixed(1);
+  for (const body of ['car', 'bike', 'train', 'none'] as const)
+    for (const kmh of TABLE_SPEEDS[body]) {
+      const o = rainOverTime(body, kmh, seed), c = rainLevel(body, kmh, 1, seed);
+      console.log(`  ${body.padEnd(6)}${String(kmh).padStart(5)}                         ${f1(o.outside)}  ${f1(o.drops)}  ${f1(o.spray)} |${f1(o.still)}      ${f1(o.long)}   ${f1(o.long - oldLv.dBA)}      ${f1(o.peak)} |   ${f1(c.dBA)}`);
+      table.push({ body, kmh, outside: r1(o.outside), drops: r1(o.drops), spray: r1(o.spray), still: r1(o.still), overTime: r1(o.long), gustPeak: r1(o.peak), roof: r1(c.dBA) });
+    }
+  // the octaves next to the old loop's (where an engine or an inverter sounds, and above)
+  const oct = (o: number[]) => OCT.map((f, i) => `${f >= 1000 ? f / 1000 + 'k' : f}:${o[i].toFixed(1)}`).join(' ');
+  console.log(`  octaves, dBFS, gusts still: the old loop      ${oct(oldLv.octaves)}`);
+  for (const body of ['car', 'train'] as const) console.log(`                              ${body.padEnd(5)} standing    ${oct(rainLevel(body, 0, 0, seed).octaves)}`);
+  console.log(`                              car at 120 km/h   ${oct(rainLevel('car', 120, 0, seed).octaves)}`);
+  summary.levels = { old: { rms: r1(oldLv.rms), dBA: r1(oldLv.dBA) }, gusts: { add: r1(g), peak: GUST_PEAK }, table };
   writeFileSync(join(out, 'summary.json'), JSON.stringify(summary, null, 1));
 }
