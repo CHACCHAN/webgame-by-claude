@@ -561,6 +561,44 @@ by the main session. Live since the release of 11-11 (below): the owner saw the 
   grains, close to 3D particles, that depict things and emphasise things by themselves: "the part in charge of
   beautiful expression". The 2D layer (`ui/fx/`) is to be remade on that brief.
 
+### The forest is in: trees, bushes, undergrowth, rocks remade; a course's shaders built once (11-12)
+The `nature` package (three rounds by an agent, each reviewed by me on pictures) is merged: twelve own species from
+Blender scripts, planted by altitude, slope and distance to the road, on medium and up (`low` keeps the old trees).
+CLAUDE.md "Forest" and "A course's shaders are built …"; docs/ASSETS.md for the models. The species' sheets went to
+the owner after round 1; the owner has not commented on them (the look is my call under the overhaul brief; one
+commit reverts it: the merge `b4e8db2`).
+
+- Round 3 against my five points of round 2 (pairs before / after on every course × dawn / night / rain,
+  `~/.local/opt/wt/nature/shots/pairs3`; I looked at tenrou dawn, oboro dawn, kirifuri dawn, autobahn night):
+  tenrou has low growth on its slopes and trees on the uphill sides, the views stay open; the slopes under the
+  views are grown over; the comb on oboro's ridge is gone; kirifuri's far hills read as forest (pale faces remain
+  where steep). Still to be said: tenrou's hairpin and finish have no tall tree by the road (an open ridge now).
+- **Found by the agent, on main too: every shader of a course was built twice** (three.js keys a render context by
+  the depth of the `render` call; a compile asked at the top, the frames draw one level in), and the compile
+  waited for 53 pipelines one by one. `threeFixes.compileAtPassDepth`, six compile lanes, the shadow maps marked
+  after a compile (its first try left a destroyed depth texture in bind groups: the cause is written in
+  `RenderHost.precompile`). The agent's numbers (quiet machine, load 1.3–2.4, six back-to-back pairs): load to the
+  title on main 6.9–8.1 s, with the forest 7.8–9.1 s (median +1.0 s; it was +5.5 s before this); GPU time a frame at
+  ultra 1440p with upscaling 6.86 → 8.48 ms, high 1080p 5.15 → 5.65 ms; frame rate at ultra 1440p upscaled
+  91 / 80 → 77 / 75 fps (p95 20–21 ms), which is the main thread (379 draws against 304).
+- **Found by me on the merged build: at night a birch in the headlights stood by the motorway like a green lamp**
+  (bright leaves lit as by day). Foliage is darker and greyer by night now (`vegetationWeather(rain, dark)`);
+  pictured on the autobahn and oboro at night.
+- Verified by me on the merged tree (`fx3d`): tsc, vitest 182, build; `tools/gpu-errors.cjs` 0 on WebGPU and on
+  `?webgl=1` (race pictures looked at: camera with the car, forest and undergrowth drawn);
+  `~/.local/opt/quality/hitch.cjs` at high (load 3–5): first load 9.1 s (the build before the forest 8.1 s in the
+  same sitting), a race's start 2 gaps (76 ms worst; before 112 ms), a new course 5.4–8.0 s behind the loading
+  screen (before 4.3 s), courses kept afterwards switch without a gap, video memory with four courses built
+  1.54 GB (before 1.42 GB). **The first change to dawn stands still for 0.9 s** (gaps of 146 / 313 / 315 / 124 ms;
+  before the forest the first change to rain took 0.76 s and to dawn 0.28 s: about the same in sum, not looked
+  into further).
+- E2E on an isolated stack, a subset (quality `low` on SwiftShader: the load path, not the forest): boot, the
+  full time-attack run, rival battle, course select, the phone test: 5 passed.
+- Not verified: other GPUs (the two-pass trees lean on equal depths between two shaders: a driver that rounds them
+  differently leaves flat-lit pixels, by design no holes); the forest on phones (they start on `low`, which has none of it; a phone set to medium or
+  higher: untested); frame rates on a weaker GPU than the RX 5700 XT; the whole E2E suite;
+  the vehicle thumbnails still show the old trees behind the cars (not re-rendered).
+
 ### The results' medal in grains (11-12)
 - `shapes.ts` `medalShape(gold | silver | bronze)`: a disc with a rim, fluting and an edge (it swings on its ribbon
   and turns to the pointer), a wreath of two branches, the medal's character (金 / 銀 / 銅, the element's text through
@@ -662,7 +700,7 @@ over the menus" describes what replaced it.
   grains, 3.8–3.9 ms a frame of their own, frame gaps median 16.7 ms, no page errors). A 42 s recording of the
   final build went to the owner.
 
-### Trees, bushes, undergrowth, rocks remade: a branch with pictures, not merged (11-11)
+### Trees, bushes, undergrowth, rocks remade: rounds 1 and 2 (11-11; merged on 11-12, see above)
 - The `nature` package's branch `worktree-agent-a93b5dfec501746d9` (tip `2621c03`): twelve own species (Blender
   scripts, three levels + impostor each), forests planted by altitude and slope, on medium and up; low keeps the old
   trees. Its own numbers, all taken under load (2–18): GPU time a frame at 1080p high 5.0 → 7.8 ms, ultra 8.0 →
@@ -679,8 +717,7 @@ over the menus" describes what replaced it.
   by the road (worse than before at its hairpin and finish), the valley sides under the views are bare, a comb
   of same-height trees on a ridge of oboro, kirifuri's far hillsides read as pale bare faces; and the cost: load
   to the title 7.2–8.7 → 13.2–13.9 s, ultra at 1440p with upscaling 64.6 fps with a p95 of 32 ms (the agent's
-  numbers, quiet machine). Sent back once more with these five points (round 3, running). Nothing of it is in
-  the game; the owner has said nothing on the first sheets yet.
+  numbers, quiet machine). Sent back once more with these five points (round 3: see the section of 11-12).
 
 ### The rivals speak (11-11, owner's request): a speech model on the player's GPU
 Request: a TTS model, Supertonic 3, WebGPU assumed; the language model's lines are spoken; without WebGPU no TTS

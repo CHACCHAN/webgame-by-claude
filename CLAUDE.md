@@ -96,6 +96,13 @@ pending. `docs/PLAN.md` holds the design.
   the surface-keeping blur that cancels a five-pixel tap pattern). The glow in the haze (`render/volumetricLights.ts`)
   takes its lights from `volume` (the course's lamps, the cars' cones via `CarVisual.beamInto`) and its amount from the
   preset's `haze`: a new kind of light source that should glow is added there.
+  A course's shaders are built behind the loading screen by `RenderHost.precompile(hold)`: in six lanes by material
+  (a compile waits for each pipeline in turn), **for the scene pass' render context** (`threeFixes.compileAtPassDepth`:
+  three.js keys a context by how deep the `render` call is nested and `compileAsync` asks at the top, so every
+  shader was built twice, by the compile and again by the first frame; it reaches into `renderer._renderContexts`:
+  on a three.js update check that no material is built again by the frame after a compile), every shadow marked
+  `needsUpdate` after it (a compile draws no shadow map; a map first drawn later leaves bind groups with a destroyed
+  depth texture), and one drawn frame waited for. Never put a frame between a world entering the scene and its compile.
   What costs main-thread time in this renderer (each found with a CPU profile, 34 → 133 fps):
   a shader is built per `InstancedMesh` (never one per chunk: `render/instancing.ts`, `ChunkedLods` = two meshes for
   all trees, instance data as geometry attributes); `alphaTest` on anything that throws a shadow (use `cutout()`, a
@@ -130,6 +137,22 @@ pending. `docs/PLAN.md` holds the design.
   `--render` does not work for this kind: run the script with `--out <dir> --render <dir>`.
   A cut-out or line thinner than a pixel flickers under the upscaler (the rockfall net): dissolve it by `fwidth` of
   its UV, keep thin steel dark.
+- Forest (medium and up; `low` keeps the old trees: `vegetation.tier` `legacy` / `lite` / `full` in `store/settings.ts`): twelve own
+  species (`tools/blender/nature/<id>.py` + `nature_kit.py` → `public/models/nature/<id>.glb`, `.lite.glb` for
+  medium; three levels + an impostor atlas each), drawn by `render/vegetation.ts` (`Forest`: chunks, a level per
+  distance, levels swapped through a dither in the cutout, impostors as one mesh per species; read its header
+  before touching it) and planted by `render/vegetationPlanting.ts` (species by altitude, slope and distance to the
+  road; `SPECIES`, a course style's list). What must hold: **the views stay open** (`roadViews` / `viewLimiter`: a
+  plant whose top would stand in the line from the driver's eye to the sea, the lake or the town is replaced by
+  what stays under it; `SpeciesDef.tall`; keep `viewLimiter` bit-identical when making it faster); the cost is
+  pixels, not triangles: trees, impostors, bushes and undergrowth are drawn in two passes (`*-first`: cutout, depth,
+  motion vectors, the sky's light; then lit at `EqualDepth`), nearest first, only plants near the road throw
+  shadows (a closed hull with holes from a noise); **one material per level for all species**: what differs per
+  species comes from `mesh.userData.kin` (`Kin`) through per-object uniforms and texture nodes, never from a
+  model's texture directly; `Forest.update(camera, view)` culls by the frustum; the garage's `clearing` holds for
+  it too; by night foliage is darker and greyer (`vegetationWeather(rain, dark)`: in headlights a bright-leaved
+  crown stood like a green lamp). Counting and maps: `npx tsx tools/nature-count.ts`, `nature-map.ts`,
+  `nature-probe.ts`.
 - Upscaler (settings アップスケーリング, off by default; `RenderHost` + `render/TemporalUpscaler.ts`): WebGPU draws the
   scene at 50–100 % with a jittered camera into three targets (colour, `velocity`, `reactive`) and gathers the frames
   at the output's size (three.js' `TAAUNode` with our resolve; SMAA off, RCAS after); the WebGL 2 backend uses FSR 1.
@@ -141,7 +164,7 @@ pending. `docs/PLAN.md` holds the design.
   `SET='{"upscale":true,"upscaleMode":"quality"}' MOVING=200 node tools/shots.cjs <label>` next to a native run, and
   `~/.local/opt/quality/flicker.cjs` (a still scene must hold still).
 - Own 3D models (no third-party assets): Blender Python scripts built by `BLENDER=<bin> node tools/blender-models.cjs
-  <trains|cars|props|creatures> [ids] [--render [dir]]` (Blender 5.2 headless → GLB → glTF-Transform: meshopt, WebP;
+  <trains|cars|props|creatures|nature> [ids] [--render [dir]]` (Blender 5.2 headless → GLB → glTF-Transform: meshopt, WebP;
   trains also palette textures). Scenery: `tools/blender/props/<id>.py` → `public/models/props/<id>.glb`; size,
   facing (+Z = front) and origin are set in `PROPS` (`render/props.ts`), placement in `TrackScenery.ts`. Each model
   falls back to the procedural shape when it fails to load. The cockroach: `tools/blender/creatures/roach.py` (skinned,
