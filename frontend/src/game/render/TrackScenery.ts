@@ -923,13 +923,14 @@ export function buildTrees(
     // levels of detail: the twig cards up close, bough cards, a few big cards, then the impostors
     const full = veg.tier === 'full';
     const plants = plantTrees(terrain, density, opts.style ?? 'touge', set.ids, opts);
-    // What the trees shade far from the camera, where no shadow map reaches: a disc per crown (`render/farShade.ts`).
+    // What the trees shade far from the camera, where no shadow map reaches (`render/farShade.ts`): a crown each, as
+    // wide as it is on the whole (0.6 of its widest).
     // The same trees that throw shadows into the map (`Planted.casts`: those by the road), or the road would be
     // sunlit near the camera and in the whole forest's shade further on.
     group.userData.casters = plants.filter((p) => p.casts !== false && !p.far).map((p): ShadeCaster => {
       const frame = (set.species[p.species].model.variants[p.variant] ?? set.species[p.species].model.variants[0])?.impostor;
       const tall = (frame?.height ?? 12) * p.scale;
-      return { x: p.x, z: p.z, r: (frame?.half ?? tall * 0.22) * p.scale * p.girth * 0.85, top: p.y + tall * 0.94 };
+      return { x: p.x, z: p.z, r: (frame?.half ?? tall * 0.22) * p.scale * p.girth * 0.6, top: p.y + tall * 0.94 };
     });
     const forest = new Forest(set.species, plants, {
       ranges: [full ? 28 * veg.range : 0, (full ? 80 : 60) * veg.range, (full ? 190 : 160) * veg.range],

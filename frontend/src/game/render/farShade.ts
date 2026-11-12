@@ -12,10 +12,15 @@ export { SHADE_SIZE };
  * matters at that distance moves, so the shade is worked out once per course and light: for every cell of a grid over
  * the course, **how high the shadow reaches there** (the height below which a point does not see the light). One
  * number answers for the ground, a wall, a tree top or a car at that place, and between cells it changes evenly, so
- * the edge of a shadow is as soft as a cell is wide. Two of them per cell:
- *  - `land`: what the terrain alone shades. Used everywhere, next to the shadow map too (the map has no terrain in it);
- *  - `all`: terrain, the trees' crowns and the rock sheds' roofs. Used where the shadow map ends, faded in at its edge.
- * (`render/keyShadow.ts` reads them in the shader.)
+ * the edge of a shadow is as soft as a cell is wide. Per cell:
+ *  - `land`: how high the terrain's shadow reaches. Used everywhere, next to the shadow map too (the map has no
+ *    terrain in it);
+ *  - `all`: the same with the rock sheds' roofs on the land;
+ *  - `canopy`: how much light the trees leave on the ground there (0 … 1). Not a height: a crown is no slab, and a
+ *    row of trees as solid blocks put the whole road behind it in the dark where the shadow map, next to it, drew
+ *    stripes of light and shade. What is kept is the share of light, so that the far road is as bright as the near
+ *    one is on the whole.
+ * `all` and `canopy` are used where the shadow map ends, faded in at its edge (`render/keyShadow.ts` reads them).
  *
  * Worked out by one sweep from the light's side: the shadow's height at a cell is what the cell before it towards
  * the light holds (its own top, or the shadow already over it), lowered by the light's slope over that step.
@@ -23,7 +28,7 @@ export { SHADE_SIZE };
 
 // (`SHADE_SIZE` cells along each side: the grid is stretched over the course's near terrain, so a cell is 2–8 m)
 
-/** something that stands on the land and shades it: a disc of radius `r` (m) with its top at `top` */
+/** a tree: a crown of radius `r` (m, as wide as it is on the whole, not at its widest) with its top at `top` */
 export interface ShadeCaster {
   x: number;
   z: number;
@@ -38,7 +43,10 @@ export interface ShadeLand {
 }
 
 export interface ShadeField {
-  /** SHADE_SIZE² × 4 bytes: `land` then `all`, each 16 bits (high byte first) of (height − base) / range */
+  /**
+   * SHADE_SIZE² × 4 bytes: `land` as 16 bits (high byte first) of (height − base) / range, how far `all` is above
+   * it in steps of `ROOF_STEP`, `canopy` as a byte
+   */
   data: Uint8Array;
   x0: number;
   z0: number;
@@ -52,9 +60,11 @@ export interface ShadeField {
 }
 
 export interface ShadeScene {
-  /** the tops of the land, and of everything on it, per cell */
+  /** per cell: the land's height, the same with the roofs on it, the share of the cell under crowns and their top */
   land: Float32Array;
   all: Float32Array;
+  cover: Float32Array;
+  crown: Float32Array;
   x0: number;
   z0: number;
   cx: number;
@@ -88,18 +98,20 @@ export function shadeScene(land: ShadeLand, casters: readonly ShadeCaster[], cov
     const o = j * N + i;
     if (top > all[o]) all[o] = top;
   };
+  const cover = new Float32Array(N * N), crown = new Float32Array(N * N).fill(-Infinity);
   for (const c of casters) {
-    // (a crown is no slab: its rim is lower than its top, and a cell it only touches is not covered)
-    const ri = c.r / cx, rj = c.r / cz;
-    const ci = (c.x - x0) / cx - 0.5, cj = (c.z - z0) / cz - 0.5;
-    for (let j = Math.floor(cj - rj); j <= Math.ceil(cj + rj); j++)
-      for (let i = Math.floor(ci - ri); i <= Math.ceil(ci + ri); i++) {
-        const d = Math.hypot((i - ci) / Math.max(ri, 0.5), (j - cj) / Math.max(rj, 0.5));
-        if (d > 1.2) continue;
-        const ground = i >= 0 && j >= 0 && i < N && j < N ? H[j * N + i] : c.top;
-        raise(i, j, ground + (c.top - ground) * (1 - 0.45 * Math.min(1, d) ** 2));
+    // the crown's share of every cell it reaches into (its square's overlap, as a disc's: × π / 4)
+    const i0 = Math.max(0, Math.floor((c.x - c.r - x0) / cx)), i1 = Math.min(N - 1, Math.floor((c.x + c.r - x0) / cx));
+    const j0 = Math.max(0, Math.floor((c.z - c.r - z0) / cz)), j1 = Math.min(N - 1, Math.floor((c.z + c.r - z0) / cz));
+    for (let j = j0; j <= j1; j++) {
+      const oz = Math.min(c.z + c.r, z0 + (j + 1) * cz) - Math.max(c.z - c.r, z0 + j * cz);
+      for (let i = i0; i <= i1; i++) {
+        const ox = Math.min(c.x + c.r, x0 + (i + 1) * cx) - Math.max(c.x - c.r, x0 + i * cx);
+        const o = j * N + i;
+        cover[o] = Math.min(1, cover[o] + (ox * oz * Math.PI) / 4 / (cx * cz));
+        crown[o] = Math.max(crown[o], c.top);
       }
-    if (c.top > hi) hi = c.top;
+    }
   }
   for (let q = 0; q + 8 < covers.length; q += 9) {
     // a roof's quad (a, b, c, d in order): the cells whose centre is inside it
@@ -123,18 +135,32 @@ export function shadeScene(land: ShadeLand, casters: readonly ShadeCaster[], cov
       }
     if (top > hi) hi = top;
   }
-  return { land: H, all, x0, z0, cx, cz, lo, hi, heightAt: land.heightAt };
+  return { land: H, all, cover, crown, x0, z0, cx, cz, lo, hi, heightAt: land.heightAt };
 }
 
+/** `all` is kept as its height above `land`, in steps of this (m): a roof's shadow is never far above the ground's */
+const ROOF_STEP = 0.1;
+/** how much of the light a cell wholly under crowns takes from a ray through it (the shadow map's hulls have holes too) */
+const CROWN_SHADE = 0.7;
+/** a crown's shadow is followed this far (m) */
+const CROWN_REACH = 170;
+
 /**
- * How high the shadow reaches in every cell, for light coming from `toLight` (unit vector towards the sun / moon).
+ * How high the shadow reaches in every cell, and what the trees leave of the light, for light coming from `toLight`
+ * (unit vector towards the sun / moon). `landShades: false`: the land itself throws no shadow (`Landform.dawnShade`),
+ * only the roofs and the trees do.
  */
-export function bakeShade(scene: ShadeScene, toLight: { x: number; y: number; z: number }): ShadeField {
+export function bakeShade(scene: ShadeScene, toLight: { x: number; y: number; z: number }, landShades = true): ShadeField {
   const N = SHADE_SIZE;
-  const { land, all, x0, z0, cx, cz, lo, hi } = scene;
+  const { cover, crown, x0, z0, cx, cz, lo, hi } = scene;
+  // what throws the two shadows: the land, and the land with the roofs (without the land: the roofs alone)
+  const NONE = -1e9;
+  const land = landShades ? scene.land : new Float32Array(N * N).fill(NONE);
+  const all = landShades ? scene.all : scene.all.map((h, o) => (h > scene.land[o] ? h : NONE));
   const flat = Math.hypot(toLight.x, toLight.z);
   const base = lo - 80, range = hi + 20 - base;
   const data = new Uint8Array(N * N * 4);
+  for (let o = 3; o < data.length; o += 4) data[o] = 255;
   const field: ShadeField = { data, x0, z0, cx, cz, base, range, soft: 1 };
   // (a light straight overhead shades nothing beside what is under it: everything stays lit)
   if (flat < 1e-3 || toLight.y <= 0) return field;
@@ -153,6 +179,7 @@ export function bakeShade(scene: ShadeScene, toLight: { x: number; y: number; z:
   const outside = (a: number, b: number) => {
     const i = alongX ? a : b, j = alongX ? b : a;
     const x = x0 + (i + 0.5) * cx, z = z0 + (j + 0.5) * cz;
+    if (!landShades) return NONE;
     let top = -Infinity;
     for (let t = 0, d = Math.max(cx, cz); t < 5000; t += d, d *= 1.06) top = Math.max(top, scene.heightAt(x + ux * t, z + uz * t) - t * slope);
     return top;
@@ -174,29 +201,60 @@ export function bakeShade(scene: ShadeScene, toLight: { x: number; y: number; z:
       sA[o] = oA - drop;
     }
   }
+  if (!landShades)
+    for (let o = 0; o < N * N; o++) {
+      // (as on level ground in the light: the shadow's top a cell's drop under the ground)
+      sT[o] = scene.land[o] - drop;
+      sA[o] = Math.max(sA[o], sT[o]);
+    }
+  // the trees: every cell under crowns takes its share of the light from the cells behind it, as far as its top's
+  // shadow runs above their ground
+  const light = new Float32Array(N * N).fill(1);
+  const reach = Math.min(N, Math.ceil(CROWN_REACH / step));
+  for (let a = 0; a < N; a++)
+    for (let b = 0; b < N; b++) {
+      const src = at(a, b);
+      if (!(cover[src] > 0)) continue;
+      const dim = CROWN_SHADE * cover[src], top = crown[src];
+      for (let n = 0; n <= reach; n++) {
+        const ra = a - dir * n, rb = b - side * n;
+        if (ra < 0 || ra >= N || rb < 0 || rb > N - 1 || top - n * drop < lo) break;
+        const b0 = Math.floor(rb), f = rb - b0;
+        const p = at(ra, b0);
+        if (scene.land[p] + n * drop < top) light[p] *= 1 - dim * (1 - f);
+        if (f > 0) {
+          const q = at(ra, b0 + 1);
+          if (scene.land[q] + n * drop < top) light[q] *= 1 - dim * f;
+        }
+      }
+    }
   const k = 65535 / range;
   for (let o = 0; o < N * N; o++) {
     const t = Math.min(65535, Math.max(0, Math.round((sT[o] - base) * k)));
-    const s = Math.min(65535, Math.max(0, Math.round((sA[o] - base) * k)));
     data[o * 4] = t >> 8;
     data[o * 4 + 1] = t & 255;
-    data[o * 4 + 2] = s >> 8;
-    data[o * 4 + 3] = s & 255;
+    data[o * 4 + 2] = Math.min(255, Math.max(0, Math.ceil((sA[o] - sT[o]) / ROOF_STEP)));
+    data[o * 4 + 3] = Math.round(light[o] * 255);
   }
   return field;
 }
 
-/** how high the shadow reaches at a place, as the shader reads it (for tests and probes): [land, all] */
-export function shadeAt(f: ShadeField, x: number, z: number): [number, number] {
+/**
+ * The shade at a place as the shader reads it (for tests and probes): how high the land's shadow reaches, how high
+ * with the roofs, and the share of the light the trees leave on the ground.
+ */
+export function shadeAt(f: ShadeField, x: number, z: number): [number, number, number] {
   const N = SHADE_SIZE;
   const u = (x - f.x0) / f.cx - 0.5, v = (z - f.z0) / f.cz - 0.5;
   const i = Math.floor(u), j = Math.floor(v), fu = u - i, fv = v - j;
-  const read = (i: number, j: number, c: number) => {
-    const o = (Math.min(N - 1, Math.max(0, j)) * N + Math.min(N - 1, Math.max(0, i))) * 4 + c;
-    return ((f.data[o] * 256 + f.data[o + 1]) / 65535) * f.range + f.base;
+  const read = (i: number, j: number): [number, number, number] => {
+    const o = (Math.min(N - 1, Math.max(0, j)) * N + Math.min(N - 1, Math.max(0, i))) * 4;
+    const land = ((f.data[o] * 256 + f.data[o + 1]) / 65535) * f.range + f.base;
+    return [land, land + f.data[o + 2] * ROOF_STEP, f.data[o + 3] / 255];
   };
-  const mix = (c: number) => (read(i, j, c) * (1 - fu) + read(i + 1, j, c) * fu) * (1 - fv) + (read(i, j + 1, c) * (1 - fu) + read(i + 1, j + 1, c) * fu) * fv;
-  return [mix(0), mix(2)];
+  const a = read(i, j), b = read(i + 1, j), c = read(i, j + 1), d = read(i + 1, j + 1);
+  const mix = (k: number) => (a[k] * (1 - fu) + b[k] * fu) * (1 - fv) + (c[k] * (1 - fu) + d[k] * fu) * fv;
+  return [mix(0), mix(1), mix(2)];
 }
 
 /** how much of the light a point at height `y` gets under a shadow that reaches `top` (the shader's formula) */
@@ -214,6 +272,8 @@ export class FarShade {
   readonly frame = new THREE.Vector4(0, 0, 1, 1);
   /** base, range, 1 / soft; w: 1 while there is a field (0: everything is lit) */
   readonly scale = new THREE.Vector4(0, 1, 1, 0);
+  /** metres per step of the roofs' height above the land's shadow, for a byte read as 0 … 1 */
+  readonly roofStep = 255 * ROOF_STEP;
   private shown: ShadeField | null = null;
 
   constructor(readonly atlas: LightAtlas) {}

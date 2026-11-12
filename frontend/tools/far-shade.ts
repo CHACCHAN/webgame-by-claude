@@ -19,13 +19,13 @@ const course = COURSES[courseId as keyof typeof COURSES];
 const track = new Track(course.design);
 const terrain = buildTerrain(track, course.landform);
 const ids = TREE_SETS[course.style ?? 'touge'];
-const casters: ShadeCaster[] = plantTrees(terrain, 1, course.style ?? 'touge', ids).filter((p) => p.casts !== false && !p.far).map((p) => ({ x: p.x, z: p.z, r: 2.4 * p.scale * p.girth, top: p.y + 13 * p.scale }));
+const casters: ShadeCaster[] = plantTrees(terrain, 1, course.style ?? 'touge', ids).filter((p) => p.casts !== false && !p.far).map((p) => ({ x: p.x, z: p.z, r: 1.7 * p.scale * p.girth, top: p.y + 13 * p.scale }));
 let t = performance.now();
 const scene = shadeScene(terrain, casters);
 const tScene = performance.now() - t;
 const dir = light === 'sun' ? SUN : new THREE.Vector3(...terrain.landform.moonDir).normalize();
 t = performance.now();
-const field = bakeShade(scene, dir);
+const field = bakeShade(scene, dir, light !== 'sun' || terrain.landform.dawnShade !== false);
 const tBake = performance.now() - t;
 let land = 0, all = 0;
 const N = SHADE_SIZE;
@@ -34,8 +34,8 @@ for (let j = 0; j < N; j++)
   for (let i = 0; i < N; i++) {
     const x = field.x0 + (i + 0.5) * field.cx, z = field.z0 + (j + 0.5) * field.cz;
     const y = scene.land[j * N + i];
-    const [a, b] = shadeAt(field, x, z);
-    const la = litUnder(field, a, y), lb = litUnder(field, b, y);
+    const [a, b, canopy] = shadeAt(field, x, z);
+    const la = litUnder(field, a, y), lb = litUnder(field, b, y) * canopy;
     land += 1 - la;
     all += 1 - lb;
     const road = terrain.roadDistAt(x, z) < 5;
@@ -51,9 +51,9 @@ let rs = 0, rl = 0;
 const p = new THREE.Vector3();
 for (let s = 0; s < track.count; s += 5) {
   track.pointAt(s, 0, p);
-  const [a, b] = shadeAt(field, p.x, p.z);
+  const [a, b, canopy] = shadeAt(field, p.x, p.z);
   rl += 1 - litUnder(field, a, p.y + 0.05);
-  rs += 1 - litUnder(field, b, p.y + 0.05);
+  rs += 1 - litUnder(field, b, p.y + 0.05) * canopy;
 }
 const n = Math.ceil(track.count / 5);
 console.log(`road: in the land's shade ${((rl / n) * 100).toFixed(1)} %, with trees ${((rs / n) * 100).toFixed(1)} %`);

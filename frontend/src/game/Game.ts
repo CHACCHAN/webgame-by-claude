@@ -499,7 +499,7 @@ export class Game {
     // the shade beyond the shadow map, for the moon of this course and for the morning sun
     const shading = this.scenery.shadeScene;
     if (shading) {
-      this.scenery.shades = { moon: bakeShade(shading, _v.set(...this.terrain.landform.moonDir).normalize()), sun: bakeShade(shading, PRESETS.dawn.keyDir) };
+      this.scenery.shades = { moon: bakeShade(shading, _v.set(...this.terrain.landform.moonDir).normalize()), sun: bakeShade(shading, PRESETS.dawn.keyDir, this.terrain.landform.dawnShade !== false) };
       this.scenery.shadeScene = null;
     }
     await this.yieldFrame(0.75, '夜景を灯しています');

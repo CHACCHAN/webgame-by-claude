@@ -8,9 +8,9 @@ const land = (heightAt: (x: number, z: number) => number): ShadeLand => ({ near:
 const light = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z).normalize();
 /** how much light the ground (or a point `up` above it) gets: [the land's shade only, with trees and roofs] */
 const lit = (f: ShadeField, ground: (x: number, z: number) => number, x: number, z: number, up = 0) => {
-  const [a, b] = shadeAt(f, x, z);
+  const [a, b, canopy] = shadeAt(f, x, z);
   const y = ground(x, z) + up;
-  return [litUnder(f, a, y), litUnder(f, b, y)];
+  return [litUnder(f, a, y), litUnder(f, b, y) * canopy];
 };
 
 describe('the far shade', () => {
@@ -58,14 +58,51 @@ describe('the far shade', () => {
     // a tree 14 m tall at the origin, a roof 6 m up over a strip of road further on
     const scene = shadeScene(land(flat), [{ x: 0, z: 0, r: 4, top: 14 }], [200, -6, 260, -6, 260, 6, 200, 6, 6]);
     const f = bakeShade(scene, dir);
-    // the tree's shadow lies towards −x, about 28 m long
-    expect(lit(f, flat, -12, 0)).toEqual([1, 0]);
+    // the tree's shadow lies towards −x, about 28 m long: a share of the light is left in it
+    const under = lit(f, flat, -12, 0);
+    expect(under[0]).toBe(1);
+    expect(under[1]).toBeGreaterThan(0.02);
+    expect(under[1]).toBeLessThan(0.5);
     expect(lit(f, flat, -60, 0)).toEqual([1, 1]);
     expect(lit(f, flat, 12, 0)[1]).toBe(1);
     // under the roof it is dark, on top of it light
     expect(lit(f, flat, 230, 0)).toEqual([1, 0]);
     expect(lit(f, flat, 230, 0, 7)[1]).toBe(1);
     expect(lit(f, flat, 230, 40)[1]).toBe(1);
+  });
+
+  it('leaves as much light behind a row of trees as their crowns let through', () => {
+    const flat = () => 0;
+    // a row along z, a tree every 8 m, crowns 2.5 m in radius, the sun low across the row
+    const row = Array.from({ length: 60 }, (_, k) => ({ x: 0, z: -240 + k * 8, r: 2.5, top: 15 }));
+    const f = bakeShade(shadeScene(land(flat), row), light(1, 0.16, 0));
+    let sum = 0, least = 1, n = 0;
+    for (let z = -100; z < 100; z += 1) {
+      const l = lit(f, flat, -20, z)[1];
+      sum += l, least = Math.min(least, l), n++;
+    }
+    // stripes: neither a solid shadow nor none (crowns cover 5 of every 8 m)
+    expect(sum / n).toBeGreaterThan(0.3);
+    expect(sum / n).toBeLessThan(0.8);
+    expect(least).toBeLessThan(0.5);
+    // beyond the shadow's end (15 m / 0.16 = 94 m) the ground is in the light again
+    expect(lit(f, flat, -110, 0)[1]).toBe(1);
+  });
+
+  it('can leave the land\'s own shadow out and keep the roofs\' and the trees\'', () => {
+    const ridge = (x: number) => 60 * Math.max(0, 1 - Math.abs(x) / 30);
+    const scene = shadeScene(land(ridge), [{ x: -400, z: 0, r: 4, top: 14 }], [-220, -6, -180, -6, -180, 6, -220, 6, 6]);
+    const f = bakeShade(scene, light(Math.cos(0.2618), Math.sin(0.2618), 0), false);
+    const g = (x: number) => ridge(x);
+    // behind the ridge, where its shadow lay: in the light, on the ground and above it
+    expect(lit(f, g, -100, 0)).toEqual([1, 1]);
+    expect(lit(f, g, -15, 0)).toEqual([1, 1]);
+    expect(lit(f, g, -100, 0, 20)).toEqual([1, 1]);
+    // under the roof dark, on it light; behind the tree a share
+    expect(lit(f, g, -200, 0)).toEqual([1, 0]);
+    expect(lit(f, g, -200, 0, 7)[1]).toBe(1);
+    expect(lit(f, g, -410, 0)[1]).toBeLessThan(0.6);
+    expect(lit(f, g, -410, 0)[0]).toBe(1);
   });
 
   it('takes the far land\'s skyline for what lies beyond the grid', () => {
