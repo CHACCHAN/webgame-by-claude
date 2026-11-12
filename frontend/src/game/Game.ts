@@ -39,6 +39,8 @@ import { TireSmoke, SkidMarks } from './fx/TireEffects';
 import { ExhaustFX, newExhaustState, type ExhaustState } from './fx/Exhaust';
 import { Rain } from './fx/Rain';
 import { AudioEngine } from './audio/AudioEngine';
+import { coverShare, rainBodyOf } from './audio/rain';
+import { kindOf } from './vehicle/kinds';
 import { GhostPlayer, GhostRecorder, type GhostData } from './race/Ghost';
 import { clamp, damp, lerp, smoothstep } from './util/math';
 import type { TrackProjection } from './track/Track';
@@ -1687,6 +1689,14 @@ export class Game {
       const e = this.audio.engine('attract', sim.spec);
       const d = sim.position.distanceTo(this.camera.position);
       e.update(sim.rpm, sim.input.throttle, sim.boost, clamp(1 - d / 160, 0, 1) * 0.5, sim.spec.engine.redline);
+    }
+    // the rain as heard from the player's vehicle (its speed, a roof over it, what the drops land on); in the menus
+    // from the camera, with no body under the rain
+    if (this.audio && this.env?.preset.rain) {
+      const sim = this.player?.sim;
+      const at = sim ? sim.position : this.camera.position;
+      const cover = this.scenery ? coverShare(this.scenery.covers, at.x, at.y + 1.2, at.z) : 0;
+      this.audio.updateRain(sim && !this.paused ? sim.speed : 0, cover, sim ? rainBodyOf(kindOf(sim.spec)) : 'none');
     }
   }
 
