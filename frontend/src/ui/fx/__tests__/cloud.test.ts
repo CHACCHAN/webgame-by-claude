@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { EMPHASIS, OBJECT, bind, createCloud, members, project, rng, stepCloud, sweep, type Shape } from '../cloud';
-import { TONE, courseRelief, maskShape, panelOutline, shellOf } from '../shapes';
+import { TONE, courseRelief, maskShape, panelOutline, shellOf, skyScene } from '../shapes';
 
 const palette = new Float32Array(7 * 3).fill(1);
 const run = (c: ReturnType<typeof createCloud>, seconds: number) => {
@@ -181,5 +181,70 @@ describe('the shapes of grains', () => {
     const many = shellOf(panelOutline(0, 0, 60, 30, 6), 6000, TONE.cyan, rng(2));
     expect(few.gain).toBe(1);
     expect(many.gain).toBeLessThan(0.35);
+  });
+  it('a sky scene per time of day: stars and a moon, rain that falls, a sun over the clouds', () => {
+    const night = skyScene('night', 3.5, 8000, rng(1));
+    // the moon: a dense white patch right of the middle; nothing lit below the ridge except the town
+    let moon = 0;
+    for (let i = 0; i < 8000; i++) if (night.tones![i] === TONE.white && Math.hypot(night.points[i * 3] - 3.5 * 0.27, night.points[i * 3 + 1] + 0.16) < 0.26) moon++;
+    expect(moon).toBeGreaterThan(900);
+    expect(night.fall).toBeUndefined();
+
+    const rain = skyScene('rain', 3.5, 8000, rng(2));
+    expect(rain.fall!.y).toBeGreaterThan(1);
+    let falling = 0;
+    for (let i = 0; i < 8000; i++) if (rain.along![i] >= 0) falling++;
+    expect(falling % 6).toBe(0);
+    expect(falling).toBeGreaterThan(3500);
+    expect(falling).toBeLessThan(6800);
+
+    const dawn = skyScene('dawn', 3.5, 8000, rng(3));
+    let disc = 0;
+    // the sun's disc is cut off at the clouds: nothing of it below them
+    for (let i = 0; i < 8000; i++) {
+      // (the disc's grains are the ones at its own depth, inside its radius)
+      if (dawn.points[i * 3 + 2] !== Math.fround(0.3) || Math.hypot(dawn.points[i * 3], dawn.points[i * 3 + 1] - 0.1) > 0.331) continue;
+      expect(dawn.points[i * 3 + 1]).toBeLessThanOrEqual(0.061);
+      disc++;
+    }
+    expect(disc).toBeGreaterThan(1200);
+    for (const s of [night, rain, dawn]) for (let i = 0; i < 8000; i++) {
+      expect(Number.isFinite(s.points[i * 3] + s.points[i * 3 + 1] + s.points[i * 3 + 2])).toBe(true);
+      expect(s.lum![i]).toBeGreaterThanOrEqual(0);
+      expect(s.lum![i]).toBeLessThanOrEqual(1.01);
+    }
+  });
+
+  it('grains ride with points that travel, and start again with them at the other end', () => {
+    const c = createCloud(1600, 1280, 720, palette);
+    const m = members(c, OBJECT);
+    // every point at the shape's middle, travelling one unit down a cycle, each with its own phase
+    const along = new Float32Array(m);
+    for (let k = 0; k < m; k++) along[k] = k / m;
+    const shape: Shape = { points: new Float32Array(m * 3), along, fall: { x: 0, y: 1, z: 0, rate: 0.5 }, tone: 1, loose: 0, size: 1, gain: 1 };
+    Object.assign(c.places[OBJECT], { x: 640, y: 360, scale: 200 });
+    bind(c, OBJECT, shape);
+    run(c, 3);
+    const where = (i: number) => 360 + 200 * ((((along[c.rank[i]] + c.time * 0.5) % 1) + 1) % 1 - 0.5);
+    let off = 0, count = 0, top = Infinity, bottom = -Infinity;
+    for (let i = 0; i < c.n; i++) {
+      if (c.group[i] !== OBJECT) continue;
+      off = Math.max(off, Math.abs(c.pos[i * 3 + 1] - where(i)));
+      top = Math.min(top, c.pos[i * 3 + 1]);
+      bottom = Math.max(bottom, c.pos[i * 3 + 1]);
+      count++;
+    }
+    expect(count).toBe(m);
+    // carried along (no lag behind the point), over the whole travel and nowhere else
+    expect(off).toBeLessThan(3);
+    expect(top).toBeGreaterThan(255);
+    expect(top).toBeLessThan(265);
+    expect(bottom).toBeLessThan(465);
+    expect(bottom).toBeGreaterThan(455);
+    // through two more cycles none of them is ever left behind (a grain flying back up through the picture)
+    for (let k = 0; k < 240; k++) {
+      stepCloud(c, 1 / 60);
+      for (let i = 0; i < c.n; i++) if (c.group[i] === OBJECT) expect(Math.abs(c.pos[i * 3 + 1] - where(i))).toBeLessThan(6);
+    }
   });
 });

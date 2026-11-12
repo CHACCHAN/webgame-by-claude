@@ -7,8 +7,8 @@ import { Track } from '../../game/track/Track';
 import { AMBIENT, EMPHASIS, OBJECT, bind, burst, createCloud, members, resizeCloud, rng, stepCloud, sweep, type Cloud as Field, type Shape } from './cloud';
 import { createCloudRenderer } from './cloudRender';
 import { createCloudRendererGpu } from './cloudRenderGpu';
-import { renderHost } from '../GameCanvas';
-import { RELIEF_PITCH, RELIEF_SWAY, TONE, courseRelief, lineOutline, maskShape, panelOutline, ringOutline, shellOf } from './shapes';
+import { gameHolder, renderHost } from '../GameCanvas';
+import { RELIEF_PITCH, RELIEF_SWAY, TONE, courseRelief, lineOutline, maskShape, panelOutline, ringOutline, shellOf, skyScene } from './shapes';
 
 /**
  * The grains over the menus (owner 11-11: fine, close to 3D particles; grains alone depict things and grains alone
@@ -20,7 +20,7 @@ import { RELIEF_PITCH, RELIEF_SWAY, TONE, courseRelief, lineOutline, maskShape, 
  *   else an element with `data-grains` (`"line"` / `"ring"` / its panel; `data-grains-tone="magenta|amber"`;
  *   `data-grains-first="<ms>"`: before all of these for its first moments), gets its edge drawn by grains.
  * - **Things**: an element with `data-cloud` is depicted by grains where it stands: `course:<id>` (the course's
- *   relief, turning), `glyph` (the element's own text). `data-cloud-fill="0…1"`: how much of it has gathered.
+ *   relief), `glyph` (the element's own text), `sky:night|rain|dawn` (a time of day and its weather as a scene). `data-cloud-fill="0…1"`: how much of it has gathered.
  * While the grains depict something the app has the class `cloud-on` (the page's own picture of it steps back).
  * A slow machine gets fewer grains, down to none. Not mounted in a race, nor with the interface's motion off.
  */
@@ -237,6 +237,9 @@ export function Cloud() {
         const t = new Track(info.design);
         return courseRelief({ count: t.count, pos: t.pos, startS: t.startS, finishS: t.finishS, base: (x, z) => info.landform.base(x, z), water: info.landform.waterLevel }, objects, rng(arg.length * 977 + 3));
       }
+      if (kind === 'sky' && (arg === 'night' || arg === 'rain' || arg === 'dawn')) {
+        return skyScene(arg, Number(key.split(':')[2]) || 3, objects, rng(arg.length * 131 + 7));
+      }
       if (kind === 'glyph') {
         // the element's own text in its own type, drawn into a mask
         const style = getComputedStyle(el);
@@ -261,14 +264,19 @@ export function Cloud() {
       }
       return null;
     };
-    const keyOf = (el: HTMLElement) => (el.dataset.cloud === 'glyph' ? `glyph:${el.dataset.cloudText ?? el.textContent ?? ''}` : (el.dataset.cloud ?? ''));
+    const keyOf = (el: HTMLElement, r: DOMRect) => {
+      const asked = el.dataset.cloud ?? '';
+      if (asked === 'glyph') return `glyph:${el.dataset.cloudText ?? el.textContent ?? ''}`;
+      // (a sky is made for the shape of its place)
+      return asked.startsWith('sky:') ? `${asked}:${(r.width / r.height).toFixed(1)}` : asked;
+    };
     const findThing = () => {
       thing = null;
       if (c.active < DEPICT) return;
       for (const el of overlay.querySelectorAll<HTMLElement>('[data-cloud]')) {
         const r = el.getBoundingClientRect();
         if (r.width < 8 || r.height < 8 || r.bottom < 0 || r.top > window.innerHeight) continue;
-        thing = { el, key: keyOf(el) };
+        thing = { el, key: keyOf(el, r) };
         return;
       }
     };
@@ -279,10 +287,26 @@ export function Cloud() {
     let raf = 0;
     let before = performance.now();
     let look = 0;
-    let frames = 0, spent = 0, gauge = before;
+    let frames = 0, spent = 0, gauge = before, resting = false;
     const stats = { cost: 0 };
     const frame = (now: number) => {
       raf = requestAnimationFrame(frame);
+      // a race under way with the menus still mounted (a tool that starts one through the game, not the screens):
+      // the grains rest, they take nothing from a race
+      const phase = gameHolder.game?.phase;
+      if (phase === 'countdown' || phase === 'racing' || phase === 'replay') {
+        if (!resting) {
+          resting = true;
+          const living = c.active;
+          c.active = 0;
+          renderer.draw(c, ratio, 0, 0);
+          c.active = living;
+          app.classList.remove('cloud-on');
+        }
+        before = now;
+        return;
+      }
+      resting = false;
       const gap = now - before;
       const dt = Math.min(gap / 1000, 0.05);
       before = now;
@@ -363,6 +387,12 @@ export function Cloud() {
             p.pitch = RELIEF_PITCH + Math.sin(c.time * 0.17) * 0.04;
             p.yaw = RELIEF_SWAY * (Math.sin(c.time * 0.23) * 0.45 + (Number.isFinite(c.px) ? (c.px / w - 0.5) * 1.1 : 0));
             p.z = -10;
+          } else if (shown.key.startsWith('sky')) {
+            // a small scene in its place: it turns a little with the pointer, enough to part the near from the far
+            p.scale = r.height * Number(shown.el.dataset.cloudScale ?? 1);
+            p.yaw = Math.sin(c.time * 0.21) * 0.1 + (Number.isFinite(c.px) ? (c.px / w - 0.5) * 0.3 : 0);
+            p.pitch = Math.sin(c.time * 0.17 + 1) * 0.04;
+            p.z = 0;
           } else {
             // a glyph: it sways a little, enough to show that it is deep
             p.scale = (parseFloat(getComputedStyle(shown.el).fontSize) || r.height) * Number(shown.el.dataset.cloudScale ?? 1);

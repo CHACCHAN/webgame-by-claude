@@ -561,6 +561,44 @@ by the main session. Live since the release of 11-11 (below): the owner saw the 
   grains, close to 3D particles, that depict things and emphasise things by themselves: "the part in charge of
   beautiful expression". The 2D layer (`ui/fx/`) is to be remade on that brief.
 
+### The condition cards' skies in grains; the grains rest in a race; the title's first shot (11-12)
+The owner asked for moving pictures on the clear night / rain / dawn cards (videos made with Gemini); Gemini's video
+generation still fails, so the selected card's sky is now a scene of grains (my proposal of 11-11, a stand-in the
+owner has not yet seen).
+
+- `shapes.ts` `skyScene`: **night** (stars at every depth, the band of the galaxy, a crescent moon, the ridge in
+  cyan, the town's lights in quarters under it), **rain** (streaks of six grains that fall together through a
+  lamp's cone, the lamp, rings on the wet road, the lamp drawn out in the water), **dawn** (the sun's disc cut off
+  by the sea of clouds, its glow and rays, the clouds in rows, two peaks lit on their sunward side). `cloud.ts`
+  `Shape.fall`: points with an `along` travel through the shape; their grains get the points' velocity fed forward
+  (they ride without lag), start again at the other end, fade at both ends. `Cloud.tsx`: `data-cloud="sky:<id>"` on
+  the selected card's `.ch-sky` (`RaceSetup.tsx`), the drawn sky fades to a dark stage under it (`.cloud-on`); the
+  strip is 7.5rem high now (was 5). Without grains (motion off, a software renderer) the cards are as before.
+- **The grains rest while the game is in a race**, whatever the app's screen (`countdown` / `racing` / `replay`):
+  found by the nature package's timings (a tool that starts a race with the app on the title kept 3 ms a frame of
+  grains running). `tools/gpu-errors.cjs`' race picture shows the title's plain 峠 over the race: no grains.
+- **Two of the title's four shots showed a roof and a bonnet** (seen behind the condition cards in these pictures;
+  `Game.cinematicCamera`, also the replay's camera). The orbit was as wide as the road around the centre line, and
+  the car drove along the edge: the camera stood right over it six seconds into the title. And both travelling
+  shots were eased towards a place ahead of the car, so at speed they fell back by speed / rate (five metres at
+  140 km/h): the low front shot looked down on the bonnet. Now: the travelling shots are carried along by the
+  car's own movement and eased only in the rest; the first is a swing on the side of the car where the road has
+  room, never nearer than five metres; the low front shot is a three-quarter view beside the lamps' cones (in
+  them the glow in the haze whitens the picture: found when the camera first kept its lead). Measured on the GPU
+  over 36 s of the title: shot 0 at 5.9–9 m from the car (was 1.8 m at its nearest), the front shot at 5.1–6.3 m
+  and 0.6–0.7 m above the car's origin; pictures of both looked at.
+- Verified on the GPU (load 2–5): the three skies pictured whole and close (1280×720), the rain in two pictures
+  0.35 s apart (different) and in a 24 s recording (51 fps of screencast frames) looked at as a sheet; a phone
+  (844×390, touch: 12 000 grains, the strip 34 px: moon, ridge and town still read), the WebGL 2 backend (same
+  picture), motion off (the drawn skies, the drawn focus frame); 31 500–37 000 grains at 2.8–4.1 ms a frame of
+  their own; no page errors. `tools/gpu-errors.cjs` 0 on WebGPU and on `?webgl=1`. vitest: 11 in `ui/fx`.
+- E2E on an isolated stack, a subset only (SwiftShader: no grains there, so it covers the markup, the guard
+  and the camera, not the skies): boot, menu navigation, course select and the phone test on the tree before the
+  camera change; boot and the full time-attack run (race, results, replay camera behind them) on the final tree.
+  The whole suite was **not** run. tsc, vitest 169, build.
+- Not verified: the owner's eye (a recording goes with the report); other GPUs / browsers / real phones; a
+  display with a pixel ratio of 2 at desktop size.
+
 ### The grains as a cloud in depth (11-11, after the owner's word on the first grains)
 Owner: 「粒はもっと細かく、3d パーティクルに近いです。粒だけで物を表現したり、粒だけで強調させたりといった使い方を
 予想してました。美しい寄りな表現担当ですね。」 The 2D layer (420 grains tracing frames) is gone; CLAUDE.md "The grains

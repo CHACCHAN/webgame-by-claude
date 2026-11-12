@@ -26,6 +26,11 @@ export interface Shape {
   /** a light that runs through the shape: per point where it is along the shape (0–1); `wave` turns a second */
   along?: Float32Array;
   wave?: number;
+  /**
+   * Points that travel: every point with `along` ≥ 0 moves this far through the shape's own space in one cycle
+   * (`rate` cycles a second, `along` its phase), then starts again at the other end, dark at both ends (rain).
+   */
+  fall?: { x: number; y: number; z: number; rate: number };
   /** where its picture is in its own space, as it is shown (centre x, centre y, width, height): what fits it into a box */
   box?: [number, number, number, number];
 }
@@ -214,7 +219,7 @@ const LUT = 2048, SIN = new Float32Array(LUT), TO_LUT = LUT / (2 * Math.PI);
 for (let k = 0; k < LUT; k++) SIN[k] = Math.sin(k / TO_LUT);
 const lsin = (x: number) => SIN[((x * TO_LUT) | 0) & (LUT - 1)];
 const lcos = (x: number) => SIN[((x * TO_LUT + LUT / 4) | 0) & (LUT - 1)];
-const mats = new Float64Array(27);
+const mats = new Float64Array(27), falls = new Float64Array(9);
 
 /**
  * One step. What changes slowly (the flow that carries a floating grain, a grain's brightness, colour and size) is
@@ -231,6 +236,9 @@ export function stepCloud(c: Cloud, dt: number) {
     const p = c.places[g];
     const cyw = Math.cos(p.yaw), syw = Math.sin(p.yaw), cp = Math.cos(p.pitch), sp = Math.sin(p.pitch), s = p.scale;
     mats.set([cyw * s, 0, syw * s, sp * syw * s, cp * s, -sp * cyw * s, -cp * syw * s, sp * s, cp * cyw * s], g * 9);
+    // (how fast a travelling point moves on the screen: its grain is carried along, not dragged behind)
+    const fall = c.shapes[g]?.fall, m = g * 9;
+    for (let k = 0; k < 3; k++) falls[g * 3 + k] = fall ? (mats[m + k * 3] * fall.x + mats[m + k * 3 + 1] * fall.y + mats[m + k * 3 + 2] * fall.z) * fall.rate : 0;
   }
   const dt4 = Math.min(dt * 4, 0.2), ease = Math.min(1, dt4 * 5), easeHeld = Math.min(1, dt4 * 4);
   // the volume the floating grains live in (wider than the screen: the near grains spread beyond it)
@@ -245,7 +253,20 @@ export function stepCloud(c: Cloud, dt: number) {
     const place = c.places[g];
     if (shape !== null && s3 <= place.fill && t - c.since[g] >= sd * 0.45) {
       const pts = shape.points, k = rank[i] % (pts.length / 3), m = g * 9, k3 = k * 3;
-      const lx = pts[k3], ly = pts[k3 + 1], lz = pts[k3 + 2];
+      let lx = pts[k3], ly = pts[k3 + 1], lz = pts[k3 + 2];
+      let vx = 0, vy = 0, vz = 0, shown = 1, again = false;
+      const fall = shape.fall;
+      if (fall !== undefined && shape.along !== undefined && shape.along[k] >= 0) {
+        const u = frac(shape.along[k] + t * fall.rate), at = u - 0.5;
+        lx += fall.x * at;
+        ly += fall.y * at;
+        lz += fall.z * at;
+        vx = falls[g * 3];
+        vy = falls[g * 3 + 1];
+        vz = falls[g * 3 + 2];
+        shown = lsin(u * Math.PI);
+        again = u < fall.rate * dt * 1.5;
+      }
       // a small orbit around its place: the shape breathes
       const w = t * (0.5 + 1.3 * s2) + sd * 40, r = shape.loose * (0.3 + s3), sw = lsin(w);
       const dx = mats[m] * lx + mats[m + 1] * ly + mats[m + 2] * lz + place.x + lcos(w) * r - x;
@@ -255,12 +276,22 @@ export function stepCloud(c: Cloud, dt: number) {
       // a spring, each grain its own (they do not arrive as one), and a turn about the way there: they spiral in
       const k1 = 26 + 46 * s2, damp = 2 * Math.sqrt(k1) * 0.82;
       const swirl = (d < 140 ? d / 140 : 1) * k1 * 1.1 * (s3 - 0.35);
-      vel[a] += (dx * k1 - vel[a] * damp - dy * swirl) * dt;
-      vel[a + 1] += (dy * k1 - vel[a + 1] * damp + dx * swirl) * dt;
-      vel[a + 2] += (dz * k1 - vel[a + 2] * damp) * dt;
-      x += vel[a] * dt;
-      y += vel[a + 1] * dt;
-      z += vel[a + 2] * dt;
+      if (again && d < 400) {
+        // its point started again at the other end: so does the grain (it does not fly back through the picture)
+        x += dx;
+        y += dy;
+        z += dz;
+        vel[a] = vx;
+        vel[a + 1] = vy;
+        vel[a + 2] = vz;
+      } else {
+        vel[a] += (dx * k1 - (vel[a] - vx) * damp - dy * swirl) * dt;
+        vel[a + 1] += (dy * k1 - (vel[a + 1] - vy) * damp + dx * swirl) * dt;
+        vel[a + 2] += (dz * k1 - (vel[a + 2] - vz) * damp) * dt;
+        x += vel[a] * dt;
+        y += vel[a + 1] * dt;
+        z += vel[a + 2] * dt;
+      }
       if (turn) {
         wantHeld = d < 26 ? 1 : 0.35;
         let l = (shape.lum ? shape.lum[k] : 1) * shape.gain;
@@ -269,7 +300,7 @@ export function stepCloud(c: Cloud, dt: number) {
           const u = frac(shape.along[k] - t * shape.wave);
           l *= 0.62 + 1.1 * Math.exp(-u * 9) + 0.5 * Math.exp(-(1 - u) * 28);
         }
-        wantLum = l * (d < 60 ? 1 : 0.55);
+        wantLum = l * shown * (d < 60 ? 1 : 0.55);
         wantSize = shape.size * (0.75 + 0.5 * s2);
         tone = shape.tones ? shape.tones[k] : shape.tone;
       }
