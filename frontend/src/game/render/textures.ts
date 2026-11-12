@@ -331,7 +331,8 @@ export function makeSmokeTexture(): THREE.Texture {
 }
 
 /** Simple sign face textures drawn on a canvas. */
-export function makeSignTexture(kind: 'chevronL' | 'chevronR' | 'hairpin' | 'speed40' | 'start' | 'finish' | 'kanban'): THREE.Texture {
+/** `board`: what the pass name board says (the course's name, its name in Latin letters, the height of the road there) */
+export function makeSignTexture(kind: 'chevronL' | 'chevronR' | 'hairpin' | 'speed40' | 'start' | 'finish' | 'kanban', board?: { name: string; roman: string; altitude: number }): THREE.Texture {
   const [c, g] = canvas(256, 256);
   if (kind === 'chevronL' || kind === 'chevronR') {
     g.fillStyle = '#f2c21a';
@@ -403,12 +404,17 @@ export function makeSignTexture(kind: 'chevronL' | 'chevronR' | 'hairpin' | 'spe
     g.lineWidth = 6;
     g.strokeRect(8, 8, 240, 240);
     g.fillStyle = '#fff';
-    g.font = 'bold 64px sans-serif';
     g.textAlign = 'center';
-    g.fillText('朧峠', 128, 100);
-    g.font = 'bold 30px sans-serif';
-    g.fillText('OBORO PASS', 128, 150);
-    g.fillText('標高 452m', 128, 200);
+    // each line as large as fits the board (天狼スカイライン is eight characters)
+    const line = (text: string, size: number, y: number) => {
+      g.font = `bold ${size}px sans-serif`;
+      const w = g.measureText(text).width;
+      if (w > 216) g.font = `bold ${Math.floor((size * 216) / w)}px sans-serif`;
+      g.fillText(text, 128, y);
+    };
+    line(board?.name ?? '朧峠', 64, 100);
+    line((board?.roman ?? 'OBORO PASS').toUpperCase(), 30, 150);
+    line(`標高 ${board?.altitude ?? 452}m`, 30, 200);
   } else {
     g.fillStyle = kind === 'start' ? '#101418' : '#101418';
     g.fillRect(0, 0, 256, 256);

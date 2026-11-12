@@ -279,7 +279,7 @@ function modelPopUps(root: THREE.Object3D): CarRig['popUps'] {
 
 /**
  * The model optimiser prunes empty nodes, so imported GLBs arrive without their anchor empties:
- * rebuild them from the geometry — lamps from the lamp-material meshes (left/right halves), the
+ * rebuild them from the geometry — lamps from the lamp-material surfaces (the middle of each side's), the
  * tailpipe from a muffler/exhaust part (mesh or material name) at the back if there is one, else low at the rear right
  * (CarSpec.exhaust overrides it).
  */
@@ -292,12 +292,45 @@ function deriveAnchors(root: THREE.Object3D, mats: CarMaterials, anchors: CarRig
     });
     return box;
   };
-  const halves = (box: THREE.Box3) => {
-    const c = box.getCenter(new THREE.Vector3());
-    const q = (box.max.x - box.min.x) / 4;
-    return [new THREE.Vector3(c.x + q, c.y, c.z), new THREE.Vector3(c.x - q, c.y, c.z)];
-  };
   const uses = (m: THREE.Mesh, mat: THREE.Material) => (Array.isArray(m.material) ? m.material.includes(mat) : m.material === mat);
+  /**
+   * Where a lamp material's surface is on each side of the vehicle: the middle of its area, left then right. (Not
+   * of its box: the lamps sit at the corners, and the quarter points of a box across the nose lie in the grille:
+   * every car's beams started 20–27 cm inside its lamps, owner 11-12.) Lamps less than 0.3 m apart are one lamp
+   * in the middle (a motorcycle's).
+   */
+  const sides = (mat: THREE.Material): THREE.Vector3[] => {
+    // (x, y, z weighted by area; w = the area)
+    const sum = [new THREE.Vector4(0, 0, 0, 0), new THREE.Vector4(0, 0, 0, 0)];
+    const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3(), n = new THREE.Vector3();
+    root.traverse((o) => {
+      const m = o as THREE.Mesh;
+      if (!m.isMesh || !uses(m, mat) || !m.geometry.attributes.position) return;
+      const pos = m.geometry.attributes.position, index = m.geometry.index;
+      const all = { start: 0, count: index ? index.count : pos.count };
+      const list = m.material;
+      const parts = Array.isArray(list) ? m.geometry.groups.filter((g) => list[g.materialIndex ?? 0] === mat) : [all];
+      for (const part of parts) {
+        const end = Math.min(part.start + part.count, all.count);
+        for (let i = part.start; i + 2 < end; i += 3) {
+          a.fromBufferAttribute(pos, index ? index.getX(i) : i).applyMatrix4(m.matrixWorld);
+          b.fromBufferAttribute(pos, index ? index.getX(i + 1) : i + 1).applyMatrix4(m.matrixWorld);
+          c.fromBufferAttribute(pos, index ? index.getX(i + 2) : i + 2).applyMatrix4(m.matrixWorld);
+          const area = n.subVectors(b, a).cross(c.sub(a)).length() / 2;
+          // (c is c − a now)
+          const x = a.x + (b.x - a.x + c.x) / 3, y = a.y + (b.y - a.y + c.y) / 3, z = a.z + (b.z - a.z + c.z) / 3;
+          const side = sum[x >= 0 ? 0 : 1];
+          side.x += x * area;
+          side.y += y * area;
+          side.z += z * area;
+          side.w += area;
+        }
+      }
+    });
+    const out = sum.filter((v) => v.w > 0).map((v) => new THREE.Vector3(v.x / v.w, v.y / v.w, v.z / v.w));
+    if (out.length === 2 && Math.abs(out[0].x - out[1].x) < 0.3) return [out[0].add(out[1]).multiplyScalar(0.5).setX(0)];
+    return out;
+  };
   if (!anchors.headlights.length) {
     // pop-up lamps (modelled raised) are the headlamps: the beams start at each pod's lens (a 'headlight' material
     // elsewhere is then a parking lamp that only glows)
@@ -312,14 +345,8 @@ function deriveAnchors(root: THREE.Object3D, mats: CarMaterials, anchors: CarRig
       if (!b.isEmpty()) anchors.headlights.push(b.getCenter(new THREE.Vector3()).setZ(b.max.z));
     }
   }
-  if (!anchors.headlights.length) {
-    const b = boxOf((m) => uses(m, mats.headlight));
-    if (!b.isEmpty()) anchors.headlights.push(...halves(b));
-  }
-  if (!anchors.taillights.length) {
-    const b = boxOf((m) => uses(m, mats.taillight));
-    if (!b.isEmpty()) anchors.taillights.push(...halves(b));
-  }
+  if (!anchors.headlights.length) anchors.headlights.push(...sides(mats.headlight));
+  if (!anchors.taillights.length) anchors.taillights.push(...sides(mats.taillight));
   if (anchors.exhaust.lengthSq() === 0) {
     const body = boxOf(() => true);
     if (body.isEmpty()) return;

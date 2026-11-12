@@ -66,6 +66,8 @@ export interface SceneryQuality {
   surfaceDetail?: number;
   /** 'autobahn': the motorway's own scenery (render/autobahnScenery.ts) instead of the mountain road's */
   style?: CourseStyle;
+  /** the course's name for the pass name board at the summit (Japanese, Latin letters) */
+  board?: { name: string; roman: string };
 }
 
 /** Builds every static mesh along and around the course. */
@@ -135,7 +137,7 @@ export function buildScenery(track: Track, terrain: TerrainData, quality: Scener
   const lightmapMats = [roadMaterial, terrainMat];
 
   // ------------------------------------------------------------- signs
-  buildSigns(track, sides, group);
+  buildSigns(track, terrain, sides, group, quality.board);
   nightEmissive.push(...nightEmissiveSigns);
   const keepOut = buildLandmarks(track, terrain, sides, group, lamps);
 
@@ -788,7 +790,7 @@ const nightEmissiveSigns: THREE.MeshStandardMaterial[] = [];
 /** where the vending machine's glow belongs on the course built last (the light itself: `LightRig.vending`); `on` = there is one */
 export const vendingSpot = { position: new THREE.Vector3(), on: false };
 
-function buildSigns(track: Track, sides: ReturnType<typeof classifySides>, group: THREE.Group) {
+function buildSigns(track: Track, terrain: TerrainData, sides: ReturnType<typeof classifySides>, group: THREE.Group, board?: { name: string; roman: string }) {
   // module-level list: only this course's materials (it used to keep every earlier course's)
   nightEmissiveSigns.length = 0;
   vendingSpot.on = false;
@@ -798,7 +800,7 @@ function buildSigns(track: Track, sides: ReturnType<typeof classifySides>, group
     chevronR: new THREE.MeshStandardMaterial({ map: makeSignTexture('chevronR'), roughness: 0.35, emissive: '#ffffff', emissiveIntensity: 0.06 }),
     hairpin: cutout(new THREE.MeshStandardMaterial({ map: makeSignTexture('hairpin'), roughness: 0.35, transparent: true, alphaTest: 0.5 })),
     speed: cutout(new THREE.MeshStandardMaterial({ map: makeSignTexture('speed40'), roughness: 0.35, transparent: true, alphaTest: 0.5 })),
-    kanban: new THREE.MeshStandardMaterial({ map: makeSignTexture('kanban'), roughness: 0.5 }),
+    kanban: new THREE.MeshStandardMaterial({ map: makeSignTexture('kanban', board && { ...board, altitude: Math.round(track.pointAt(18).y) }), roughness: 0.5 }),
     start: new THREE.MeshStandardMaterial({ map: makeSignTexture('start'), roughness: 0.5, emissive: '#ffffff', emissiveMap: null, emissiveIntensity: 0.15 }),
     finish: new THREE.MeshStandardMaterial({ map: makeSignTexture('finish'), roughness: 0.5, emissive: '#ffffff', emissiveIntensity: 0.15 }),
   };
@@ -838,8 +840,27 @@ function buildSigns(track: Track, sides: ReturnType<typeof classifySides>, group
     const yaw = track.heading[i] + (side > 0 ? Math.PI / 2 : -Math.PI / 2);
     const model = prop('vending');
     const machines: THREE.Matrix4[] = [];
+    // They stand on the strip between the barrier line and whatever the mountain side has there (a retaining wall's
+    // foot is 0.95 m out: 1.6 m out they stood half inside its blocks, owner 11-12), on a concrete plinth as high
+    // as the ground at their backs.
+    const out = track.width[i] / 2 + SHOULDER + 0.48;
+    let top = -Infinity;
     for (let k = 0; k < 3; k++) {
-      track.pointAt(i + k * 1.3, side * (track.width[i] / 2 + SHOULDER + 1.6), p);
+      track.pointAt(i + k * 1.3, side * (out + 0.4), p);
+      top = Math.max(top, terrain.heightAt(p.x, p.z) + 0.03, p.y + 0.05);
+    }
+    {
+      track.pointAt(i + 1.3, side * out, p);
+      const plinth = new THREE.Mesh(new THREE.BoxGeometry(3.9, 0.8, 0.88), new THREE.MeshStandardMaterial({ color: '#8d8c86', roughness: 0.92 }));
+      plinth.position.set(p.x, top - 0.4, p.z);
+      plinth.rotation.y = yaw;
+      plinth.receiveShadow = true;
+      plinth.name = 'vending-plinth';
+      group.add(plinth);
+    }
+    for (let k = 0; k < 3; k++) {
+      track.pointAt(i + k * 1.3, side * out, p);
+      p.y = top;
       if (model) {
         machines.push(new THREE.Matrix4().compose(p, new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), yaw), new THREE.Vector3(1, 1, 1)));
         continue;
@@ -866,7 +887,7 @@ function buildSigns(track: Track, sides: ReturnType<typeof classifySides>, group
       group.add(placeProp(model, machines, { castShadow: true, material: glow, name: 'vending-machines' }).group);
     }
     // the machines light their surroundings
-    track.pointAt(i + 1, side * (track.width[i] / 2 + SHOULDER), p);
+    track.pointAt(i + 1.3, side * (track.width[i] / 2 - 0.5), p);
     vendingSpot.position.set(p.x, p.y + 1.4, p.z);
     vendingSpot.on = true;
   }

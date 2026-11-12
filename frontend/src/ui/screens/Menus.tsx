@@ -12,6 +12,7 @@ import { currentCourseId, useSettings } from '../../store/settings';
 import { decodeGhost } from '../../game/race/Ghost';
 import { api, loadCarBests, loadLocalBest, loadRivalRecord } from '../../api/client';
 import { medalFor } from '../../game/race/medals';
+import { versionLabel } from '../../version';
 import { formatTime } from '../format';
 import { sfx } from '../sfx';
 import { COLORS } from './Cars';
@@ -130,7 +131,7 @@ export function TitleScreen() {
         </div>
       </div>
       <div className="title-foot">
-        <span>v1.0</span>
+        <span>{versionLabel()}</span>
         <span>© 2026 Touge Nocturne Project ― 峠・人物は架空です。車名・車両デザインは各メーカーの商標・意匠です（私的利用の非公開作品）</span>
       </div>
     </div>

@@ -318,7 +318,9 @@
 @keyframes finish-word { from { opacity: 0; transform: scaleX(1.8); letter-spacing: 0.5em; } }
 @keyframes finish-bar { from { transform: translateX(var(--fx, -100%)); } }
 .results.in .finish-banner { opacity: 0; transform: scale(1.12); }
-.results-card { width: min(46rem, 94vw); max-height: calc(100vh - 2rem); overflow-y: auto; scrollbar-width: thin; text-align: center; opacity: 0; }
+.results-card { width: min(46rem, 94vw); max-height: calc(100vh - 2rem); overflow-y: hidden; scrollbar-width: thin; scrollbar-color: var(--line) transparent; text-align: center; opacity: 0; }
+/* it scrolls only once its parts stand (Results.tsx `settled`): rising in, they reach under its edge */
+.results.settled .results-card { overflow-y: auto; }
 .results.in .results-card { opacity: 1; }
 /* the steps of the build-up, from the moment the card is in */
 .results.in .results-card > * { animation: var(--kf-rise) var(--t-enter) var(--e-out) both; animation-delay: var(--at, 0ms); }

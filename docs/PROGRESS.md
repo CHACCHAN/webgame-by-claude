@@ -590,6 +590,70 @@ picture (a drawn sky strip, a grain sky, text). Two layouts were shown next to t
 - Seen on these pictures and reported by the owner the same hour: the glow of the car's own headlights stands as a
   ball above its bonnet (the next section).
 
+### Release 2.0 (11-12): version, the terrain on all cores, three reports by the owner
+- **Version** (owner: 「バージョンがずっとv1.0なの気になる 常に更新していいと思う … v2.0かな?」): 2.0.0, written once in
+  `frontend/package.json` (`src/version.ts`: the title's foot, a run's `client_version`; the server's default in
+  `config/game.php` says the same and a vitest compares). The rule for raising it is in CLAUDE.md (Conventions).
+- **A course's terrain is worked out on all cores but one** (the owner's yes to using all the machine's resources
+  for loading): `track/terrain.ts` `planTerrain` → `stripe(k, n)` → `finish`, `terrain.worker.ts`, `terrainJob.ts`,
+  begun in `Game.load` before the downloads. The result is the same to the bit as `buildTerrain`'s on all four
+  courses (Node: whole and in 7 stripes; `track.test.ts`: 5 stripes in any order, missing / double / wrong-size rows
+  refused). In the browser (GPU Chrome, 1280×720, high, three paired runs, load 4 of 20 cores,
+  `~/.local/opt/quality/loadtime.cjs`): 16 workers, no fallback, no page error; the job takes 0.6–2.1 s beside the
+  downloads; **first load 10.0 → 9.5 s, a change of course 5.4 → 4.2 s (medians; single runs 8.7–16.0 s and
+  3.6–6.5 s: the machine is shared, the gain on the first load is within the scatter)**. Not verified: the fallback
+  in a browser (no Worker, a failing worker, the 20 s limit: the code path is the old `buildTerrain`), phones.
+- **Results: a scrollbar came up for a moment** (owner). Reproduced: for ~0.4 s while the card builds up, the last
+  part rises into place from under the card's edge and the card (`overflow-y: auto`) offered to scroll by 13–15 px
+  (`~/.local/opt/quality/resultscroll.cjs`: 3 of ~78 samples at 1920×911, 1280×720, 1366×650, time attack and rival).
+  The card scrolls only once it stands (`Results.tsx` `settled` → `.results.settled .results-card`); after: 0 samples.
+- **The vending machines stood half inside the retaining wall** (owner; seen on 朧峠 and 天狼, on 霧降 they were sunk
+  0.4 m into the verge): placed 1.6 m behind the barrier line, where the remade roadside (11-11) has its wall from
+  0.95 m on. They now stand on the strip in front of it (0.48 m out) on a concrete plinth as high as the ground at
+  their backs; their light moved with them. Pictures on the three passes, dawn and night (`cmp/vend1` before,
+  `cmp/vend2` after). Seen on the way and fixed: **the pass name board said 朧峠 / OBORO PASS / 452 m on every
+  course**; it now carries the course's own name and the road's height there (`makeSignTexture('kanban', board)`).
+  Not done: at night the machines' fronts burn out in the bloom (the labels cannot be read).
+- **A probe camera**: `game.lookFrom([s, side, up], [s, side, up])` (`Game.spy`) stands anywhere along the road
+  whatever the phase; `~/.local/opt/quality/spy.cjs` takes pictures with it. Made for the owner's reports of places.
+- **Verified**: vitest 190; `tools/gpu-errors.cjs` 0 on WebGPU and on WebGL 2; the race pictures looked at.
+  E2E: not run on this tree (the six tests that pass the conditions screen ran before these changes).
+
+### The vehicles' lights start at their lamps; the glow in the haze no longer grains (11-12, two reports by the owner)
+The owner: 「車両のライトの発射位置が全部おかしい」, and an hour later, with a screenshot of the car select on the
+autobahn (a motorcycle, the camera in its beam): 「正面から光を浴びると画面上部がつぶつぶになります」.
+- **What was wrong with the places** (measured on every vehicle, `~/.local/opt/quality/lamps.cjs`):
+  the lamp anchors were the middle of the lamp material's bounding box per half of the car, 20–27 cm inside the
+  lamps on models whose lamp parts wrap round the corner; the one real spot light per vehicle started at a height
+  by kind (0.75 m cars, 0.45 m bikes, 1.1 m trains) on the centre line, whatever the model: from the front wheel of
+  the NSR, from under the floor of a train whose lamps sit on the roof line, and its glow in the haze was one cone
+  from that point (a ball of light above the bonnet of a low car).
+- **Now**: an anchor is the area-weighted centroid of the lamp material's triangles per side (`CarModel.deriveAnchors`
+  → `sides`; lamps closer than 0.3 m to each other are one lamp on the centre line: the bikes). The spot starts
+  between the lamps at their height, just ahead of the nose (`CarVisual`: `max(lens + 0.1, min(nose, lens + 0.6) +
+  0.05)`, the nose from the unskinned meshes; trains at their measured lamps), so the bonnet does not catch its own
+  light. The glow in the haze is one cone per lamp (`CarVisual.lampSources`, `beamsInto`; lamps closer than 0.5 m
+  glow as one), the intensity shared; the pool is 8 cones (`VOLUME_SPOTS`, was 4).
+  After: s15 ±0.60 m, r34 ±0.68, supra ±0.54, raijin ±0.61, the Cybertruck on its light bar, the bikes one lamp at
+  x = 0, trains at 2.85–3.37 m (their own lamps). `KIND_TRAITS.lampHeight` is only the fallback for a model without
+  lamp parts now.
+- **The grain**: a cone's six steps were spread at equal angles over the whole view ray. From inside a beam, looking
+  at its lamp, none or one of them fell into the light, by the pixel's dither: lit or unlit by chance, and visible
+  wherever the depth-keeping blur cannot average (leaves, nets, the sky's edge). The steps are now taken only on the
+  part of the ray that is inside the cone and its reach (ray × cone as a quadratic, the interval by case, clamped to
+  the reach sphere), at equal angles within it. A beam seen from the side looks as before.
+- **Cost**: the volume pass 0.22 → 0.34 ms of GPU time (1080p, ultra, rival race at night, `tools/perf-pass.cjs`,
+  load ~4 of 20 cores; a frame is ~6.5 ms there). Eight cones and the interval are the difference.
+- **Verified** (GPU, headless Chrome, RX 5700 XT): the anchors and origins of all 18 vehicles as numbers before and
+  after; the car select before / after on nine vehicles (`cmp/lamps4`: the NSR's light leaves its lamp, no glow
+  above the U9's bonnet, the E235's comes from its roof lamps, the roach's from its eyes); the chase view before /
+  after (`cmp/lamps3`: hardly a difference, as it should be); the owner's case reproduced and gone
+  (`cmp/grain1/sheet-top.jpg`); one car on WebGL 2 and at quality `low` looked at. vitest 188;
+  `tools/gpu-errors.cjs`: 0 on WebGPU and on WebGL 2.
+- **Left as it is**: in a view from the front the road just before the camera shines (the lamp's mirror image on
+  wet asphalt: right); stars on a rear window are the street lamps' highlights in the bloom, not the car's lamps.
+- **Not verified**: other GPUs, a phone; every vehicle × every paint in the race (the anchors do not depend on paint).
+
 ### The grains reconsidered: pictures only, in water; no dust, no ornaments (11-12, the owner's word)
 The owner (11-12): the grains are too many; grains decorating the buttons and particles spread over the whole
 screen all the time are "しつこい"; reconsider all of it; a fluid-simulation-like expression would be beautiful; do

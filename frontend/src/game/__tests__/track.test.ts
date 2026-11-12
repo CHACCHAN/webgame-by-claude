@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { Track } from '../track/Track';
 import { OBORO_DOWNHILL } from '../track/courseDesign';
-import { buildTerrain } from '../track/terrain';
+import { buildTerrain, planTerrain } from '../track/terrain';
+import { terrainThreads } from '../track/terrainJob';
 import { BAY } from '../track/landforms';
 import { findCorners } from '../track/corners';
 import { COURSES, COURSE_ORDER } from '../track/courses';
@@ -194,5 +195,48 @@ describe('curve mirrors', () => {
       }
       expect(new Set(spots.map((s) => Math.sign(s.lateral))).size).toBe(2);
     }
+  });
+});
+
+describe('terrain worked out in stripes (the rows each worker takes)', () => {
+  const same = (a: ArrayLike<number>, b: ArrayLike<number>) => {
+    if (a.length !== b.length) return false;
+    for (let i = 0; i < a.length; i++) if (!Object.is(a[i], b[i])) return false;
+    return true;
+  };
+  const c = COURSES['tenrou-skyline'];
+  const t = new Track(c.design);
+
+  it('is the same to the bit as the terrain built in one go, in whatever order the stripes arrive', () => {
+    const whole = buildTerrain(t, c.landform);
+    // (each worker lays the course out again: another Track of the same design)
+    const n = 5, stripes = [3, 0, 4, 2, 1].map((k) => planTerrain(new Track(c.design), c.landform).stripe(k, n));
+    const T = planTerrain(t, c.landform).finish(stripes);
+    expect(same(T.near.heights, whole.near.heights)).toBe(true);
+    expect(same(T.near.roadDist!, whole.near.roadDist!)).toBe(true);
+    expect(same(T.near.edgeDist!, whole.near.edgeDist!)).toBe(true);
+    expect(same(T.far.heights, whole.far.heights)).toBe(true);
+    expect([T.near.x0, T.near.z0, T.near.nx, T.near.nz, T.far.x0, T.far.z0, T.far.nx, T.far.nz]).toEqual([whole.near.x0, whole.near.z0, whole.near.nx, whole.near.nz, whole.far.x0, whole.far.z0, whole.far.nx, whole.far.nz]);
+    expect(T.heightAt(t.pos[300] + 40, t.pos[302] - 25)).toBe(whole.heightAt(t.pos[300] + 40, t.pos[302] - 25));
+  });
+
+  it('refuses rows that are missing, given twice or of another size', () => {
+    const plan = planTerrain(t, c.landform, { nearCell: 16, farCell: 96 });
+    const a = plan.stripe(0, 2), b = plan.stripe(1, 2);
+    expect(() => plan.finish([a])).toThrow();
+    expect(() => plan.finish([a, b, b])).toThrow();
+    expect(() => plan.finish([a, { ...b, nearH: b.nearH.subarray(1) }])).toThrow();
+    // more stripes than rows: the late ones are empty, and that is fine
+    const many = 400, all = Array.from({ length: many }, (_, k) => plan.stripe(k, many));
+    expect(all[many - 1].nearH.length + all[many - 1].farH.length).toBe(0);
+    expect(same(plan.finish(all).near.heights, plan.finish([a, b]).near.heights)).toBe(true);
+  });
+
+  it('uses all cores but the page\'s own, within reason', () => {
+    expect(terrainThreads(20)).toBe(16);
+    expect(terrainThreads(8)).toBe(7);
+    expect(terrainThreads(2)).toBe(1);
+    expect(terrainThreads(1)).toBe(1);
+    expect(terrainThreads(0)).toBe(1);
   });
 });

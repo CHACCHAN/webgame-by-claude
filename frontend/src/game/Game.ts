@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 import { Track } from './track/Track';
 import { COURSES, type CourseId, type CourseInfo } from './track/courses';
-import { buildTerrain, type TerrainData } from './track/terrain';
+import type { TerrainData } from './track/terrain';
+import { buildTerrainParallel, terrainStats } from './track/terrainJob';
 import { PhysicsWorld, PHYSICS_DT, initRapier } from './vehicle/PhysicsWorld';
 import { VehicleSim, emptyInput, type AssistLevel, type VehicleInput } from './vehicle/VehicleSim';
 import { CAR_ORDER, CAR_SPECS, VEHICLE_ORDER, type CarId } from './vehicle/carSpecs';
@@ -15,7 +16,7 @@ import { CarVisual } from './render/CarVisual';
 import { clearing } from './render/instancing';
 import { loadVegetation, SHADOW_LAYER, vegetationHold, vegetationLights, vegetationWeather, type VegetationQuality } from './render/vegetation';
 import { vegetationFiles } from './render/vegetationPlanting';
-import { volume, volumeSpot } from './render/volumetricLights';
+import { VOLUME_SPOTS, volume, volumeSpot } from './render/volumetricLights';
 import { gpuBytes } from './render/gpuBytes';
 import { LightRig } from './render/LightRig';
 import { ensureVehicleModels, onModelWait, preloadVehicleModels, vehicleModelReady } from './render/vehicleModels';
@@ -260,6 +261,11 @@ export class Game {
   private bestSplits: number[] | null = null;
   /** a shot a menu asks for and holds while it is up (the conditions screen: the road ahead under the sky) */
   menuShot: 'sky' | null = null;
+  /**
+   * For probes (tools/, a report to look into): the camera stands at `from` and looks at `at`, whatever the phase.
+   * `lookFrom` sets it in the road's own terms.
+   */
+  spy: { from: THREE.Vector3; at: THREE.Vector3 } | null = null;
   private cinematic = { shot: 0, t: 0, anchor: new THREE.Vector3(), anchorS: 0, pos: new THREE.Vector3(), side: 1, fore: 1, last: new THREE.Vector3(), look: new THREE.Vector3() };
   private garageCar: CarVisual | null = null;
   /** counts what was asked to be shown: a show that waited for a model goes ahead only if nothing came after it */
@@ -360,8 +366,23 @@ export class Game {
     await new Promise((r) => setTimeout(r, 0));
   }
 
+  /**
+   * A course laid out and its terrain on the way: the heights are worked out on the other cores
+   * (`track/terrainJob.ts`) while this thread goes on with whatever does not need them.
+   */
+  private survey(courseId: CourseId) {
+    const course = COURSES[courseId];
+    const track = new Track(course.design);
+    return { courseId, track, terrain: buildTerrainParallel(courseId, track, course.landform) };
+  }
+  /** how the last terrain was worked out (threads, ms, why not on workers): for probes */
+  readonly terrainJob = terrainStats;
+  /** the first course's, begun before the downloads so that both run at the same time */
+  private surveyed: { courseId: CourseId; track: Track; terrain: Promise<TerrainData> } | null = null;
+
   async load(courseId: CourseId, timeOfDay: TimeOfDay) {
     this.timeOfDay = timeOfDay;
+    this.surveyed = this.survey(courseId);
     await this.yieldFrame(0.05, '物理エンジンを初期化中');
     await initRapier();
     await this.yieldFrame(0.08, 'コースの素材を読み込み中');
@@ -446,24 +467,27 @@ export class Game {
   private async buildWorld(courseId: CourseId) {
     const course = COURSES[courseId];
     this.course = course;
+    const ahead = this.surveyed?.courseId === courseId ? this.surveyed : this.survey(courseId);
+    this.surveyed = null;
     await this.yieldFrame(0.12, `${course.name} を測量中`);
-    this.track = new Track(course.design);
+    this.track = ahead.track;
     this.corners = findCorners(this.track);
     this.line = new RacingLine(this.track);
     await this.yieldFrame(0.25, '山の地形を生成中');
-    this.terrain = buildTerrain(this.track, course.landform);
+    // (the models that need no terrain come in while the other cores work out the heights)
+    const [terrain] = await Promise.all([
+      ahead.terrain,
+      loadVegetation(vegetationFiles(course.style ?? 'touge', this.quality.vegetation.undergrowth > 0), this.quality.vegetation.tier),
+      // the autobahn's oncoming traffic is the game's own cars (light copies of their models)
+      course.style === 'autobahn' ? ensureVehicleModels(CAR_ORDER).then(() => loadTrafficModels(CAR_ORDER)) : null,
+    ]);
+    this.terrain = terrain;
     await this.yieldFrame(0.5, '道路と森を配置中');
     this.physics = new PhysicsWorld(this.track);
-    // the autobahn's oncoming traffic is the game's own cars (light copies of their models)
-    if (course.style === 'autobahn') {
-      await ensureVehicleModels(CAR_ORDER);
-      await loadTrafficModels(CAR_ORDER);
-    }
-    await loadVegetation(vegetationFiles(course.style ?? 'touge', this.quality.vegetation.undergrowth > 0), this.quality.vegetation.tier);
     // (every level of every species stays in the scene until its shader is compiled)
     vegetationHold(true);
     vendingSpot.on = false;
-    this.scenery = buildScenery(this.track, this.terrain, { treeDensity: this.quality.treeDensity, shadows: this.quality.shadows, photoTextures: this.quality.photoTextures, treeLod: this.quality.treeLod, surfaceDetail: this.quality.surfaceDetail, vegetation: this.quality.vegetation, style: course.style });
+    this.scenery = buildScenery(this.track, this.terrain, { treeDensity: this.quality.treeDensity, shadows: this.quality.shadows, photoTextures: this.quality.photoTextures, treeLod: this.quality.treeLod, surfaceDetail: this.quality.surfaceDetail, vegetation: this.quality.vegetation, style: course.style, board: { name: course.name, roman: course.nameEn } });
     // an instanced mesh without instances has an empty matrix buffer, which WebGPU refuses to bind
     const empty: THREE.Object3D[] = [];
     this.scenery.group.traverse((o) => {
@@ -1032,7 +1056,7 @@ export class Game {
     this.updateBeams();
   }
 
-  private beamPool = Array.from({ length: 4 }, volumeSpot);
+  private beamPool = Array.from({ length: VOLUME_SPOTS }, volumeSpot);
   private beamCars: CarVisual[] = [];
   /**
    * The cars with their headlights on, the one the camera is with first and the others by their distance from it:
@@ -1051,10 +1075,13 @@ export class Game {
     this.lights.beams(cars);
     const spots = volume.spots;
     spots.length = 0;
+    // (a cone from each lamp: two for a car, as long as there is room)
+    let used = 0;
     for (const visual of cars) {
-      if (spots.length >= this.beamPool.length) break;
-      if (visual.beamInto(this.beamPool[spots.length])) spots.push(this.beamPool[spots.length]);
+      if (used >= this.beamPool.length) break;
+      used += visual.beamsInto(this.beamPool, used);
     }
+    for (let k = 0; k < used; k++) spots.push(this.beamPool[k]);
   }
 
   private racers(): Racer[] {
@@ -1623,6 +1650,10 @@ export class Game {
     // (the garage's clearing among the trees closes with any other view; its own statement: written into the
     // chain above it cut the race camera off, and the car drove away from a camera left at the garage)
     if (this.phase !== 'garage') clearing.value.z = -10;
+    if (this.spy) {
+      this.camera.position.copy(this.spy.from);
+      this.camera.lookAt(this.spy.at);
+    }
 
     // ---- HUD + audio
     if (this.player) {
@@ -1767,6 +1798,20 @@ export class Game {
    * the ground lets it see the road: a camera placed by an offset from the car alone ended up inside a slope, behind
    * a mound or with a post of the roadside across the picture.
    */
+  /**
+   * Probe: stand at `s` metres along the road, `side` metres to the left of its middle and `up` above it, and look
+   * at the place given the same way (`null`: the game's own camera again).
+   */
+  lookFrom(from: [number, number, number] | null, at: [number, number, number] = [0, 0, 0]) {
+    if (!from || !this.track) return void (this.spy = null);
+    const place = ([s, side, up]: [number, number, number]) => {
+      const p = this.track!.pointAt(s, side, new THREE.Vector3());
+      p.y += up;
+      return p;
+    };
+    this.spy = { from: place(from), at: place(at) };
+  }
+
   private cinematicCamera(dt: number, root: THREE.Object3D, trackS: number) {
     const c = this.cinematic;
     c.t += dt;

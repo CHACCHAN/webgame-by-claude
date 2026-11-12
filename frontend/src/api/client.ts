@@ -2,8 +2,9 @@
 import type { CarId } from '../game/vehicle/carSpecs';
 import type { EncodedGhost } from '../game/race/Ghost';
 import type { TimeOfDay } from '../game/render/Environment';
+import { APP_VERSION } from '../version';
 
-export const CLIENT_VERSION = '1.0.0';
+export const CLIENT_VERSION = APP_VERSION;
 const BASE = (import.meta.env.VITE_API_BASE as string | undefined) ?? '/api';
 /** a guest's token carried over the trip to Authentik and back, so the records just set become the member's */
 const CLAIM_KEY = 'touge-claim';

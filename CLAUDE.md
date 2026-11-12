@@ -94,8 +94,11 @@ pending. `docs/PLAN.md` holds the design.
   `_pipelines`: check both when three.js is updated (`~/.local/opt/quality/builds2.cjs` counts shaders built per step).
   Passes that work from the depth buffer share `render/screenSpace.ts` (view position from the depth, sized targets,
   the surface-keeping blur that cancels a five-pixel tap pattern). The glow in the haze (`render/volumetricLights.ts`)
-  takes its lights from `volume` (the course's lamps, the cars' cones via `CarVisual.beamInto`) and its amount from the
-  preset's `haze`: a new kind of light source that should glow is added there.
+  takes its lights from `volume` (the course's lamps; a cone per headlamp via `CarVisual.beamsInto`, at most
+  `VOLUME_SPOTS` = 8, the followed car first) and its amount from the preset's `haze`: a new kind of light source that
+  should glow is added there. A cone's steps are taken only on the part of the view ray inside the cone (ray × cone,
+  clamped to the reach): spread over the whole ray, a camera inside a beam got none or one in the light by chance
+  and the picture grained (11-12). Keep that when adding a kind of light with a narrow lit volume.
   A course's shaders are built behind the loading screen by `RenderHost.precompile(hold)`: in six lanes by material
   (a compile waits for each pipeline in turn), **for the scene pass' render context** (`threeFixes.compileAtPassDepth`:
   three.js keys a context by how deep the `render` call is nested and `compileAsync` asks at the top, so every
@@ -116,6 +119,14 @@ pending. `docs/PLAN.md` holds the design.
   second fog or PMREM target; change intensity / colour / position (a car's headlights are `CarVisual.headlight()`
   → the rig's three spots via `Game.updateBeams`; the vending machine's light is `vendingSpot`). Measure with
   `~/.local/opt/quality/hitch.cjs` (frame gaps over 40 ms per action).
+  A course's terrain heights are worked out on all cores but one (owner 11-12: loading may use all the machine's
+  resources): `track/terrainJob.ts` gives every `n`th row of the two grids to a module worker each
+  (`terrain.worker.ts` lays the course out again from its id; `planTerrain` → `stripe(k, n)` → `finish`), begun in
+  `Game.load` before the downloads (`Game.survey`). **The result is the same to the bit as `buildTerrain`'s**
+  (which stays for Node tools, tests and as the fallback when a worker cannot be made, fails or is silent for
+  20 s; `track.test.ts` compares): the far grid travels as doubles because it is sunk under the near grid before
+  it is rounded. Whatever changes a course's design or landform at run time would not reach the workers: they
+  know only the course's id. `game.terrainJob` says how the last one went (threads, ms, fallback).
   Courses stay built after leaving them (`Game.leaveWorld` / `enterWorld`, `keepCourses`, `keepBudget` in MB of
   `gpuBytes`, oldest freed first, all on a GPU out-of-memory: `releaseKept`); `disposeWorld` frees only what no
   other built course uses. Vehicle models load in stages (`render/vehicleModels.ts`: one car before the title, the
@@ -176,8 +187,11 @@ pending. `docs/PLAN.md` holds the design.
   `wheel_*` with `spin_*` children, swap materials by name (paint, glass, headlight, taillight, …; docs/ASSETS.md).
   Pop-up lamps modelled raised: nodes `popup_l` / `popup_r` + material `popup_lens`; modelled closed instead:
   `CarSpec.popUpLamps` (runtime pods in `CarVisual`). The optimiser prunes empty nodes, so `CarModel.deriveAnchors`
-  rebuilds lamp and exhaust anchors from the geometry (a part named `exhaust` gives the tailpipe; else
-  `CarSpec.exhaust`). Lamp materials only on lamp parts (check: only at the car's ends). Dark lens textures:
+  rebuilds lamp and exhaust anchors from the geometry (a lamp anchor = the area-weighted centroid of the lamp
+  material's triangles per side, one on the centre line when the two are closer than 0.3 m; a part named `exhaust`
+  gives the tailpipe; else `CarSpec.exhaust`). The vehicle's real spot light starts between its headlamp anchors at
+  their height, just ahead of the nose (`CarVisual`; `KIND_TRAITS.lampHeight` only without lamp parts): measure a
+  new model with `~/.local/opt/quality/lamps.cjs`. Lamp materials only on lamp parts (check: only at the car's ends). Dark lens textures:
   `tailLampGain`. Unpainted metal swatches (the Cybertruck's stainless; with `clearcoat` the H2's mirror coat): `CarSpec.bareMetal`. A new model goes in
   only after the owner has seen its sheet; never label a third-party model 自作.
 - Never leave a transmissive (refractive) material in the scene: three.js then renders every opaque object a second
@@ -417,6 +431,11 @@ pending. `docs/PLAN.md` holds the design.
   everyone is a guest and `/api/content` says `auth.enabled: false`. The redirect URI the provider must know is
   `<public address>/api/auth/callback` (taken from the request: `X-Forwarded-Proto` + `Host`; `AUTHENTIK_REDIRECT_URI`
   overrides). Tests: `AuthTest.php` (Authentik faked), `client.test.ts`.
+- Looking at a place (a report of something wrong somewhere along a road): `game.lookFrom([s, side, up], [s, side, up])`
+  holds the camera there in any phase (`null` gives it back); `~/.local/opt/quality/spy.cjs` takes the pictures.
+  The mountain side's retaining wall starts 0.95 m behind the barrier line (`roadside.ts` `WALL_FOOT`) and the
+  ground rises from the line on: whatever is stood on the roadside by `TrackScenery` goes in front of that, on the
+  terrain's height, not at a fixed distance on the road's height (the vending machines stood inside the wall).
 - Race timing/splits/AI run per physics step (`Game.raceStep`, `driveAI`); keep frame-time logic out of timing.
 - Tyre grip = course surface (`CourseInfo.surface.grip`) × weather (`WET_GRIP` in rain): `Game.roadGrip` → `VehicleSim.gripScale`
   (before `AIDriver.calibrate`). Headless tools take the course's grip. Changing a grip: re-check medals with the sim
@@ -432,6 +451,10 @@ pending. `docs/PLAN.md` holds the design.
   over and parks (`AIDriver.pullOver`). Check AI-vs-AI contact with `npx tsx tools/sim-duel.ts`.
 
 ## Conventions
+- Version (owner 11-12: it must move, always): written once, in `frontend/package.json` (`src/version.ts` shows it on
+  the title and sends it with a run; `backend/config/game.php`'s default says the same, a vitest compares). Raise it
+  with every deploy that changes what a player meets: the patch number for fixes, the minor for a new feature or
+  screen, the major only on the owner's word (2.0 = the overhaul of 11-10…12). Say the new number in the report.
 - Units: meters, seconds, radians. +Y up, +Z south (towards the bay). Heading 0 = +Z; car local +Z forward, +X left.
 - Physics fixed step 120 Hz (`PHYSICS_DT`); visuals interpolate. Vehicle forces are applied as impulses.
 - Keep engine modules free of React; UI reads `game.hud` each animation frame (no per-frame React state).

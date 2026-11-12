@@ -6,7 +6,7 @@
 */
 
 return [
-    'version' => env('GAME_VERSION', '1.0.0'),
+    'version' => env('GAME_VERSION', '2.0.0'),
 
     'tracks' => [
         // min_time_ms: anything faster is physically impossible on the course. With the cockroach, the fastest vehicle
