@@ -1,7 +1,8 @@
 // The renderer's fallback from WebGPU to WebGL 2 (render/backendChoice.ts, ui/GameCanvas.tsx), on the host GPU.
 // Each case is a fresh browser context; "up" = the game reached the attract phase and a frame was drawn.
 //   node tools/backend-fallback.cjs            exit code 1 when a case did not end as expected
-// Env: URL (http://localhost:4173/), CHROME, PW_MODULE, OUT (directory for a picture per case).
+// Env: URL (http://localhost:4173/), CHROME, PW_MODULE, OUT (directory for a picture per case), ONLY (cases whose name
+// holds this), SET (settings JSON laid over every case's stored settings, e.g. '{"upscale":true}').
 // Serve with `API_PROXY=http://127.0.0.1:9 npx vite preview`; /api is also aborted in the browser.
 const { chromium } = require(process.env.PW_MODULE || 'playwright');
 const URL_ = process.env.URL || 'http://localhost:4173/';
@@ -155,7 +156,7 @@ const CASES = [
     page.on('console', (m) => /WebGPU is not available|renderer:/.test(m.text()) && notes.push(m.text().slice(0, 90)));
     await page.addInitScript((s) => {
       if (!localStorage.getItem('touge-settings')) localStorage.setItem('touge-settings', JSON.stringify({ state: { quality: 'low', timeOfDay: 'night', masterVolume: 0, ...s }, version: 1 }));
-    }, c.settings || {});
+    }, { ...JSON.parse(process.env.SET || '{}'), ...(c.settings || {}) });
     if (c.init) await page.addInitScript(c.init);
     let got, why = '';
     try {
