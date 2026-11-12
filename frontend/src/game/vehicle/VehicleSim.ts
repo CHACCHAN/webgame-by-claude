@@ -68,6 +68,8 @@ export class VehicleSim {
   assist: AssistLevel = 1;
   /** AI rivals get a slight grip handicap/bonus via this multiplier */
   gripScale = 1;
+  /** rolling resistance of the ground as a multiple of the tyres' own (loose dirt, a dry lake's clay) */
+  rollScale = 1;
   powerScale = 1;
   autoShift = true;
   /** AI drivers grip-drive: feint/power drift triggers are disabled */
@@ -584,7 +586,7 @@ export class VehicleSim {
       const stopLong = (Math.abs(vF) * wheelMass) / dt;
       fx -= Math.sign(vF) * Math.min(brakeF, stopLong);
       // rolling resistance (roughly constant, ~1.5% of load for tyres)
-      fx -= Math.sign(vF) * Math.min(Math.abs(vF) * 40, load * (spec.rolling ?? 0.015));
+      fx -= Math.sign(vF) * Math.min(Math.abs(vF) * 40, load * (spec.rolling ?? 0.015) * this.rollScale);
       const locked = handbrake && !w.front && !bikeG && !heavy && Math.abs(vF) > 1;
 
       // --- friction circle (lateral keeps a share of grip even when spinning)

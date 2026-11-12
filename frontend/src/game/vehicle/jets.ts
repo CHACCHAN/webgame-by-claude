@@ -13,8 +13,8 @@ import type { CarSpec } from './carSpecs';
  */
 export type JetId = 'f15j' | 'f15c' | 'su47';
 
-/** the air at Edwards (field elevation 702 m, ISA): density (kg/m³) and the speed of sound (m/s) */
-export const EDWARDS_AIR = { density: 1.145, sound: 338.4 };
+/** the air at Edwards (field elevation 2,311 ft = 704 m, standard atmosphere): density (kg/m³) and the speed of sound (m/s) */
+export const EDWARDS_AIR = { density: 1.144, sound: 337.6 };
 
 export interface JetLivery {
   name: string;
@@ -211,7 +211,7 @@ const JETS: JetDef[] = [
     id: 'su47',
     name: 'Su-47 ベールクト',
     tagline: '前進翼の試作戦闘機',
-    description: 'スホーイが1機だけ作った前進翼の実験機「01」。推力15トン級のD-30F6を2基積み、カナードと前進翼の独特な姿で地上を突っ走る。重いぶん、出足はイーグルに一歩譲る。',
+    description: 'スホーイが1機だけ作った前進翼の実験機「01」。推力15トン級のD-30F11を2基積み、カナードと前進翼の独特な姿で地上を突っ走る。イーグルより5トン重いが、推力はそれ以上に大きい。',
     mass: 25670,
     length: 22.6,
     wheelbase: 6.0,
@@ -227,16 +227,17 @@ const JETS: JetDef[] = [
     jet: {
       maker: 'Sukhoi',
       origin: 'ロシア（1997年初飛行）',
-      // D-30F6: 152 kN with afterburner, 83.4 kN dry (sources differ on the engine: D-30F6 / D-30F11)
-      engines: { count: 2, name: 'D-30F6', idle: 6000, dry: 83400, ab: 152000, spoolUp: 5, spoolDown: 3.5 },
-      wing: { area: 61.87, span: 16.7, cl0: 0.1, cd0: 0.02, cdGear: 0.016, speedBrake: 0 },
+      // D-30F11 (the MiG-31's D-30F6 adapted): 153 kN with afterburner, 93.1 kN dry; wing 56 m²; 25,670 kg at a
+      // normal take-off (Jane's All the World's Aircraft 2000–01; other sources give 61.87 m²)
+      engines: { count: 2, name: 'D-30F11', idle: 6000, dry: 93100, ab: 153000, spoolUp: 5, spoolDown: 3.5 },
+      wing: { area: 56, span: 16.7, cl0: 0.1, cd0: 0.02, cdGear: 0.016, speedBrake: 0 },
       vr: 72,
       lof: 82,
       liveries: [{ name: '「01」試作機', swatch: '#3b4049', crew: 1 }],
       camo: ['#3b4049', '#2a2e35'],
       courses: ['edwards'],
-      figures: { engine: 'Aviadvigatel D-30F6 ×2', thrust: '152 kN ×2（A/B）', weight: '25.7 t（通常離陸）', maxSpeed: 'マッハ1.65', span: 16.7, length: 22.6 },
-      estimated: ['車輪配置', '空力係数', '推力の速度・高度変化', '空虚重量（諸説）'],
+      figures: { engine: 'Aviadvigatel D-30F11 ×2', thrust: '153 kN ×2（A/B）', weight: '25.7 t（通常離陸）', maxSpeed: 'マッハ2.21', span: 16.7, length: 22.6 },
+      estimated: ['車輪配置', '空力係数', '推力の速度・高度変化', '離陸速度'],
     },
     model: { title: 'Su-47 ベールクト', author: 'TOUGE NOCTURNE', url: '', license: '自作', own: true },
   },

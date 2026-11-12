@@ -327,3 +327,8 @@ function proceduralJet(spec: CarSpec, mats: CarMaterials) {
   leg('gear_r', 'spin_r', -spec.track / 2, -spec.wheelbase / 2, r, false);
   return root;
 }
+
+/** Aircraft standing on an apron (scenery: no rig, no lights), or null when there is nothing to stand there. */
+export function parkedJets(_spots: { position: THREE.Vector3; heading: number; id: string }[]): THREE.Object3D | null {
+  return null;
+}

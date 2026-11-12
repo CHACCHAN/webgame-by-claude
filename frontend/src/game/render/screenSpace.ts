@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import type { Node, TextureNode } from 'three/webgpu';
-import { Fn, float, perspectiveDepthToViewZ, rtt, uniform, uv, vec3 } from 'three/tsl';
+import { Fn, float, perspectiveDepthToViewZ, rtt, uniform, uv, vec3, select } from 'three/tsl';
 
 /**
  * What the passes that work from the depth buffer share (ambient occlusion, the lights' glow in the haze): the scene
@@ -53,16 +53,27 @@ export function scaledTexture(node: Node, scale: number, name: string, colour = 
  * `texture` averaged over five texels along `step`, each as far as it lies on the centre's surface (by its distance):
  * a blur that does not bleed over an edge. Five with equal weights: a pattern that repeats every five texels (the
  * taps of these passes are turned per pixel in one) cancels exactly over that many.
+ *
+ * "On the centre's surface" is measured against the surface's own slope: the ground seen at a low angle is
+ * metres further from one row of pixels to the next, and taken for another surface the rows above and below
+ * dropped out, the pattern no longer cancelled and came through as stripes across open ground (faint on dark
+ * asphalt, plain on a runway's concrete and a dry lake). A plane's 1/distance runs evenly across the screen: the
+ * slope is taken there, from the neighbour nearer in depth (the other may be another surface).
  */
 export function surfaceBlur(texture: TextureNode, view: ScreenView, step: Node<'vec2'>): Node<'vec4'> {
   return Fn(() => {
     const at = uv();
     const centre = view.distance(at).toVar();
+    const inv = float(1).div(centre).toVar();
+    const before = float(1).div(view.distance(at.sub(step))).toVar(), after = float(1).div(view.distance(at.add(step))).toVar();
+    const slope = select(before.sub(inv).abs().lessThan(after.sub(inv).abs()), inv.sub(before), after.sub(inv)).toVar();
+    // (a difference of a twentieth of the distance is another surface: in 1/distance, that over the distance squared)
+    const scale = centre.mul(centre).div(centre.mul(0.05).add(0.05)).toVar();
     const sum = texture.sample(at).mul(1e-3).toVar(), weights = float(1e-3).toVar();
     for (let i = -2; i <= 2; i++) {
       const p = at.add(step.mul(i));
-      // (a difference of a twentieth of the distance is another surface)
-      const w = view.distance(p).sub(centre).abs().div(centre.mul(0.05).add(0.05)).oneMinus().saturate();
+      const there = i === -1 ? before : i === 1 ? after : i === 0 ? inv : float(1).div(view.distance(p));
+      const w = there.sub(inv.add(slope.mul(i))).abs().mul(scale).oneMinus().saturate();
       sum.addAssign(texture.sample(p).mul(w));
       weights.addAssign(w);
     }

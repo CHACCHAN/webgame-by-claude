@@ -5,6 +5,8 @@
 // Conventions: Y is up, +Z points south (towards the bay and the city lights),
 // heading 0 = driving towards +Z, positive arc angles turn LEFT.
 
+import { Track } from './Track';
+
 export type ZoneTag =
   | 'start'
   | 'vista'
@@ -23,7 +25,14 @@ export type ZoneTag =
   /** noise walls on the right, village lights beyond */
   | 'village'
   /** street lamps, an exit lane and slip road on the right, overhead gantry signs before it */
-  | 'interchange';
+  | 'interchange'
+  // the air base's zones (scenery: render/airbaseScenery.ts):
+  /** the flight line's concrete apron */
+  | 'ramp'
+  | 'taxiway'
+  | 'runway'
+  /** the dry lake: no pavement, the playa itself is the surface */
+  | 'lakebed';
 
 export interface Seg {
   /** straight length (m) when r is undefined, otherwise the arc radius (m) */
@@ -36,6 +45,19 @@ export interface Seg {
   tag?: ZoneTag;
   /** optional road width override (m, full drivable width) */
   w?: number;
+  /** paved width (m) inside `w`, where the pavement is narrower than what can be driven on (default: all of `w`) */
+  pave?: number;
+}
+
+/** A paved rectangle beside or under the road (an apron, a runway wider than the way onto it): world x / z of the
+ * middle of its near end, the heading of its long axis (as the road's), its length and width (m). */
+export interface Slab {
+  id: string;
+  x: number;
+  z: number;
+  heading: number;
+  length: number;
+  width: number;
 }
 
 export interface CourseDesign {
@@ -58,6 +80,20 @@ export interface CourseDesign {
   formation?: { left: number; right: number };
   /** the AI's speed limit on this course (m/s, default 62 ≈ 223 km/h on the mountain passes) */
   aiTopSpeed?: number;
+  /** level ground: no banking in the bends and no widening of tight ones (an airfield) */
+  flat?: boolean;
+  /** how far the ground under the road lies below its surface (m, default 0.45; 0: the ground is the surface) */
+  bed?: number;
+  /** tyre grip by zone, as a share of the course's (default 1), and rolling resistance by zone, as a multiple of the tyre's on pavement */
+  zoneGrip?: Partial<Record<ZoneTag, number>>;
+  zoneRoll?: Partial<Record<ZoneTag, number>>;
+  /**
+   * The road has no barriers: beside the pavement (`Seg.pave`, `slabs`) lies open ground one can drive on with this
+   * share of the grip, and whoever reaches the edge of `w` is put back on the road (`Game.trackRacer`).
+   */
+  verge?: { grip: number; roll: number };
+  /** paved rectangles that count as pavement whatever the road's own paved width is there */
+  slabs?: Slab[];
 }
 
 const S = (len: number, g: number, tag?: ZoneTag): Seg => ({ len, g, tag });
@@ -220,3 +256,114 @@ export const AUTOBAHN: CourseDesign = {
     S(650, 0, 'finish'),
   ],
 };
+
+// EDWARDS AFB (エドワーズ空軍基地): from the flight line down the parallel taxiway to the threshold of runway 04R,
+// its 4.6 km of concrete, out onto Rogers Dry Lake past the compass rose and north along a lakebed runway.
+// True bearings; a bearing θ is the heading π − θ here (+X east, +Z south). The airfield's frame: `a` metres along
+// 04R from its threshold, `b` metres to its left (north-west). The runway's length, width and surface and the
+// lake's level are the published ones (15,024 × 300 ft of concrete; field 2,311 ft, lake 2,277 ft); the bearing
+// (057° true for magnetic 044°), where the ramp and the taxiway lie and which lakebed runway passes the compass
+// rose are from memory of the field's diagram, not measured.
+const DEG = Math.PI / 180;
+export const EDWARDS_FIELD = {
+  /** world x / z of the 04R threshold's middle */
+  x: 0,
+  z: 0,
+  /** true bearing of runway 04R (degrees) */
+  bearing: 57,
+  runway: { length: 4579.3, width: 91.44 },
+  /** elevation of the 04R threshold and of the lakebed (m): the runway runs down to the lake */
+  top: 704.3,
+  lake: 694.0,
+  /**
+   * the parallel taxiway and the ramp's taxi lane: metres left of the runway's centre line (380 and 620, to the
+   * metre the road is sampled by: two quarter turns and a whole number of metres between them, see `EDWARDS_ROUTE`)
+   */
+  taxiway: 320 / Math.PI + 278,
+  lane: 640 / Math.PI + 278 + 138,
+  /** the ramp's apron: from / to along the runway, from / to left of it */
+  apron: { a0: 1930, a1: 2720, b0: 562, b1: 770 },
+  /** the compass rose: its middle in the field's frame and its radius (4,000 ft across, from memory) */
+  rose: { a: 5523, b: 809, radius: 610 },
+};
+/** the field's frame: unit vectors along 04R and to its left, and a point of it in the world */
+export const edwardsFrame = () => {
+  const t = EDWARDS_FIELD.bearing * DEG;
+  const ax = Math.sin(t), az = -Math.cos(t);
+  const bx = Math.sin(t - Math.PI / 2), bz = -Math.cos(t - Math.PI / 2);
+  return {
+    ax, az, bx, bz,
+    at: (a: number, b: number): [number, number] => [EDWARDS_FIELD.x + a * ax + b * bx, EDWARDS_FIELD.z + a * az + b * bz],
+    /** a world point in the field's frame */
+    of: (x: number, z: number): [number, number] => [(x - EDWARDS_FIELD.x) * ax + (z - EDWARDS_FIELD.z) * az, (x - EDWARDS_FIELD.x) * bx + (z - EDWARDS_FIELD.z) * bz],
+  };
+};
+/** the land's height along the runway: level at the top, down to the lake at the far threshold, level on the lake */
+export const edwardsHeight = (a: number) => EDWARDS_FIELD.lake + (EDWARDS_FIELD.top - EDWARDS_FIELD.lake) * Math.min(1, Math.max(0, (EDWARDS_FIELD.runway.length - a) / EDWARDS_FIELD.runway.length));
+
+/** where the course's parts begin and end along the runway's axis (the scenery reads them) */
+// (the road is laid out in whole metres: a quarter turn of 80 m and a 45° sweep of 1100 m have the radii below,
+// so that the runway's part of the road lies on the runway's centre line to the centimetre)
+export const EDWARDS_ROUTE = { turn: 160 / Math.PI, startA: 2600, rampLen: 520, overrun: 700, sweepR: 4400 / Math.PI, sweepDeg: 45, last: 2500, runoff: 1800 };
+
+function edwardsDesign(shiftB: number): CourseDesign {
+  const F = EDWARDS_FIELD, f = edwardsFrame(), R = EDWARDS_ROUTE;
+  // the runway's fall per metre (towards the lake)
+  const fall = (F.top - F.lake) / F.runway.length;
+  /** a quarter turn's grade when it takes the road `da` metres along the runway */
+  const quarter = (da: number) => (-da * fall) / ((Math.PI / 2) * R.turn);
+  const taxi = { w: 55, pave: 23 }, runway = { w: 140, pave: F.runway.width }, lake = { w: 320 };
+  const [x, z] = f.at(R.startA, F.lane + shiftB);
+  const along = Math.round(R.startA - R.rampLen - 3 * R.turn);
+  return {
+    id: 'edwards',
+    start: { x, y: edwardsHeight(R.startA), z, heading: Math.PI - (F.bearing + 180) * DEG },
+    baseWidth: 110,
+    sectors: 4,
+    // room behind the line for a row of 20 m aircraft; after the finish, room to stop from Mach 1 or to take off
+    startS: 80,
+    runoff: R.runoff,
+    flat: true,
+    bed: 0,
+    // the lake's dry clay: hard enough for any aircraft (250 psi), but dusty: less grip than concrete and twice the
+    // rolling resistance (estimates); the desert's graded dirt beside the pavements: loose, and it drags
+    zoneGrip: { lakebed: 0.8 },
+    zoneRoll: { lakebed: 2 },
+    verge: { grip: 0.6, roll: 5 },
+    slabs: [
+      { id: 'runway', x: F.x, z: F.z, heading: Math.PI - F.bearing * DEG, length: F.runway.length, width: F.runway.width },
+      { id: 'apron', x: f.at(F.apron.a0, (F.apron.b0 + F.apron.b1) / 2)[0], z: f.at(F.apron.a0, (F.apron.b0 + F.apron.b1) / 2)[1], heading: Math.PI - F.bearing * DEG, length: F.apron.a1 - F.apron.a0, width: F.apron.b1 - F.apron.b0 },
+    ],
+    // the fighters run to Mach 1 on the runway; nothing else comes near (the cockroach's own top speed is Mach 1)
+    aiTopSpeed: 345,
+    segs: [
+      // along the flight line, past the hangars and the tower
+      { len: R.rampLen, g: fall, tag: 'ramp' },
+      // off the apron and across to the parallel taxiway
+      { r: R.turn, deg: 90, g: quarter(-R.turn), tag: 'taxiway', ...taxi },
+      { len: F.lane - F.taxiway - 2 * R.turn, g: 0, tag: 'taxiway', ...taxi },
+      { r: R.turn, deg: -90, g: quarter(-R.turn), tag: 'taxiway', ...taxi },
+      // the parallel taxiway, south-west to the runway's end
+      { len: along, g: fall, tag: 'taxiway', ...taxi },
+      { r: R.turn, deg: 90, g: quarter(-R.turn), tag: 'taxiway', ...taxi },
+      { len: F.taxiway - 2 * R.turn, g: 0, tag: 'taxiway', ...taxi },
+      // onto the runway at the threshold of 04R
+      { r: R.turn, deg: 90, g: quarter(R.turn), tag: 'taxiway', ...taxi },
+      { len: F.runway.length - R.turn, g: -fall, tag: 'runway', ...runway },
+      // the lakebed: straight on over the overrun, a long left past the compass rose, north along lakebed runway 36
+      { len: R.overrun, g: 0, tag: 'lakebed', ...lake },
+      { r: R.sweepR, deg: R.sweepDeg, g: 0, tag: 'lakebed', ...lake },
+      { len: R.last + R.runoff, g: 0, tag: 'lakebed', ...lake },
+    ],
+  };
+}
+/**
+ * The bends' eased ends (the smoothing of the curvature) move the road sideways by a metre or two over the four
+ * quarter turns: laid out once to see by how much, the start is moved so that the road runs down the middle of
+ * the runway.
+ */
+export const EDWARDS: CourseDesign = (() => {
+  const trial = new Track(edwardsDesign(0));
+  const i = Math.round(3183 + EDWARDS_FIELD.runway.length / 2);
+  return edwardsDesign(-edwardsFrame().of(trial.pos[i * 3], trial.pos[i * 3 + 2])[1]);
+})();

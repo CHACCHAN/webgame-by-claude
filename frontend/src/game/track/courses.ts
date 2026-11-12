@@ -1,15 +1,20 @@
 import type { AILevel } from '../ai/AIDriver';
 import type { CarId, RoadCarId } from '../vehicle/carSpecs';
-import { AUTOBAHN, KIRIFURI_LAKESIDE, OBORO_DOWNHILL, TENROU_SKYLINE, type CourseDesign } from './courseDesign';
-import { BAY, CALDERA, PLATEAU, RIDGE, type Landform } from './landforms';
+import { AUTOBAHN, EDWARDS, KIRIFURI_LAKESIDE, OBORO_DOWNHILL, TENROU_SKYLINE, type CourseDesign } from './courseDesign';
+import { BAY, CALDERA, MOJAVE, PLATEAU, RIDGE, type Landform } from './landforms';
+import type { JetId } from '../vehicle/jets';
+import { RELEASED } from '../release';
 import type { TrainId } from '../vehicle/trains';
 import type { BikeId } from '../vehicle/bikes';
 import type { VoiceId } from '../audio/speech/text';
 
-export type CourseId = 'oboro-downhill' | 'kirifuri-lakeside' | 'tenrou-skyline' | 'autobahn';
+export type CourseId = 'oboro-downhill' | 'kirifuri-lakeside' | 'tenrou-skyline' | 'autobahn' | 'edwards';
 
-/** a Japanese mountain pass, or a German motorway (no Japanese roadside dressing, motorway structures instead) */
-export type CourseStyle = 'touge' | 'autobahn';
+/**
+ * a Japanese mountain pass, a German motorway (no Japanese roadside dressing, motorway structures instead), or an
+ * air base in the desert (render/airbaseScenery.ts: aprons, a runway, a dry lake; no roadside at all)
+ */
+export type CourseStyle = 'touge' | 'autobahn' | 'airbase';
 
 export interface RivalInfo {
   name: string;
@@ -164,9 +169,45 @@ export const COURSES: Record<CourseId, CourseInfo> = {
     music: 'bgm_race_autobahn',
     art: '/img/courses/autobahn.webp',
   },
+  edwards: {
+    id: 'edwards',
+    name: 'エドワーズ空軍基地',
+    nameEn: 'EDWARDS AFB',
+    style: 'airbase',
+    tagline: '滑走路04Rから乾湖へ、音速の手前まで',
+    description: 'モハーヴェ砂漠の試験飛行の聖地。駐機場から誘導路を抜け、4.6kmのコンクリート滑走路を全開で駆け、ロジャース乾湖のコンパスローズをかすめて湖面滑走路へ。約12km、壁はひとつもない。戦闘機はここでだけ走れる。',
+    design: EDWARDS,
+    landform: MOJAVE,
+    // dry concrete; the lakebed's clay gives less (`CourseDesign.zoneGrip`)
+    surface: { grip: 1, label: '乾いたコンクリートと乾湖の粘土（湖面は滑りやすい）' },
+    rivals: {
+      // a drag race like the autobahn's, and here the rivals above the rookie fly: only an aircraft keeps up with
+      // them (tools/sim-run.ts)
+      rookie: { name: 'ノーラ・ヘイズ', voice: 'F4', title: 'ROOKIE / 整備班の新人', car: 'cybertruck', color: '#c8ccd0', portrait: '', description: 'フライトラインの整備班に来たばかり。夜勤明けに、牽引車がわりのトラックで滑走路を走るのが楽しみ。' },
+      ace: { name: 'デイル・マッケンジー', voice: 'M2', title: 'LOCAL ACE / 412試験航空団のテストパイロット', car: 'f15c', color: '#7f8890', portrait: '', description: 'EDのテイルコードを背負うイーグル乗り。この滑走路の継ぎ目の数まで知っている。' },
+      legend: { name: 'ベールクト', voice: 'M3', title: 'LEGEND / 乾湖に現れる黒い前進翼', car: 'su47', color: '#3b4049', portrait: '', description: '記録にない夜、湖面にだけ現れるという黒い機体。誰が乗っているのか、基地の誰も知らない。' },
+    },
+    // PLACEHOLDER
+    medals: {
+      hayate: { gold: 300_000, silver: 320_000, bronze: 350_000 },
+      raijin: { gold: 300_000, silver: 320_000, bronze: 350_000 },
+      shiden: { gold: 300_000, silver: 320_000, bronze: 350_000 },
+      supra: { gold: 300_000, silver: 320_000, bronze: 350_000 },
+      r34: { gold: 300_000, silver: 320_000, bronze: 350_000 },
+      cybertruck: { gold: 300_000, silver: 320_000, bronze: 350_000 },
+      u9: { gold: 300_000, silver: 320_000, bronze: 350_000 },
+      s15: { gold: 300_000, silver: 320_000, bronze: 350_000 },
+    },
+    // (no track of its own: the motorway's, the other flat-out course)
+    music: 'bgm_race_autobahn',
+    art: '/img/courses/edwards.webp',
+  },
 };
 
-export const COURSE_ORDER: CourseId[] = ['oboro-downhill', 'kirifuri-lakeside', 'tenrou-skyline', 'autobahn'];
+/** every course there is, shown to players or not yet (tests and tools) */
+export const ALL_COURSES: CourseId[] = ['oboro-downhill', 'kirifuri-lakeside', 'tenrou-skyline', 'autobahn', 'edwards'];
+/** the courses a player can choose (Edwards with its fighters once released: `release.ts`) */
+export const COURSE_ORDER: CourseId[] = ALL_COURSES.filter((id) => id !== 'edwards' || RELEASED.edwards);
 export const DEFAULT_COURSE: CourseId = 'oboro-downhill';
 
 /**
@@ -212,6 +253,15 @@ export const TRAIN_MEDALS: Record<CourseId, Record<TrainId, { gold: number; silv
     e5: { gold: 174_000, silver: 186_500, bronze: 202_000 },
     l0: { gold: 130_000, silver: 139_000, bronze: 151_000 },
   },
+  // PLACEHOLDER
+  edwards: {
+    e231: { gold: 400_000, silver: 430_000, bronze: 460_000 },
+    e235: { gold: 400_000, silver: 430_000, bronze: 460_000 },
+    keikyu1000: { gold: 400_000, silver: 430_000, bronze: 460_000 },
+    tobu30000: { gold: 400_000, silver: 430_000, bronze: 460_000 },
+    e5: { gold: 400_000, silver: 430_000, bronze: 460_000 },
+    l0: { gold: 400_000, silver: 430_000, bronze: 460_000 },
+  },
 };
 
 /**
@@ -227,6 +277,8 @@ export const ROACH_MEDALS: Record<CourseId, { gold: number; silver: number; bron
   'tenrou-skyline': { gold: 44_000, silver: 47_000, bronze: 51_000 },
   // the autobahn: from a standing start (as TRAIN_MEDALS)
   autobahn: { gold: 35_500, silver: 38_000, bronze: 41_000 },
+  // PLACEHOLDER
+  edwards: { gold: 60_000, silver: 64_000, bronze: 70_000 },
 };
 
 /**
@@ -255,4 +307,19 @@ export const BIKE_MEDALS: Record<CourseId, Record<BikeId, { gold: number; silver
     ninjah2: { gold: 90_500, silver: 97_000, bronze: 105_000 },
     hayabusa: { gold: 95_500, silver: 102_000, bronze: 111_000 },
   },
+  // PLACEHOLDER
+  edwards: {
+    nsr250r: { gold: 300_000, silver: 320_000, bronze: 350_000 },
+    ninjah2: { gold: 300_000, silver: 320_000, bronze: 350_000 },
+    hayabusa: { gold: 300_000, silver: 320_000, bronze: 350_000 },
+  },
+};
+
+/**
+ * Medal times of the fighters at Edwards, the only course they run on. PLACEHOLDER
+ */
+export const JET_MEDALS: Record<JetId, { gold: number; silver: number; bronze: number }> = {
+  f15j: { gold: 120_000, silver: 130_000, bronze: 140_000 },
+  f15c: { gold: 120_000, silver: 130_000, bronze: 140_000 },
+  su47: { gold: 120_000, silver: 130_000, bronze: 140_000 },
 };

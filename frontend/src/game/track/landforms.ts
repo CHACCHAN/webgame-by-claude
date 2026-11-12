@@ -1,4 +1,5 @@
 import { fbm, lerp, ridged, smoothstep } from '../util/math';
+import { EDWARDS_FIELD, edwardsFrame, edwardsHeight } from './courseDesign';
 
 /** A cluster of town/city lights. */
 export interface CityDef {
@@ -67,6 +68,13 @@ export interface Landform {
   hillside?: number;
   /** strength of the spurs and gullies on the hillsides away from the road (default 1; visual only) */
   gullies?: number;
+  /**
+   * how far the land near the road is drawn to the road's height (default 1: the road is cut into a hillside the
+   * landform knows nothing of; 0: the landform already lies where the road runs, an airfield's level ground)
+   */
+  follow?: number;
+  /** the rough ground the road's cutting leaves beside it, as a share of the mountain roads' ±7 m (default 1) */
+  roadsideRelief?: number;
   /** bridges are viaducts over valleys of the landform (the ground follows the valley down, as wide as the bridge) */
   viaducts?: boolean;
   features: {
@@ -295,4 +303,51 @@ export const PLATEAU: Landform = {
       [-3500, 500], [-3050, 700], [-2600, 450],
     ],
   },
+};
+
+// ------------------------------------------------- EDWARDS: the high desert and Rogers Dry Lake
+const ED = edwardsFrame();
+/**
+ * The dry lake's shore in the airfield's frame: the lake lies beyond the far end of the runway (`a` greater than
+ * this, for a place `b` metres left of the centre line). Sines only: the ground's material draws the same line
+ * (render/airbaseGround.ts).
+ */
+export const edwardsShore = (b: number) => EDWARDS_FIELD.runway.length + 70 * (Math.sin(b / 700 + 0.4) - Math.sin(0.4)) + 30 * (Math.sin(b / 230 + 2) - Math.sin(2));
+
+export const MOJAVE: Landform = {
+  base(x, z) {
+    const [a, b] = ED.of(x, z);
+    let h = edwardsHeight(a);
+    // the desert's gentle swells, none on the lake (level to a hand's breadth) and none on the airfield
+    const land = smoothstep(120, 900, edwardsShore(b) - a);
+    const field = smoothstep(500, 1500, Math.hypot(a - 2300, (b - 300) * 1.6) - 2300);
+    h += fbm(x / 520 + 3.1, z / 520 - 7.7, 3) * 5 * land * field;
+    // buttes and ranges on the horizon, all round
+    const far = Math.hypot(a - 4300, b - 1700);
+    h += ridged(x / 1700 + 4.4, z / 1700 - 2.9, 4) * 420 * smoothstep(8200, 11500, far);
+    return h;
+  },
+  relief: () => 0,
+  waterLevel: null,
+  treeLine: 2000,
+  cities: [
+    // the base's housing and shops, west of the flight line
+    { x: ED.at(900, 3300)[0], z: ED.at(900, 3300)[1], rx: 900, rz: 600, angle: 0.4, density: 0.1, downtown: 0 },
+    // a town on the desert floor far to the south-west
+    { x: ED.at(-7500, -3000)[0], z: ED.at(-7500, -3000)[1], rx: 2400, rz: 1200, angle: 0.2, density: 0.35, downtown: 0.1 },
+  ],
+  cityGlowDir: [-0.75, 0, 0.66],
+  cityGlow: 0.3,
+  // the moon over the lake, ahead of the runway
+  moonDir: [0.62, 0.5, -0.6],
+  // the sun comes up over the lake: low, the land is level and throws no shade over the road
+  dawnSun: [0.86, 0.15, -0.49],
+  // (no sea of clouds: the level sits under the lake)
+  cloudLevel: 560,
+  grid: { near: 12, far: 48, reach: 6500 },
+  hillside: 0,
+  gullies: 0,
+  roadsideRelief: 0,
+  follow: 0,
+  features: { towers: [ED.at(600, 2400), ED.at(3900, 2600)] },
 };

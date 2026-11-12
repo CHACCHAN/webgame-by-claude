@@ -28,7 +28,8 @@ export class RacingLine {
         const rx = track.right[i * 3], rz = track.right[i * 3 + 2];
         const rl = Math.hypot(rx, rz) || 1;
         const delta = ((mx - px[i]) * rx + (mz - pz[i]) * rz) / rl;
-        const lim = track.width[i] / 2 - margin;
+        // (inside the pavement: on an airfield the ground beside it can be driven on, but nobody races there)
+        const lim = track.pave[i] / 2 - margin;
         u[i] = clamp(u[i] + delta * 0.5, -lim, lim);
       }
     }
@@ -70,9 +71,10 @@ export class RacingLine {
       // average curvature over a short window for robustness
       let k = 0;
       for (let j = Math.max(0, i - 3); j <= Math.min(n - 1, i + 3); j++) k = Math.max(k, Math.abs(this.curvature[j]));
-      v[i] = Math.min(vmax, Math.sqrt(latAccel / Math.max(k, 1e-4)));
+      // (the zone's own grip: a dry lake gives less than the runway before it)
+      v[i] = Math.min(vmax, Math.sqrt((latAccel * this.track.grip[i]) / Math.max(k, 1e-4)));
     }
-    for (let i = n - 2; i >= 0; i--) v[i] = Math.min(v[i], Math.sqrt(v[i + 1] * v[i + 1] + 2 * brakeDecel * DS));
+    for (let i = n - 2; i >= 0; i--) v[i] = Math.min(v[i], Math.sqrt(v[i + 1] * v[i + 1] + 2 * brakeDecel * this.track.grip[i] * DS));
     for (let i = 1; i < n; i++) v[i] = Math.min(v[i], Math.sqrt(v[i - 1] * v[i - 1] + 2 * accel * DS));
     return v;
   }

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { CAR_ORDER, CAR_SPECS, UNRELEASED_VEHICLES, VEHICLE_ORDER, vehiclesFor, type CarId } from '../../game/vehicle/carSpecs';
+import { CAR_ORDER, CAR_SPECS, VEHICLE_ORDER, vehiclesFor, type CarId } from '../../game/vehicle/carSpecs';
+import { RELEASED } from '../../game/release';
 import { KIND_ORDER, KIND_TRAITS, kindOf } from '../../game/vehicle/kinds';
 import { VEHICLE_STATS } from '../../game/vehicle/stats';
 import { COURSE_ORDER } from '../../game/track/courses';
@@ -59,8 +60,8 @@ describe('car select', () => {
 
   it('keeps the unreleased kinds out while they are switched off', () => {
     const tabs = pickerTabs(VEHICLE_ORDER, []).map((t) => t.id);
-    expect(tabs.includes('tank')).toBe(UNRELEASED_VEHICLES);
-    expect(tabs.includes('jet')).toBe(UNRELEASED_VEHICLES);
+    expect(tabs.includes('tank')).toBe(RELEASED.tanks);
+    expect(tabs.includes('jet')).toBe(RELEASED.edwards);
   });
 
   it('lists the starred vehicles on the favourites tab, in the list order', () => {

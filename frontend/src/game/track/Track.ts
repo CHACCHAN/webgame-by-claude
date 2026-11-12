@@ -48,6 +48,10 @@ export class Track {
   /** unit up (road normal) */
   readonly up: Float32Array;
   readonly width: Float32Array;
+  /** paved width (m): the whole of `width` unless the course says otherwise (`Seg.pave`) */
+  readonly pave: Float32Array;
+  /** tyre grip of the zone, as a share of the course's (`CourseDesign.zoneGrip`) */
+  readonly grip: Float32Array;
   /** signed curvature (1/m), positive = left */
   readonly curvature: Float32Array;
   readonly heading: Float32Array;
@@ -70,6 +74,7 @@ export class Track {
     const kRaw: number[] = [];
     const gRaw: number[] = [];
     const wRaw: number[] = [];
+    const pRaw: number[] = [];
     const zones: (ZoneTag | undefined)[] = [];
     for (const seg of design.segs) {
       const isArc = seg.r !== undefined;
@@ -80,6 +85,7 @@ export class Track {
         kRaw.push(k);
         gRaw.push(seg.g);
         wRaw.push(seg.w ?? design.baseWidth);
+        pRaw.push(seg.pave ?? seg.w ?? design.baseWidth);
         zones.push(seg.tag);
       }
     }
@@ -87,12 +93,15 @@ export class Track {
     kRaw.push(0);
     gRaw.push(gRaw[gRaw.length - 1]);
     wRaw.push(wRaw[wRaw.length - 1]);
+    pRaw.push(pRaw[pRaw.length - 1]);
     zones.push(zones[zones.length - 1]);
 
     // Smoothing keeps the integral (total heading change) intact.
     const k = movingAverage(Float64Array.from(kRaw), design.smoothing?.curvature ?? 24);
     const g = movingAverage(Float64Array.from(gRaw), design.smoothing?.grade ?? 60);
     const widthBase = movingAverage(Float64Array.from(wRaw), 40);
+    const paveBase = movingAverage(Float64Array.from(pRaw), 40);
+    const gripBase = movingAverage(Float64Array.from(zones.map((t) => (t && design.zoneGrip?.[t]) ?? 1)), 20);
 
     this.count = n;
     this.length = (n - 1) * DS;
@@ -101,6 +110,8 @@ export class Track {
     this.right = new Float32Array(n * 3);
     this.up = new Float32Array(n * 3);
     this.width = new Float32Array(n);
+    this.pave = new Float32Array(n);
+    this.grip = Float32Array.from(gripBase);
     this.curvature = new Float32Array(n);
     this.heading = new Float32Array(n);
     this.bank = new Float32Array(n);
@@ -117,7 +128,7 @@ export class Track {
       this.heading[i] = h;
       this.curvature[i] = k[i];
       // Hairpins get wider, like real mountain roads.
-      widen[i] = clamp((Math.abs(k[i]) - 1 / 70) * 160, 0, 3.2);
+      widen[i] = design.flat ? 0 : clamp((Math.abs(k[i]) - 1 / 70) * 160, 0, 3.2);
       // advance (midpoint rule)
       const hm = h + k[i] * DS * 0.5;
       x += Math.sin(hm) * DS;
@@ -129,8 +140,9 @@ export class Track {
     const bankRaw = new Float64Array(n);
     for (let i = 0; i < n; i++) {
       this.width[i] = widthBase[i] + widenSm[i];
+      this.pave[i] = paveBase[i] + widenSm[i];
       // Bank into the corner, capped at ~4.5 degrees.
-      bankRaw[i] = clamp(k[i] * 3.2, -0.08, 0.08);
+      bankRaw[i] = design.flat ? 0 : clamp(k[i] * 3.2, -0.08, 0.08);
     }
     const bankSm = movingAverage(bankRaw, 30);
 
@@ -216,6 +228,40 @@ export class Track {
     const t = clamp(s / DS, 0, this.count - 1.0001);
     const i = Math.floor(t);
     return lerp(this.width[i], this.width[i + 1], t - i);
+  }
+
+  paveAt(s: number) {
+    const t = clamp(s / DS, 0, this.count - 1.0001);
+    const i = Math.floor(t);
+    return lerp(this.pave[i], this.pave[i + 1], t - i);
+  }
+
+  /**
+   * Tyre grip of the ground at a place, as a share of the course's: the zone's own (a dry lake's clay), and beside
+   * the pavement the open ground's (`CourseDesign.verge`; a paved slab beside the road counts as pavement).
+   */
+  surfaceGrip(index: number, lateral: number, x: number, z: number) {
+    index = clamp(index, 0, this.count - 1);
+    return this.paved(index, lateral, x, z) ? this.grip[index] : this.design.verge!.grip;
+  }
+
+  /** Rolling resistance of the ground at a place, as a multiple of the tyre's own on pavement. */
+  surfaceRoll(index: number, lateral: number, x: number, z: number) {
+    index = clamp(index, 0, this.count - 1);
+    const zone = this.zone[index];
+    return this.paved(index, lateral, x, z) ? ((zone && this.design.zoneRoll?.[zone]) ?? 1) : this.design.verge!.roll;
+  }
+
+  /** on the course's own surface (not on the open ground beside the pavement) */
+  paved(index: number, lateral: number, x: number, z: number) {
+    const d = this.design;
+    if (!d.verge || Math.abs(lateral) <= this.pave[index] / 2) return true;
+    for (const sl of d.slabs ?? []) {
+      const fx = Math.sin(sl.heading), fz = Math.cos(sl.heading);
+      const along = (x - sl.x) * fx + (z - sl.z) * fz, across = (x - sl.x) * fz - (z - sl.z) * fx;
+      if (along >= 0 && along <= sl.length && Math.abs(across) <= sl.width / 2) return true;
+    }
+    return false;
   }
 
   curvatureAt(s: number) {

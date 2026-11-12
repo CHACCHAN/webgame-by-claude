@@ -1292,13 +1292,21 @@ export class Game {
     const p = r.sim.position;
     r.proj = this.track.project(p.x, p.y, p.z, r.proj.index, r.proj);
     const onRoad = Math.abs(r.proj.lateral) < this.track.width[r.proj.index] / 2 + 1 && Math.abs(r.proj.height) < 3;
+    const design = this.track.design;
+    // what the tyres stand on: a zone's own ground (a dry lake's clay), the open ground beside a pavement
+    if (design.zoneGrip || design.verge) {
+      r.sim.gripScale = this.roadGrip * this.track.surfaceGrip(r.proj.index, r.proj.lateral, p.x, p.z);
+      r.sim.rollScale = this.track.surfaceRoll(r.proj.index, r.proj.lateral, p.x, p.z);
+    }
+    // a course without barriers: whoever reaches the edge of the ground it gives is put back on it
+    const strayed = !!design.verge && Math.abs(r.proj.lateral) > this.track.width[r.proj.index] / 2 - 2;
     if (onRoad && !r.sim.isFlipped && r.sim.speed > 2) r.lastSafe = { s: r.proj.s, t: this.time };
     // automatic recovery
     if (r.sim.isFlipped) r.flippedTime += dt;
     else r.flippedTime = 0;
     const lost = Math.abs(r.proj.height) > 12 || r.sim.position.y < -20;
     // (a finished rival parks on purpose: not stuck)
-    if (r.flippedTime > 2 || lost || (r.ai && r.ai.needsRespawn && r !== this.player && !r.finished)) this.respawn(r);
+    if (r.flippedTime > 2 || lost || strayed || (r.ai && r.ai.needsRespawn && r !== this.player && !r.finished)) this.respawn(r);
   }
 
   private respawn(r: Racer) {

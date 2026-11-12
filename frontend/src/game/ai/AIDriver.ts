@@ -119,7 +119,7 @@ export class AIDriver {
     const look = 7 + Math.max(speed, 0) * 0.42;
     const ts = s + look;
     const wobble = Math.sin(this.wobblePhase + s / 37) * this.profile.sloppiness;
-    const half = this.track.widthAt(ts) / 2 - 1.1;
+    const half = this.track.paveAt(ts) / 2 - 1.1;
     const lat = clamp(this.pullOver ?? this.line.offsetAt(ts) + wobble + this.avoid, -half, half);
     this.track.pointAt(ts, lat, _target);
 

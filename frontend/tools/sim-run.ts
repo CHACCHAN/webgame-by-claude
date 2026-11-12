@@ -24,7 +24,10 @@ for (const [car, level] of pairs) {
     const start = track.pointAt(track.startS - 12);
     const v = new VehicleSim(physics, CAR_SPECS[car], start, track.headingAt(track.startS - 12));
     // the course's surface (GRIP=<factor> overrides it)
-    v.gripScale = Number(process.env.GRIP ?? course.surface.grip);
+    const baseGrip = Number(process.env.GRIP ?? course.surface.grip);
+    v.gripScale = baseGrip;
+    let proj = track.project(start.x, start.y, start.z);
+    let strayed = false;
     v.powerScale = Number(process.env.POWER ?? 1);
     const ai = new AIDriver(track, line, AI_PROFILES[level]);
     ai.calibrate(v);
@@ -35,6 +38,13 @@ for (const [car, level] of pairs) {
     const splits: number[] = [];
     while (t < 420) {
       ai.update(v, PHYSICS_DT, input);
+      // the ground under the tyres, as the game sets it (`Game.trackRacer`)
+      if (track.design.zoneGrip || track.design.verge) {
+        proj = track.project(v.position.x, v.position.y, v.position.z, proj.index, proj);
+        v.gripScale = baseGrip * track.surfaceGrip(proj.index, proj.lateral, v.position.x, v.position.z);
+        v.rollScale = track.surfaceRoll(proj.index, proj.lateral, v.position.x, v.position.z);
+        if (track.design.verge && Math.abs(proj.lateral) > track.width[proj.index] / 2 - 2) strayed = true;
+      }
       v.input = input;
       v.preStep(PHYSICS_DT);
       physics.step();
@@ -56,7 +66,9 @@ for (const [car, level] of pairs) {
       if (started < 0 && ai.s >= track.startS) started = t;
       if (started >= 0 && splits.length < track.sectorSplits.length && ai.s >= track.sectorSplits[splits.length]) splits.push(t - started);
       if (splits.length === track.sectorSplits.length) break;
-      if (v.isFlipped || ai.needsRespawn || v.position.y < -50) {
+      if (v.isFlipped || ai.needsRespawn || v.position.y < -50 || strayed) {
+        strayed = false;
+        proj.index = -1;
         if (v.isFlipped) flips++;
         respawns++;
         const s = Math.max(ai.s - 5, 0);
