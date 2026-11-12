@@ -6,7 +6,8 @@ half height) on rails, a slatted bench, on the back wall the timetable, the town
 beside the hut the stop's pole: a concrete disc, a steel pipe, the round sign printed on both faces (fictional stop
 「朧峠入口」, no operator logo) and a timetable case.
 About 2.5 m tall (the sign's top at 2.59 m), 3.4 m shelter width; open side towards +Z; origin at the centre of the
-footprint on the ground (the slab reaches 0.35 m into it: the ground there is never level).
+footprint on the ground (the slab on its foundation reaches 1.6 m into it: the ground there is never level, and the
+game stands the hut on the highest of it).
 Texture busstop.png (painted by paint.py): the sign, the timetable, the posters.
 
     blender -t 4 --background --factory-startup --python bus_stop.py -- --out <dir> [--render <dir>]
@@ -107,6 +108,8 @@ def build(out):
     # --- slab (cast against boards: a chamfer), into the ground
     with m.dense(0.7):
         m.box(conc, -2.2, 1.5, -0.35, 0.12, -1.0, 1.25, bevel=0.015, seg=1)
+    with m.dense(0.3):   # its foundation: the shelter stands level on the highest ground under it
+        m.box(conc, -2.17, 1.47, -1.6, -0.3, -0.97, 1.22)
     # --- posts in their steel shoes
     for x in (-2.0, 1.3):
         for z0, top in ((0.80, 2.30), (-0.94, 2.13)):
@@ -189,7 +192,7 @@ def build(out):
     # --- the stop's pole: a concrete disc, a steel pipe, the round sign (both faces), a timetable case
     sx, sy, sz = SIGN
     with m.dense(0.8):
-        m.lathe(conc, [(0.26, -0.2), (0.26, 0.10), (0.24, 0.14), (0.06, 0.155)], seg=20, cx=sx, cz=sz - 0.045)
+        m.lathe(conc, [(0.26, -1.6), (0.26, 0.10), (0.24, 0.14), (0.06, 0.155)], seg=20, cx=sx, cz=sz - 0.045)
     m.cyl(zinc, (sx, 0.15, sz - 0.045), (sx, 0.21, sz - 0.045), 0.034, seg=12)
     m.cyl(zinc, (sx, 0.15, sz - 0.045), (sx, 2.32, sz - 0.045), 0.0243, seg=12)
     ring_pts = K.circle_pts(0, 0, SIGN_R, 36)

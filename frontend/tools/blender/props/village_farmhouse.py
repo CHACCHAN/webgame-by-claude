@@ -1,8 +1,12 @@
 """
-Farmhouse of the AUTOBAHN course's village: half-timbered upper floor over a plastered ground floor, with a timber
-barn at one end (a big board door at the front). Same builder as village_house.py. ~16 x 11 m, ~11 m tall.
+Farmhouse of the AUTOBAHN course's village: a half-timbered upper floor (posts, rails, braces lying on the render)
+over a rendered ground floor, with a boarded timber barn at one end (the big double door with its braces at the
+front, a loft hatch in the gable). Same builder as village_house.py. ~16 x 11 m, ~12.3 m tall, origin at the centre
+of the footprint on the ground.
 
     blender -t 4 --background --factory-startup --python village_farmhouse.py -- --out <dir> [--render <dir>]
+
+One baked material (prop_bake).
 """
 import os
 import sys
@@ -20,6 +24,7 @@ def build(out):
 
 SPEC = K.Spec('village_farmhouse.glb', build, [
     dict(name='front', eye=(12.0, 6.0, 24.0), target=(0, 4.0, 0), lens=35),
+    dict(name='back', eye=(-16.0, 7.0, -22.0), target=(0, 4.0, 0), lens=35),
     dict(name='night', eye=(12.0, 6.0, 24.0), target=(0, 4.0, 0), lens=35, night=True),
 ])
 

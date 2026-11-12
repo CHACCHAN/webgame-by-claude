@@ -1415,11 +1415,23 @@ function buildLandmarks(track: Track, terrain: TerrainData, sides: ReturnType<ty
   const avoid = [...lamps.map((l) => l.position), ...curveMirrorSpots(track).map((m) => track.pointAt(m.i, m.lateral))];
   const UP = new THREE.Vector3(0, 1, 0), one = new THREE.Vector3(1, 1, 1);
   /** frame at a spot: origin `depth` from the footprint's road edge, local +Z towards the road */
-  const frame = (spot: { i: number; side: 1 | -1 }, gap: number, depth: number) => {
+  const frame = (spot: { i: number; side: 1 | -1 }, gap: number, depth: number, footprint?: [number, number, number, number]) => {
     const at = track.pointAt(spot.i, spot.side * (track.width[spot.i] / 2 + SHOULDER + gap + depth));
     at.y = terrain.heightAt(at.x, at.z) - 0.05;
     const toRoad = track.getRight(spot.i, new THREE.Vector3()).multiplyScalar(-spot.side);
     const q = new THREE.Quaternion().setFromAxisAngle(UP, Math.atan2(toRoad.x, toRoad.z));
+    if (footprint) {
+      // a building stands level, on the highest ground under it (x0, x1, z0, z1 in this frame): its foundation goes
+      // down into the rest (the ground came up through the shelter's floor on a slope). Asked in a grid, a metre
+      // wider than the building: the ground's mesh is coarser than its height function and cuts corners between
+      const [x0, x1, z0, z1] = footprint, c = new THREE.Vector3();
+      for (let x = x0 - 1; x <= x1 + 1.001; x += (x1 - x0 + 2) / 6) {
+        for (let z = z0 - 1; z <= z1 + 1.001; z += (z1 - z0 + 2) / 4) {
+          c.set(x, 0, z).applyQuaternion(q).add(at);
+          at.y = Math.max(at.y, terrain.heightAt(c.x, c.z));
+        }
+      }
+    }
     return (x: number, z: number, yaw = 0) =>
       new THREE.Matrix4().compose(new THREE.Vector3(x, 0, z).applyQuaternion(q).add(at), q.clone().multiply(new THREE.Quaternion().setFromAxisAngle(UP, yaw)), one);
   };
@@ -1439,7 +1451,7 @@ function buildLandmarks(track: Track, terrain: TerrainData, sides: ReturnType<ty
     const spot = roadsideSpot(track, terrain, sides, { range: [Math.round(track.count * 0.45), Math.round(track.finishS - 100)], halfWidth: 4.5, depth: 5, gap: 0.5, avoid, tol: 1.2 });
     if (spot) {
       // the shelter reaches 1.13 m ahead of its origin (open side to the road; 2.25 m deep)
-      const at = frame(spot, 0.5, 1.75);
+      const at = frame(spot, 0.5, 1.75, [-2.3, 2.3, -1.25, 1.15]);
       group.add(placeProp(shelter, [at(0, 0)], { castShadow: true, name: 'bus-stop' }).group);
       const c = new THREE.Vector3().setFromMatrixPosition(at(0, 0));
       keepOut.push({ x: c.x, z: c.z, r: 6 });

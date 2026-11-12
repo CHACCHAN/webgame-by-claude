@@ -43,13 +43,13 @@ const PROPS: Record<PropId, PropDef> = {
   vending: { file: 'vending_machine.glb', height: 2.02, origin: [0, 0], base: 0 },
   torii: { file: 'torii.glb', height: 4.85, origin: [0, 0], base: 0 },
   stoneLantern: { file: 'stone_lantern.glb', height: 1.75, origin: [0, 0], base: 0 },
-  busStop: { file: 'bus_stop.glb', height: 2.946, origin: [0, 0], base: 0 },
+  busStop: { file: 'bus_stop.glb', height: 4.196, origin: [0, 0], base: 0 },
   cone: { file: 'traffic_cone.glb', height: 0.7 },
   // the autobahn's (heights as built; their foundations reach below the ground)
   signGantry: { file: 'sign_gantry.glb', height: 8.75, origin: [0, 0], base: 0 },
-  emergencyPhone: { file: 'emergency_phone.glb', height: 1.52, origin: [0, 0], base: 0 },
-  villageHouse: { file: 'village_house.glb', height: 11.76, origin: [0, 0], base: 0 },
-  villageFarmhouse: { file: 'village_farmhouse.glb', height: 13.655, origin: [0, 0], base: 0 },
+  emergencyPhone: { file: 'emergency_phone.glb', height: 1.82, origin: [0, 0], base: 0 },
+  villageHouse: { file: 'village_house.glb', height: 11.91, origin: [0, 0], base: 0 },
+  villageFarmhouse: { file: 'village_farmhouse.glb', height: 13.805, origin: [0, 0], base: 0 },
   villageChurch: { file: 'village_church.glb', height: 37.9, base: 0 },
 };
 

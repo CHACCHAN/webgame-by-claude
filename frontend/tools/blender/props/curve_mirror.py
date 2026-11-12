@@ -53,8 +53,8 @@ def build(out):
     d = K.paint(out, ['mirror'])
     orange = PB.surface('orange', '#e0611c', roughness=0.46, vary=0.1, mottle=0.3, mottle_scale=7, mottle_colour='#e58a52', mottle_rough=0.62,
                         dirt=0.55, streak=0.45, foot=0.5, foot_h=0.3, rust=0.3, wear=0.35, wear_colour='#b9ad9f')
-    glass = PB.surface('mirror', '#dfe6ea', metallic=1.0, roughness=0.05, vary=0.0, rough_vary=0.0, mottle=0.3, mottle_scale=34,
-                       mottle_colour='#cdd4d8', mottle_rough=0.22, dirt=0.55, streak=0.12)
+    glass = PB.surface('mirror', '#dfe6ea', metallic=1.0, roughness=0.05, vary=0.0, rough_vary=0.0, mottle=0.14, mottle_scale=34,
+                       mottle_colour='#cdd4d8', mottle_rough=0.2, dirt=0.5, streak=0.12)
     zinc = PB.surface('zinc', '#a3a8a8', metallic=0.7, roughness=0.45, rust=0.45, dirt=0.5)
     conc = PB.surface('concrete', '#8d8c85', roughness=0.9, vary=0.14, mottle=0.45, mottle_scale=30, dirt=0.7, foot=0.6, foot_h=0.05, moss=0.5)
     tag = PB.surface('tag', '#ffffff', roughness=0.4, image=K.load_image(os.path.join(d, 'mirror_tag.png')), dirt=0.45, streak=0.3, vary=0.03)

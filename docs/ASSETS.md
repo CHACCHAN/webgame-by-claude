@@ -133,6 +133,14 @@ Since 2026-11-03 every scenery model is our own: built from numbers by Python sc
 fails to load. No third-party geometry or textures; dimensions from public figures and photos (used for measuring
 only). Street light, wind turbine (rotor turns), curve mirror, vending machine (front lit at night; generic drinks,
 no brands or logos), torii, stone lantern, bus stop, traffic cone.
+Re-modelled 2026-11-12 (all thirteen, the AUTOBAHN's five included): real construction (footings, base plates and
+anchor bolts, brackets, hinges, gutters, wedges, window reveals) and used surfaces. The surfaces are made in the
+scripts too: `prop_bake.py` describes each material as a procedural node graph (paint, galvanised steel, concrete,
+timber, granite, clay tiles… with dirt, rain runs, rust, moss, worn edges driven by baked occlusion and edge masks)
+and bakes them with Cycles into one atlas per model (base colour, occlusion / roughness / metalness, normal, glow),
+so every prop is one material = one draw call. What is written on them (price tags, timetable, the shrine's name
+board, number plates, warning signs) is painted by `paint.py` / `paint_autobahn.py` with PIL and the system's Noto
+Sans / Serif CJK fonts (invented names and numbers, no brands). No third-party geometry, textures or photos.
 The roadside's modules (2026-11-11; `frontend/tools/blender/roadside/<id>.py` → `node tools/blender-models.cjs roadside`
 → `frontend/public/models/roadside/*.glb`, laid along the road by `render/roadside.ts`): guardrail span (W-beam, splice,
 post), its end terminal, delineator, gutter grating, rockfall fence bay. Own geometry, no textures; dimensions from the
