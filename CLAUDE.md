@@ -365,19 +365,18 @@ pending. `docs/PLAN.md` holds the design.
   `shapes.ts` makes the shapes: a course's relief (`courseRelief`: road, start / finish beams, the land as contour
   lines; `box` fits it into its place; course select and loading screen), a glyph from a mask (the title's 峠:
   **an entrance only**, `data-cloud-once="<ms>"`, then the element gets `data-cloud-done` and the type takes over:
-  type is finer than grains at that size; the grain glyph is sized like the type, `GLYPH_EM`), a sky per time of day
-  (`skyScene`: night / rain / dawn, in units of its place's height; the conditions screen's selected card), a medal
+  type is finer than grains at that size; the grain glyph is sized like the type, `GLYPH_EM`), a medal
   (`medalShape`: disc, wreath, ribbon, the element's text as its emblem; beside the results card once the stamp has
-  landed). `Shape.fall` makes the points with an `along` travel (the rain): their grains ride with them, without lag.
-  In the markup: `data-cloud="course:<id>"`, `"sky:<time of day>"`, `"medal:<gold|silver|bronze>"` or `"glyph"`
+  landed). `Shape.fall` makes the points with an `along` travel: their grains ride with them, without lag (made for
+  the rain of the conditions screen's grain skies, which left with its cards on 11-12: no shape uses it now).
+  In the markup: `data-cloud="course:<id>"`, `"medal:<gold|silver|bronze>"` or `"glyph"`
   (`data-cloud-fill="0…1"`: how much of it is there, as on the loading screen; the rest is not there). While the
   grains can depict, the app has the class `cloud-on` and the page's own picture of the same thing steps back. The
   count follows the grains' own cost on the main thread (`BUDGET` 3.5 ms a frame; 32 000 in a picture cost 2–3 ms
   here, ~1 ms more while the water runs), never the frame time. While the game is in a race (`countdown` /
   `racing`; not `replay`, which goes on behind the results) the grains rest whatever screen the app is on. What is
   slow in the step: `Math.hypot`, sines (a table), anything per grain per frame that could be done for a quarter of
-  them in turn. Pictures of all of it: `~/.local/opt/quality/fluidshots.cjs`, `titlein.cjs`, `medalgrains.cjs`,
-  `cloudsky.cjs`.
+  them in turn. Pictures of all of it: `~/.local/opt/quality/fluidshots.cjs`, `titlein.cjs`, `medalgrains.cjs`.
   **Nothing else on the page may make a WebGL context while the game is on WebGPU**: it lost the game's device
   (`VK_ERROR_DEVICE_LOST`, 11-11). Whatever else draws uses the game's own API: the grains draw on
   `RenderHost.gpuDevice` (`cloudRenderGpu.ts`), or with WebGL 2 next to the WebGL 2 backend (`cloudRender.ts`); the
@@ -388,6 +387,13 @@ pending. `docs/PLAN.md` holds the design.
   place across the road, not from the centre line, and let a shot that travels be carried by the car's movement
   (eased towards a place ahead of it, it falls back by speed / rate: a roof and a bonnet filled the title).
   A camera ahead of the car stays out of its lamps' cones (their glow in the haze whitens the picture).
+  A menu can hold one shot while it is up: `Game.menuShot` (`'sky'`: behind and beside the car at a driver's
+  height, looking down the road; set and given back by the screen's effect). The time & weather screen
+  (`ConditionsScreen`, owner 11-12: the three cards with drawn skies looked dowdy) uses it: **the scene is the
+  picture of the condition**, so the screen is a list on the left (`.cond-list` / `.cond-row`, the row
+  `FocusFrame`) and the selected one's description and figures at the bottom left (`.cond-panel`: grip from the
+  course's surface × `WET_GRIP`, lamps, sight); nothing may cover the road and the sky there (on a phone the panel
+  stands above the two touch buttons). Pictures: `~/.local/opt/quality/condshots.cjs`.
 - Who plays (owner 11-11: accounts come from Authentik; nothing in the browser keeps an account any more). **Members**
   log in through the owner's Authentik (`AuthController`: authorization code + PKCE, the code is exchanged on the
   server; `config/authentik.php`, `AUTHENTIK_*` in `.env` only: never to the browser, a log or a commit). The account

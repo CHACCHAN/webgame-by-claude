@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { FREE, GONE, PLACED, bind, createCloud, project, rng, stepCloud, type Shape } from '../cloud';
 import { calm, createFluid, divergence, flowAt, project as settle, splat, stepFluid } from '../fluid';
-import { TONE, courseRelief, maskShape, medalShape, skyScene } from '../shapes';
+import { TONE, courseRelief, maskShape, medalShape } from '../shapes';
 
 const palette = new Float32Array(9 * 3).fill(1);
 const run = (c: ReturnType<typeof createCloud>, seconds: number) => {
@@ -278,39 +278,6 @@ describe('the shapes of grains', () => {
     // nothing in the mask: nothing bright
     const none = maskShape(new Uint8Array(w * h), w, h, 100, TONE.white, rng(9));
     expect([...none.lum!].every((l) => l === 0)).toBe(true);
-  });
-
-  it('a sky scene per time of day: stars and a moon, rain that falls, a sun over the clouds', () => {
-    const night = skyScene('night', 3.5, 8000, rng(1));
-    // the moon: a dense white patch right of the middle; nothing lit below the ridge except the town
-    let moon = 0;
-    for (let i = 0; i < 8000; i++) if (night.tones![i] === TONE.white && Math.hypot(night.points[i * 3] - 3.5 * 0.27, night.points[i * 3 + 1] + 0.16) < 0.26) moon++;
-    expect(moon).toBeGreaterThan(900);
-    expect(night.fall).toBeUndefined();
-
-    const rain = skyScene('rain', 3.5, 8000, rng(2));
-    expect(rain.fall!.y).toBeGreaterThan(1);
-    let falling = 0;
-    for (let i = 0; i < 8000; i++) if (rain.along![i] >= 0) falling++;
-    expect(falling % 6).toBe(0);
-    expect(falling).toBeGreaterThan(3500);
-    expect(falling).toBeLessThan(6800);
-
-    const dawn = skyScene('dawn', 3.5, 8000, rng(3));
-    let disc = 0;
-    // the sun's disc is cut off at the clouds: nothing of it below them
-    for (let i = 0; i < 8000; i++) {
-      // (the disc's grains are the ones at its own depth, inside its radius)
-      if (dawn.points[i * 3 + 2] !== Math.fround(0.3) || Math.hypot(dawn.points[i * 3], dawn.points[i * 3 + 1] - 0.1) > 0.331) continue;
-      expect(dawn.points[i * 3 + 1]).toBeLessThanOrEqual(0.061);
-      disc++;
-    }
-    expect(disc).toBeGreaterThan(1200);
-    for (const s of [night, rain, dawn]) for (let i = 0; i < 8000; i++) {
-      expect(Number.isFinite(s.points[i * 3] + s.points[i * 3 + 1] + s.points[i * 3 + 2])).toBe(true);
-      expect(s.lum![i]).toBeGreaterThanOrEqual(0);
-      expect(s.lum![i]).toBeLessThanOrEqual(1.01);
-    }
   });
 
   it('a medal: a disc on a ribbon, its emblem in the middle, in its own metal', () => {

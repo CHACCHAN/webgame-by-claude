@@ -258,7 +258,9 @@ export class Game {
   private topSpeed = 0;
   private driftT = 0;
   private bestSplits: number[] | null = null;
-  private cinematic = { shot: 0, t: 0, anchor: new THREE.Vector3(), anchorS: 0, pos: new THREE.Vector3(), side: 1, fore: 1, last: new THREE.Vector3() };
+  /** a shot a menu asks for and holds while it is up (the conditions screen: the road ahead under the sky) */
+  menuShot: 'sky' | null = null;
+  private cinematic = { shot: 0, t: 0, anchor: new THREE.Vector3(), anchorS: 0, pos: new THREE.Vector3(), side: 1, fore: 1, last: new THREE.Vector3(), look: new THREE.Vector3() };
   private garageCar: CarVisual | null = null;
   /** counts what was asked to be shown: a show that waited for a model goes ahead only if nothing came after it */
   private asked = 0;
@@ -1768,6 +1770,8 @@ export class Game {
   private cinematicCamera(dt: number, root: THREE.Object3D, trackS: number) {
     const c = this.cinematic;
     c.t += dt;
+    // (a menu holds a shot of its own: the turn of the four goes on underneath and is there again afterwards)
+    const shot = this.phase === 'attract' && this.menuShot === 'sky' ? 4 : c.shot;
     const car = root.position;
     const track = this.track;
     const shots = 4;
@@ -1785,10 +1789,10 @@ export class Game {
     // The shots that travel with the car are carried along by its own movement first, and eased only in what is
     // left: eased towards a place ahead of a fast car, the camera fell back by speed / rate (five metres at
     // 140 km/h) and the low front shot looked down on the bonnet from above it.
-    if (c.shot !== 1 && c.shot !== 3 && c.last.distanceToSquared(car) < 25) cam.position.add(_v.subVectors(car, c.last));
+    if (shot !== 1 && shot !== 3 && c.last.distanceToSquared(car) < 25) cam.position.add(_v.subVectors(car, c.last));
     c.last.copy(car);
     let fov = 45;
-    switch (c.shot) {
+    switch (shot) {
       case 0: {
         // a slow swing along the road, from ahead of the car (or behind it) to beside it, on the side of the car
         // where the road has room, and never nearer than five metres: a full orbit as wide as the road stood right
@@ -1835,6 +1839,23 @@ export class Game {
         cam.position.lerp(c.pos, 1 - Math.exp(-dt * 8));
         cam.lookAt(car.x, car.y + 0.5, car.z);
         fov = 50;
+        break;
+      }
+      case 4: {
+        // the conditions screen: behind the car and beside it, at a driver's height, looking down the road. What a
+        // time of day and its weather look like is the sky, the lamps and the road ahead, not a car from above.
+        track.pointAt(trackS, 0, _v);
+        track.pointAt(trackS, 1, _w);
+        const lateral = (car.x - _v.x) * (_w.x - _v.x) + (car.z - _v.z) * (_w.z - _v.z);
+        const s = trackS - 7.5;
+        // (on the car's left: the car stands right of the middle, clear of the screen's list)
+        track.pointAt(s, clamp(lateral - 2.6, -inside(s), inside(s)), c.pos);
+        c.pos.y = Math.max(c.pos.y, car.y) + 2.2;
+        cam.position.lerp(c.pos, 1 - Math.exp(-dt * 5));
+        track.pointAt(trackS + 38, 0, _v);
+        c.look.lerp(_w.set(_v.x, Math.max(_v.y, car.y - 1.5) + 2.4, _v.z), c.look.lengthSq() === 0 ? 1 : 1 - Math.exp(-dt * 2.5));
+        cam.lookAt(c.look);
+        fov = 56;
         break;
       }
       default: {

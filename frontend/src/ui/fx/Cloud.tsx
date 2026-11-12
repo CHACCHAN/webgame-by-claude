@@ -7,7 +7,7 @@ import { splat } from './fluid';
 import { createCloudRenderer } from './cloudRender';
 import { createCloudRendererGpu } from './cloudRenderGpu';
 import { gameHolder, renderHost } from '../GameCanvas';
-import { RELIEF_PITCH, RELIEF_SWAY, TONE, courseRelief, maskShape, medalShape, skyScene } from './shapes';
+import { RELIEF_PITCH, RELIEF_SWAY, TONE, courseRelief, maskShape, medalShape } from './shapes';
 
 /**
  * The grains of the menus. Owner 11-12: grains around every button and dust over the whole screen all the time
@@ -15,7 +15,7 @@ import { RELIEF_PITCH, RELIEF_SWAY, TONE, courseRelief, maskShape, medalShape, s
  * one thing: **they are the picture of a thing, in the few places where a picture belongs**, and they hang in water.
  *
  * - An element with `data-cloud` is depicted by grains where it stands: `course:<id>` (the course's relief),
- *   `glyph` (the element's own text), `sky:night|rain|dawn` (a time of day and its weather as a scene),
+ *   `glyph` (the element's own text),
  *   `medal:gold|silver|bronze` (a medal, the element's text as its emblem). `data-cloud-fill="0…1"`: how much of
  *   it is there. A thing condenses when it is asked for and comes apart like ink when it is let go.
  *   `data-cloud-once="<ms>"`: an entrance only: after that long in grains the element gets `data-cloud-done` and
@@ -128,9 +128,6 @@ export function Cloud() {
         const t = new Track(info.design);
         return courseRelief({ count: t.count, pos: t.pos, startS: t.startS, finishS: t.finishS, base: (x, z) => info.landform.base(x, z), water: info.landform.waterLevel }, n, rng(arg.length * 977 + 3));
       }
-      if (kind === 'sky' && (arg === 'night' || arg === 'rain' || arg === 'dawn')) {
-        return skyScene(arg, Number(key.split(':')[2]) || 3, n, rng(arg.length * 131 + 7));
-      }
       if (kind === 'glyph' || kind === 'medal') {
         // the element's own text in its own type, drawn into a mask
         const style = getComputedStyle(el);
@@ -158,12 +155,11 @@ export function Cloud() {
       }
       return null;
     };
-    const keyOf = (el: HTMLElement, r: DOMRect) => {
+    const keyOf = (el: HTMLElement) => {
       const asked = el.dataset.cloud ?? '';
       if (asked === 'glyph') return `glyph:${el.dataset.cloudText ?? el.textContent ?? ''}`;
       if (asked.startsWith('medal:')) return `${asked}:${el.dataset.cloudText ?? el.textContent ?? ''}`;
-      // (a sky is made for the shape of its place)
-      return asked.startsWith('sky:') ? `${asked}:${(r.width / r.height).toFixed(1)}` : asked;
+      return asked;
     };
     const findThing = () => {
       thing = null;
@@ -171,7 +167,7 @@ export function Cloud() {
       for (const el of overlay.querySelectorAll<HTMLElement>('[data-cloud]')) {
         const r = el.getBoundingClientRect();
         if (r.width < 8 || r.height < 8 || r.bottom < 0 || r.top > window.innerHeight || el.dataset.cloudDone !== undefined) continue;
-        thing = { el, key: keyOf(el, r) };
+        thing = { el, key: keyOf(el) };
         return;
       }
     };
@@ -280,12 +276,6 @@ export function Cloud() {
             p.pitch = RELIEF_PITCH + Math.sin(c.time * 0.17) * 0.04;
             p.yaw = RELIEF_SWAY * (Math.sin(c.time * 0.23) * 0.45 + (pointer ? (px / w - 0.5) * 1.1 : 0));
             p.z = -10;
-          } else if (shown.key.startsWith('sky')) {
-            // a small scene in its place: it turns a little with the pointer, enough to part the near from the far
-            p.scale = r.height * Number(shown.el.dataset.cloudScale ?? 1);
-            p.yaw = Math.sin(c.time * 0.21) * 0.1 + (pointer ? (px / w - 0.5) * 0.3 : 0);
-            p.pitch = Math.sin(c.time * 0.17 + 1) * 0.04;
-            p.z = 0;
           } else if (shown.key.startsWith('medal')) {
             // a medal on its ribbon: it swings a little and turns to the pointer, and the gleam goes round it
             p.scale = r.height * Number(shown.el.dataset.cloudScale ?? 1);

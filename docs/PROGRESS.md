@@ -561,6 +561,35 @@ by the main session. Live since the release of 11-11 (below): the owner saw the 
   grains, close to 3D particles, that depict things and emphasise things by themselves: "the part in charge of
   beautiful expression". The 2D layer (`ui/fx/`) is to be remade on that brief.
 
+### Time & weather: the scene is the picture (11-12, the owner's choice of layout A)
+The owner (11-12): the screen where the weather is chosen looks somehow dowdy; rework the layout and show it in
+pictures first, the decision follows. What was wrong (my reading): three cards across the middle hid the scene
+that changes with the choice, the camera looked down on the car's roof, and the cards mixed three kinds of
+picture (a drawn sky strip, a grain sky, text). Two layouts were shown next to the old one
+(`~/.local/opt/quality/cmp/cond2/conditions-proposals.jpg`); the owner: 「A案でよいと思います」.
+- **Layout A, now the screen** (`ConditionsScreen`, `.cond*` in `screens.css`): the three conditions as a list on
+  the left where the menus have theirs (row `FocusFrame`, ↑↓ and ←→), the selected one's description and three
+  readouts at the bottom left (grip in % from the course's surface × `WET_GRIP` with a bar, lamps on / off, sight
+  in three steps; amber for what the rain worsens). Nothing covers the road and the sky.
+- **The camera is held for the screen**: `Game.menuShot = 'sky'` (case 4 of `cinematicCamera`): 7.5 m behind the
+  car and 2.6 m to its left at 2.2 m, looking 38 m down the road, eased; the car stands right of the middle, clear
+  of the list. Set and given back by the screen's effect (checked: `null` again after Esc).
+- **Removed**: the cards and their drawn sky strips for this screen (the gearbox screen keeps its two cards), the
+  grain skies (`skyScene`, `data-cloud="sky:…"`, their test): a picture of the sky next to the sky itself had no
+  job left. `Shape.fall` (travelling points) stays in `cloud.ts` with its test, unused.
+- Phones (844×390): the list top left, the panel above the two touch buttons (it lay under them at first: seen on
+  the picture, moved). Standing phones show the rotate notice as before.
+- **Verified** (GPU, headless Chrome, RX 5700 XT; `~/.local/opt/quality/condshots.cjs` → `cmp/cond3`): night /
+  rain / dawn at 1280×720 and 1920×1080 on WebGPU, on WebGL 2 (`?webgl=1`), with UI motion off, on a phone
+  (touch, 844×390): all looked at; no page errors. vitest 185 (one fewer: the grain sky's). `tools/gpu-errors.cjs`:
+  0 on WebGPU and on WebGL 2; the race picture looked at. E2E on the isolated stack, the six tests that pass the
+  screen (time attack, ghost battle, rival battle, course select, car select, phone): 6 passed (14.1 min).
+  The shot on the other three courses (霧降 / 天狼 / アウトバーン, the three conditions each, 1280×720): looked at,
+  the car and the road ahead are in view on all of them, nothing in front of the camera.
+- **Not verified**: a real phone; other GPUs; the whole E2E suite.
+- Seen on these pictures and reported by the owner the same hour: the glow of the car's own headlights stands as a
+  ball above its bonnet (the next section).
+
 ### The grains reconsidered: pictures only, in water; no dust, no ornaments (11-12, the owner's word)
 The owner (11-12): the grains are too many; grains decorating the buttons and particles spread over the whole
 screen all the time are "しつこい"; reconsider all of it; a fluid-simulation-like expression would be beautiful; do
@@ -642,7 +671,7 @@ commit reverts it: the merge `b4e8db2`).
 - Not verified: other GPUs (the two-pass trees lean on equal depths between two shaders: a driver that rounds them
   differently leaves flat-lit pixels, by design no holes); the forest on phones (they start on `low`, which has none of it; a phone set to medium or
   higher: untested); frame rates on a weaker GPU than the RX 5700 XT; the whole E2E suite;
-  the vehicle thumbnails still show the old trees behind the cars (not re-rendered).
+  the vehicle thumbnails still show the old trees behind the cars (re-rendered since: `a62a10c`, all 18 looked at).
 
 ### The results' medal in grains (11-12)
 - `shapes.ts` `medalShape(gold | silver | bronze)`: a disc with a rim, fluting and an edge (it swings on its ribbon

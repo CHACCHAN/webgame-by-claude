@@ -124,7 +124,7 @@
 .cc-stats small, .cc-road small { display: block; font-family: var(--font-display); font-stretch: var(--w-norm); font-weight: 500; font-size: var(--fs-2xs); letter-spacing: 0.18em; color: var(--faint); }
 .cc-road { margin-top: 0.6rem; font-size: var(--fs-s); color: var(--text-2); border-left: 2px solid var(--line); padding-left: 0.5rem; }
 
-/* ------------------------------------------------------------- time & weather, gearbox */
+/* ------------------------------------------------------------- gearbox (cards), time & weather (list) */
 .choice-cards { position: absolute; left: 8vw; right: 8vw; top: calc(var(--bar) + 5.6rem); display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.4rem; }
 /* the car stays in view on the left (garage camera framing) */
 .choice-cards.two { left: auto; right: var(--gutter); width: min(30rem, 90vw); grid-template-columns: 1fr; }
@@ -136,22 +136,40 @@
 .ch-big { font-family: var(--font-display); font-stretch: var(--w-tight); font-weight: 700; font-size: 4.2rem; line-height: 1; color: var(--text); }
 .choice-card.active .ch-big { color: var(--cyan); text-shadow: var(--glow-cyan-text); }
 .ch-jp { font-size: var(--fs-xl); font-weight: 700; margin: 0.3rem 0 0.5rem; }
-/* the sky of the choice, as a strip across the card's head */
-.ch-sky { height: 7.5rem; margin: 0 -1.6rem 1.1rem; position: relative; overflow: hidden; }
-.ch-sky::after { content: ''; position: absolute; inset: 0; }
-.tod-night .ch-sky { background: linear-gradient(180deg, rgb(var(--c-void)), rgb(var(--c-sky-night))); }
-.tod-night .ch-sky::after { background: radial-gradient(1.5px 1.5px at 12% 30%, var(--text) 50%, transparent 51%), radial-gradient(1px 1px at 31% 62%, var(--text) 50%, transparent 51%), radial-gradient(1.5px 1.5px at 47% 22%, var(--text) 50%, transparent 51%),
-    radial-gradient(1px 1px at 63% 48%, var(--text) 50%, transparent 51%), radial-gradient(1.5px 1.5px at 78% 28%, var(--text) 50%, transparent 51%), radial-gradient(1px 1px at 90% 66%, var(--text) 50%, transparent 51%),
-    radial-gradient(0.9rem 0.9rem at 84% 44%, rgb(var(--c-text) / 0.9) 49%, transparent 51%); }
-.tod-rain .ch-sky { background: linear-gradient(180deg, rgb(var(--c-void)), rgb(var(--c-sky-rain))); }
-.tod-rain .ch-sky::after { inset: -100% 0 0 0; background: repeating-linear-gradient(104deg, transparent 0 13px, rgb(var(--c-text) / 0.3) 13px 14px); animation: ch-rain 0.5s linear infinite; animation-play-state: var(--kf-idle); }
-@keyframes ch-rain { to { transform: translateY(50%); } }
-.tod-dawn .ch-sky { background: linear-gradient(180deg, rgb(var(--c-sky-night)), rgb(var(--c-sky-dawn)) 62%, rgb(var(--c-amber) / 0.9)); }
-.tod-dawn .ch-sky::after { background: radial-gradient(3rem 1.6rem at 50% 100%, rgb(var(--c-white) / 0.9), rgb(var(--c-amber) / 0.5) 45%, transparent 75%); }
-.ch-data { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.4rem; margin: 1rem 0 0; }
-.ch-data div { border-left: 2px solid var(--line); padding-left: 0.5rem; }
-.ch-data dt { font-size: var(--fs-2xs); letter-spacing: 0.14em; color: var(--faint); }
-.ch-data dd { margin: 0; font-weight: 700; font-size: var(--fs-m); }
+
+/* time & weather: the scene itself is the picture (the camera looks down the road: Game.menuShot); a list on the
+   left where the menus have theirs, the selected one's figures at the bottom left */
+.cond { background: linear-gradient(90deg, rgb(var(--c-void) / 0.72) 0%, rgb(var(--c-void) / 0.28) 34%, transparent 58%), linear-gradient(0deg, rgb(var(--c-void) / 0.7) 0%, transparent 34%); }
+.cond-read { display: flex; gap: 2.2rem; margin: 0; }
+.cond-read > div { min-width: 7.5rem; }
+.cond-read dt { display: flex; align-items: baseline; gap: 0.6rem; font-size: var(--fs-xs); font-weight: 700; color: var(--text-2); padding-bottom: 0.35rem; border-bottom: 1px solid var(--line); }
+.cond-read dt small { font-family: var(--font-display); font-stretch: var(--w-cond); font-weight: 500; font-size: var(--fs-2xs); letter-spacing: 0.24em; color: var(--faint); }
+.cond-read dd { margin: 0.5rem 0 0; display: flex; align-items: baseline; gap: 0.35rem; min-height: 2.6rem; }
+.cond-read b { font-family: var(--font-display); font-stretch: var(--w-cond); font-weight: 600; font-size: var(--fs-2xl); line-height: 1; font-variant-numeric: tabular-nums; }
+.cond-read i { font-style: normal; font-family: var(--font-display); font-size: var(--fs-s); color: var(--muted); margin-right: 0.5rem; }
+.cond-read em { font-style: normal; font-weight: 700; font-size: var(--fs-l); }
+.cond-read .warn b, .cond-read .warn em { color: var(--amber); }
+.cond-read .off em { color: var(--muted); }
+.cr-bar { align-self: center; width: 5.5rem; height: 3px; background: rgb(var(--c-text) / 0.16); }
+.cr-bar span { display: block; height: 100%; background: var(--cyan); box-shadow: 0 0 0.5rem rgb(var(--c-cyan) / 0.7); }
+.warn .cr-bar span { background: var(--amber); box-shadow: 0 0 0.5rem rgb(var(--c-amber) / 0.7); }
+.cr-lamp { align-self: center; width: 0.7rem; height: 0.7rem; border-radius: 50%; margin-right: 0.3rem; background: var(--amber); box-shadow: 0 0 0.7rem rgb(var(--c-amber) / 0.9); }
+.off .cr-lamp { background: none; box-shadow: none; border: 1px solid var(--muted); }
+.cr-steps { align-self: center; display: flex; gap: 3px; margin-right: 0.4rem; }
+.cr-steps span { width: 0.9rem; height: 0.55rem; background: rgb(var(--c-text) / 0.16); }
+.cr-steps.s1 span:nth-child(-n+1), .cr-steps.s2 span:nth-child(-n+2), .cr-steps.s3 span:nth-child(-n+3) { background: var(--cyan); }
+.warn .cr-steps span:nth-child(-n+1) { background: var(--amber); }
+
+.cond-list { position: absolute; left: var(--gutter); top: calc(var(--bar) + 7.5rem); width: min(31rem, 88vw); }
+.cond-row { position: relative; display: grid; grid-template-columns: 2.6rem auto 1fr; align-items: baseline; column-gap: 0.4rem; padding: 0.95rem 1rem 0.95rem 1.4rem; cursor: pointer; transition: transform var(--t-snap) var(--e-snap); }
+.cond-row .cw-no { font-family: var(--font-display); font-stretch: var(--w-cond); font-weight: 500; font-size: var(--fs-s); letter-spacing: 0.1em; color: var(--faint); }
+.cond-row .cw-jp { font-size: var(--fs-2xl); font-weight: 700; letter-spacing: 0.06em; line-height: 1.15; color: rgb(var(--c-text) / 0.55); transition: color var(--t-fast); }
+.cond-row .cw-en { font-family: var(--font-display); font-stretch: var(--w-cond); font-weight: 600; font-size: var(--fs-s); letter-spacing: 0.26em; color: var(--muted); padding-left: 0.9rem; transition: color var(--t-fast); }
+.cond-row.active { transform: translateX(0.5rem); }
+.cond-row.active .cw-jp { color: var(--text); text-shadow: var(--glow-cyan-text); }
+.cond-row.active .cw-en, .cond-row.active .cw-no { color: var(--cyan); }
+.cond-panel { position: absolute; left: var(--gutter); bottom: calc(var(--bar) + 2.2rem); width: min(40rem, 90vw); padding-left: 1.4rem; border-left: 2px solid var(--cyan); animation: var(--kf-cut) var(--t-wipe) var(--e-out) both; }
+.cond-panel p { color: var(--text-2); font-size: var(--fs-m); line-height: 1.8; margin: 0 0 1.3rem; max-width: 34rem; }
 
 /* ------------------------------------------------------------- rivals (the other side: magenta) */
 .rival-cards { position: absolute; left: 8vw; right: 8vw; top: calc(var(--bar) + 5.2rem); display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.4rem; }
@@ -428,11 +446,22 @@
   .choice-card { --c: var(--cut-m); padding: 0 14px 12px; }
   .choice-cards.two .choice-card { padding-top: 10px; }
   .choice-card p { font-size: 12px; line-height: 1.55; min-height: 0; }
-  .ch-sky { height: 34px; margin: 0 -14px 8px; }
   .ch-jp { font-size: 19px; margin: 2px 0; }
+  .cond-list { top: calc(var(--bar) + 34px); width: min(330px, 46vw); }
+  .cond-row { padding: 7px 10px 7px 14px; grid-template-columns: 22px auto 1fr; }
+  .cond-row .cw-jp { font-size: 20px; }
+  .cond-row .cw-en, .cond-row .cw-no { font-size: 10px; }
+  /* (above the two touch buttons in the bottom left corner) */
+  .cond-panel { bottom: calc(var(--bar) + 66px); width: min(430px, 60vw); padding-left: 12px; }
+  .cond-panel p { font-size: 12px; line-height: 1.55; margin-bottom: 8px; }
+  .cond-read { gap: 18px; }
+  .cond-read > div { min-width: 0; }
+  .cond-read dt { font-size: 10px; padding-bottom: 3px; }
+  .cond-read dd { margin-top: 4px; min-height: 0; }
+  .cond-read b { font-size: 22px; }
+  .cond-read em { font-size: 15px; }
+  .cr-bar { width: 44px; }
   .ch-big { font-size: 38px; }
-  .ch-data { margin-top: 6px; }
-  .ch-data dd { font-size: 12px; }
   .rival-cards { left: 2vw; right: 2vw; top: calc(var(--bar) + 30px); gap: 10px; grid-template-columns: repeat(3, 1fr); overflow: visible; padding: 0; bottom: auto; }
   .rival-card { --c: var(--cut-m); }
   .rival-card .portrait { height: 84px; }
@@ -522,10 +551,7 @@
 .cloud-on .title h1 .kanji:not([data-cloud-done]) { color: transparent; text-shadow: none; transition: none; }
 .course-relief { position: absolute; left: 16vw; right: 16vw; top: calc(var(--bar) + 38.4rem); bottom: calc(var(--bar) + 0.4rem); pointer-events: none; }
 .cloud-on .course-relief::before, .cloud-on .cl-relief::before { content: ''; position: absolute; inset: -18% -6% -30%; background: radial-gradient(ellipse 50% 50% at 50% 50%, rgb(var(--c-void) / 0.8), rgb(var(--c-void) / 0.45) 55%, transparent 100%); }
-/* the selected time of day: its sky is the grains' (the drawn stars, rain and sun step back, the sky's colour stays) */
-.ch-sky::after { transition: opacity 0.5s; }
-.cloud-on .choice-card.active .ch-sky[data-cloud]::after { opacity: 0; }
-.cloud-on .choice-card.active .ch-sky[data-cloud] { background: linear-gradient(180deg, rgb(var(--c-void)), rgb(var(--c-void) / 0.6)); }
 @media (max-height: 640px), (max-width: 900px) { .course-relief { display: none; } }
 .cl-relief { position: absolute; right: 3vw; top: 14vh; width: 62vw; height: 62vh; pointer-events: none; }
 @media (max-height: 500px) { .cl-relief { top: 10vh; height: 66vh; } }
+

@@ -1,5 +1,5 @@
 // The grains of the menus: the simulation (no DOM: tested in Node).
-// The grains are there only to depict a thing: a course's relief, a glyph, a sky, a medal (shapes.ts). A thing is a
+// The grains are there only to depict a thing: a course's relief, a glyph, a medal (shapes.ts). A thing is a
 // shape: points in its own space, placed (turned, sized, moved) anew every frame. While nothing is shown there are
 // no grains at all, and a step costs nothing. A thing asked for condenses: its grains come into being around their
 // places in wisps and draw together; let go, it comes apart like ink in water and is gone within a second. The
@@ -29,7 +29,8 @@ export interface Shape {
   wave?: number;
   /**
    * Points that travel: every point with `along` ≥ 0 moves this far through the shape's own space in one cycle
-   * (`rate` cycles a second, `along` its phase), then starts again at the other end, dark at both ends (rain).
+   * (`rate` cycles a second, `along` its phase), then starts again at the other end, dark at both ends (made for
+   * rain; no shape has such points since the sky scenes left the conditions screen, 11-12).
    */
   fall?: { x: number; y: number; z: number; rate: number };
   /** where its picture is in its own space, as it is shown (centre x, centre y, width, height): what fits it into a box */

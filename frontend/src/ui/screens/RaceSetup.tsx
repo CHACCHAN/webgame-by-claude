@@ -17,7 +17,11 @@ export const CONDITIONS: { id: TimeOfDay; en: string; jp: string; desc: string; 
   { id: 'dawn', en: 'DAWN', jp: '夜明け', desc: '雲海の向こうから朝日が昇る。視界は良いが、街灯は消えている。', lamps: '消灯', sight: '良い' },
 ];
 
-/** Time of day and weather, chosen right after the course; the world behind the cards switches with the choice. */
+/**
+ * Time of day and weather, chosen right after the course. The world behind the list switches with the choice and is
+ * the picture of it (owner 11-12: the three cards with drawn skies over a car seen from above looked dowdy; layout
+ * A of the two shown): a list where the menus have theirs, the selected one's figures at the bottom, the scene free.
+ */
 export function ConditionsScreen() {
   const { go, afterLoad, mode } = useApp();
   const tod = useSettings((s) => s.timeOfDay);
@@ -45,27 +49,47 @@ export function ConditionsScreen() {
       go('courses');
     }
   });
+  // the camera goes behind the car and looks down the road: the scene itself is the picture of the condition
+  useEffect(() => {
+    const game = gameHolder.game;
+    if (!game) return;
+    game.menuShot = 'sky';
+    return () => { game.menuShot = null; };
+  }, []);
+  const sel = CONDITIONS[i];
+  const grip = Math.round(course.surface.grip * (sel.id === 'rain' ? WET_GRIP : 1) * 100);
   return (
-    <div className="screen setup">
+    <div className="screen cond">
       <ScreenHead jp="時間帯・天候" en="TIME & WEATHER" note={`${course.name}${mode === 'ghost' ? '・ゴーストバトル' : ''}`} />
-      <div className="choice-cards focus-box stagger">
+      <div className="cond-list focus-box stagger">
         {CONDITIONS.map((c, k) => (
-          <div key={c.id} className={`choice-card tod-${c.id} ${k === i ? 'active' : ''}`} {...hoverSelect(() => setI(k))} onClick={() => { setI(k); choose(k); }}>
-            {/* the selected one's sky is a scene of grains (ui/fx/Cloud.tsx) */}
-            <div className="ch-sky" {...(k === i ? { 'data-cloud': `sky:${c.id}` } : {})} />
-            <div className="ch-en">{c.en}</div>
-            <div className="ch-jp">{c.jp}</div>
-            <p>{c.desc}</p>
-            <dl className="ch-data">
-              <div><dt>グリップ</dt><dd>{Math.round(course.surface.grip * (c.id === 'rain' ? WET_GRIP : 1) * 100)}%</dd></div>
-              <div><dt>街灯</dt><dd>{c.lamps}</dd></div>
-              <div><dt>視界</dt><dd>{c.sight}</dd></div>
-            </dl>
+          <div key={c.id} className={`cond-row ${k === i ? 'active' : ''}`} {...hoverSelect(() => setI(k))} onClick={() => { setI(k); choose(k); }}>
+            <span className="cw-no">0{k + 1}</span>
+            <span className="cw-jp">{c.jp}</span>
+            <span className="cw-en">{c.en}</span>
           </div>
         ))}
-        <FocusFrame on=".choice-card.active" deps={[i]} pad={5} />
+        <FocusFrame on=".cond-row.active" deps={[i]} kind="row" />
       </div>
-      <Hint items={[['lr', '選択'], ['ok', '決定']]} />
+      {/* what the selected one means for the drive (the others' figures are a key away: the scene changes with them) */}
+      <div className="cond-panel" key={i}>
+        <p>{sel.desc}</p>
+        <dl className="cond-read">
+          <div className={sel.id === 'rain' ? 'warn' : ''}>
+            <dt>グリップ<small>GRIP</small></dt>
+            <dd><b>{grip}</b><i>%</i><span className="cr-bar"><span style={{ width: `${Math.min(100, grip / 1.1)}%` }} /></span></dd>
+          </div>
+          <div className={sel.lamps === '消灯' ? 'off' : ''}>
+            <dt>街灯<small>LAMPS</small></dt>
+            <dd><span className="cr-lamp" /><em>{sel.lamps}</em></dd>
+          </div>
+          <div className={sel.id === 'rain' ? 'warn' : ''}>
+            <dt>視界<small>SIGHT</small></dt>
+            <dd><span className={`cr-steps s${sel.id === 'dawn' ? 3 : sel.id === 'night' ? 2 : 1}`}><span /><span /><span /></span><em>{sel.sight}</em></dd>
+          </div>
+        </dl>
+      </div>
+      <Hint items={[['ud', '選択'], ['ok', '決定']]} />
     </div>
   );
 }
