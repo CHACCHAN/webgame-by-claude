@@ -473,7 +473,9 @@ export class Game {
     this.dryMaterials = {};
     this.vending = vendingSpot.on ? vendingSpot.position.clone() : null;
     this.showWorld();
-    await this.yieldFrame(0.92, 'シェーダーを準備中');
+    // (no frame between the world going into the scene and the compile that holds the picture: a frame there built
+    // every shader of the new world at once, on the main thread, and the compile then built them a second time)
+    this.emit({ type: 'loading', progress: 0.92, label: 'シェーダーを準備中' });
     await this.precompile(true);
     vegetationHold(false);
     await this.yieldFrame(1, '準備完了');
