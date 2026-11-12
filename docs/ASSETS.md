@@ -86,13 +86,13 @@ owner puts the zips into `~/Downloads` (2026-11-02).
 
 | Game id | Model | Author | Source | Licence | Status |
 |---|---|---|---|---|---|
-| `shiden` | Mazda RX-7 FD3S (late Type RS) | **own** (Blender, `tools/blender/cars/shiden*.py`) | — | own | **in game** since 2026-11-08 (57 k tris, 0.33 MB); fitted to 10 Commons photos (measuring only, `fitdata/shiden/ref/list.json`) |
+| `shiden` | Mazda RX-7 FD3S (late Type RS) | **own** (Blender, `tools/blender/cars/shiden*.py`) | — | own | **in game** since 2026-11-08 (57 k tris, 0.33 MB); rebuilt 2026-11-12 with `car_common.py` (71 k tris, 0.54 MB, 8 materials: tyres, brakes, underside, two atlases, baked sky share); fitted to 10 Commons photos (measuring only, `fitdata/shiden/ref/list.json`) |
 | `s15` | Nissan Silvia S15 spec-R | **own** (Blender, `tools/blender/cars/s15*.py`) | — | own | **in game** since 2026-11-10 (48 k tris, 0.29 MB); fitted to 7 Commons photos (measuring only, `fitdata/s15/ref/list.json`) |
 | `raijin` | Subaru Impreza WRX STI (GDB-C, 2004) | **own** (Blender, `tools/blender/cars/raijin*.py`) | — | own | **in game** since 2026-11-10 (49 k tris, 0.44 MB); fitted to 5 of the 20 listed Commons photos (measuring only, `fitdata/raijin/ref/list.json`) |
-| `r34` | Nissan Skyline GT-R (BNR34, V-spec look) | **own** (Blender, `tools/blender/cars/r34*.py`) | — | own | **in game** since 2026-11-10 (57 k tris, 0.56 MB); fitted to 6 of the 39 listed Commons photos (measuring only, `fitdata/r34/ref/list.json`) |
+| `r34` | Nissan Skyline GT-R (BNR34, V-spec look) | **own** (Blender, `tools/blender/cars/r34*.py`) | — | own | **in game** since 2026-11-10 (57 k tris, 0.56 MB); rebuilt 2026-11-12 with `car_common.py` (75 k tris, 0.79 MB, 8 materials: tyres, brakes, underside, two atlases, baked sky share); fitted to 6 of the 39 listed Commons photos (measuring only, `fitdata/r34/ref/list.json`) |
 | `cybertruck` | Tesla Cybertruck (Cyberbeast) | **own** (Blender, `tools/blender/cars/cybertruck*.py`) | — | own | **in game** since 2026-11-10 (39 k tris, 0.27 MB); fitted to 6 of the 10 listed Commons photos (measuring only, `fitdata/cybertruck/ref/list.json`) |
 | `supra` | Toyota Supra RZ (JZA80, late, factory wing) | **own** (Blender, `tools/blender/cars/supra*.py`) | — | own | **in game** since 2026-11-10 (73 k tris, 0.47 MB); fitted to 7 Commons photos (measuring only, `fitdata/supra/photos.json`) |
-| `hayate` | Toyota Sprinter Trueno AE86 GT-APEX (late) | **own** (Blender, `tools/blender/cars/hayate*.py`) | — | own | **in game** since 2026-11-07 (42 k tris, 0.27 MB); fitted to 6 Commons photos (measuring only, `fitdata/hayate/ref/list.json`) |
+| `hayate` | Toyota Sprinter Trueno AE86 GT-APEX (late) | **own** (Blender, `tools/blender/cars/hayate*.py`) | — | own | **in game** since 2026-11-07 (42 k tris, 0.27 MB); rebuilt 2026-11-12 with `car_common.py` (51 k tris, 0.51 MB, 9 materials: tyres, brakes, underside, two atlases, baked sky share, sill steps, wiper, antenna, plate and reverse lamps); fitted to 6 Commons photos (measuring only, `fitdata/hayate/ref/list.json`) |
 
 Notes on the replaced Sketchfab models (none is in the game any more):
 

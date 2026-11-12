@@ -11,6 +11,8 @@ import math
 import bmesh
 import numpy as np
 
+import car_common as CC
+import hayate_kit as HK
 import r34_kit as K
 
 TRACK_F, TRACK_R = 1.48, 1.49
@@ -146,21 +148,32 @@ def _mirror(part):
 
 
 def build(mats, root, tex):
-    out = []
+    """tyre, disc and caliper come from the shared kit (car_common: a profiled 245/40R18 with its own texture set,
+    scored discs, gold four-pot calipers); the rim is this car's own"""
+    out, made = [], []
+    info = None
     for name, x, z in (('fl', TRACK_F / 2, WHEELBASE / 2), ('fr', -TRACK_F / 2, WHEELBASE / 2),
                        ('rl', TRACK_R / 2, -WHEELBASE / 2), ('rr', -TRACK_R / 2, -WHEELBASE / 2)):
         front = name[0] == 'f'
         pivot = K.empty(f'wheel_{name}', (x, R_TYRE, z), parent=root)
         spin = K.empty(f'spin_{name}', (0, 0, 0), parent=pivot)
         w = K.Part(f'wheel_{name}_turning')
-        tyre(w)
         rim(w)
-        disc(w, 0.162 if front else 0.150)
-        c = K.Part(f'caliper_{name}')
-        caliper(c, 0.162 if front else 0.150, front)
+        t = HK.Mesh(f'tyre_{name}')
+        # the bead sits inside the rim's lip (its crest at r 0.246 stays proud of the sidewall, as before)
+        info = CC.tyre(t, R_TYRE, 0.228, 0.245, 0.200, grooves=4)
+        rd = 0.162 if front else 0.150
+        thick = 0.030 if front else 0.022
+        CC.brake_disc(t, rd, 0.010, thick=thick, r_hat=0.088, hat=0.024, vented=True)
+        c = HK.Mesh(f'caliper_{name}')
+        CC.caliper(c, rd, 0.010, thick=thick, kind='4pot', angle=-73.0, colour='cal_gold')
         if x < 0:
             _mirror(w)
-            _mirror(c)
+            t, c = CC.turned(t), c.mirrored()
         out.append(('wheels', w.build(mats, parent=spin, merge_dist=0)))
-        out.append(('calipers', c.build(mats, parent=pivot, merge_dist=0)))
+        made.append(('wheels', t, spin))
+        made.append(('calipers', c, pivot))
+    mats['tire'] = CC.tyre_material(info, 'NOCTURNE', '245/40R18 93W')
+    for kind, mesh, parent in made:
+        out.append((kind, CC.build(mesh, parent, mats)))
     return out
