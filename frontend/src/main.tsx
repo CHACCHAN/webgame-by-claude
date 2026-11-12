@@ -9,6 +9,7 @@ import './ui/theme/tokens.css';
 import './ui/theme/base.css';
 import './ui/theme/screens.css';
 import './ui/theme/picker.css';
+import './ui/theme/about.css';
 import './ui/theme/online.css';
 import './ui/theme/hud.css';
 import { App } from './App';

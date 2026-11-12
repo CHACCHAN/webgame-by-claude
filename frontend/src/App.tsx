@@ -6,6 +6,7 @@ import { BootScreen, ControlsScreen, CourseLoadingScreen, CoursesScreen, ModesSc
 import { GarageScreen } from './ui/garage/GarageScreen';
 import { LeaderboardScreen } from './ui/screens/Leaderboard';
 import { SettingsScreen } from './ui/screens/Settings';
+import { AboutScreen } from './ui/screens/About';
 import { ReplayOverlay, ResultsScreen } from './ui/screens/Results';
 import { Hud, PauseMenu } from './ui/hud/Hud';
 import { OnlineLobbyScreen, OnlineResultsScreen, OnlineRoomScreen } from './ui/screens/Online';
@@ -28,7 +29,7 @@ declare global {
 window.__app = useApp;
 
 /** the menu screens: the shell (trail, back, fullscreen) stands around them */
-const SHELLED: Screen[] = ['modes', 'courses', 'conditions', 'garage', 'transmission', 'cars', 'rivals', 'leaderboard', 'settings', 'controls', 'online', 'onlineRoom', 'onlineResults'];
+const SHELLED: Screen[] = ['modes', 'courses', 'conditions', 'garage', 'transmission', 'cars', 'rivals', 'leaderboard', 'settings', 'controls', 'about', 'online', 'onlineRoom', 'onlineResults'];
 
 export function App() {
   const screen = useApp((s) => s.screen);
@@ -119,6 +120,7 @@ export function App() {
         {screen === 'leaderboard' && <LeaderboardScreen />}
         {screen === 'settings' && <SettingsScreen />}
         {screen === 'controls' && <ControlsScreen />}
+        {screen === 'about' && <AboutScreen />}
         {screen === 'online' && <OnlineLobbyScreen />}
         {screen === 'onlineRoom' && <OnlineRoomScreen />}
         {screen === 'onlineResults' && <OnlineResultsScreen />}

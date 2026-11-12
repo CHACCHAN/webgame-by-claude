@@ -16,7 +16,7 @@ export function motionOn() {
 /** How deep in the menus a screen is: a change to a deeper one wipes left to right, back the other way. */
 const DEPTH: Record<Screen, number> = {
   boot: 0, title: 1, modes: 2, courses: 3, loading: 3.5, conditions: 4, leaderboard: 4.5, garage: 5, transmission: 6, rivals: 7,
-  cars: 3, settings: 3, controls: 3, online: 3, onlineRoom: 4, race: 8, results: 9, replay: 10, onlineResults: 9,
+  cars: 3, settings: 3, controls: 3, about: 3, online: 3, onlineRoom: 4, race: 8, results: 9, replay: 10, onlineResults: 9,
 };
 
 /** how deep in the menus a screen is (the grains are swept the way the wipe goes: ui/fx/Grains.tsx) */

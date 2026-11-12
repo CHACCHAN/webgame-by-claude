@@ -5,7 +5,7 @@ import type { GamePhase, RaceMode, RaceResult } from '../game/Game';
 import type { RenderBackend } from '../game/render/RenderHost';
 import type { FallbackReason } from '../game/render/backendChoice';
 
-export type Screen = 'boot' | 'title' | 'modes' | 'conditions' | 'garage' | 'transmission' | 'cars' | 'rivals' | 'leaderboard' | 'settings' | 'controls' | 'race' | 'results' | 'replay' | 'courses' | 'loading' | 'online' | 'onlineRoom' | 'onlineResults';
+export type Screen = 'boot' | 'title' | 'modes' | 'about' | 'conditions' | 'garage' | 'transmission' | 'cars' | 'rivals' | 'leaderboard' | 'settings' | 'controls' | 'race' | 'results' | 'replay' | 'courses' | 'loading' | 'online' | 'onlineRoom' | 'onlineResults';
 
 export interface GhostChoice {
   runId: number | 'local';
