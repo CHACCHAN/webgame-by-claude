@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import { isTouchDevice } from '../touch';
 import { COURSES, type CourseId } from '../../game/track/courses';
 import { Track } from '../../game/track/Track';
-import { bind, createCloud, resizeCloud, rng, stepCloud, type Cloud as Field, type Shape } from './cloud';
+import { FOCAL, bind, createCloud, resizeCloud, rng, stepCloud, type Cloud as Field, type Shape } from './cloud';
 import { splat } from './fluid';
 import { createCloudRenderer } from './cloudRender';
 import { createCloudRendererGpu } from './cloudRenderGpu';
@@ -264,6 +264,9 @@ export function Cloud() {
           const p = c.place;
           const fill = shown.el.dataset.cloudFill;
           p.fill = fill === undefined ? 1 : Math.max(0, Math.min(1, Number(fill)));
+          // (where the page says the car of its film is on the course: `data-cloud-at`)
+          const at = shown.el.dataset.cloudAt;
+          p.at = at === undefined ? undefined : Number(at);
           p.x = r.left - left + r.width / 2;
           p.y = r.top - top + r.height / 2;
           if (shown.key.startsWith('course')) {
@@ -276,6 +279,32 @@ export function Cloud() {
             p.pitch = RELIEF_PITCH + Math.sin(c.time * 0.17) * 0.04;
             p.yaw = RELIEF_SWAY * (Math.sin(c.time * 0.23) * 0.45 + (pointer ? (px / w - 0.5) * 1.1 : 0));
             p.z = -10;
+            // the labels the page hangs on it (start, finish, the car of its film) go where those places are on
+            // the screen
+            const marks = c.shape?.marks;
+            if (marks) {
+              const cyw = Math.cos(p.yaw), syw = Math.sin(p.yaw), cp = Math.cos(p.pitch), sp = Math.sin(p.pitch), f = h * FOCAL;
+              const path = c.shape?.path;
+              for (const tag of shown.el.querySelectorAll<HTMLElement>('[data-cloud-mark]')) {
+                let mx: number, my: number, mz: number;
+                if (tag.dataset.cloudMark === 'at') {
+                  // the car's own mark: on the road where the page's film has it
+                  if (!path || p.at === undefined) continue;
+                  const j = Math.max(0, Math.min(0.9999, p.at)) * (path.length / 3 - 1), j0 = Math.floor(j) * 3, r = j - Math.floor(j);
+                  mx = path[j0] + (path[j0 + 3] - path[j0]) * r;
+                  my = path[j0 + 1] + (path[j0 + 4] - path[j0 + 1]) * r;
+                  mz = path[j0 + 2] + (path[j0 + 5] - path[j0 + 2]) * r;
+                } else {
+                  const m = Number(tag.dataset.cloudMark) * 3;
+                  mx = marks[m];
+                  my = marks[m + 1];
+                  mz = marks[m + 2];
+                }
+                const x = (cyw * mx + syw * mz) * p.scale + p.x, y = (sp * syw * mx + cp * my - sp * cyw * mz) * p.scale + p.y;
+                const z = (-cp * syw * mx + sp * my + cp * cyw * mz) * p.scale + p.z, k = f / (f + z);
+                tag.style.transform = `translate(${(w / 2 + (x - w / 2) * k - (r.left - left)).toFixed(1)}px, ${(h / 2 + (y - h / 2) * k - (r.top - top)).toFixed(1)}px)`;
+              }
+            }
           } else if (shown.key.startsWith('medal')) {
             // a medal on its ribbon: it swings a little and turns to the pointer, and the gleam goes round it
             p.scale = r.height * Number(shown.el.dataset.cloudScale ?? 1);

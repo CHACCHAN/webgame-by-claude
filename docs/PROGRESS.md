@@ -1918,3 +1918,42 @@ a rock shed. Standing still it keeps the old long-term level (−25.2 against �
 - Not verified: **how it sounds** (nobody has listened: the WAVs went to the owner), the roof in the browser (the
   20 s drive passed none), bike / train / cockroach in the browser, phones' cost, the fallback without AudioWorklet,
   the level in the full mix against engine and music.
+
+## Release 2.1 (11-12): course select with a film, About and the desk, paint online
+
+**Course select.** The owner found the cards with a grain relief under them "added on afterwards". Two layouts
+went to them as pictures (A: the relief as the stage, B: the course art); then they proposed themselves: a
+recording of play whose car's progress drives the grains. My first build put film, relief, speed, clock and a
+height profile side by side; the owner's correction: **the grains go over the film**, and **not too much
+information: it tires**. Adopted (their word: 「その提案を採用」, which I read as this layout together with my
+two proposals: each course at the time of day that suits it, one fixed car):
+- `CoursesScreen`: list on the left, the selected course's words and three figures bottom left, on the right a
+  film of a run (the game's AI driver in the hayate) with the course's relief of grains over the film's sky. The
+  page reads the film's clock every frame, looks up the car's share of the course in the film's track and writes
+  `data-cloud-at`; the grains light the road behind the car, keep the road ahead dark, a ring rides where it is
+  (`cloud.ts` `Placement.at`, `Shape.part` / `path`; `Cloud.tsx` `data-cloud-mark="at"`).
+- Films: `tools/course-clip.cjs` (frame by frame on the GPU, the game stepped by hand) + `course-clip-encode.sh`
+  (720p, CRF 34): oboro night 12.4 MB / 114 s, kirifuri dawn 11.6 MB / 97 s, tenrou night 7.2 MB / 84 s, autobahn
+  dawn 22.7 MB / 175 s; 52 MB in all, fetched only on this screen, one at a time. nginx: `/video/` (a missing film
+  is a 404).
+- Without grains (motion off, a software renderer) the drawn line stands in; with motion off the film stands on
+  its still; without a film the course's art and the relief's own running light.
+- The old cards, the two other proposals, the height profile and the scale bar are gone.
+
+**About and the desk** (agent): main menu このゲームについて: overview, maker (configuration only), technology,
+credits, and a desk: questions answered by a language model through the server and the rivals' gateway, reports
+(bug / request / other) filed by the model's tool call or by a plain form into `reports.jsonl` in the `desk`
+volume; `php artisan desk:reports` reads and closes them. CLAUDE.md "About and the desk".
+
+**Paint online** (agent): the online vehicle select offers the paints like single player's (same component, the
+`colors` switch is gone); `room_players.color` (migration), told to the others, drawn in the waiting room and the
+race; the seat's colour stays the member's mark; a change of paint alone keeps `ready`.
+
+- Verified: tsc; vitest 210 (new: the car's light on a relief, paints, desk client); backend tests on the
+  combined tree 62 passed (724 assertions); E2E on an isolated stack, software rendering: 9 passed before the
+  paint merge (About ×3, menus, a whole time attack with submission, ghost battle, rival battle, course select,
+  phone) and again after it the online waiting room, course select, car select and phone (see below); pictures
+  on the GPU looked at: course select at 1920×1080, 1280×720, 844×390 (phone), 768×1024 (portrait), motion
+  off, three courses at mid-film, a film missing; the stack serves the film (200, whole length) and answers 404
+  for a missing one. The agents' own checks are in their reports (About: 42 pictures on the GPU with the API
+  played by the script; paint: two players on the GPU against an isolated stack, both sides).

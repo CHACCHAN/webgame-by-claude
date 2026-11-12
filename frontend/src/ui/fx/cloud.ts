@@ -35,6 +35,15 @@ export interface Shape {
   fall?: { x: number; y: number; z: number; rate: number };
   /** where its picture is in its own space, as it is shown (centre x, centre y, width, height): what fits it into a box */
   box?: [number, number, number, number];
+  /** places in its own space that the page hangs labels on (x, y, z each: `data-cloud-mark="<index>"`, Cloud.tsx) */
+  marks?: Float32Array;
+  /**
+   * What a point belongs to when something travels through the shape (`Placement.at`, a car on a course's relief):
+   * 1 = the way itself, 2 = what lies beside it, 0 = the rest. With it, `along` is where on the way the point is.
+   */
+  part?: Uint8Array;
+  /** the way through the shape as places in its own space (x, y, z each, evenly from `along` 0 to 1) */
+  path?: Float32Array;
 }
 
 /** Where a shape stands: its own space turned (yaw about its y, then pitch about x), sized and moved to the screen. */
@@ -47,6 +56,12 @@ export interface Placement {
   pitch: number;
   /** 0–1: this share of the grains is there (a picture that fills up) */
   fill: number;
+  /**
+   * 0–1: where something is on the shape's way just now (a car on the course, told by the page from a film of the
+   * run). The way behind it is lit, the way ahead waits dark, the land beside it is lit as it passes; the shape's own
+   * running light rests. Not given: the running light.
+   */
+  at?: number;
 }
 
 /** a grain is not there, on its way to its place or in it, or let go and fading */
@@ -176,7 +191,7 @@ export function stepCloud(c: Cloud, dt: number) {
   }
   const m0 = mat[0], m1 = mat[1], m2 = mat[2], m3 = mat[3], m4 = mat[4], m5 = mat[5], m6 = mat[6], m7 = mat[7], m8 = mat[8];
   // (how fast a travelling point moves on the screen: its grain is carried along, not dragged behind)
-  const fall = shape?.fall, along = shape?.along;
+  const fall = shape?.fall, along = shape?.along, part = shape?.part, at = place.at;
   const fvx = fall ? (m0 * fall.x + m1 * fall.y + m2 * fall.z) * fall.rate : 0;
   const fvy = fall ? (m3 * fall.x + m4 * fall.y + m5 * fall.z) * fall.rate : 0;
   const fvz = fall ? (m6 * fall.x + m7 * fall.y + m8 * fall.z) * fall.rate : 0;
@@ -269,7 +284,13 @@ export function stepCloud(c: Cloud, dt: number) {
       }
       if (turn) {
         let l = (sh.lum ? sh.lum[k] : 1) * sh.gain;
-        if (along && sh.wave) {
+        if (along && at !== undefined && part) {
+          // something travels the way (a car): hot where it is, the way it has come lit, the way ahead waiting,
+          // the land beside it in its light for a moment
+          const d = at - along[k], w = part[k];
+          if (w === 1) l *= d >= 0 ? 0.95 + 2.1 * Math.exp(-d * 70) : 0.2 + 1.7 * Math.exp(d * 110);
+          else l *= w === 2 ? 0.26 + 1.3 * Math.exp(-d * d * 1400) : 0.26;
+        } else if (along && sh.wave) {
           // the running light: a crest that goes round, twice the brightness where it is
           const u = frac(along[k] - t * sh.wave);
           l *= 0.62 + 1.1 * Math.exp(-u * 9) + 0.5 * Math.exp(-(1 - u) * 28);

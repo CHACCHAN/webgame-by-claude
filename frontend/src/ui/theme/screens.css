@@ -100,29 +100,12 @@
 
 /* ------------------------------------------------------------- course select */
 .courses, .setup, .rivals { background: linear-gradient(180deg, rgb(var(--c-void) / 0.62) 0%, rgb(var(--c-void) / 0.3) 40%, rgb(var(--c-void) / 0.8) 100%); }
-.course-cards { position: absolute; left: var(--gutter); right: var(--gutter); top: calc(var(--bar) + 5.2rem); display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 1.1rem; }
-.course-card { --c: var(--cut-l); position: relative; overflow: hidden; cursor: pointer; opacity: 0.74; transition: opacity var(--t-fast), transform var(--t-fast) var(--e-snap); }
-.course-card.active { --edge: var(--line-hot); opacity: 1; }
-.cc-art { position: relative; height: 10.5rem; background: rgb(var(--c-sky-night)) center / cover no-repeat; }
-.cc-art::after { content: ''; position: absolute; inset: 0; background: linear-gradient(180deg, rgb(var(--c-void) / 0.3), rgb(var(--c-void) / 0.82)), var(--tex-scan); }
 .course-map { position: absolute; inset: 6px; width: calc(100% - 12px); height: calc(100% - 12px); z-index: 1; }
 .cm-shadow { fill: none; stroke: rgb(var(--c-void) / 0.8); stroke-width: 7; stroke-linecap: round; stroke-linejoin: round; }
 .cm-line { fill: none; stroke: var(--text); stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 1; }
-.course-card.active .cm-line { stroke: var(--cyan); filter: drop-shadow(0 0 4px rgb(var(--c-cyan) / 0.9)); animation: cm-draw 0.9s var(--e-inout) both; }
-.motion-off .course-card.active .cm-line { animation: none; }
 @keyframes cm-draw { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
 .cm-start { fill: var(--green); }
 .cm-end { fill: var(--text); }
-.cc-body { padding: 1rem 1.1rem 1.2rem; }
-.cc-en { font-family: var(--font-display); font-stretch: var(--w-cond); font-weight: 600; letter-spacing: 0.24em; font-size: var(--fs-xs); color: var(--cyan); }
-.cc-name { font-family: var(--font-name); font-weight: 800; font-size: clamp(1.4rem, 2vw, 2.1rem); line-height: 1.25; white-space: nowrap; }
-.cc-tag { color: var(--text-2); font-size: var(--fs-s); font-weight: 700; margin-top: 0.1rem; }
-.course-card p { color: var(--muted); font-size: var(--fs-s); line-height: 1.7; min-height: 5.6rem; margin: 0.6rem 0; }
-.cc-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.4rem; }
-.cc-stats span { font-family: var(--font-display); font-stretch: var(--w-cond); font-weight: 600; font-variant-numeric: tabular-nums; font-size: clamp(0.9rem, 1.1vw, 1.15rem); border-left: 2px solid var(--line); padding-left: 0.5rem; white-space: nowrap; }
-.cc-stats span.has-best { border-left-color: var(--cyan); color: var(--cyan); }
-.cc-stats small, .cc-road small { display: block; font-family: var(--font-display); font-stretch: var(--w-norm); font-weight: 500; font-size: var(--fs-2xs); letter-spacing: 0.18em; color: var(--faint); }
-.cc-road { margin-top: 0.6rem; font-size: var(--fs-s); color: var(--text-2); border-left: 2px solid var(--line); padding-left: 0.5rem; }
 
 /* ------------------------------------------------------------- gearbox (cards), time & weather (list) */
 .choice-cards { position: absolute; left: 8vw; right: 8vw; top: calc(var(--bar) + 5.6rem); display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.4rem; }
@@ -393,13 +376,10 @@
 
 /* ------------------------------------------------------------- narrow and short windows */
 @media (max-width: 1100px) and (min-height: 501px) {
-  .course-cards { grid-auto-flow: row; grid-template-columns: repeat(2, 1fr); grid-auto-rows: max-content; overflow-y: auto; bottom: calc(var(--bar) + 0.5rem); padding: 0.5rem; }
-  .course-card p { min-height: 0; }
   .drift-guide ol { grid-template-columns: 1fr 1fr; }
   .medal { position: static; display: inline-block; margin-top: 0.3rem; }
 }
 @media (max-width: 760px) {
-  .course-cards, .rival-cards, .choice-cards, .choice-cards.two { left: 4vw; right: 4vw; width: auto; grid-auto-flow: row; grid-template-columns: 1fr; grid-auto-rows: max-content; overflow-y: auto; bottom: calc(var(--bar) + 0.5rem); padding: 0.5rem; }
   .hide-sm { display: none; }
   .arrow.right { right: var(--gutter); top: auto; bottom: calc(var(--bar) + 1rem); }
   .arrow.left { top: auto; bottom: calc(var(--bar) + 1rem); }
@@ -432,16 +412,6 @@
   .menu-list li.group-start::before { display: none; }
   .menu-desc { display: none; }
   /* course cards: art, name and figures only */
-  .course-cards { left: 2vw; right: 2vw; top: calc(var(--bar) + 30px); bottom: auto; gap: 10px; grid-auto-flow: column; grid-template-columns: none; overflow: visible; padding: 0; }
-  .course-card { --c: var(--cut-m); }
-  .cc-art { height: 72px; }
-  .cc-body { padding: 8px 10px 10px; }
-  .cc-name { font-size: 19px; }
-  .cc-tag { font-size: 10.5px; }
-  .cc-stats { gap: 4px; margin-top: 6px; }
-  .cc-stats span { padding-left: 5px; font-size: 13px; }
-  .course-card p { display: none; }
-  .cc-road { margin-top: 6px; font-size: 11px; }
   /* time & weather, gearbox, rivals */
   .choice-cards, .choice-cards.two { left: 2vw; right: 2vw; top: calc(var(--bar) + 30px); grid-template-columns: repeat(3, 1fr); gap: 10px; width: auto; overflow: visible; padding: 0; bottom: auto; }
   .choice-cards.two { left: auto; width: min(560px, 64vw); grid-template-columns: 1fr 1fr; }
@@ -547,13 +517,67 @@
   .voice-status { bottom: calc(var(--bar) + 0.3rem); }
 }
 
+/* ---- course select (11-12): a list, the selected course's words under it, and a film of a run on it with the
+   course's relief of grains over the film's sky (Menus.tsx `CoursesScreen`, `CourseRun`) */
+.crs::before { content: ''; position: absolute; inset: 0; z-index: -1; background: linear-gradient(90deg, rgb(var(--c-void) / 0.72), rgb(var(--c-void) / 0.88) 34%, rgb(var(--c-void) / 0.93)); }
+.crs-list { width: min(29rem, 88vw); }
+.crs-row { grid-template-columns: 1fr auto; row-gap: 0.15rem; padding: 0.8rem 1.1rem 0.8rem 1.4rem; }
+.crs-row .cw-jp { grid-column: 1; font-family: var(--font-name); font-weight: 800; font-size: 1.9rem; letter-spacing: 0.04em; white-space: nowrap; }
+.crs-row .cw-en { grid-column: 1; grid-row: 2; padding-left: 0.1rem; font-size: var(--fs-xs); }
+.crs-km { grid-column: 2; grid-row: 1 / span 2; align-self: center; font-family: var(--font-display); font-stretch: var(--w-cond); font-weight: 600; font-size: var(--fs-xl); font-variant-numeric: tabular-nums; color: var(--muted); transition: color var(--t-fast); }
+.crs-km small { font-size: var(--fs-s); font-weight: 500; margin-left: 0.25rem; }
+.crs-row.active .crs-km { color: var(--text); }
+.crs-panel { width: min(31rem, 90vw); }
+.crs-panel strong { display: block; font-size: var(--fs-l); font-weight: 700; letter-spacing: 0.04em; margin-bottom: 0.5rem; }
+.crs-panel p { font-size: var(--fs-s); color: var(--muted); line-height: 1.8; margin-bottom: 1.2rem; }
+.crs-panel .cond-read { gap: 1.6rem; }
+.crs-panel .cond-read > div { min-width: 0; }
+.crs-panel .has-best b { color: var(--cyan); }
+.crs-road { margin-top: 0.9rem; font-size: var(--fs-s); color: var(--muted); }
+.crs-stage { position: absolute; left: calc(var(--gutter) + 34rem); right: var(--gutter); top: calc(var(--bar) + 5.4rem); bottom: calc(var(--bar) + 2.6rem); display: flex; align-items: center; justify-content: flex-end; container-type: size; animation: kf-fade var(--t-enter) linear both; }
+/* (the film keeps its shape: as wide as the stage, or as its height allows) */
+.crs-film { position: relative; width: 100%; width: min(100cqw, 100cqh * 16 / 9); aspect-ratio: 16 / 9; }
+.crs-run { position: absolute; inset: 0; background: rgb(var(--c-void)) center / cover no-repeat; clip-path: polygon(0 0, calc(100% - var(--cut-l)) 0, 100% var(--cut-l), 100% 100%, var(--cut-l) 100%, 0 calc(100% - var(--cut-l))); }
+.crs-run video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+/* (the film is darker where the relief lies: grains are light, they need a night behind them) */
+.crs-run::after { content: ''; position: absolute; inset: 0; background: linear-gradient(180deg, rgb(var(--c-void) / 0.72), rgb(var(--c-void) / 0.5) 34%, transparent 62%); pointer-events: none; }
+.run-cap { position: absolute; z-index: 1; right: 1.2rem; bottom: 0.9rem; font-size: var(--fs-xs); letter-spacing: 0.08em; color: var(--text-2); text-shadow: 0 0 0.5rem rgb(var(--c-void)); }
+.crs-relief { position: absolute; inset: 9% 10% 50% 9%; pointer-events: none; }
+.crs-relief .course-map { inset: 0; width: 100%; height: 100%; }
+.cloud-on .crs-relief .course-map { display: none; }
+.crs .cm-line { stroke: var(--cyan); filter: drop-shadow(0 0 4px rgb(var(--c-cyan) / 0.9)); animation: cm-draw 0.9s var(--e-inout) both; }
+.motion-off .crs .cm-line { animation: none; }
+.crs .cm-end { fill: var(--amber); }
+/* a label on a place of the relief: the element is that point (Cloud.tsx moves it), its text stands over it */
+.crs-tag { position: absolute; left: 0; top: 0; width: 0; height: 0; visibility: hidden; }
+.cloud-on .crs-tag { visibility: visible; }
+.crs-tag > span { position: absolute; left: 0; bottom: 0.5rem; transform: translateX(-50%); white-space: nowrap; font-size: var(--fs-xs); font-weight: 700; letter-spacing: 0.12em; text-shadow: 0 0 0.5rem rgb(var(--c-void)); animation: kf-fade var(--t-enter) linear 0.7s both; }
+.crs-tag.start > span { color: var(--green); }
+.crs-tag.end > span { color: var(--amber); }
+/* (the car's mark is there once the film says where it is) */
+.crs-tag.car { visibility: hidden; }
+.cloud-on .crs-relief[data-cloud-at] .crs-tag.car { visibility: visible; }
+.crs-tag.car em { position: absolute; left: -0.5rem; top: -0.5rem; width: 1rem; height: 1rem; border: 1.5px solid var(--text); border-radius: 50%; box-shadow: 0 0 0.9rem rgb(var(--c-cyan) / 0.9), inset 0 0 0.3rem rgb(var(--c-cyan) / 0.6); }
+/* a phone held sideways: the list and the film; the words have no room (the next screens say what the road is like) */
+@media (max-height: 500px) {
+  .crs-list { width: min(27rem, 44vw); }
+  .crs-row { padding: 6px 10px 6px 14px; }
+  .crs-row .cw-jp { font-size: 20px; }
+  .crs-km { font-size: 17px; }
+  .crs-panel { display: none; }
+  .crs-stage { left: calc(var(--gutter) + min(27rem, 44vw) + 18px); top: calc(var(--bar) + 30px); bottom: calc(var(--bar) + 6px); }
+}
+/* a narrow, tall screen: the list, the film under it, the figures at the foot */
+@media (max-width: 900px) and (min-height: 501px) {
+  .crs-stage { left: var(--gutter); top: calc(var(--bar) + 27rem); bottom: calc(var(--bar) + 12.5rem); justify-content: center; }
+  .crs-panel p { display: none; }
+}
+
 /* ---- the grains depict things (ui/fx/Cloud.tsx; `.cloud-on` while they do): the page's own picture steps back */
 .title h1 .kanji { transition: color 0.7s, text-shadow 0.7s; }
 /* (the title's kanji arrives in grains, then it is type again: `data-cloud-done`) */
 .cloud-on .title h1 .kanji:not([data-cloud-done]) { color: transparent; text-shadow: none; transition: none; }
-.course-relief { position: absolute; left: 16vw; right: 16vw; top: calc(var(--bar) + 38.4rem); bottom: calc(var(--bar) + 0.4rem); pointer-events: none; }
-.cloud-on .course-relief::before, .cloud-on .cl-relief::before { content: ''; position: absolute; inset: -18% -6% -30%; background: radial-gradient(ellipse 50% 50% at 50% 50%, rgb(var(--c-void) / 0.8), rgb(var(--c-void) / 0.45) 55%, transparent 100%); }
-@media (max-height: 640px), (max-width: 900px) { .course-relief { display: none; } }
+.cloud-on .cl-relief::before { content: ''; position: absolute; inset: -18% -6% -30%; background: radial-gradient(ellipse 50% 50% at 50% 50%, rgb(var(--c-void) / 0.8), rgb(var(--c-void) / 0.45) 55%, transparent 100%); }
 .cl-relief { position: absolute; right: 3vw; top: 14vh; width: 62vw; height: 62vh; pointer-events: none; }
 @media (max-height: 500px) { .cl-relief { top: 10vh; height: 66vh; } }
 

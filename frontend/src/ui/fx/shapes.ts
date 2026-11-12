@@ -47,6 +47,7 @@ export function courseRelief(src: CourseSource, n: number, rand: Rand): Shape {
   // heights drawn larger than they are: a pass is a few hundred metres high over several kilometres
   const up = Math.min(2.4, Math.max(1.2, 0.2 / ((maxY - minY) / extent || 1)));
   const points = new Float32Array(n * 3), lum = new Float32Array(n), tones = new Uint8Array(n), along = new Float32Array(n);
+  // (what a grain belongs to: 1 = the course, 2 = the land beside the road, 0 = the rest of the island)
   const course = new Uint8Array(n);
   const put = (i: number, x: number, y: number, z: number, l: number, tone: number, u: number) => {
     points[i * 3] = (x - mx) / extent;
@@ -82,9 +83,9 @@ export function courseRelief(src: CourseSource, n: number, rand: Rand): Shape {
       // the land, an island around the course: most of its grains on contour lines (of a few places tried, the one
       // nearest to a line), the rest a thin dusting between them; it thins out towards its rim
       const lines = role < 0.86;
-      let x = 0, y = 0, z = 0, fade = 0, line = Infinity;
+      let x = 0, y = 0, z = 0, fade = 0, line = Infinity, beside = false;
       for (let tries = lines ? 5 : 1; tries > 0; tries--) {
-        let tx: number, tz: number, ty: number, tf: number;
+        let tx: number, tz: number, ty: number, tf: number, tb = false;
         if (rand() < 0.5) {
           // around the road
           const dx = bell(rand) * reach, dz = bell(rand) * reach, d = Math.hypot(dx, dz);
@@ -95,6 +96,7 @@ export function courseRelief(src: CourseSource, n: number, rand: Rand): Shape {
           const near = Math.max(0, 1 - d / 45);
           ty += (ry - ty) * near * near;
           tf = 0.5 + 0.5 * Math.exp(-(d * d) / (reach * reach * 3.2));
+          tb = d < reach * 0.9;
         } else {
           // anywhere on the island
           const ang = rand() * 6.2832, r = Math.sqrt(rand());
@@ -111,12 +113,14 @@ export function courseRelief(src: CourseSource, n: number, rand: Rand): Shape {
           y = water ? (src.water as number) : ty;
           fade = tf;
           line = tl;
+          beside = tb;
           if (water) break;
         }
       }
       const water = src.water !== null && y <= src.water;
       // (the land's brightness is its own: the light that runs along the road dims what it is not on)
       const high = (y - minY) / (maxY - minY || 1);
+      if (beside) course[i] = 2;
       if (water) put(i, x, y, z, (0.4 + 0.4 * rand()) * fade, TONE.deep, u);
       else if (lines) put(i, x, y, z, (0.45 + 1.1 * Math.exp(-(line * line) / 1.6)) * fade, high > 0.8 ? TONE.white : high < 0.2 ? TONE.deep : TONE.dust, u);
       else put(i, x, y, z, (0.25 + 0.3 * rand()) * fade, TONE.deep, u);
@@ -148,7 +152,7 @@ export function courseRelief(src: CourseSource, n: number, rand: Rand): Shape {
     const tx = x * cos + z * sin, tz = -x * sin + z * cos;
     points[i * 3] = tx;
     points[i * 3 + 2] = tz;
-    if (!course[i]) continue;
+    if (course[i] !== 1) continue;
     const y = cp * points[i * 3 + 1];
     for (let turn = -1; turn <= 1; turn++) {
       const px = cw * tx + turn * sw * tz, py = sp * turn * sw * tx + y - sp * cw * tz;
@@ -158,7 +162,24 @@ export function courseRelief(src: CourseSource, n: number, rand: Rand): Shape {
       y1 = Math.max(y1, py);
     }
   }
-  return { points, lum, tones, along, wave: 0.11, tone: TONE.cyan, loose: 0.6, size: 1.55, gain: 1, box: [(x0 + x1) / 2, (y0 + y1) / 2, x1 - x0, y1 - y0] };
+  // the tops of the two beams, turned like the grains: where the page hangs its start and finish labels
+  const marks = new Float32Array(6);
+  [a, b].forEach((k, m) => {
+    const x = (src.pos[k * 3] - mx) / extent, z = -(src.pos[k * 3 + 2] - mz) / extent;
+    marks[m * 3] = x * cos + z * sin;
+    marks[m * 3 + 1] = (-(src.pos[k * 3 + 1] + extent * 0.11 - my) / extent) * up;
+    marks[m * 3 + 2] = -x * sin + z * cos;
+  });
+  // the raced road as a line of places (a car told by the page rides on it: `Placement.at`)
+  const PATH = 384, path = new Float32Array(PATH * 3);
+  for (let j = 0; j < PATH; j++) {
+    const k = Math.round(a + ((b - a) * j) / (PATH - 1));
+    const x = (src.pos[k * 3] - mx) / extent, z = -(src.pos[k * 3 + 2] - mz) / extent;
+    path[j * 3] = x * cos + z * sin;
+    path[j * 3 + 1] = (-(src.pos[k * 3 + 1] + 2 - my) / extent) * up;
+    path[j * 3 + 2] = -x * sin + z * cos;
+  }
+  return { points, lum, tones, along, part: course, path, wave: 0.11, tone: TONE.cyan, loose: 0.6, size: 1.55, gain: 1, box: [(x0 + x1) / 2, (y0 + y1) / 2, x1 - x0, y1 - y0], marks };
 }
 
 /**

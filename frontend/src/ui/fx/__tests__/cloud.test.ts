@@ -262,6 +262,46 @@ describe('the shapes of grains', () => {
     expect(mean(TONE.green, 1)).toBeLessThan(mean(TONE.amber, 1));
   });
 
+  it('a relief told where a car is lights the road behind it, keeps the road ahead dark, and has a place for it', () => {
+    const count = 2000, pos = new Float32Array(count * 3);
+    for (let k = 0; k < count; k++) {
+      pos[k * 3] = 100;
+      pos[k * 3 + 1] = 300 - k * 0.1;
+      pos[k * 3 + 2] = k;
+    }
+    const s = courseRelief({ count, pos, startS: 100, finishS: 1900, base: (_x, z) => 300 - z * 0.1, water: 120 }, 6000, rng(5));
+    // the way through it: from the start on the left to the finish on the right, on the road
+    const path = s.path!, last = path.length - 3;
+    expect(path[0]).toBeLessThan(-0.4);
+    expect(path[last]).toBeGreaterThan(0.4);
+    expect(Math.abs(path[2])).toBeLessThan(0.01);
+    const c = createCloud(6000, 1280, 720, palette);
+    bind(c, s);
+    c.place = { x: 640, y: 360, z: 0, scale: 600, yaw: 0, pitch: 0, fill: 1, at: 0.5 };
+    run(c, 4);
+    // (a grain's point of the shape is its number, as in `stepCloud`)
+    const mean = (pick: (k: number) => boolean) => {
+      let sum = 0, m = 0;
+      for (let i = 0; i < c.n; i++) {
+        const k = i % 6000;
+        if (c.state[i] === PLACED && pick(k)) { sum += c.lum[i]; m++; }
+      }
+      expect(m).toBeGreaterThan(10);
+      return sum / m;
+    };
+    const road = (k: number) => s.part![k] === 1 && s.tones![k] !== TONE.green && s.tones![k] !== TONE.amber;
+    const behind = mean((k) => road(k) && s.along![k] > 0.05 && s.along![k] < 0.4);
+    const ahead = mean((k) => road(k) && s.along![k] > 0.6 && s.along![k] < 0.95);
+    const there = mean((k) => road(k) && s.along![k] > 0.48 && s.along![k] < 0.5);
+    expect(behind).toBeGreaterThan(ahead * 3);
+    expect(there).toBeGreaterThan(behind * 1.5);
+    // without a car the road is lit along its whole length (the running light)
+    c.place.at = undefined;
+    run(c, 3);
+    const a2 = mean((k) => road(k) && s.along![k] > 0.6 && s.along![k] < 0.95);
+    expect(a2).toBeGreaterThan(ahead * 1.8);
+  });
+
   it('a mask becomes grains inside it only, brighter along its edges', () => {
     // a filled square in the middle of a 40 × 40 mask
     const w = 40, h = 40, alpha = new Uint8Array(w * h);
