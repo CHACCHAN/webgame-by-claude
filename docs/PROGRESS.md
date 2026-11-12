@@ -1913,6 +1913,8 @@ a rock shed. Standing still it keeps the old long-term level (âˆ’25.2 against âˆ
   looked at, six vitests (bounded, deterministic per seed, silent when dry, levels, ears apart), tsc, 196 vitests;
   in the game on the GPU: the node appears with the first rain, gets the car's speed and kind in a race, fades to
   zero after the weather changes.
+- Deployed 11-12 as v2.0.1: `gpu-errors.cjs` 0 on WebGPU and WebGL 2, a race picture looked at, the live stack
+  and the public address serve the built bundle, `/api/content` says 2.0.1, the worklet's file answers 200.
 - Not verified: **how it sounds** (nobody has listened: the WAVs went to the owner), the roof in the browser (the
   20 s drive passed none), bike / train / cockroach in the browser, phones' cost, the fallback without AudioWorklet,
   the level in the full mix against engine and music.
