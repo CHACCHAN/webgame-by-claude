@@ -36,7 +36,7 @@ for (const [car, level] of pairs) {
     const prevVel = v.velocity.clone();
     let started = -1;
     const splits: number[] = [];
-    while (t < 420) {
+    while (t < (+process.env.LIMIT! || 420)) {
       ai.update(v, PHYSICS_DT, input);
       // the ground under the tyres, as the game sets it (`Game.trackRacer`)
       if (track.design.zoneGrip || track.design.verge) {

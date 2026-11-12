@@ -34,7 +34,7 @@ import { findCorners, type Corner, type CornerKind } from './track/corners';
 import { paintFor, RemoteRacers, type Peer } from './net/RemoteRacers';
 import { NetLink, type LocalState } from './net/NetLink';
 import type { GameRenderer } from './render/RenderHost';
-import { onlineGrid } from './net/grid';
+import { footprint, onlineGrid } from './net/grid';
 import { LobbyLineup } from './net/LobbyLineup';
 import { LINEUP_VIEW, type LineupEntry } from './net/lineup';
 import { BIKE_CAMERA, CAR_CAMERA, ChaseCamera, JET_CAMERA, TRAIN_CAMERA } from './camera/ChaseCamera';
@@ -943,10 +943,15 @@ export class Game {
     this.clearRace();
     this.config = cfg;
     // online: everybody's place on the grid follows from the room alone, so every client agrees (net/grid.ts)
-    const grid = cfg.online ? onlineGrid([{ slot: cfg.online.slot, carId: cfg.carId }, ...cfg.online.peers], this.track.startS) : null;
+    const grid = cfg.online ? onlineGrid([{ slot: cfg.online.slot, carId: cfg.carId }, ...cfg.online.peers], this.track.startS, this.track.design.gridWidth) : null;
     const spot = grid?.get(cfg.online!.slot);
-    const gridS = spot ? spot.s : this.track.startS - 6;
-    const lane = spot ? spot.lateral : cfg.mode === 'rival' ? 2.0 : 0;
+    // alone or against a rival: side by side, as far apart as the two are wide (a fighter's wings are 13–17 m
+    // across), the longer nose a metre short of the line
+    const mine = footprint(CAR_SPECS[cfg.carId]);
+    const theirs = cfg.mode === 'rival' && cfg.rivalLevel ? footprint(CAR_SPECS[this.course.rivals[cfg.rivalLevel].car]) : null;
+    const apart = theirs ? Math.max(2, (mine.width + theirs.width) / 4 + 0.6) : 0;
+    const gridS = spot ? spot.s : this.track.startS - Math.max(6, mine.ahead + 1, (theirs?.ahead ?? 0) + 1);
+    const lane = spot ? spot.lateral : apart;
     this.player = this.createRacer(cfg.carId, gridS, lane, {
       headlights: true,
       // the colour picked in the car select; online the member's paint as the room has it, the seat's colour without
@@ -980,7 +985,7 @@ export class Game {
     this.player.sim.autoShift = this.autoShift;
     if (cfg.mode === 'rival' && cfg.rivalLevel) {
       const rival = this.course.rivals[cfg.rivalLevel];
-      this.rival = this.createRacer(rival.car, gridS, -2.0, { ai: cfg.rivalLevel, headlights: true, color: rival.color, rival: true });
+      this.rival = this.createRacer(rival.car, gridS, -apart, { ai: cfg.rivalLevel, headlights: true, color: rival.color, rival: true });
       this.rival.sim.powerScale = rival.power ?? 1;
       const ai = this.rival.ai;
       this.mind = new RivalMind({
@@ -1890,12 +1895,12 @@ export class Game {
       eye.y = this.terrain.heightAt(eye.x, eye.z) + 1.8;
       this.departAim.copy(at);
     }
-    this.departAim.lerp(at, 1 - Math.exp(-dt * 9));
+    this.departAim.lerp(at, 1 - Math.exp(-dt * 30));
     cam.position.copy(this.departEye);
     cam.lookAt(this.departAim.x, this.departAim.y + 1.5, this.departAim.z);
-    // the aircraft kept about a third of the picture's width as it goes away
-    const fov = clamp((2 * Math.atan(26 / Math.max(cam.position.distanceTo(at), 1)) * 180) / Math.PI, 4.5, 58);
-    cam.fov = damp(cam.fov, fov, 2.2, dt);
+    // a long lens as it goes away: the aircraft keeps about a fifth of the picture's width for the first 2.5 km
+    const fov = clamp((2 * Math.atan(20 / Math.max(cam.position.distanceTo(at), 1)) * 180) / Math.PI, 0.9, 58);
+    cam.fov = damp(cam.fov, fov, 3.5, dt);
     cam.updateProjectionMatrix();
   }
   private departEye: THREE.Vector3 | null = null;

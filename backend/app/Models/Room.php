@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\Vehicles;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -24,6 +25,13 @@ class Room extends Model
         static::updated(function (Room $room) {
             if ($room->wasChanged('track_id')) {
                 $room->members()->update(['loaded' => false, 'ready' => false]);
+                // a vehicle that does not run on the new course (a fighter away from Edwards) gives way to the
+                // first that does, its paint with it
+                foreach ($room->members()->get() as $member) {
+                    if (! Vehicles::allowedOn($member->car_id, $room->track_id)) {
+                        $member->update(['car_id' => Vehicles::fallback($room->track_id), 'color' => null]);
+                    }
+                }
             } elseif ($room->wasChanged('time_of_day')) {
                 $room->members()->update(['ready' => false]);
             }

@@ -174,4 +174,42 @@ class GameApiTest extends TestCase
         $this->withToken($token)->postJson('/api/runs', $this->runPayload(259_000, ['track_id' => 'autobahn', 'car_id' => 'e231']))->assertCreated();
         $this->assertSame([28_000], array_column($this->getJson('/api/tracks/autobahn/leaderboard?car_id=roach')->json('entries'), 'time_ms'));
     }
+
+    /** Edwards and its fighters as they are once released (config/game.php `release`). */
+    private function releaseEdwards(): void
+    {
+        config(['game.release.edwards' => true, 'game.tracks' => config('game.catalog.tracks'), 'game.cars' => config('game.catalog.cars')]);
+    }
+
+    public function test_edwards_and_the_fighters_are_in_the_catalogue_but_closed_until_released(): void
+    {
+        $token = $this->register();
+        $this->assertFalse(config('game.release.edwards'));
+        $this->assertArrayHasKey('edwards', config('game.catalog.tracks'));
+        $this->assertSame(['edwards'], config('game.catalog.cars.f15j.tracks'));
+        $this->assertArrayNotHasKey('edwards', config('game.tracks'));
+        $this->assertArrayNotHasKey('su47', config('game.cars'));
+        // nothing can be recorded or looked up there yet
+        $this->withToken($token)->postJson('/api/runs', $this->runPayload(200_000, ['track_id' => 'edwards']))->assertUnprocessable();
+        $this->withToken($token)->postJson('/api/runs', $this->runPayload(200_000, ['car_id' => 'f15j']))->assertUnprocessable();
+        $this->getJson('/api/tracks/edwards/leaderboard')->assertNotFound();
+    }
+
+    public function test_once_released_the_fighters_run_at_edwards_and_nowhere_else(): void
+    {
+        $this->releaseEdwards();
+        $token = $this->register();
+        $this->getJson('/api/content')->assertOk()->assertJsonPath('tracks.4.id', 'edwards')->assertJsonCount(21, 'cars');
+
+        $edwards = ['track_id' => 'edwards', 'car_id' => 'f15j'];
+        $this->withToken($token)->postJson('/api/runs', $this->runPayload(188_000, $edwards))->assertCreated();
+        // a car may race there too
+        $this->withToken($token)->postJson('/api/runs', $this->runPayload(128_000, ['track_id' => 'edwards', 'car_id' => 'u9']))->assertCreated();
+        // 11.9 km in under 30 s is beyond Mach 1.2
+        $this->withToken($token)->postJson('/api/runs', $this->runPayload(29_000, $edwards))->assertUnprocessable();
+        // a fighter on a mountain pass: refused
+        $this->withToken($token)->postJson('/api/runs', $this->runPayload(120_000, ['car_id' => 'su47']))
+            ->assertUnprocessable()->assertJsonValidationErrors('car_id');
+        $this->assertSame([188_000], array_column($this->getJson('/api/tracks/edwards/leaderboard?car_id=f15j')->json('entries'), 'time_ms'));
+    }
 }

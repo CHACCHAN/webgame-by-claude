@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Player;
 use App\Models\Run;
+use App\Support\Vehicles;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -119,6 +120,10 @@ class RunController extends Controller
     {
         $track = config('game.tracks.'.$data['track_id']);
         $errors = [];
+
+        if (! Vehicles::allowedOn($data['car_id'], $data['track_id'])) {
+            $errors['car_id'] = 'This vehicle does not run on this track.';
+        }
 
         if ($data['time_ms'] < $track['min_time_ms'] || $data['time_ms'] > $track['max_time_ms']) {
             $errors['time_ms'] = 'The time is outside the plausible range for this track.';

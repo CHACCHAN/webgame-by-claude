@@ -44,6 +44,8 @@ export interface JetInfo {
   /** reference wing area (m²), span (m); coefficients at the ground attitude (lift, zero-lift drag, gear and doors,
    * speed brake area × its drag coefficient in m²) */
   wing: { area: number; span: number; cl0: number; cd0: number; cdGear: number; speedBrake: number };
+  /** the nose wheel's distance aft of the nose tip (m): where the aircraft's ends are from its origin (the grid) */
+  noseGear: number;
   /** rotation and lift-off speeds for the take-off after the finish (m/s) */
   vr: number;
   lof: number;
@@ -167,6 +169,7 @@ const JETS: JetDef[] = [
       // F100-IHI-220E: 23,450 lbf with afterburner, 14,590 lbf dry
       engines: { count: 2, name: 'F100-IHI-220E', idle: lbf(1200), dry: lbf(14590), ab: lbf(23450), spoolUp: 4, spoolDown: 3 },
       wing: F15_WING,
+      noseGear: 5.0,
       vr: 66,
       lof: 75,
       liveries: [
@@ -194,6 +197,7 @@ const JETS: JetDef[] = [
       // F100-PW-220: 23,770 lbf with afterburner, 14,590 lbf dry
       engines: { count: 2, name: 'F100-PW-220', idle: lbf(1200), dry: lbf(14590), ab: lbf(23770), spoolUp: 4, spoolDown: 3 },
       wing: F15_WING,
+      noseGear: 5.0,
       vr: 66,
       lof: 75,
       liveries: [
@@ -231,6 +235,7 @@ const JETS: JetDef[] = [
       // normal take-off (Jane's All the World's Aircraft 2000–01; other sources give 61.87 m²)
       engines: { count: 2, name: 'D-30F11', idle: 6000, dry: 93100, ab: 153000, spoolUp: 5, spoolDown: 3.5 },
       wing: { area: 56, span: 16.7, cl0: 0.1, cd0: 0.02, cdGear: 0.016, speedBrake: 0 },
+      noseGear: 5.6,
       vr: 72,
       lof: 82,
       liveries: [{ name: '「01」試作機', swatch: '#3b4049', crew: 1 }],

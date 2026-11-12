@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Player;
 use App\Models\Room;
 use App\Models\RoomPlayer;
+use App\Support\Vehicles;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Broadcast;
@@ -34,6 +35,14 @@ class RoomController extends Controller
         return isset($data['color']) ? strtolower($data['color']) : null;
     }
 
+    /** A vehicle that runs only on certain courses (a fighter: Edwards) is refused on any other. */
+    private static function mustBeAllowed(string $carId, string $trackId): void
+    {
+        if (! Vehicles::allowedOn($carId, $trackId)) {
+            throw ValidationException::withMessages(['car_id' => 'この車両はこのコースでは使えません']);
+        }
+    }
+
     public function store(Request $request): JsonResponse
     {
         $data = $request->validate([
@@ -42,6 +51,7 @@ class RoomController extends Controller
             'car_id' => ['required', 'string', Rule::in(array_keys(config('game.cars')))],
             'color' => self::COLOR_RULE,
         ]);
+        self::mustBeAllowed($data['car_id'], $data['track_id']);
         $player = $this->player($request);
 
         Room::where('updated_at', '<', now()->subMinutes((int) config('game.online.room_ttl_minutes')))->delete();
@@ -77,6 +87,7 @@ class RoomController extends Controller
         ]);
         $player = $this->player($request);
         $room = $this->room($code);
+        self::mustBeAllowed($data['car_id'], $room->track_id);
         if ($member = $room->memberFor($player)) {
             // back in after a reload: loading the course again (and so not ready either)
             if ($member->loaded || $member->ready) {
@@ -144,6 +155,9 @@ class RoomController extends Controller
         [$room, $member] = $this->membership($request, $code);
         if ((isset($data['car_id']) || array_key_exists('color', $data)) && $room->status === 'racing') {
             return response()->json(['message' => 'レース中は車を変更できません'], 409);
+        }
+        if (isset($data['car_id'])) {
+            self::mustBeAllowed($data['car_id'], $room->track_id);
         }
         $changes = [];
         if (isset($data['car_id']) && $data['car_id'] !== $member->car_id) {

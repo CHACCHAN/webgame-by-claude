@@ -80,6 +80,8 @@ export interface CourseDesign {
   formation?: { left: number; right: number };
   /** the AI's speed limit on this course (m/s, default 62 ≈ 223 km/h on the mountain passes) */
   aiTopSpeed?: number;
+  /** the room for the start grid where it is not a road's (m; `net/grid.ts`: 9.5 on every road): an apron */
+  gridWidth?: number;
   /** level ground: no banking in the bends and no widening of tight ones (an airfield) */
   flat?: boolean;
   /** how far the ground under the road lies below its surface (m, default 0.45; 0: the ground is the surface) */
@@ -336,6 +338,8 @@ function edwardsDesign(shiftB: number): CourseDesign {
     ],
     // the fighters run to Mach 1 on the runway; nothing else comes near (the cockroach's own top speed is Mach 1)
     aiTopSpeed: 345,
+    // the grid stands across the flight line: three fighters abreast, wing tips ten metres apart
+    gridWidth: 80,
     segs: [
       // along the flight line, past the hangars and the tower
       { len: R.rampLen, g: fall, tag: 'ramp' },

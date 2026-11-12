@@ -330,4 +330,33 @@ class RoomTest extends TestCase
         $this->postJson('/api/broadcasting/auth', ['socket_id' => '1234.5678', 'channel_name' => 'private-admin'], $h)->assertForbidden();
         $this->postJson('/api/broadcasting/auth', ['socket_id' => '1234.5678', 'channel_name' => $channel])->assertUnauthorized();
     }
+
+    public function test_a_fighter_is_taken_only_into_a_room_at_edwards(): void
+    {
+        // (Edwards as it is once released: config/game.php `release`)
+        config(['game.release.edwards' => true, 'game.tracks' => config('game.catalog.tracks'), 'game.cars' => config('game.catalog.cars')]);
+        [, $h] = $this->player('Host');
+        [, $b] = $this->player('Guest');
+
+        // a mountain pass: no room is made with a fighter, none is joined with one, and nobody changes to one
+        $this->postJson('/api/rooms', ['track_id' => 'kirifuri-lakeside', 'car_id' => 'f15j'], $h)
+            ->assertUnprocessable()->assertJsonValidationErrors('car_id');
+        $pass = $this->createRoom($h);
+        $this->postJson("/api/rooms/{$pass}/join", ['car_id' => 'su47'], $b)->assertUnprocessable();
+        $this->postJson("/api/rooms/{$pass}/join", ['car_id' => 'supra'], $b)->assertOk();
+        $this->patchJson("/api/rooms/{$pass}/me", ['car_id' => 'f15c'], $b)->assertUnprocessable();
+        $this->getJson("/api/rooms/{$pass}", $h)->assertJsonPath('players.1.car_id', 'supra');
+
+        // Edwards: fighters and cars side by side
+        $code = $this->postJson('/api/rooms', ['track_id' => 'edwards', 'car_id' => 'f15j', 'color' => '#7f8890'], $h)->assertCreated()->json('code');
+        $this->postJson("/api/rooms/{$code}/join", ['car_id' => 'r34'], $b)->assertOk();
+        $this->patchJson("/api/rooms/{$code}/me", ['car_id' => 'su47'], $b)->assertOk()->assertJsonPath('players.1.car_id', 'su47');
+
+        // the room moves to another course: the fighters give way to a car (and its paint goes), everyone loads again
+        Room::where('code', $code)->firstOrFail()->update(['track_id' => 'oboro-downhill']);
+        $this->getJson("/api/rooms/{$code}", $h)
+            ->assertJsonPath('players.0.car_id', 'hayate')->assertJsonPath('players.0.color', null)
+            ->assertJsonPath('players.1.car_id', 'hayate')
+            ->assertJsonPath('players.0.loaded', false)->assertJsonPath('players.1.ready', false);
+    }
 }
