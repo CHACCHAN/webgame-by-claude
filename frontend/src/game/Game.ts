@@ -47,7 +47,8 @@ import { AudioEngine } from './audio/AudioEngine';
 import { coverShare, rainBodyOf } from './audio/rain';
 import { kindOf } from './vehicle/kinds';
 import { GhostPlayer, GhostRecorder, type GhostData } from './race/Ghost';
-import { clamp, damp, lerp, smoothstep } from './util/math';
+import { clamp, damp, lerp, smoothstep, wrapAngle } from './util/math';
+import { Departure } from './race/Departure';
 import type { TrackProjection } from './track/Track';
 import { loadTrainModel, loadTrainVariants, trainModelReady, trainNose } from './render/TrainModel';
 import { specForLivery, trainLivery, trainModelKey, TRAIN_ORDER } from './vehicle/trains';
@@ -173,6 +174,8 @@ interface Racer {
   finished: boolean;
   finishTime: number;
   exhaust: ExhaustState;
+  /** a fighter past the line: its take-off */
+  departure?: Departure;
 }
 
 const _v = new THREE.Vector3(), _w = new THREE.Vector3(), _q = new THREE.Quaternion(), _f = new THREE.Vector3();
@@ -725,6 +728,7 @@ export class Game {
 
   private clearRace() {
     this.asked++;
+    this.departEye = null;
     this.remotes?.clear();
     this.hud.online = null;
     this.removeRacer(this.player);
@@ -1220,7 +1224,8 @@ export class Game {
     const dt = PHYSICS_DT;
     const pl = this.player;
     if (pl && (phase === 'racing' || phase === 'finished')) {
-      if (pl.finished) this.autopilot(pl, dt);
+      if (pl.finished && pl.sim.spec.jet) this.depart(pl, dt);
+      else if (pl.finished) this.autopilot(pl, dt);
       else if (this.autoDrive) this.autoDriver(pl, dt);
     }
     for (const r of [this.rival, this.attractCar]) {
@@ -1232,6 +1237,10 @@ export class Game {
         continue;
       }
       if (pl && r === this.rival) r.ai.opponent = { s: pl.proj.s, lateral: pl.proj.lateral, speed: pl.sim.forwardSpeed };
+      if (r.finished && r.sim.spec.jet) {
+        this.depart(r, dt);
+        continue;
+      }
       if (r.finished && r.ai.pullOver === null) r.ai.pullOver = r.proj.lateral >= 0 ? 10 : -10;
       r.ai.update(r.sim, dt, r.input);
       if (r.finished) {
@@ -1250,6 +1259,41 @@ export class Game {
       r.ai.calibrate(r.sim);
     }
     r.ai.update(r.sim, dt, r.input);
+  }
+
+  /**
+   * A fighter past the line leaves by air (`race/Departure.ts`). The ground run is the simulation's own: the game
+   * holds it straight where it is (no swerve back to the middle at 800 km/h) in full afterburner; from the rotation
+   * speed on, once it runs straight, it is carried along the take-off, and taken off the scene when it is away.
+   */
+  private depart(r: Racer, dt: number) {
+    const d = (r.departure ??= new Departure(r.sim.spec));
+    const sim = r.sim;
+    if (d.stage === 'gone') return;
+    if (d.stage !== 'roll') {
+      d.step(dt);
+      sim.carry(d.position, d.quaternion, { spool: 1, afterburner: 1 });
+      return;
+    }
+    d.step(dt);
+    if (!r.ai) {
+      r.ai = new AIDriver(this.track, this.line, AI_PROFILES.rookie, 3);
+      r.ai.calibrate(sim);
+    }
+    if (r.ai.pullOver === null) r.ai.pullOver = r.proj.lateral;
+    r.ai.opponent = null;
+    r.ai.update(sim, dt, r.input);
+    r.input.throttle = 1;
+    r.input.brake = 0;
+    r.input.handbrake = false;
+    const heading = Math.atan2(sim.forward.x, sim.forward.z);
+    const straight = Math.abs(wrapAngle(heading - this.track.headingAt(r.proj.s))) < 0.035 && Math.abs(sim.yawRate) < 0.03 && Math.abs(sim.slipAngle) < 0.035;
+    // (the lake goes on past the end of the course: whoever is not straight by then goes as it is)
+    const room = this.track.length - 200 - r.proj.s;
+    if ((sim.forwardSpeed >= sim.spec.jet!.vr && straight && d.t > 0.8) || room < 0) {
+      d.rotate(sim.position, heading, sim.speed);
+      sim.carry(d.position, d.quaternion, { spool: 1, afterburner: 1 });
+    }
   }
 
   private autopilot(r: Racer, dt: number) {
@@ -1305,6 +1349,8 @@ export class Game {
     if (r.sim.isFlipped) r.flippedTime += dt;
     else r.flippedTime = 0;
     const lost = Math.abs(r.proj.height) > 12 || r.sim.position.y < -20;
+    // (an aircraft in the air is where it should be)
+    if (r.sim.carried) return;
     // (a finished rival parks on purpose: not stuck)
     if (r.flippedTime > 2 || lost || strayed || (r.ai && r.ai.needsRespawn && r !== this.player && !r.finished)) this.respawn(r);
   }
@@ -1622,6 +1668,11 @@ export class Game {
     const alpha = clamp(this.accumulator / PHYSICS_DT, 0, 1);
     for (const r of this.racers()) {
       r.visual.syncFromSim(r.sim, this.paused ? 1 : alpha, dt);
+      if (r.departure) {
+        r.visual.rig.jet?.setGear(r.departure.gear);
+        r.visual.rig.jet?.setPitch(r.departure.elevator);
+        r.visual.root.visible = r.departure.stage !== 'gone';
+      }
       if (!this.paused) {
         this.emitTyreFx(r, dt);
         this.emitExhaust(r, dt);
@@ -1653,6 +1704,7 @@ export class Game {
     if (this.phase === 'attract' && this.attractCar) this.cinematicCamera(dt, this.attractCar.visual.root, this.attractCar.proj.s);
     else if (this.phase === 'replay' && this.replay) this.updateReplay(dt);
     else if (this.phase === 'garage' && (this.garageCar || this.lobby)) this.garageCamera(dt);
+    else if (this.player?.departure && this.player.departure.stage !== 'roll') this.departureCamera(dt, this.player);
     else if (this.player) {
       const sim = this.player.sim;
       const v = this.player.visual.root;
@@ -1689,7 +1741,11 @@ export class Game {
         // a train's sound follows its tractive effort (it builds up after a notch-on, as in VehicleSim)
         // a train's flanges squeal in tight curves (lateral acceleration = yaw rate × speed)
         if ('cornering' in e) e.cornering(sim.yawRate * sim.forwardSpeed);
-        e.update(sim.rpm, sim.spec.train ? sim.traction : sim.input.throttle, sim.boost, 1, sim.spec.engine.redline, sim.input.brake);
+        // a fighter leaving after the finish is heard going away, and not at all once it is gone
+        const away = this.player.departure;
+        if ('distance' in e) e.distance(away && away.stage !== 'roll' ? this.player.visual.root.position.distanceTo(this.camera.position) : 0);
+        if (away?.stage === 'gone') e.update(sim.rpm, 0, 0, 0, sim.spec.engine.redline);
+        else e.update(sim.rpm, sim.spec.train ? sim.traction : sim.input.throttle, sim.boost, 1, sim.spec.engine.redline, sim.input.brake);
         let skid = 0;
         for (const w of sim.wheels) if (w.grounded) skid = Math.max(skid, w.skid);
         this.audio.updateTyres(skid, sim.speed);
@@ -1698,13 +1754,16 @@ export class Game {
         if (this.rival) {
           const re = this.audio.engine('rival', this.rival.sim.spec);
           const d = this.rival.sim.position.distanceTo(this.camera.position);
-          re.update(this.rival.sim.rpm, this.rival.input.throttle, this.rival.sim.boost, clamp(1 - d / 140, 0, 1) * 0.8, this.rival.sim.spec.engine.redline);
+          if ('distance' in re) re.distance(d);
+          if ('distance' in re) re.update(this.rival.sim.rpm, 0, 0, this.rival.departure?.stage === 'gone' ? 0 : 0.8, 0);
+          else re.update(this.rival.sim.rpm, this.rival.input.throttle, this.rival.sim.boost, clamp(1 - d / 140, 0, 1) * 0.8, this.rival.sim.spec.engine.redline);
         }
       }
     } else if (this.audio && this.attractCar && this.phase === 'attract') {
       const sim = this.attractCar.sim;
       const e = this.audio.engine('attract', sim.spec);
       const d = sim.position.distanceTo(this.camera.position);
+      if ('distance' in e) e.distance(d);
       e.update(sim.rpm, sim.input.throttle, sim.boost, clamp(1 - d / 160, 0, 1) * 0.5, sim.spec.engine.redline);
     }
     // the rain as heard from the player's vehicle (its speed, a roof over it, what the drops land on); in the menus
@@ -1815,6 +1874,32 @@ export class Game {
     });
     this.cinematicCamera(dt, rp.cars[0].visual.root, rp.proj.s);
   }
+
+  /**
+   * The take-off is watched from the lake: a camera standing beside the path where the aircraft leaves the ground,
+   * a man's height up, that turns with it and closes in as it climbs away (the chase camera would hang behind a
+   * tail going up at 30°, looking at the sky).
+   */
+  private departureCamera(dt: number, r: Racer) {
+    const d = r.departure!;
+    const cam = this.camera;
+    const at = r.visual.root.position;
+    if (!this.departEye) {
+      const f = r.sim.forward, ahead = clamp(d.speed * 3, 240, 800);
+      const eye = (this.departEye = new THREE.Vector3(at.x + f.x * ahead - f.z * 42, 0, at.z + f.z * ahead + f.x * 42));
+      eye.y = this.terrain.heightAt(eye.x, eye.z) + 1.8;
+      this.departAim.copy(at);
+    }
+    this.departAim.lerp(at, 1 - Math.exp(-dt * 9));
+    cam.position.copy(this.departEye);
+    cam.lookAt(this.departAim.x, this.departAim.y + 1.5, this.departAim.z);
+    // the aircraft kept about a third of the picture's width as it goes away
+    const fov = clamp((2 * Math.atan(26 / Math.max(cam.position.distanceTo(at), 1)) * 180) / Math.PI, 4.5, 58);
+    cam.fov = damp(cam.fov, fov, 2.2, dt);
+    cam.updateProjectionMatrix();
+  }
+  private departEye: THREE.Vector3 | null = null;
+  private departAim = new THREE.Vector3();
 
   get replayTime() {
     return this.replay?.t ?? 0;

@@ -218,6 +218,28 @@ export class VehicleSim {
     this.prevQuaternion.copy(this.quaternion);
   }
 
+  /**
+   * Carried along a path by the game from here on (a fighter leaving the ground after the finish, `race/Departure.ts`):
+   * no forces, no contacts, nothing from the wheels; the body is moved to each pose in the next physics step, so
+   * whatever reads this simulation (the model, the camera, the peers' packets) sees the flight as it saw the drive.
+   */
+  carry(position: Vector3, quaternion: Quaternion, engines: { spool: number; afterburner: number }) {
+    if (!this.carried) {
+      this.carried = true;
+      this.body.setBodyType(RAPIER.RigidBodyType.KinematicPositionBased, true);
+      this.collider.setEnabled(false);
+      for (const w of this.wheels) {
+        w.grounded = false;
+        w.skid = w.load = w.steer = 0;
+      }
+    }
+    this.body.setNextKinematicTranslation(position);
+    this.body.setNextKinematicRotation(quaternion);
+    this.spool = engines.spool;
+    this.afterburner = engines.afterburner;
+  }
+  carried = false;
+
   /** Place the car at rest at a position/heading (respawn, grid). */
   reset(position: Vector3, heading: number, speed = 0) {
     const q = _q.setFromAxisAngle(UP, heading);
@@ -271,6 +293,16 @@ export class VehicleSim {
     this.prevPosition.copy(this.position);
     this.prevQuaternion.copy(this.quaternion);
     this.syncState();
+    if (this.carried) {
+      // in the air: only what the gauges, the sound and the camera read
+      this.speed = this.forwardSpeed = this.velocity.length();
+      this.slipAngle = this.yawRate = this.driftAmount = this.liftShare = 0;
+      this.airborne = true;
+      this.rpm = (65 + 35 * this.spool + 2 * this.afterburner) * 100;
+      if (spec.jet) this.thrust = jetThrust(spec.jet.engines, this.spool, this.afterburner, this.speed / EDWARDS_AIR.sound);
+      for (const w of this.wheels) w.angularVelocity *= Math.exp(-dt * 0.8), (w.rotation += w.angularVelocity * dt);
+      return;
+    }
 
     const inp = this.input;
     const fwdSpeed = this.velocity.dot(this.forward);
@@ -822,6 +854,12 @@ export class VehicleSim {
 
   /** Post-step bookkeeping (call after world.step). */
   postStep(dt: number) {
+    if (this.carried) {
+      this.syncState();
+      this.impact = 0;
+      this.lastVel.copy(this.velocity);
+      return;
+    }
     this.softenWallHit(dt);
     this.syncState();
     const dv = _v.copy(this.velocity).sub(this.lastVel).length() / dt;

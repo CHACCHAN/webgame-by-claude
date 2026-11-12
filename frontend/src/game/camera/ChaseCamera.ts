@@ -44,7 +44,7 @@ export const TRAIN_CAMERA: CameraProfile = {
 /** a fighter, 19–23 m long with a 13–17 m span: the chase takes all of it in; the front view from the cockpit */
 export const JET_CAMERA: CameraProfile = {
   chase: { dist: 27, perKmh: 0.012, height: 8 },
-  near: { dist: 17, perKmh: 0.008, height: 5 },
+  near: { dist: 21, perKmh: 0.008, height: 6.2 },
   front: { ahead: 3.6, up: 1.5 },
 };
 
