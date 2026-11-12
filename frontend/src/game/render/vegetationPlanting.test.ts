@@ -46,6 +46,7 @@ describe('vegetation planting', () => {
 
   // what each pass is known for: the sea and the harbour town under oboro, the lake of kirifuri
   for (const course of Object.values(COURSES).filter((c) => ['oboro-downhill', 'kirifuri-lakeside'].includes(c.id))) {
+    // (tenrou looks out all round: its own test below)
     it(`${course.id}: the road looks out, and no tree stands in the view`, () => {
       const track = new Track(course.design);
       const terrain = buildTerrain(track, course.landform);
@@ -58,18 +59,21 @@ describe('vegetation planting', () => {
       expect(views.reduce((sum, v) => sum + bits(v.open), 0) / views.length).toBeLessThan(7);
       const limit = viewLimiter(track, terrain);
       const plants = plantTrees(terrain, 1, course.style, ids, { views: limit });
-      let near = 0;
+      let near = 0, grown = 0;
+      const high = (p: { species: number; scale: number }) => SPECIES[ids[p.species]].tall! * p.scale > 12;
       for (const p of plants) {
         const d = terrain.roadDistAt(p.x, p.z);
         if (!(d < 40)) continue;
         near++;
+        if (high(p)) grown++;
         // (planted a little into the ground: the top is no higher than this)
         expect(p.y + SPECIES[ids[p.species]].tall! * p.scale).toBeLessThanOrEqual(limit(p.x, p.z) + 0.01);
       }
       // the forest is still there: by the road on the mountain side, and all of it behind
       const all = plantTrees(terrain, 1, course.style, ids);
       expect(near).toBeGreaterThan(1200);
-      expect(near).toBeLessThan(all.filter((p) => terrain.roadDistAt(p.x, p.z) < 40).length * 0.8);
+      // (the valley side keeps trees too, but low ones: the tall trees by the road are fewer)
+      expect(grown).toBeLessThan(all.filter((p) => terrain.roadDistAt(p.x, p.z) < 40 && high(p)).length * 0.8);
       expect(plants.length).toBeGreaterThan(all.length * 0.9);
       // the bushes at the road's edge stay under the eye there
       const coverIds = COVER_SETS[course.style];
@@ -77,10 +81,37 @@ describe('vegetation planting', () => {
       expect(c.cover.length).toBeGreaterThan(1500);
       for (const p of c.cover) {
         const tall = SPECIES[coverIds[p.species]].tall;
-        if (tall) expect(p.y + tall * p.scale).toBeLessThanOrEqual(limit(p.x, p.z) + 0.61);
+        // (what is lower than the eye stands in no view)
+        if (tall && tall * p.scale > 1.01) expect(p.y + tall * p.scale).toBeLessThanOrEqual(limit(p.x, p.z) + 0.11);
       }
     });
   }
+
+  it('tenrou-skyline: the ridge looks out all round and is not shaved for it', () => {
+    const course = COURSES['tenrou-skyline'];
+    const track = new Track(course.design);
+    const terrain = buildTerrain(track, course.landform);
+    const ids = TREE_SETS[course.style];
+    const limit = viewLimiter(track, terrain);
+    const plants = plantTrees(terrain, 1, course.style, ids, { views: limit });
+    let near = 0, low = 0;
+    for (const p of plants) {
+      const d = terrain.roadDistAt(p.x, p.z);
+      if (!(d < 120)) continue;
+      near++;
+      const top = SPECIES[ids[p.species]].tall! * p.scale;
+      if (top < 10) low++;
+      expect(p.y + top).toBeLessThanOrEqual(limit(p.x, p.z) + 0.01);
+    }
+    // trees stand within sight of the road, most of them kept low: under the views, and stunted near the tree line
+    expect(near).toBeGreaterThan(2500);
+    expect(low).toBeGreaterThan(near * 0.4);
+    // and where none may stand the ground has its thickets
+    const coverIds = COVER_SETS[course.style];
+    const c = plantCover(track, terrain, 1, [], coverIds, [], { undergrowth: 0, style: course.style, views: limit });
+    expect(c.cover.length).toBeGreaterThan(12000);
+    expect(c.cover.length).toBeLessThan(45000);
+  });
 
   it('every species a course asks for has its numbers', () => {
     for (const style of ['touge', 'autobahn'] as const) for (const id of vegetationFiles(style)) expect(SPECIES[id]).toBeDefined();

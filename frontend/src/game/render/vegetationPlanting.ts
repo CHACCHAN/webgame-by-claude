@@ -87,6 +87,18 @@ export function cityWeight(lf: Landform, x: number, z: number) {
   return w;
 }
 
+/**
+ * 0..1 how much of a town stands at (x, z): `cityWeight` where the land can be built on. A town's outline is an
+ * ellipse and takes no notice of the mountain it lies against (kirifuri's hot-spring town reaches up the caldera's
+ * wall): on steep ground there are no houses (the lights keep off it by the same measure) but forest.
+ */
+export function townWeight(terrain: TerrainData, x: number, z: number) {
+  const w = cityWeight(terrain.landform, x, z);
+  if (w <= 0) return 0;
+  const steep = (Math.abs(terrain.heightAt(x + 8, z) - terrain.heightAt(x - 8, z)) + Math.abs(terrain.heightAt(x, z + 8) - terrain.heightAt(x, z - 8))) / 16;
+  return w * smoothstep(0.62, 0.42, steep);
+}
+
 // ------------------------------------------------------------------------------------------------ the views
 
 /** how far apart the road is sampled for its views (m), and how far from it a tree can stand in one */
@@ -98,6 +110,12 @@ const VIEW_SECTORS = 16;
 const VIEW_EYE = 1.5;
 /** how steeply a view looks down, at least and at most (a tree's top stays under that line) */
 const VIEW_DROP = [0.035, 0.09];
+/** a bend tighter than this radius (m) has no view to its inside: the land there lies between its own two legs */
+const VIEW_BEND = 55;
+/** the least a tree is given (m; scrub of that height): where less is free under a view only the thickets stand (`plantCover`) */
+const LOW = 2.5;
+/** what is this low (m) closes no view wherever it stands: it is under the eye of whoever looks over it */
+const UNDER_EYE = 1.0;
 
 /** a point of the road and which directions around it look out: bit k = the azimuth (k + 0.5) / 16 of a turn, from +X towards +Z */
 export interface ViewPoint {
@@ -115,8 +133,8 @@ export interface ViewPoint {
  * sea of clouds under the ridge): a direction is open where an eye over the road sees one of them below it, over
  * all the land in between. That
  * is the valley side, and straight ahead where the road runs down towards the view (one direction is enough: the
- * lake at the end of a straight); the mountain side and the stretches that face nothing stay closed, and the forest
- * stands over the road there.
+ * lake at the end of a straight); the mountain side, the inside of a hairpin and the stretches that face nothing
+ * stay closed, and the forest stands over the road there.
  */
 export function roadViews(track: Track, terrain: TerrainData): ViewPoint[] {
   const lf = terrain.landform;
@@ -154,13 +172,23 @@ export function roadViews(track: Track, terrain: TerrainData): ViewPoint[] {
     return null;
   };
   const pts: ViewPoint[] = [];
-  const p = new THREE.Vector3();
+  const p = new THREE.Vector3(), pa = new THREE.Vector3(), pb = new THREE.Vector3();
   for (let s = 0; s <= track.length; s += VIEW_STEP) {
     track.pointAt(s, 0, p);
     let open = 0;
     const drop = new Float32Array(VIEW_SECTORS), reach = new Float32Array(VIEW_SECTORS);
+    // the inside of a tight bend: towards the middle of the chord between the road before and after
+    track.pointAt(Math.max(0, s - 12), 0, pa);
+    track.pointAt(Math.min(track.length, s + 12), 0, pb);
+    const ix = (pa.x + pb.x) / 2 - p.x, iz = (pa.z + pb.z) / 2 - p.z;
+    const half = Math.hypot(pb.x - pa.x, pb.z - pa.z) / 2;
+    const inside = Math.hypot(ix, iz) > (half * half) / (2 * VIEW_BEND) ? Math.atan2(iz, ix) : null;
     const look = (k: number, seen: [number, number] | null) => {
       if (!seen || (open >> k) & 1) return;
+      if (inside !== null) {
+        const off = ((k + 0.5) / VIEW_SECTORS) * Math.PI * 2 - inside;
+        if (Math.abs(Math.atan2(Math.sin(off), Math.cos(off))) < 1.25) return;
+      }
       open |= 1 << k;
       // (under the steepest line that sees it, with room to spare: what is seen is wider than its near edge)
       drop[k] = clamp(seen[0] * 0.6, VIEW_DROP[0], VIEW_DROP[1]);
@@ -204,8 +232,9 @@ export function viewLimiter(track: Track, terrain: TerrainData): (x: number, z: 
     else grid.set(k, [i]);
   });
   const n = Math.ceil(VIEW_REACH / VIEW_CELL);
-  return (x, z) => {
+  const at = (x: number, z: number) => {
     let limit = Infinity;
+    const h = terrain.heightAt(x, z);
     const cx = Math.floor(x / VIEW_CELL), cz = Math.floor(z / VIEW_CELL);
     for (let j = -n; j <= n; j++) {
       for (let i = -n; i <= n; i++) {
@@ -218,10 +247,22 @@ export function viewLimiter(track: Track, terrain: TerrainData): (x: number, z: 
           if (out < 4 || out > VIEW_REACH) continue;
           const k = Math.floor((Math.atan2(ez, ex) / (Math.PI * 2) + 1) * VIEW_SECTORS) % VIEW_SECTORS;
           if (!((v.open >> k) & 1) || out > v.reach[k]) continue;
-          limit = Math.min(limit, v.y + 0.5 - v.drop[k] * out);
+          // (land that rises to the eye's own height is this view's edge, not in it: what stands on it hides sky)
+          if (h > v.y + VIEW_EYE - 0.012 * out) continue;
+          limit = Math.min(limit, v.y + VIEW_EYE - 0.2 - v.drop[k] * out);
         }
       }
     }
+    return limit;
+  };
+  // (asked for every tree, thicket and vertex of the ground near the road: worked out once per 4 m square)
+  const CELL = 4;
+  const known = new Map<number, number>();
+  return (x, z) => {
+    const cx = Math.round(x / CELL), cz = Math.round(z / CELL);
+    const k = (cx + 32768) * 65536 + cz + 32768;
+    let limit = known.get(k);
+    if (limit === undefined) known.set(k, (limit = at(cx * CELL, cz * CELL)));
     return limit;
   };
 }
@@ -264,11 +305,13 @@ export function plantTrees(terrain: TerrainData, density: number, style: CourseS
   const clearance = opts.clearance ?? 10.5;
   const limit = opts.views ?? null;
 
-  /** the species for a spot: [id, size factor] */
-  const pick = (x: number, z: number, y: number, slope: number, d: number): [string, number] => {
+  /** the species for a spot: [id, size factor] (`young`: growth kept low, under a view or at the tree line) */
+  const pick = (x: number, z: number, y: number, slope: number, d: number, young: boolean): [string, number] => {
     const stand = noise2(x / 210 + 7.3, z / 210 - 2.1);
     const dry = noise2(x / 95 + 31, z / 95 - 17);
     const edge = d < clearance + 7;
+    // a stand is not of one kind to the last tree: others have seeded themselves in
+    if (r() < 0.1) return [ids[Math.floor(r() * ids.length)], 1];
     if (style === 'autobahn') {
       // spruce plantations with beech between them; birches where the light gets in
       if (has('birke') && (edge ? r() < 0.5 : dry > 0.5 && r() < 0.6)) return ['birke', edge ? 0.75 : 1];
@@ -276,6 +319,10 @@ export function plantTrees(terrain: TerrainData, density: number, style: CourseS
       return [has('fichte') ? 'fichte' : ids[0], edge ? 0.8 : 1];
     }
     const alt = clamp((y - lo) / Math.max(hi - lo, 1), 0, 1);
+    // what stays low is what came by itself: broadleaves and pines, few of the planted conifers
+    if (young && r() < 0.6) return [has('buna') && r() < 0.55 ? 'buna' : has('akamatsu') ? 'akamatsu' : ids[0], 1];
+    // rock faces: pines hold on where nothing else does
+    if (slope > 1.25 && has('akamatsu') && (slope > 1.7 || r() < 0.5)) return ['akamatsu', 0.65 + r() * 0.3];
     // the mantle along the road: young broadleaves under the planted trees' edge
     if (edge && has('buna') && r() < 0.45) return ['buna', 0.5 + r() * 0.25];
     // red pines hold the dry, steep and rocky places
@@ -288,32 +335,47 @@ export function plantTrees(terrain: TerrainData, density: number, style: CourseS
     return [k < 0.5 || !has('hinoki') ? 'sugi' : k < 0.78 ? 'hinoki' : has('buna') ? 'buna' : 'sugi', 1];
   };
 
-  const add = (x: number, z: number, size: number, d: number) => {
+  const add = (x: number, z: number, size: number, d: number, second = false) => {
     if (opts.keep && !opts.keep(x, z)) return;
     const y = terrain.heightAt(x, z);
     if (lf.waterLevel !== null && y < lf.waterLevel + 3) return;
-    // thinning out towards the tree line (over 70 m of height, in patches), none above it
+    // towards the tree line the forest opens and its trees stay small (over 70 m of height, in patches): none above it
     const above = y - (lf.treeLine + noise2(x / 90, z / 90) * 40 + (r() - 0.5) * 24);
-    if (above > 0 || (above > -70 && r() < ((above + 70) / 70) ** 1.5 * 0.9)) return;
-    if (lf.relief(x, z) < 0.25 || cityWeight(lf, x, z) > 0.2) return;
+    if (above > 0) return;
+    const high = clamp((above + 70) / 70, 0, 1);
+    if (r() < high ** 2 * 0.45) return;
+    if (lf.relief(x, z) < 0.25 || townWeight(terrain, x, z) > 0.2) return;
     const dx = terrain.heightAt(x + 3, z) - terrain.heightAt(x - 3, z);
     const dz = terrain.heightAt(x, z + 3) - terrain.heightAt(x, z - 3);
     const slope = Math.hypot(dx, dz) / 6;
-    if (slope > 1.25) return;
-    const [id, k] = pick(x, z, y, slope, d);
+    // steep ground: the forest holds up to 60° (seen across a lake such a wall is green), thins out above and the
+    // last pines stand in a rock face of 70°; by the road the cuttings and their walls stay clear
+    if (slope > 1.25 && (d < 45 || r() > smoothstep(2.9, 1.8, slope))) return;
+    // how high a tree may stand here (m): under the line of sight of the road's views
+    const room = limit && d < VIEW_REACH + 40 ? limit(x, z) - y : Infinity;
+    if (room < LOW) return;
+    const [id, k] = pick(x, z, y, slope, d, room < 15 || high > 0.45);
     const def = SPECIES[id];
+    const tall = def.tall ?? 18;
     // a stand is of one age: its trees are of a height, give or take
     const age = 0.5 + 0.5 * noise2(x / 300 - 11, z / 300 + 50);
     let scale = (def.scale[0] + (def.scale[1] - def.scale[0]) * clamp(age * 0.8 + r() * 0.35, 0, 1)) * k * size;
-    if (limit && d < VIEW_REACH + 40) {
-      // young growth where a grown tree would stand in the view: of every height under the line of sight, and
-      // the fewer the less room there is (all of them grown up to the line, they stood there as a clipped hedge)
-      const room = (limit(x, z) - y) / (def.tall ?? 18);
-      if (room < scale) {
-        if (room < 0.32 || r() > (room / scale) ** 2 * 0.7) return;
-        scale = Math.max(0.3, room * (0.5 + 0.5 * r()));
-      }
+    // … but not to the last tree (a rank of equal trees on a ridge is a comb against the sky): young ones stand
+    // among the grown, a few stand over them. (Not far away: a small tree there is a hole in the canopy.)
+    const u = r();
+    if (d < 260 && u < 0.24) scale *= 0.45 + r() * 0.35;
+    else if (u > 0.92) scale *= 1.12;
+    // wind-shorn and crooked near the tree line
+    scale *= 1 - 0.62 * high ** 1.3;
+    let small = false;
+    if (room < scale * tall) {
+      // a tree that stays under the line: of every height the room allows from a good half of it up (all of them
+      // grown up to the line, they stood there as a clipped hedge)
+      scale = (room * (room < 5 ? 0.75 + 0.25 * r() : 0.6 + 0.4 * r())) / tall;
+      small = true;
     }
+    // (small trees leave the ground between them open: one more beside it)
+    if (small && !second && scale * tall < 10 && r() < 0.75) add(x + (r() - 0.5) * 5.5, z + (r() - 0.5) * 5.5, size, d, true);
     out.push({
       species: of(id),
       variant: Math.floor(r() * 8),
@@ -350,9 +412,12 @@ export function plantTrees(terrain: TerrainData, density: number, style: CourseS
   // the ranks along the road
   scatter(g.x0, g.z0, x1, z1, 5.3 * k, (x, z) => {
     const d = roadDist(x, z);
-    if (d < clearance || d >= 85) return;
+    // (the forest's edge is no line drawn along the road: it stands back in places)
+    if (d < clearance + 7 * Math.max(0, noise2(x / 31 + 9, z / 31 - 4)) || d >= 85) return;
     // (clearings; the road's edge stays wooded for the tunnel of trees)
     if (d > 40 && noise2(x / 140, z / 140) < -0.32 + (r() - 0.5) * 0.16) return;
+    // (and gaps a few trees wide: a windthrow, a rock)
+    if (noise2(x / 34 - 20, z / 34 + 13) < -0.42 && r() < 0.85) return;
     add(x, z, 1, d);
   });
   // behind them
@@ -366,8 +431,9 @@ export function plantTrees(terrain: TerrainData, density: number, style: CourseS
   scatter(g.x0, g.z0, x1, z1, 8.5 * k, (x, z) => {
     const d = roadDist(x, z);
     if (d < 260) return;
-    // (seen from afar a clearing's edge is ragged: cut along the planting grid it was a staircase)
-    if (noise2(x / 220, z / 220) < -0.42 + (r() - 0.5) * 0.24) return;
+    // (seen from afar a clearing's edge is ragged: cut along the planting grid it was a staircase; and clearings are
+    // few there: across a lake they are bare patches in what should read as a forested mountain)
+    if (noise2(x / 220, z / 220) < -0.6 + (r() - 0.5) * 0.24) return;
     add(x, z, 1.25, d);
   });
   // the far mountains, as far as the terrain goes
@@ -375,7 +441,7 @@ export function plantTrees(terrain: TerrainData, density: number, style: CourseS
   const reach = 2200;
   scatter(Math.max(g.x0 - reach, f.x0 + f.cell), Math.max(g.z0 - reach, f.z0 + f.cell), Math.min(x1 + reach, f.x0 + (f.nx - 2) * f.cell), Math.min(z1 + reach, f.z0 + (f.nz - 2) * f.cell), 22 * k, (x, z) => {
     if (x > g.x0 && x < x1 && z > g.z0 && z < z1) return;
-    if (noise2(x / 300, z / 300) < -0.45 + (r() - 0.5) * 0.24) return;
+    if (noise2(x / 300, z / 300) < -0.62 + (r() - 0.5) * 0.24) return;
     add(x, z, 1.8, 1e6);
   });
   opts.extra?.((x, z, scale) => add(x, z, scale, roadDist(x, z)));
@@ -391,6 +457,8 @@ export interface CoverOptions {
   style: CourseStyle;
   /** the road's views (`viewLimiter`): a bush on the valley side's verge stays under the eye */
   views?: (x: number, z: number) => number;
+  /** thickets where no tree may stand (under a view, above the tree line), so far from the road (m; default 130, 0: none) */
+  thickets?: number;
 }
 
 /**
@@ -435,12 +503,10 @@ export function plantCover(
     const def = SPECIES[id];
     let scale = (def.scale[0] + (def.scale[1] - def.scale[0]) * r()) * size;
     if (opts.views && def.tall) {
-      // (a bush may stand a little higher in a view than a tree's top: it is at the road's edge, under the eye)
-      const room = (opts.views(g.x, g.z) + 0.6 - g.y) / def.tall;
-      if (room < scale) {
-        if (room < 0.3) return;
-        scale = room * (0.7 + 0.3 * r());
-      }
+      // (a bush may stand a little higher in a view than a tree's top: it is at the road's edge, under the eye;
+      // and what is lower than the eye is in nobody's way)
+      const room = Math.max(UNDER_EYE, opts.views(g.x, g.z) + 0.1 - g.y) / def.tall;
+      if (room < scale) scale = room * (0.7 + 0.3 * r());
     }
     list.push({
       species,
@@ -477,6 +543,47 @@ export function plantCover(
       // (small at the road's edge: nothing reaches over the kerb)
       // (bamboo grass is the Japanese passes')
       put(cover, coverIds, thicket && r() < 0.7 && coverIds.includes('sasa') ? 'sasa' : 'yabu', g, clamp(reach / 3.5, 0.45, 1), 0.04 + g.steep * 0.12, reach < 8);
+    }
+  }
+
+  // thickets where no tree may stand: under a view's line of sight and above the tree line the ground is not bare
+  // (bamboo grass and low scrub, in patches; they are what makes a valley side read as overgrown from above)
+  const reach = opts.thickets ?? 130;
+  if (touge && reach > 0 && (opts.views || lf.treeLine < 1500)) {
+    const grid = terrain.near;
+    const gx1 = grid.x0 + (grid.nx - 1) * grid.cell, gz1 = grid.z0 + (grid.nz - 1) * grid.cell;
+    const cell = 3.3 / Math.sqrt(Math.max(density, 0.05));
+    const proj = { index: 0, s: 0, lateral: 0, height: 0 } as ReturnType<Track['project']>;
+    for (let z0 = grid.z0; z0 < gz1; z0 += cell) {
+      for (let x0 = grid.x0; x0 < gx1; x0 += cell) {
+        const x = x0 + r() * cell, z = z0 + r() * cell;
+        const d = terrain.roadDistAt(x, z);
+        if (!(d < reach) || d < 8) continue;
+        const y = terrain.heightAt(x, z);
+        const above = y - (lf.treeLine + noise2(x / 90, z / 90) * 40);
+        // in patches: closer together under a view than on the open ridge
+        if (noise2(x / 19 + 60, z / 19 - 33) + noise2(x / 61, z / 61 + 7) * 0.6 < (above > -30 ? 0.05 : -0.22)) continue;
+        const room = opts.views ? opts.views(x, z) - y : Infinity;
+        // (where trees stand the forest floor is the undergrowth's)
+        if (room >= LOW + 2 && above < -30) continue;
+        if (lf.waterLevel !== null && y < lf.waterLevel + 0.4) continue;
+        if (townWeight(terrain, x, z) > 0.2 || keepOut.some((k) => (x - k.x) ** 2 + (z - k.z) ** 2 < k.r * k.r)) continue;
+        const gx = (terrain.heightAt(x + 1.5, z) - terrain.heightAt(x - 1.5, z)) / 3, gz = (terrain.heightAt(x, z + 1.5) - terrain.heightAt(x, z - 1.5)) / 3;
+        const steep = Math.hypot(gx, gz);
+        if (steep > 1.2) continue;
+        if (d < 26) {
+          // by the road: not on its verge, its structures or the start's apron
+          track.project(x, y, z, -1, proj);
+          const i = clamp(Math.round(proj.s), 0, track.count - 1);
+          if (track.zone[i] === 'bridge' || track.zone[i] === 'rockshed') continue;
+          if (Math.abs(proj.lateral) < track.width[i] / 2 + SHOULDER + 2.5) continue;
+          if (proj.s < track.startS + 45 && Math.abs(proj.lateral) < 16) continue;
+          if (opts.accept && !opts.accept(proj.s, proj.lateral)) continue;
+        }
+        const low = (opts.views ? Math.max(UNDER_EYE, room + 0.1) : Infinity) < 1.5 || above > -10;
+        const id = (low ? r() < 0.75 : r() < 0.35) && coverIds.includes('sasa') ? 'sasa' : 'yabu';
+        put(cover, coverIds, id, { x, y, z, steep }, id === 'yabu' && above > -30 ? 0.6 : 1, 0.04 + steep * 0.12);
+      }
     }
   }
 

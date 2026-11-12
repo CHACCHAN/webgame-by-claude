@@ -20,10 +20,9 @@ import { roadMaterial as roadSurface } from './roadMaterial';
 import { findCorners } from '../track/corners';
 import { placeProp, prop, type PropModel } from './props';
 import type { CourseStyle } from '../track/courses';
-import type { Landform } from '../track/landforms';
 import { ChunkedLods, cutout } from './instancing';
 import { Forest, vegetationFrame, type VegetationQuality } from './vegetation';
-import { cityWeight, COVER_SETS, loadedSpecies, plantCover, plantTrees, TREE_SETS, UNDER_SETS, viewLimiter } from './vegetationPlanting';
+import { cityWeight, COVER_SETS, loadedSpecies, plantCover, plantTrees, townWeight, TREE_SETS, UNDER_SETS, viewLimiter } from './vegetationPlanting';
 import { buildAutobahnScenery } from './autobahnScenery';
 import { layBridges, layRoadside, layRocksheds, Roadside } from './roadside';
 
@@ -93,7 +92,9 @@ export function buildScenery(track: Track, terrain: TerrainData, quality: Scener
   const lf = terrain.landform;
   const look: GroundLook = { grass: lf.treeLine < 1000 ? 'grass' : 'moss', waterLevel: lf.waterLevel };
   const terrainMat = detail ? (groundMaterial(look, detail) as unknown as THREE.MeshStandardMaterial) : plainTerrainMaterial(surfaceTexture);
-  const nearMesh = new THREE.Mesh(gridGeometry(terrain.near, terrain, true, !!detail), terrainMat);
+  // (the road's views: what the vegetation keeps open, and the ground under it there)
+  const views = quality.vegetation && quality.vegetation.tier !== 'legacy' ? viewLimiter(track, terrain) : undefined;
+  const nearMesh = new THREE.Mesh(gridGeometry(terrain.near, terrain, true, !!detail, views), terrainMat);
   nearMesh.receiveShadow = true;
   nearMesh.name = 'terrain-near';
   group.add(nearMesh);
@@ -113,7 +114,7 @@ export function buildScenery(track: Track, terrain: TerrainData, quality: Scener
   let roadsideUpdate: ((camera: THREE.Vector3) => void) | null = null;
   if (detail) {
     // ----------------------------------- roadside and structures, modelled
-    const rs = new Roadside(track, terrain, { detail, shadows: quality.shadows, ground: terrainMat, cover: (x, y, z) => groundCover(lf, x, y, z) });
+    const rs = new Roadside(track, terrain, { detail, shadows: quality.shadows, ground: terrainMat, cover: (x, y, z) => groundCover(terrain, x, y, z, views) });
     layRoadside(rs, sides);
     for (const l of layRocksheds(rs, sides, covers)) lamps.push({ position: l.position, color: SODIUM.clone(), s: l.s });
     for (const l of layBridges(rs, terrain)) lamps.push({ position: l.position, color: LED.clone(), s: l.s });
@@ -140,7 +141,6 @@ export function buildScenery(track: Track, terrain: TerrainData, quality: Scener
 
   // ------------------------------------------------------------- trees
   // (what the pass is known for stays in sight: the sea and the town below, the lake)
-  const views = quality.vegetation && quality.vegetation.tier !== 'legacy' ? viewLimiter(track, terrain) : undefined;
   const trees = buildTrees(terrain, quality.treeDensity, quality.treeLod, { vegetation: quality.vegetation, views });
   group.add(trees);
   const clutter = buildClutter(track, terrain, quality.treeDensity, surfaceTexture, keepOut, { vegetation: quality.vegetation, views });
@@ -373,10 +373,14 @@ export function bakeTerrainLightmap(g: HeightGrid, lamps: Lamp[]) {
 }
 
 /** what covers the ground at a place: [town 0..1, forest 0..1] (the `surf` attribute's z and w) */
-export function groundCover(lf: Landform, x: number, y: number, z: number): [number, number] {
-  const urban = cityWeight(lf, x, z);
+export function groundCover(terrain: TerrainData, x: number, y: number, z: number, views?: (x: number, z: number) => number): [number, number] {
+  const lf = terrain.landform;
+  // (a town's ground only where a town can stand: its outline takes no notice of the mountainside it reaches up)
+  const urban = townWeight(terrain, x, z);
   let forest = smoothstep(0.15, 0.35, lf.relief(x, z)) * smoothstep(lf.treeLine + 35, lf.treeLine - 25, y) * (1 - urban);
   if (lf.waterLevel !== null) forest *= smoothstep(lf.waterLevel + 1.5, lf.waterLevel + 4, y);
+  // (where a view keeps the trees away the ground is open land with its thickets, not a forest's bare floor)
+  if (views && forest > 0) forest *= smoothstep(1.5, 7, views(x, z) - y);
   return [urban, forest];
 }
 
@@ -385,7 +389,7 @@ export function groundCover(lf: Landform, x: number, y: number, z: number): [num
  * A height grid's mesh. `layered`: for render/terrainMaterial.ts, which reads what the ground is from `surf` (four
  * bytes per vertex, see there) instead of vertex colours.
  */
-export function gridGeometry(g: HeightGrid, terrain: TerrainData, near: boolean, layered = false) {
+export function gridGeometry(g: HeightGrid, terrain: TerrainData, near: boolean, layered = false, views?: (x: number, z: number) => number) {
   const { nx, nz, cell, x0, z0, heights } = g;
   const geo = new THREE.PlaneGeometry((nx - 1) * cell, (nz - 1) * cell, nx - 1, nz - 1);
   geo.rotateX(-Math.PI / 2);
@@ -407,7 +411,6 @@ export function gridGeometry(g: HeightGrid, terrain: TerrainData, near: boolean,
   // (rows now run towards +z, which keeps PlaneGeometry's winding facing +y)
   geo.computeVertexNormals();
   if (layered) {
-    const lf = terrain.landform;
     const surf = new Uint8Array(nx * nz * 4);
     const h = (i: number, j: number) => heights[clamp(j, 0, nz - 1) * nx + clamp(i, 0, nx - 1)];
     for (let j = 0; j < nz; j++)
@@ -417,7 +420,7 @@ export function gridGeometry(g: HeightGrid, terrain: TerrainData, near: boolean,
         const beyond = near && g.edgeDist ? g.edgeDist[vi] : 1e6;
         // convex (a spur, a bank's shoulder) above 0.5, hollow below: the land's second derivative, per metre
         const lap = (h(i - 1, j) + h(i + 1, j) + h(i, j - 1) + h(i, j + 1) - 4 * y) / (cell * cell);
-        const [urban, forest] = groundCover(lf, x, y, z);
+        const [urban, forest] = groundCover(terrain, x, y, z, beyond < 320 ? views : undefined);
         surf[vi * 4] = clamp((beyond + 2) / 34, 0, 1) * 255;
         surf[vi * 4 + 1] = clamp(0.5 - lap * 7, 0, 1) * 255;
         surf[vi * 4 + 2] = urban * 255;
