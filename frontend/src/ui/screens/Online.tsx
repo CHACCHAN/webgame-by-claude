@@ -218,7 +218,7 @@ function SetupCell({ label, value, hint, onChange }: { label: string; value: str
         <small>{label}</small>
         <b>{value}</b>
       </span>
-      {onChange && <em>変更 ▶</em>}
+      {onChange && <em><span>変更</span> ▶</em>}
     </>
   );
   return onChange ? (
@@ -467,14 +467,17 @@ export function OnlineRoomScreen() {
       {!picking && !setup && <LobbyTags room={room} playerId={player.id} choosing={choosing} />}
       <ScreenHead jp="ルーム" en="ONLINE ROOM" note={<>{course?.name ?? room.track_id}・{conditions?.jp ?? ''} <RealtimeBadge /></>} />
       <div className="ol-panel">
-        <div className="ol-code-big">
-          <small>ROOM CODE</small>
-          <b>{room.code}</b>
-          <span>友達にこのコードを伝えてください</span>
-        </div>
-        <div className="ol-setup">
-          <SetupCell label="コース" value={course?.name ?? room.track_id} hint="fav" onChange={canSet ? () => setSetup('course') : undefined} />
-          <SetupCell label="時間帯・天候" value={conditions?.jp ?? ''} hint="color" onChange={canSet ? () => setSetup('conditions') : undefined} />
+        {/* (two rows; on a phone one: the code, then the room's course and conditions beside it) */}
+        <div className="ol-top">
+          <div className="ol-code-big">
+            <small>ROOM CODE</small>
+            <b>{room.code}</b>
+            <span>友達にこのコードを伝えてください</span>
+          </div>
+          <div className="ol-setup">
+            <SetupCell label="コース" value={course?.name ?? room.track_id} hint="fav" onChange={canSet ? () => setSetup('course') : undefined} />
+            <SetupCell label="時間帯・天候" value={conditions?.jp ?? ''} hint="color" onChange={canSet ? () => setSetup('conditions') : undefined} />
+          </div>
         </div>
         <ul className="ol-slots">
           {Array.from({ length: room.max_players }, (_, slot) => {

@@ -37,6 +37,7 @@
 .overlay:has(> .room-over) > .screen:not(.room-over) { visibility: hidden; }
 
 /* the room's course and its time & weather: what they are, and for the host the way to change each */
+.ol-top { display: contents; }
 .ol-setup { display: grid; grid-template-columns: 1.3fr 1fr; gap: 0.4rem; }
 .ol-set { --c: var(--cut-s); --tex: none; --fill: rgb(var(--c-ink-2) / 0.55); display: flex; align-items: center; gap: 0.6rem; min-width: 0; padding: 0.4rem 0.8rem; text-align: left; }
 button.ol-set:hover { --edge: var(--cyan); }
@@ -137,14 +138,15 @@ em.you { color: var(--on-cyan); background: var(--cyan); border-color: var(--cya
   .ol-split { grid-template-columns: 1.5fr 1fr; gap: 14px; }
   .ol-section { gap: 5px; }
   .ol-me b { font-size: 16px; }
-  .ol-code-big { grid-template-columns: auto auto 1fr; column-gap: 10px; }
-  .ol-code-big small { grid-column: auto; }
-  .ol-code-big b { font-size: 24px; }
-  .ol-code-big span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .ol-setup { gap: 4px; }
-  .ol-set { padding: 2px 8px; gap: 6px; }
-  .ol-set-name { display: flex; align-items: baseline; gap: 6px; }
-  .ol-set-name small { flex: none; font-size: 9px; }
+  /* one row: the code, then the room's course and conditions (five seats and the buttons must fit under it;
+     the labels and the code's hint give way: the values say what they are, the bar above says ルーム + the code) */
+  .ol-top { display: flex; align-items: stretch; gap: 8px; min-width: 0; }
+  .ol-code-big { flex: none; display: block; }
+  .ol-code-big small, .ol-code-big span { display: none; }
+  .ol-code-big b { display: block; font-size: 24px; }
+  .ol-setup { flex: 1; min-width: 0; gap: 4px; }
+  .ol-set { padding: 0 8px; gap: 6px; }
+  .ol-set-name small, .ol-set em span { display: none; }
   .ol-set-name b { font-size: 12px; }
   .ol-set em { font-size: 11px; }
   .ol-load { height: 2px; }
