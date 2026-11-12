@@ -970,8 +970,9 @@ export function buildTrees(
       // (the shadow map is a square of 120 m around the car)
       shadows: 80,
       prepass: true,
-      // (beyond lod1 and in the shadow map one shape per species: 24 draw calls less, each ~30 µs of main-thread time)
-      single: [false, false, true, true],
+      // (beyond the nearest level and in the shadow map one shape per species: 40 draw calls less, each ~60 µs of
+      // main-thread time; from 30 m on a tree's turn, height, girth and tint tell it from its neighbour, not its boughs)
+      single: [false, true, true, true],
     });
     group.add(forest.group);
     group.userData.lods = forest;
@@ -1215,7 +1216,9 @@ export function buildClutter(
         shadows: 30,
         impostors: false,
         capacity: [200, 800, 3000, 800],
-        single: [false, false, true, true],
+        single: [false, true, true, true],
+        // (a bush is cards over cards as a tree is: lit once, where it is seen)
+        prepass: true,
       }),
     ];
     if (planted.under.length) {
@@ -1228,7 +1231,9 @@ export function buildClutter(
           impostors: false,
           capacity: [3000, 3000, 12000, 1],
           strides: [3, 3, 6, 8],
-          single: [false, false, true, false],
+          // (a tuft among thousands: one shape per species, and the grass in front of the camera lit once per pixel)
+          single: [true, true, true, false],
+          prepass: true,
         }),
       );
     }

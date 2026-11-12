@@ -376,6 +376,8 @@ interface InstanceNodes {
   foot: N;
   /** how far the instance is from the viewer */
   dist: N;
+  /** the same as its levels of detail count it: longer for a small plant (`Planted.small`) */
+  lod: N;
   /** the local point scaled and turned by the instance */
   place: (v: N) => N;
   turn: (v: N) => N;
@@ -395,7 +397,7 @@ interface InstanceNodes {
 
 /**
  * The instance's two attributes as shader nodes. instA: x, y, z, yaw; instB: height scale, girth, the ground's
- * slope and the tint in one number (`packLook`), variant + seed.
+ * slope and the tint in one number (`packLook`), variant + 8 × its smallness in steps (`SMALL_STEP`) + seed.
  */
 function instanceNodes(): InstanceNodes {
   const A: N = attribute('instA', 'vec4'), B: N = attribute('instB', 'vec4');
@@ -409,9 +411,11 @@ function instanceNodes(): InstanceNodes {
   const c: N = cos(A.w), s: N = sin(A.w);
   const turn = (v: N): N => vec3(v.x.mul(c).add(v.z.mul(s)), v.y, v.z.mul(c).sub(v.x.mul(s)));
   const girth: N = B.x.mul(B.y);
+  const dist: N = foot.sub(viewer).length();
   return {
     foot,
-    dist: foot.sub(viewer).length(),
+    dist,
+    lod: dist.mul(floor(B.w.div(8)).mul(SMALL_STEP).add(1)),
     turn,
     place: (v: N) => v.mul(vec3(girth, B.x, girth)),
     ground: vec3(slope.x, float(1).sub(slope.dot(slope)).max(0.05).sqrt(), slope.y),
@@ -424,6 +428,9 @@ function instanceNodes(): InstanceNodes {
     },
   };
 }
+
+/** a plant's smallness is kept in steps of this (0 … 7 of them: 1 … 3.1), so that the picking and the shaders count the same */
+const SMALL_STEP = 0.3;
 
 /** the ground's slope under a plant (the normal's x and z) and its tint (0…1) in one float: see `instanceNodes` */
 function packLook(nx: number, nz: number, tint: number) {
@@ -445,19 +452,71 @@ export interface PlantLook {
   moss?: number;
 }
 
+/**
+ * What a species gives a shader: its textures and the numbers of its `PlantLook`. The shaders take them from the mesh
+ * being drawn (`userData.kin`), not from their material: the species of a forest then share one material per level,
+ * and with it one built shader and one GPU pipeline. A material per species was 75 of a course's 160 shaders, built
+ * one after the other while the course loads.
+ */
+interface Kin {
+  leaf: THREE.Texture;
+  leafN: THREE.Texture | null;
+  imp: THREE.Texture | null;
+  impN: THREE.Texture | null;
+  tint: THREE.Vector3;
+  wind: number;
+  translucency: number;
+  moss: number;
+}
+
+function kinOf(model: PlantModel, look: PlantLook): Kin {
+  return {
+    leaf: model.leaf, leafN: model.leafN, imp: model.imp, impN: model.impN,
+    tint: new THREE.Vector3(...(look.tint ?? [1, 1, 1])), wind: look.wind ?? 1, translucency: look.translucency ?? 1, moss: look.moss ?? 1,
+  };
+}
+
+const kin = (() => {
+  // the textures as nodes: a shader reads `texture(kin.leaf, uv)`, which follows this node's value
+  const leaf: N = texture(), leafN: N = texture(), imp: N = texture(), impN: N = texture();
+  const use = (k: Kin) => {
+    leaf.value = k.leaf;
+    if (k.leafN) leafN.value = k.leafN;
+    if (k.imp) imp.value = k.imp;
+    if (k.impN) impN.value = k.impN;
+  };
+  // A texture node cannot ask to be brought up to date per object (three.js sets its update type itself), so the
+  // numbers do it for them: every one of these shaders has one, and it is asked for before the object's textures
+  // are bound.
+  const per = (start: number | THREE.Vector3, pick: (k: Kin) => number | THREE.Vector3): N =>
+    (uniform(start as never) as N).onObjectUpdate(({ object }: { object: THREE.Object3D | null }) => {
+      const k = object?.userData.kin as Kin | undefined;
+      if (!k) return undefined;
+      use(k);
+      return pick(k);
+    });
+  return {
+    leaf, leafN, imp, impN, use,
+    tint: per(new THREE.Vector3(1, 1, 1), (k) => k.tint),
+    wind: per(1, (k) => k.wind),
+    translucency: per(1, (k) => k.translucency),
+    moss: per(1, (k) => k.moss),
+  };
+})();
+
 /** what the picture's material and the depth-only one share: where a vertex goes and the cutout */
-function plantNodes(model: PlantModel, look: PlantLook, span: Span) {
+function plantNodes(span: Span) {
   const I = instanceNodes();
   const veg: N = attribute('veg', 'vec4');
   const S: N = span;
-  const windK = look.wind ?? 1;
+  const windK: N = kin.wind;
   // `sway`: the motion vector has the wind's own movement in it (the nearest level). Further away that movement is
   // a fraction of a pixel a frame, and working the wind out a second time for the frame before doubled the vertex
   // stage of every tree under the upscaler (scene pass 8.9 ms against 4.7 ms without vegetation, 1440p quality)
   const position = (sway: boolean): N =>
     Fn(() => {
       // outside the level's span (and inside the garage's clearing) the instance is drawn at no size, at its foot
-      const size: N = I.open.mul(step(S.x.sub(S.y), I.dist)).mul(step(I.dist, S.z));
+      const size: N = I.open.mul(step(S.x.sub(S.y), I.lod)).mul(step(I.lod, S.z));
       const lp: N = I.place(positionLocal).toVar();
       const at: N = I.foot.add(I.turn(lp)).toVar();
       (normalLocal as N).assign(I.turn(normalLocal));
@@ -468,9 +527,9 @@ function plantNodes(model: PlantModel, look: PlantLook, span: Span) {
   // per instance, worked out in the vertex stage: the dither's two thresholds and the cutout's (far cards keep
   // their thin twigs: a mip's alpha is the coverage, and half of it would leave the crown bald)
   const fade: N = varying(
-    vec3(float(1).sub(smoothstep(S.x.sub(S.y), S.x, I.dist)), float(1).sub(smoothstep(S.z.sub(S.w), S.z, I.dist)), mix(0.5, 0.26, smoothstep(5, 50, I.dist))),
+    vec3(float(1).sub(smoothstep(S.x.sub(S.y), S.x, I.lod)), float(1).sub(smoothstep(S.z.sub(S.w), S.z, I.lod)), mix(0.5, 0.26, smoothstep(5, 50, I.dist))),
   );
-  const tex: N = texture(model.leaf, uv());
+  const tex: N = texture(kin.leaf, uv());
   const d: N = dither();
   const mask: N = tex.a.greaterThan(fade.z).and(d.lessThan(fade.y)).and(d.greaterThanEqual(fade.x));
   // x: the hillside's shade; y: 0 near … 1 beyond the shadow map's reach, where nothing stands between a tree and
@@ -478,28 +537,28 @@ function plantNodes(model: PlantModel, look: PlantLook, span: Span) {
   // glowed against a low sun, and glittered under the moon in the rain)
   const lit: N = varying(vec2(I.shade(false), smoothstep(50, 110, I.dist)));
   // the hillside's normal as the camera sees it, and how much of it the far trees take (as the impostors do)
-  const ground: N = varying(vec4((cameraViewMatrix as N).mul(vec4(I.ground, 0)).xyz, smoothstep(70, 190, I.dist).mul(0.4)));
+  const ground: N = varying(vec4((cameraViewMatrix as N).mul(vec4(I.ground, 0)).xyz, smoothstep(70, 190, I.lod).mul(0.4)));
   return { I, veg, position, mask, tex, shade: lit.x, far: lit.y, ground };
 }
 
 /**
- * The material of a level's meshes: bark and foliage from the species' one texture pair. `second`: the lit pass of
- * two (see the file's header): no cutout, only where the first pass left this very depth.
+ * The material of a level's meshes: bark and foliage from the species' one texture pair (`normals`: it has a normal
+ * map). `second`: the lit pass of two (see the file's header): no cutout, only where the first pass left this very depth.
  */
-function plantMaterial(model: PlantModel, look: PlantLook, span: Span, second = false, sway = true) {
+function plantMaterial(normals: boolean, span: Span, second = false, sway = true) {
   const mat = new MeshSSSNodeMaterial();
   mat.side = THREE.DoubleSide;
   mat.metalness = 0;
   mat.envMapIntensity = 0.3;
-  const { I, veg, position, mask, tex, shade, far, ground } = plantNodes(model, look, span);
+  const { I, veg, position, mask, tex, shade, far, ground } = plantNodes(span);
   mat.positionNode = position(sway);
-  const texN: N = model.leafN ? texture(model.leafN, uv()) : vec4(0.5, 0.5, 1, 1);
+  const texN: N = normals ? texture(kin.leafN, uv()) : vec4(0.5, 0.5, 1, 1);
   if (second) {
     mat.depthFunc = THREE.EqualDepth;
     mat.depthWrite = false;
   } else mat.maskNode = mask;
   const leaf: N = texN.a;
-  const hue: N = mix(vec3(0.8, 0.9, 0.74), vec3(1.14, 1.06, 0.9), I.tint).mul(vec3(...(look.tint ?? [1, 1, 1])));
+  const hue: N = mix(vec3(0.8, 0.9, 0.74), vec3(1.14, 1.06, 0.9), I.tint).mul(kin.tint);
   const ao: N = veg.r;
   const albedo: N = tex.rgb
     .mul(mix(vec3(1), hue, leaf.mul(0.75).add(0.25)))
@@ -516,7 +575,7 @@ function plantMaterial(model: PlantModel, look: PlantLook, span: Span, second = 
   const n: N = texN.rgb.mul(2).sub(1);
   mat.normalNode = (mix(perturb(normalViewGeometry, vec3(n.xy.mul(1.2), n.z), uv()), ground.xyz, ground.w) as N).normalize();
   // light through the leaves: the crown's rim glows against the sun, a lamp, headlights
-  mat.thicknessColorNode = albedo.mul(leaf).mul((look.translucency ?? 1) * 1.6).mul(mix(1, 0.08, far));
+  mat.thicknessColorNode = albedo.mul(leaf).mul(kin.translucency.mul(1.6)).mul(mix(1, 0.08, far));
   mat.thicknessDistortionNode = float(0.4);
   mat.thicknessAmbientNode = float(0);
   mat.thicknessAttenuationNode = float(1);
@@ -526,41 +585,41 @@ function plantMaterial(model: PlantModel, look: PlantLook, span: Span, second = 
 }
 
 /** The first of a tree level's two passes: the cutout, the depth, the motion vectors, and the colour under the sky's light. */
-function firstMaterial(model: PlantModel, look: PlantLook, span: Span, sway = true) {
+function firstMaterial(span: Span, sway = true) {
   const mat = new MeshBasicNodeMaterial();
   mat.side = THREE.DoubleSide;
-  const { I, veg, position, mask, tex, shade } = plantNodes(model, look, span);
+  const { I, veg, position, mask, tex, shade } = plantNodes(span);
   mat.positionNode = position(sway);
   mat.maskNode = mask;
-  const hue: N = mix(vec3(0.8, 0.9, 0.74), vec3(1.14, 1.06, 0.9), I.tint).mul(vec3(...(look.tint ?? [1, 1, 1])));
+  const hue: N = mix(vec3(0.8, 0.9, 0.74), vec3(1.14, 1.06, 0.9), I.tint).mul(kin.tint);
   mat.colorNode = vec4(tex.rgb.mul(hue).mul(veg.r.mul(0.6).add(0.4)).mul(mix(1, 0.68, wet)).mul(shade).mul(skyLight), 1);
   return mat;
 }
 
 /** a rock: its colour and normal from the octahedral map, moss on what faces the sky, darker and shinier in rain */
-function rockMaterial(model: PlantModel, look: PlantLook, span: Span) {
+function rockMaterial(normals: boolean, span: Span) {
   const mat = new MeshStandardNodeMaterial();
   mat.metalness = 0;
   mat.envMapIntensity = 0.4;
   const I = instanceNodes();
   const S: N = span;
   mat.positionNode = Fn(() => {
-    const size: N = I.open.mul(step(S.x.sub(S.y), I.dist)).mul(step(I.dist, S.z));
+    const size: N = I.open.mul(step(S.x.sub(S.y), I.lod)).mul(step(I.lod, S.z));
     const at: N = mix(I.foot, I.foot.add(I.turn(I.place(positionLocal))), size).toVar();
     (normalLocal as N).assign(I.turn(normalLocal));
     (positionPrevious as N).assign(at);
     return at;
   })();
-  const fade: N = varying(vec2(float(1).sub(smoothstep(S.x.sub(S.y), S.x, I.dist)), float(1).sub(smoothstep(S.z.sub(S.w), S.z, I.dist))));
+  const fade: N = varying(vec2(float(1).sub(smoothstep(S.x.sub(S.y), S.x, I.lod)), float(1).sub(smoothstep(S.z.sub(S.w), S.z, I.lod))));
   const d: N = dither();
   mat.maskNode = d.lessThan(fade.y).and(d.greaterThanEqual(fade.x));
-  const tex: N = texture(model.leaf, uv());
-  const texN: N = model.leafN ? texture(model.leafN, uv()) : vec4(0.5, 1, 0.5, 0.5);
+  const tex: N = texture(kin.leaf, uv());
+  const texN: N = normals ? texture(kin.leafN, uv()) : vec4(0.5, 1, 0.5, 0.5);
   // the normal in the rock's frame, turned with the instance: the world's
   const world: N = I.turn(texN.rgb.mul(2).sub(1)).normalize();
-  const moss: N = smoothstep(0.5, 0.82, world.y.mul(0.7).add(texN.a.mul(0.5))).mul(look.moss ?? 1);
+  const moss: N = smoothstep(0.5, 0.82, world.y.mul(0.7).add(texN.a.mul(0.5))).mul(kin.moss);
   const shade: N = mix(0.82, 1.12, I.tint);
-  const albedo: N = mix(tex.rgb.mul(shade).mul(vec3(...(look.tint ?? [1, 1, 1]))), vec3(0.075, 0.115, 0.035).mul(tex.g.mul(1.6).add(0.45)), moss).mul(mix(1, 0.62, wet));
+  const albedo: N = mix(tex.rgb.mul(shade).mul(kin.tint), vec3(0.075, 0.115, 0.035).mul(tex.g.mul(1.6).add(0.45)), moss).mul(mix(1, 0.62, wet));
   mat.colorNode = vec4(albedo, 1);
   mat.roughnessNode = mix(mix(0.88, 0.97, moss), 0.32, wet.mul(0.85));
   mat.normalNode = (cameraViewMatrix as N).mul(vec4(world, 0)).xyz.normalize();
@@ -572,7 +631,7 @@ function rockMaterial(model: PlantModel, look: PlantLook, span: Span) {
  * (`hullOf`), one side of it, with holes where a noise in the tree's own space says so (the light that falls through
  * a crown, without a texture to read per texel), most of them along its outline.
  */
-function shadowMaterial(model: PlantModel, look: PlantLook, reach: Reach, hull: boolean) {
+function shadowMaterial(reach: Reach, hull: boolean) {
   const mat = new MeshBasicNodeMaterial();
   mat.side = hull ? THREE.FrontSide : THREE.DoubleSide;
   const I = instanceNodes();
@@ -580,7 +639,7 @@ function shadowMaterial(model: PlantModel, look: PlantLook, reach: Reach, hull: 
   mat.positionNode = Fn(() => {
     const size: N = I.open.mul(step(I.dist, reach as N));
     const lp: N = I.place(positionLocal).toVar();
-    return mix(I.foot, I.foot.add(I.turn(lp)).add(windPush(lp, veg, I.foot, I.seed, windNow).mul(look.wind ?? 1)), size);
+    return mix(I.foot, I.foot.add(I.turn(lp)).add(windPush(lp, veg, I.foot, I.seed, windNow).mul(kin.wind)), size);
   })();
   if (hull) {
     const q: N = varying(positionLocal), crown: N = varying(veg.a);
@@ -593,15 +652,17 @@ function shadowMaterial(model: PlantModel, look: PlantLook, reach: Reach, hull: 
     // metre), few where the shape faces the light and many where it turns away from it, which is its outline there.
     const facing: N = (varying(I.turn(normalLocal)) as N).normalize().dot(keyDir as N).abs();
     mat.maskShadowNode = gaps.lessThan(mix(9, mix(-0.15, 1.05, smoothstep(0.1, 0.6, facing)), crown));
-  } else mat.maskShadowNode = (texture(model.leaf, uv()) as N).a.greaterThan(0.4);
+  } else mat.maskShadowNode = (texture(kin.leaf, uv()) as N).a.greaterThan(0.4);
   return mat;
 }
 
-/** the impostors' material: a card that turns to the viewer about the vertical and shows the nearest of the eight views */
-function impostorMaterial(model: PlantModel, look: PlantLook, span: Span) {
-  const mat = new MeshSSSNodeMaterial();
-  mat.metalness = 0;
-  mat.envMapIntensity = 0.3;
+/**
+ * The impostors' material: a card that turns to the viewer about the vertical and shows the nearest of the eight
+ * views. `pass`: as the mesh levels (see the file's header), the cutout and the depth first and the lighting only
+ * where a card is seen. A far hillside is cards many deep, in the order of their distance from the road, not from
+ * the viewer: lit in one pass, most of what was lit was then covered.
+ */
+function impostorMaterial(normals: boolean, span: Span, pass: 'first' | 'second') {
   const I = instanceNodes();
   const B: N = attribute('instB', 'vec4');
   // (half width, height, foot depth, first row) and the cell (u0, v0, width, height) of the instance's variant
@@ -616,10 +677,10 @@ function impostorMaterial(model: PlantModel, look: PlantLook, span: Span) {
     const ph: N = I.seed.mul(6.283).add(I.foot.x.mul(0.031)).add(I.foot.z.mul(0.047));
     const gust: N = sin(t.mul(0.7).add(ph)).mul(0.5).add(sin(t.mul(1.9).add(ph.mul(1.7))).mul(0.25)).add(0.35);
     const h: N = corner.y.mul(F.y).mul(B.x).mul(1 / 16);
-    return vec3(WIND.x, 0, WIND.y).mul(h.mul(h).mul(gust).mul(0.3 * (look.wind ?? 1))).mul(windPower);
+    return vec3(WIND.x, 0, WIND.y).mul(h.mul(h).mul(gust).mul(0.3).mul(kin.wind)).mul(windPower);
   };
-  mat.positionNode = Fn(() => {
-    const size: N = I.open.mul(step(S.x.sub(S.y), I.dist));
+  const position: N = Fn(() => {
+    const size: N = I.open.mul(step(S.x.sub(S.y), I.lod));
     // (far away the cards are drawn wider: the crowns of a hillside close into a canopy, where trees a few pixels
     // wide with the dark ground between them were a grain)
     const wide: N = mix(1, 1.8, smoothstep(S.x, S.x.add(350), I.dist));
@@ -638,34 +699,46 @@ function impostorMaterial(model: PlantModel, look: PlantLook, span: Span) {
   // (z: how much of the card's height is drawn. Far away the texture's small mips mix a view with the cells around
   // it, and the trunk's foot of the variant in the row above showed as a dot in the air over every distant tree)
   const fade: N = varying(
-    vec3(float(1).sub(smoothstep(S.x.sub(S.y), S.x, I.dist)), mix(0.45, 0.25, smoothstep(150, 600, I.dist)), mix(1.0, 0.93, smoothstep(230, 600, I.dist))),
+    vec3(float(1).sub(smoothstep(S.x.sub(S.y), S.x, I.lod)), mix(0.45, 0.25, smoothstep(150, 600, I.dist)), mix(1.0, 0.93, smoothstep(230, 600, I.dist))),
   );
-  const tex: N = texture(model.imp!, coord);
-  mat.maskNode = tex.a.greaterThan(fade.y).and(dither().greaterThanEqual(fade.x)).and(uv().y.lessThan(fade.z));
-  const hue: N = mix(vec3(0.8, 0.9, 0.74), vec3(1.14, 1.06, 0.9), I.tint).mul(vec3(...(look.tint ?? [1, 1, 1])));
+  const tex: N = texture(kin.imp, coord);
+  const hue: N = mix(vec3(0.8, 0.9, 0.74), vec3(1.14, 1.06, 0.9), I.tint).mul(kin.tint);
   // (a far hillside is a canopy: its trees stand in each other's shade. Lit one by one as if each stood alone they
   // were bright dots on the darker ground, a grain over the whole mountain at dawn)
   // (from where the impostors begin, so that the last mesh level hands over at the same brightness)
   const canopy: N = mix(1, 0.45, smoothstep(S.x, S.x.add(350), I.dist));
   const albedo: N = tex.rgb.mul(mix(vec3(1), hue, 0.85)).mul(mix(1, 0.68, wet)).mul(varying(I.shade(true).mul(canopy)));
+  if (pass === 'first') {
+    const first = new MeshBasicNodeMaterial();
+    first.positionNode = position;
+    first.maskNode = tex.a.greaterThan(fade.y).and(dither().greaterThanEqual(fade.x)).and(uv().y.lessThan(fade.z));
+    first.colorNode = vec4(albedo.mul(skyLight), 1);
+    return first;
+  }
+  const mat = new MeshSSSNodeMaterial();
+  mat.metalness = 0;
+  mat.envMapIntensity = 0.3;
+  mat.positionNode = position;
+  mat.depthFunc = THREE.EqualDepth;
+  mat.depthWrite = false;
   mat.colorNode = vec4(albedo, 1);
   mat.roughnessNode = float(0.8);
   // (see `plantMaterial` on the shine of far foliage)
   mat.specularIntensityNode = float(0.1);
   // the baked normal is in the view's frame: right, up, towards the viewer
   const basis: N = varying(vec4(right.x, right.z, dir.x, dir.y));
-  const n: N = model.impN ? (texture(model.impN, coord) as N).rgb.mul(2).sub(1) : vec3(0, 0, 1);
+  const n: N = normals ? (texture(kin.impN, coord) as N).rgb.mul(2).sub(1) : vec3(0, 0, 1);
   const own: N = vec3(basis.x.mul(n.x).add(basis.z.mul(n.z)), n.y, basis.y.mul(n.x).add(basis.w.mul(n.z)));
   // (far away a tree is lit as its hillside is: with its own round shape every tree of a sunlit slope had a bright
   // side and a dark one, a few pixels each, and the slope was a field of dots instead of a canopy)
-  const flat: N = varying(vec4(I.ground, smoothstep(S.x.sub(S.y), S.x.add(140), I.dist).mul(0.45).add(0.4)));
+  const flat: N = varying(vec4(I.ground, smoothstep(S.x.sub(S.y), S.x.add(140), I.lod).mul(0.45).add(0.4)));
   const world: N = mix(own, flat.xyz, flat.w);
   mat.normalNode = (cameraViewMatrix as N).mul(vec4(world, 0)).xyz.normalize();
   // (a tree this far away is out of the lamps' and the headlights' reach)
   if (farLights) mat.lightsNode = lights(farLights) as N;
   // (little: see `plantNodes` on the far trees)
   // (hardly any: against a low sun a far slope's trees glowed pale, one by one, on ground that the same sun barely lit)
-  mat.thicknessColorNode = albedo.mul((look.translucency ?? 1) * 0.06);
+  mat.thicknessColorNode = albedo.mul(kin.translucency.mul(0.06));
   mat.thicknessDistortionNode = float(0.4);
   mat.thicknessAmbientNode = float(0);
   mat.thicknessAttenuationNode = float(1);
@@ -709,6 +782,12 @@ export interface Planted {
   nx?: number;
   nz?: number;
   seed: number;
+  /**
+   * How small it is: a tree a third as tall is as small in the picture at 30 m as a grown one at 90 m, and changes
+   * to its coarser levels that much nearer (1, the default: full-grown … 3.1; kept in steps of 0.3). A sapling by
+   * the road was drawn with the 17 000 triangles of the nearest level, as its grown neighbour.
+   */
+  small?: number;
   /** it never comes near the viewer (far from the road): an impostor only */
   far?: boolean;
   /** it throws a shadow (default: it does). Only what stands by the road should: the others' shadows fall in the forest, unseen */
@@ -812,6 +891,8 @@ export class Forest {
   private impostorMeshes: { mesh: THREE.Mesh; count: number }[] = [];
   private reach = uniform(0);
   private materials = new Map<number, THREE.Material>();
+  /** per species: what its meshes hand to the shared shaders */
+  private kins: Kin[];
   /** every mesh is in the scene, empty or not (see `vegetationHold`) */
   private showingAll = true;
   private inReach: Chunk[] = [];
@@ -819,6 +900,7 @@ export class Forest {
   count = 0;
 
   constructor(private readonly species: ForestSpecies[], plants: Planted[], opts: ForestOptions) {
+    this.kins = species.map((sp) => kinOf(sp.model, sp.look));
     const size = opts.chunk ?? 32;
     const lists = new Map<string, Map<number, number[]>>();
     const castLists = new Map<string, Map<number, number[]>>();
@@ -832,7 +914,8 @@ export class Forest {
       if (!sp) continue;
       const variant = p.variant % sp.model.variants.length;
       const k = p.species * MAX_VARIANTS + variant;
-      const row = [p.x, p.y, p.z, p.yaw, p.scale, p.girth, packLook(p.nx ?? 0, p.nz ?? 0, p.tint), variant + Math.min(0.999, Math.max(0, p.seed))];
+      const small = Math.min(7, Math.max(0, Math.round(((p.small ?? 1) - 1) / SMALL_STEP)));
+      const row = [p.x, p.y, p.z, p.yaw, p.scale, p.girth, packLook(p.nx ?? 0, p.nz ?? 0, p.tint), variant + 8 * small + Math.min(0.999, Math.max(0, p.seed))];
       const list0 = all[p.species];
       for (const v of row) list0.push(v);
       this.count++;
@@ -896,6 +979,7 @@ export class Forest {
           const mat = shadow ? this.material(si, 4 + (variant.hull ? 1 : 0), span) : this.material(si, l, span, prepass);
           const mesh = new THREE.Mesh(geo, mat as unknown as THREE.Material);
           mesh.frustumCulled = false;
+          mesh.userData.kin = this.kins[si];
           mesh.name = `${sp.model.id}-v${vi}-${shadow ? 'shadow' : `lod${l}`}`;
           if (shadow) {
             mesh.castShadow = true;
@@ -910,6 +994,7 @@ export class Forest {
           if (prepass) {
             pre = new THREE.Mesh(geo, this.material(si, 8 + l, span));
             pre.frustumCulled = false;
+            pre.userData.kin = this.kins[si];
             pre.name = `${sp.model.id}-v${vi}-first${l}`;
             pre.renderOrder = FIRST - 1.5 + l * 0.1;
             this.group.add(pre);
@@ -936,29 +1021,44 @@ export class Forest {
         const arr = data.array as Float32Array;
         for (let i = 0; i < n; i++) {
           for (let k = 0; k < STRIDE; k++) arr[i * 16 + k] = rows[i * STRIDE + k];
-          const f = sp.model.variants[Math.floor(rows[i * STRIDE + 7])].impostor;
+          const f = sp.model.variants[Math.floor(rows[i * STRIDE + 7]) & 7].impostor;
           if (f) arr.set([f.half, f.height, f.base, 0, ...f.cell], i * 16 + 8);
         }
         geo.instanceCount = n;
-        const mesh = new THREE.Mesh(geo, impostorMaterial(sp.model, sp.look, span) as unknown as THREE.Material);
+        const mesh = new THREE.Mesh(geo, this.material(si, 13, span));
         mesh.frustumCulled = false;
+        mesh.userData.kin = this.kins[si];
         mesh.name = `${sp.model.id}-impostors`;
         mesh.renderOrder = FIRST + 3;
-        this.group.add(mesh);
+        const pre = new THREE.Mesh(geo, this.material(si, 12, span));
+        pre.frustumCulled = false;
+        pre.userData.kin = this.kins[si];
+        pre.name = `${sp.model.id}-impostors-first`;
+        pre.renderOrder = FIRST + 2.9;
+        this.group.add(pre, mesh);
         this.impostorMeshes.push({ mesh, count: n });
       });
     }
   }
 
-  /** one material per species and level (its span differs); `level` 4 / 5: the shadows' (cards / hull), 8…: the depth pass of level − 8 */
+  /**
+   * One material per level (its span differs) for all the species (`Kin`); rocks, and species with and without a
+   * normal map, are different shaders. `level` 4 / 5: the shadows' (cards / hull), 8…10: the first pass of level − 8,
+   * 12 / 13: the impostors' first and second pass.
+   */
   private material(species: number, level: number, span: Span, prepass = false) {
-    const key = species * 16 + level;
+    const sp = this.species[species];
+    const rock = sp.look.kind === 'rock';
+    const normals = !!(level >= 12 ? sp.model.impN : sp.model.leafN);
+    const key = level < 4 || level >= 12 ? level + (rock ? 16 : 0) + (normals ? 32 : 0) : level;
     let m = this.materials.get(key);
     if (!m) {
-      const sp = this.species[species];
-      if (level >= 8) m = firstMaterial(sp.model, sp.look, span, level === 8) as unknown as THREE.Material;
-      else if (level >= 4) m = shadowMaterial(sp.model, sp.look, this.reach, level === 5) as unknown as THREE.Material;
-      else m = (sp.look.kind === 'rock' ? rockMaterial(sp.model, sp.look, span) : plantMaterial(sp.model, sp.look, span, prepass, level === 0)) as unknown as THREE.Material;
+      // (a shader is built with the textures the nodes hold then: real ones, of this kind)
+      kin.use(this.kins[species]);
+      if (level >= 12) m = impostorMaterial(normals, span, level === 12 ? 'first' : 'second') as unknown as THREE.Material;
+      else if (level >= 8) m = firstMaterial(span, level === 8) as unknown as THREE.Material;
+      else if (level >= 4) m = shadowMaterial(this.reach, level === 5) as unknown as THREE.Material;
+      else m = (rock ? rockMaterial(normals, span) : plantMaterial(normals, span, prepass, level === 0)) as unknown as THREE.Material;
       this.materials.set(key, m);
     }
     return m;
@@ -1013,7 +1113,9 @@ export class Forest {
             const fit = lm.fit[j];
             for (let i = 0; i < set.length && lm.n < lm.capacity; i += STRIDE) {
               const dx = set[i] - camera.x, dy = set[i + 1] - camera.y, dz = set[i + 2] - camera.z;
-              const d2 = dx * dx + dy * dy + dz * dz;
+              // (a small plant's distance counts longer: `Planted.small`; a shadow is as long whatever throws it)
+              const q = shadow ? 1 : 1 + SMALL_STEP * (set[i + 7] >> 3);
+              const d2 = (dx * dx + dy * dy + dz * dz) * q * q;
               if (d2 > hi2 || d2 < lo2) continue;
               const o = lm.n++ * STRIDE;
               for (let k = 0; k < STRIDE; k++) arr[o + k] = set[i + k];
@@ -1047,7 +1149,7 @@ export class Forest {
       return { draws, instances, triangles };
     });
     const count = this.impostorMeshes.reduce((s, m) => s + m.count, 0);
-    levels.push({ draws: this.impostorMeshes.length, instances: count, triangles: count * 2 });
+    levels.push({ draws: this.impostorMeshes.length * 2, instances: count, triangles: count * 4 });
     return { plants: this.count, chunks: this.chunks.length, levels };
   }
 }

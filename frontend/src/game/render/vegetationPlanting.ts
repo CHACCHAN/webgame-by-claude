@@ -232,26 +232,46 @@ export function viewLimiter(track: Track, terrain: TerrainData): (x: number, z: 
     else grid.set(k, [i]);
   });
   const n = Math.ceil(VIEW_REACH / VIEW_CELL);
-  const at = (x: number, z: number) => {
-    let limit = Infinity;
-    const h = terrain.heightAt(x, z);
-    const cx = Math.floor(x / VIEW_CELL), cz = Math.floor(z / VIEW_CELL);
-    for (let j = -n; j <= n; j++) {
-      for (let i = -n; i <= n; i++) {
-        const list = grid.get(key(cx + i, cz + j));
-        if (!list) continue;
-        for (const at of list) {
-          const v = pts[at];
-          const ex = x - v.x, ez = z - v.z;
-          const out = Math.hypot(ex, ez);
-          if (out < 4 || out > VIEW_REACH) continue;
-          const k = Math.floor((Math.atan2(ez, ex) / (Math.PI * 2) + 1) * VIEW_SECTORS) % VIEW_SECTORS;
-          if (!((v.open >> k) & 1) || out > v.reach[k]) continue;
-          // (land that rises to the eye's own height is this view's edge, not in it: what stands on it hides sky)
-          if (h > v.y + VIEW_EYE - 0.012 * out) continue;
-          limit = Math.min(limit, v.y + VIEW_EYE - 0.2 - v.drop[k] * out);
+  // (per view: the square of how far its furthest open direction reaches, at most VIEW_REACH)
+  const far2 = pts.map((v) => Math.min(VIEW_REACH, v.reach.reduce((m, r, k) => ((v.open >> k) & 1 ? Math.max(m, r) : m), 0)) ** 2);
+  // Asked a quarter of a million times for a course (every 4 m square of ground near the road), with a hundred
+  // views around each: the cheap tests come first, the angle only for a view that is near and looks down on the spot.
+  /** per cell of the grid: the views that can reach into it (those of the cells around it), found when first asked for */
+  const around = new Map<number, number[]>();
+  const reaching = (cx: number, cz: number) => {
+    const k = key(cx, cz);
+    let list = around.get(k);
+    if (!list) {
+      list = [];
+      const mx = (cx + 0.5) * VIEW_CELL, mz = (cz + 0.5) * VIEW_CELL;
+      for (let j = -n; j <= n; j++) {
+        for (let i = -n; i <= n; i++) {
+          for (const at of grid.get(key(cx + i, cz + j)) ?? []) {
+            if (Math.hypot(pts[at].x - mx, pts[at].z - mz) < Math.sqrt(far2[at]) + VIEW_CELL * 0.71) list.push(at);
+          }
         }
       }
+      around.set(k, list);
+    }
+    return list;
+  };
+  const at = (x: number, z: number) => {
+    let limit = Infinity;
+    let h = NaN;
+    for (const at of reaching(Math.floor(x / VIEW_CELL), Math.floor(z / VIEW_CELL))) {
+      const v = pts[at];
+      const ex = x - v.x, ez = z - v.z;
+      const out2 = ex * ex + ez * ez;
+      // (the square with a hair to spare: the distance itself decides, as it always did)
+      if (out2 < 15.9 || out2 > far2[at] + 1) continue;
+      const out = Math.hypot(ex, ez);
+      if (out < 4 || out > VIEW_REACH) continue;
+      // (land that rises to the eye's own height is this view's edge, not in it: what stands on it hides sky)
+      if (h !== h) h = terrain.heightAt(x, z);
+      if (h > v.y + VIEW_EYE - 0.012 * out) continue;
+      const k = Math.floor((Math.atan2(ez, ex) / (Math.PI * 2) + 1) * VIEW_SECTORS) % VIEW_SECTORS;
+      if (!((v.open >> k) & 1) || out > v.reach[k]) continue;
+      limit = Math.min(limit, v.y + VIEW_EYE - 0.2 - v.drop[k] * out);
     }
     return limit;
   };
@@ -267,6 +287,8 @@ export function viewLimiter(track: Track, terrain: TerrainData): (x: number, z: 
   };
 }
 
+/** a tree this tall (m) and taller is drawn with the levels of detail at their full distances (`Planted.small`) */
+const GROWN = 13;
 /** a tree further than this from the road (m) never comes within the mesh levels' reach: an impostor only */
 const FAR = 330;
 /** a tree further than this from the road (m) throws no shadow: it would fall deep inside the forest, unseen (nearer, the forest shades itself: its inside is dark) */
@@ -391,6 +413,8 @@ export function plantTrees(terrain: TerrainData, density: number, style: CourseS
       nx: -dx / 6 / Math.hypot(dx / 6, dz / 6, 1),
       nz: -dz / 6 / Math.hypot(dx / 6, dz / 6, 1),
       seed: r(),
+      // (a young tree is as small in the picture as a grown one further away: `Planted.small`)
+      small: clamp(GROWN / (scale * tall), 1, 3.1),
       far: d > FAR,
       // (a tree's shadow is seen where it falls on the road and the verge)
       casts: d < SHADE,
