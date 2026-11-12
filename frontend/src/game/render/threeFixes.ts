@@ -63,3 +63,39 @@ export function keepShaders(renderer: WebGPURenderer) {
     pipelines._releaseProgram = () => {};
   }
 }
+
+type Contexts = { get(target?: THREE.RenderTarget | null, mrt?: unknown, depth?: number): unknown };
+
+/**
+ * A compile that builds what the frames then draw with. three.js 0.186 keeps a render context per (the target's
+ * formats, the outputs, **how deep the `render` call is nested**), and a context's id is part of every shader's key.
+ * `compileAsync` asks for the context of a call at the top; the scene is drawn one level in, by a pass inside the
+ * drawing of the pipeline's screen quad. So nothing a compile built was what a frame looked for: each material's
+ * shader was built by the compile and once more, in one go, by the first frame that drew it (only the GPU's
+ * pipelines were found again, by their code). At a course's load that was the whole world twice.
+ *
+ * The returned function runs the start of a compile (`start`: the call of `compileAsync`, which takes its context
+ * before it first waits) with the context of the depth at which `sceneTarget` is drawn into: as seen in the frames,
+ * one level in before the first of them. It reaches into `renderer._renderContexts`: check when three.js is updated
+ * (`~/.local/opt/quality/builds2.cjs`: a material's shader must not be built again by the frame after a compile).
+ */
+export function compileAtPassDepth(renderer: WebGPURenderer, sceneTarget: () => THREE.RenderTarget | null): <T>(start: () => T) => T {
+  const contexts = (renderer as unknown as { _renderContexts?: Contexts })._renderContexts;
+  if (!contexts || typeof contexts.get !== 'function') return (start) => start();
+  const get = contexts.get.bind(contexts);
+  let depth = 1;
+  let compiling = false;
+  contexts.get = (target = null, mrt = null, callDepth = 0) => {
+    if (compiling) return get(target, mrt, depth);
+    if (target !== null && callDepth > 0 && target === sceneTarget()) depth = callDepth;
+    return get(target, mrt, callDepth);
+  };
+  return (start) => {
+    compiling = true;
+    try {
+      return start();
+    } finally {
+      compiling = false;
+    }
+  };
+}

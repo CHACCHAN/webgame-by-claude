@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { vegetationFrame } from './vegetation';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { Track } from '../track/Track';
 import type { TerrainData } from '../track/terrain';
@@ -931,6 +932,8 @@ export function buildAutobahnScenery(track: Track, terrain: TerrainData, quality
   const inForest = (s: number) => inRanges(s, forests);
   const clear = (x: number, z: number) => !keepOut.some((k) => (x - k.x) ** 2 + (z - k.z) ** 2 < k.r * k.r);
   const trees = buildTrees(terrain, quality.treeDensity, quality.treeLod, {
+    vegetation: quality.vegetation,
+    style: 'autobahn',
     clearance: -OUT + 5,
     keep: clear,
     // the land around is wide and mostly far forest: big chunks (draw calls) where only the far mesh ever shows
@@ -956,12 +959,13 @@ export function buildAutobahnScenery(track: Track, terrain: TerrainData, quality
     },
   });
   group.add(trees);
-  group.add(
-    buildClutter(track, terrain, quality.treeDensity * 0.6, () => null, keepOut, {
-      accept: (s, lat) => !inRanges(s, bridges, 10) && (lat > 0 ? lat > E + 7 && !inGap(s) : lat < OUT - 3),
-      rocks: false,
-    }),
-  );
+  const clutter = buildClutter(track, terrain, quality.treeDensity * 0.6, () => null, keepOut, {
+    accept: (s, lat) => !inRanges(s, bridges, 10) && (lat > 0 ? lat > E + 7 && !inGap(s) : lat < OUT - 3),
+    rocks: false,
+    vegetation: quality.vegetation,
+    style: 'autobahn',
+  });
+  group.add(clutter);
   const turbines = buildTurbines(terrain);
   group.add(turbines.group);
 
@@ -983,8 +987,10 @@ export function buildAutobahnScenery(track: Track, terrain: TerrainData, quality
     nightEmissive,
     lightmapMats: [roadMaterial, terrainMat],
     covers: new Float32Array(covers),
-    update(time, cameraPos) {
-      updateTreeLods(trees, cameraPos);
+    update(time, cameraPos, view) {
+      vegetationFrame(time, cameraPos);
+      updateTreeLods(trees, cameraPos, view);
+      updateTreeLods(clutter, cameraPos, view);
       turbines.update(time);
       traffic.update(time, cameraPos);
     },

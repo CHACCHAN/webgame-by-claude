@@ -8,7 +8,7 @@ import { smaa } from 'three/addons/tsl/display/SMAANode.js';
 import { ambientOcclusion } from './ambientOcclusion';
 import { graded } from './grade';
 import { beamCones, updateVolume, volumetricLights } from './volumetricLights';
-import { fixInterleavedDispose, keepShaders } from './threeFixes';
+import { compileAtPassDepth, fixInterleavedDispose, keepShaders } from './threeFixes';
 import { ErrorBurst } from './backendChoice';
 import { TemporalUpscaler, biasSceneTextures, sceneTextureBias, temporalUpscale } from './TemporalUpscaler';
 
@@ -92,6 +92,9 @@ export type RenderBackend = 'webgpu' | 'webgl2';
 /** what `RenderHost.create`'s `onTrouble` reports */
 export type RenderTrouble = 'lost' | 'errors' | 'memory';
 
+/** compiles side by side while the picture is held (`RenderHost.lanes`) */
+const COMPILE_LANES = 6;
+
 /**
  * Owns the canvas' renderer, the scene, the camera and the post-processing chain, and drives the frame loop:
  * `frame(dt)` (the game's update) then the render. Post-processing: scene (HDR) → bloom → tone mapping (AgX), output
@@ -112,6 +115,10 @@ export class RenderHost {
   /** … and nothing is drawn meanwhile (behind the loading screen: the compile is then not paced by the frames) */
   private holding = false;
   private compileQueue: Promise<void> = Promise.resolve();
+  /** runs the start of a compile so that it builds for the scene pass (`compileAtPassDepth`) */
+  private forPass: <T>(start: () => T) => T = (start) => start();
+  /** called once after the next frame that was drawn (see `precompile`) */
+  private drawn: (() => void) | null = null;
   private renderThrew: ((err: unknown) => void) | null = null;
 
   private constructor(readonly renderer: GameRenderer, readonly canvas: HTMLCanvasElement, options: RenderOptions) {
@@ -135,6 +142,7 @@ export class RenderHost {
       fixInterleavedDispose(renderer);
       keepShaders(renderer);
       const host = new RenderHost(renderer, canvas, options);
+      host.forPass = compileAtPassDepth(renderer, () => host.scenePass?.renderTarget ?? null);
       renderer.toneMapping = THREE.AgXToneMapping;
       renderer.setClearColor('#05070c');
       renderer.shadowMap.enabled = options.shadows;
@@ -287,7 +295,17 @@ export class RenderHost {
       this.holding = hold;
       this.aim();
       try {
-        await this.renderer.compileAsync(what, this.camera, this.scene);
+        await Promise.all((hold ? this.lanes(what) : [what]).map((part) => this.forPass(() => this.renderer.compileAsync(part, this.camera, this.scene))));
+        // three.js draws no shadow map while it compiles. A map first met in a compile therefore gets its depth
+        // texture from a material's binding, as an ordinary texture, and the first drawing into the map replaces it
+        // by a new one on the GPU. What three.js then takes for unchanged (a plain material on a thing that stands
+        // still, no motion vectors) keeps its bind group with the destroyed texture: validation errors in every
+        // frame, from the moment the headlights' map was first drawn (a race's start; the sun's is drawn in the
+        // first frame anyway). So every map is drawn in the next frame, in which each of those bind groups is new.
+        this.scene.traverse((o) => {
+          const shadow = (o as THREE.DirectionalLight).isLight && o.castShadow ? (o as THREE.DirectionalLight).shadow : null;
+          if (shadow) shadow.needsUpdate = true;
+        });
       } finally {
         this.compiling = false;
         this.holding = false;
@@ -295,9 +313,54 @@ export class RenderHost {
         this.renderer.setMRT(null);
         this.upscaler?.steadyVelocity(false);
       }
+      // What a compile leaves to the first frame (the shadow maps' own shaders, the passes after the scene's) is
+      // built in that frame, at once: behind the loading screen it is waited for here, or the title would stand
+      // still under it. (A tab in the background draws no frame: not waited for longer than a moment.)
+      if (hold) {
+        await new Promise<void>((resolve) => {
+          const done = () => {
+            this.drawn = null;
+            clearTimeout(late);
+            resolve();
+          };
+          const late = setTimeout(done, 1500);
+          this.drawn = done;
+        });
+      }
     };
     this.compileQueue = this.compileQueue.then(run, run);
     return this.compileQueue;
+  }
+
+  /**
+   * `what` in parts that are compiled side by side. A compile takes its objects one after the other and waits for
+   * each one's pipeline before it starts on the next; those waits were half of a course's compile (53 pipelines,
+   * 3.1 of 6.3 s), and the GPU process can make several at a time. Behind the loading screen, where no frame has to
+   * fit in between, `COMPILE_LANES` compiles run at once, each on its share of the drawn objects; the shares go by
+   * material, so that objects with one shader meet in one lane and the second finds what the first built.
+   */
+  private lanes(what: THREE.Object3D): THREE.Object3D[] {
+    what.updateMatrixWorld();
+    const lanes: THREE.Object3D[] = [];
+    const lane = new Map<THREE.Material, number>();
+    let next = 0;
+    const walk = (o: THREE.Object3D) => {
+      if (!o.visible) return;
+      const material = (o as THREE.Mesh).material;
+      if (!(o as THREE.Mesh).geometry || !material) {
+        for (const child of o.children) walk(child);
+        return;
+      }
+      // (a drawn object goes with what hangs on it: the compile walks down from it)
+      const first = Array.isArray(material) ? material[0] : material;
+      let k = lane.get(first);
+      if (k === undefined) lane.set(first, (k = next++ % COMPILE_LANES));
+      // a stand-in parent: the objects stay where they are in the scene, and their own places are up to date
+      const part = (lanes[k] ??= Object.assign(new THREE.Object3D(), { matrixWorldAutoUpdate: false }));
+      part.children.push(o);
+    };
+    walk(what);
+    return lanes.filter(Boolean);
   }
 
   /** the renderer's target and outputs as the scene pass has them when it draws */
@@ -336,6 +399,7 @@ export class RenderHost {
           this.renderThrew?.(err);
           throw err;
         }
+        this.drawn?.();
       }
       if (this.compiling) this.aim();
     });

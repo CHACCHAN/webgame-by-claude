@@ -13,6 +13,8 @@ import { buildScenery, vendingSpot, type SceneryResult } from './render/TrackSce
 import { buildEnvironment, PRESETS, type EnvironmentRig, type TimeOfDay } from './render/Environment';
 import { CarVisual } from './render/CarVisual';
 import { clearing } from './render/instancing';
+import { loadVegetation, SHADOW_LAYER, vegetationHold, vegetationLights, vegetationWeather, type VegetationQuality } from './render/vegetation';
+import { vegetationFiles } from './render/vegetationPlanting';
 import { volume, volumeSpot } from './render/volumetricLights';
 import { gpuBytes } from './render/gpuBytes';
 import { LightRig } from './render/LightRig';
@@ -74,6 +76,8 @@ export interface QualitySettings {
   headlightShadows: boolean;
   photoTextures: boolean;
   treeLod: number;
+  /** the Blender-made vegetation: which set, how far its levels of detail reach, how much undergrowth */
+  vegetation: VegetationQuality;
   /** the ground's, the road's and the roadside's layered materials: 0 = the plain ones, 1–3 = medium to ultra */
   surfaceDetail?: number;
 }
@@ -368,6 +372,9 @@ export class Game {
     this.remotes = new RemoteRacers(this.root, (id) => this.rideHeightOf(id), false, this.net);
     // the lights: all of them now, none later (the street lamps' pooled lights among them)
     this.lights = new LightRig(this.quality);
+    // (the trees' shadow meshes are drawn into this light's shadow map only)
+    this.lights.key.shadow.camera.layers.enable(SHADOW_LAYER);
+    vegetationLights(this.lights.key, this.lights.hemi);
     this.root.add(this.lights.group);
     this.scene.fog = this.lights.fog;
     for (let i = 0; i < this.lights.lamps.length; i++) this.lampSlots.push(-1);
@@ -450,8 +457,11 @@ export class Game {
       await ensureVehicleModels(CAR_ORDER);
       await loadTrafficModels(CAR_ORDER);
     }
+    await loadVegetation(vegetationFiles(course.style ?? 'touge', this.quality.vegetation.undergrowth > 0), this.quality.vegetation.tier);
+    // (every level of every species stays in the scene until its shader is compiled)
+    vegetationHold(true);
     vendingSpot.on = false;
-    this.scenery = buildScenery(this.track, this.terrain, { treeDensity: this.quality.treeDensity, shadows: this.quality.shadows, photoTextures: this.quality.photoTextures, treeLod: this.quality.treeLod, surfaceDetail: this.quality.surfaceDetail, style: course.style });
+    this.scenery = buildScenery(this.track, this.terrain, { treeDensity: this.quality.treeDensity, shadows: this.quality.shadows, photoTextures: this.quality.photoTextures, treeLod: this.quality.treeLod, surfaceDetail: this.quality.surfaceDetail, vegetation: this.quality.vegetation, style: course.style });
     // an instanced mesh without instances has an empty matrix buffer, which WebGPU refuses to bind
     const empty: THREE.Object3D[] = [];
     this.scenery.group.traverse((o) => {
@@ -463,8 +473,11 @@ export class Game {
     this.dryMaterials = {};
     this.vending = vendingSpot.on ? vendingSpot.position.clone() : null;
     this.showWorld();
-    await this.yieldFrame(0.92, 'シェーダーを準備中');
+    // (no frame between the world going into the scene and the compile that holds the picture: a frame there built
+    // every shader of the new world at once, on the main thread, and the compile then built them a second time)
+    this.emit({ type: 'loading', progress: 0.92, label: 'シェーダーを準備中' });
     await this.precompile(true);
+    vegetationHold(false);
     await this.yieldFrame(1, '準備完了');
   }
 
@@ -604,6 +617,7 @@ export class Game {
     this.dryMaterials.terrain ??= terrain.roughness;
     terrain.roughness = lerp(this.dryMaterials.terrain, 0.62, wet);
     this.rain.setIntensity(wet);
+    vegetationWeather(wet);
     this.weatherGrip = lerp(1, WET_GRIP, wet);
     this.audio?.setRain(wet);
     this.lobby?.setLamps(lamps > 0.5 ? 1 : 0.5);
@@ -1011,7 +1025,7 @@ export class Game {
     this.updateVisuals(dt);
     this.env.update(this.time, this.camera.position);
     this.rain.update(this.time, this.camera.position, this.player?.sim.velocity ?? _zero);
-    this.scenery.update(this.time, this.camera.position);
+    this.scenery.update(this.time, this.camera.position, this.camera);
     this.updateLampLights(dt);
     this.updateBeams();
   }

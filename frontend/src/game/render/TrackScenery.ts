@@ -2,7 +2,6 @@ import * as THREE from 'three';
 import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { Track } from '../track/Track';
 import type { TerrainData, HeightGrid } from '../track/terrain';
-import type { Landform } from '../track/landforms';
 import { buildRoadGeometry, classifySides, SHOULDER } from '../track/roadGeometry';
 import { clamp, fbm, lerp, noise2, rng, smoothstep } from '../util/math';
 import {
@@ -22,6 +21,8 @@ import { findCorners } from '../track/corners';
 import { placeProp, prop, type PropModel } from './props';
 import type { CourseStyle } from '../track/courses';
 import { ChunkedLods, cutout } from './instancing';
+import { Forest, vegetationFrame, type VegetationQuality } from './vegetation';
+import { cityWeight, COVER_SETS, loadedSpecies, plantCover, plantTrees, townWeight, TREE_SETS, UNDER_SETS, viewLimiter } from './vegetationPlanting';
 import { buildAutobahnScenery } from './autobahnScenery';
 import { layBridges, layRoadside, layRocksheds, Roadside } from './roadside';
 
@@ -47,7 +48,8 @@ export interface SceneryResult {
    * order (x, z pairs) and the roof slab's top height
    */
   covers: Float32Array;
-  update(time: number, cameraPos: THREE.Vector3): void;
+  /** `view`: the camera of the picture, when it is one that looks from `cameraPos` (the forest then draws what it sees) */
+  update(time: number, cameraPos: THREE.Vector3, view?: THREE.Camera): void;
 }
 
 export const SODIUM = new THREE.Color('#ffa850');
@@ -58,6 +60,8 @@ export interface SceneryQuality {
   shadows: boolean;
   photoTextures: boolean;
   treeLod: number;
+  /** the Blender-made vegetation (render/vegetation.ts); without it, or as `legacy`, the old procedural cedar and lumps */
+  vegetation?: VegetationQuality;
   /** 0 (default): the plain materials and shapes; 1–3: the layered ground, road and roadside (store/settings.ts) */
   surfaceDetail?: number;
   /** 'autobahn': the motorway's own scenery (render/autobahnScenery.ts) instead of the mountain road's */
@@ -88,7 +92,9 @@ export function buildScenery(track: Track, terrain: TerrainData, quality: Scener
   const lf = terrain.landform;
   const look: GroundLook = { grass: lf.treeLine < 1000 ? 'grass' : 'moss', waterLevel: lf.waterLevel };
   const terrainMat = detail ? (groundMaterial(look, detail) as unknown as THREE.MeshStandardMaterial) : plainTerrainMaterial(surfaceTexture);
-  const nearMesh = new THREE.Mesh(gridGeometry(terrain.near, terrain, true, !!detail), terrainMat);
+  // (the road's views: what the vegetation keeps open, and the ground under it there)
+  const views = quality.vegetation && quality.vegetation.tier !== 'legacy' ? viewLimiter(track, terrain) : undefined;
+  const nearMesh = new THREE.Mesh(gridGeometry(terrain.near, terrain, true, !!detail, views), terrainMat);
   nearMesh.receiveShadow = true;
   nearMesh.name = 'terrain-near';
   group.add(nearMesh);
@@ -108,7 +114,7 @@ export function buildScenery(track: Track, terrain: TerrainData, quality: Scener
   let roadsideUpdate: ((camera: THREE.Vector3) => void) | null = null;
   if (detail) {
     // ----------------------------------- roadside and structures, modelled
-    const rs = new Roadside(track, terrain, { detail, shadows: quality.shadows, ground: terrainMat, cover: (x, y, z) => groundCover(lf, x, y, z) });
+    const rs = new Roadside(track, terrain, { detail, shadows: quality.shadows, ground: terrainMat, cover: (x, y, z) => groundCover(terrain, x, y, z, views) });
     layRoadside(rs, sides);
     for (const l of layRocksheds(rs, sides, covers)) lamps.push({ position: l.position, color: SODIUM.clone(), s: l.s });
     for (const l of layBridges(rs, terrain)) lamps.push({ position: l.position, color: LED.clone(), s: l.s });
@@ -134,9 +140,11 @@ export function buildScenery(track: Track, terrain: TerrainData, quality: Scener
   const keepOut = buildLandmarks(track, terrain, sides, group, lamps);
 
   // ------------------------------------------------------------- trees
-  const trees = buildTrees(terrain, quality.treeDensity, quality.treeLod);
+  // (what the pass is known for stays in sight: the sea and the town below, the lake)
+  const trees = buildTrees(terrain, quality.treeDensity, quality.treeLod, { vegetation: quality.vegetation, views });
   group.add(trees);
-  group.add(buildClutter(track, terrain, quality.treeDensity, surfaceTexture, keepOut));
+  const clutter = buildClutter(track, terrain, quality.treeDensity, surfaceTexture, keepOut, { vegetation: quality.vegetation, views });
+  group.add(clutter);
   const turbines = buildTurbines(terrain);
   group.add(turbines.group);
 
@@ -147,8 +155,10 @@ export function buildScenery(track: Track, terrain: TerrainData, quality: Scener
     nightEmissive,
     lightmapMats,
     covers: new Float32Array(covers),
-    update(time, cameraPos) {
-      updateTreeLods(trees, cameraPos);
+    update(time, cameraPos, view) {
+      vegetationFrame(time, cameraPos);
+      updateTreeLods(trees, cameraPos, view);
+      updateTreeLods(clutter, cameraPos, view);
       turbines.update(time);
       roadsideUpdate?.(cameraPos);
     },
@@ -363,10 +373,14 @@ export function bakeTerrainLightmap(g: HeightGrid, lamps: Lamp[]) {
 }
 
 /** what covers the ground at a place: [town 0..1, forest 0..1] (the `surf` attribute's z and w) */
-export function groundCover(lf: Landform, x: number, y: number, z: number): [number, number] {
-  const urban = cityWeight(lf, x, z);
+export function groundCover(terrain: TerrainData, x: number, y: number, z: number, views?: (x: number, z: number) => number): [number, number] {
+  const lf = terrain.landform;
+  // (a town's ground only where a town can stand: its outline takes no notice of the mountainside it reaches up)
+  const urban = townWeight(terrain, x, z);
   let forest = smoothstep(0.15, 0.35, lf.relief(x, z)) * smoothstep(lf.treeLine + 35, lf.treeLine - 25, y) * (1 - urban);
   if (lf.waterLevel !== null) forest *= smoothstep(lf.waterLevel + 1.5, lf.waterLevel + 4, y);
+  // (where a view keeps the trees away the ground is open land with its thickets, not a forest's bare floor)
+  if (views && forest > 0) forest *= smoothstep(1.5, 7, views(x, z) - y);
   return [urban, forest];
 }
 
@@ -375,7 +389,7 @@ export function groundCover(lf: Landform, x: number, y: number, z: number): [num
  * A height grid's mesh. `layered`: for render/terrainMaterial.ts, which reads what the ground is from `surf` (four
  * bytes per vertex, see there) instead of vertex colours.
  */
-export function gridGeometry(g: HeightGrid, terrain: TerrainData, near: boolean, layered = false) {
+export function gridGeometry(g: HeightGrid, terrain: TerrainData, near: boolean, layered = false, views?: (x: number, z: number) => number) {
   const { nx, nz, cell, x0, z0, heights } = g;
   const geo = new THREE.PlaneGeometry((nx - 1) * cell, (nz - 1) * cell, nx - 1, nz - 1);
   geo.rotateX(-Math.PI / 2);
@@ -397,7 +411,6 @@ export function gridGeometry(g: HeightGrid, terrain: TerrainData, near: boolean,
   // (rows now run towards +z, which keeps PlaneGeometry's winding facing +y)
   geo.computeVertexNormals();
   if (layered) {
-    const lf = terrain.landform;
     const surf = new Uint8Array(nx * nz * 4);
     const h = (i: number, j: number) => heights[clamp(j, 0, nz - 1) * nx + clamp(i, 0, nx - 1)];
     for (let j = 0; j < nz; j++)
@@ -407,7 +420,7 @@ export function gridGeometry(g: HeightGrid, terrain: TerrainData, near: boolean,
         const beyond = near && g.edgeDist ? g.edgeDist[vi] : 1e6;
         // convex (a spur, a bank's shoulder) above 0.5, hollow below: the land's second derivative, per metre
         const lap = (h(i - 1, j) + h(i + 1, j) + h(i, j - 1) + h(i, j + 1) - 4 * y) / (cell * cell);
-        const [urban, forest] = groundCover(lf, x, y, z);
+        const [urban, forest] = groundCover(terrain, x, y, z, beyond < 320 ? views : undefined);
         surf[vi * 4] = clamp((beyond + 2) / 34, 0, 1) * 255;
         surf[vi * 4 + 1] = clamp(0.5 - lap * 7, 0, 1) * 255;
         surf[vi * 4 + 2] = urban * 255;
@@ -923,20 +936,6 @@ function buildSigns(track: Track, sides: ReturnType<typeof classifySides>, group
   }
 }
 
-/** Japanese cedar style conifers, instanced in spatial chunks for culling. */
-/** 0..1 how much (x, z) lies inside one of the landform's towns. */
-function cityWeight(lf: Landform, x: number, z: number) {
-  let w = 0;
-  for (const c of lf.cities) {
-    const ca = Math.cos(c.angle), sa = Math.sin(c.angle);
-    const dx = x - c.x, dz = z - c.z;
-    const ax = dx * ca + dz * sa, az = -dx * sa + dz * ca;
-    const d = Math.sqrt((ax / c.rx) ** 2 + (az / c.rz) ** 2);
-    w = Math.max(w, smoothstep(1.05, 0.8, d));
-  }
-  return w;
-}
-
 /**
  * `opts` (the autobahn's): `clearance` from the centreline instead of the mountain road's 10.5 m, `keep` rejects a
  * spot, `extra` places more trees through `add` after the scattered ones.
@@ -952,10 +951,33 @@ export function buildTrees(
     /** chunk size (m) of the trees in the near grid (default 320 m: a chunk changes its level of detail as a whole) and outside it */
     chunk?: number;
     farChunk?: number;
+    /** the Blender-made species (see `SceneryQuality.vegetation`) and whose course they are for */
+    vegetation?: VegetationQuality;
+    /** the road's views, which the trees keep open (`vegetationPlanting.ts` `viewLimiter`) */
+    views?: (x: number, z: number) => number;
+    style?: CourseStyle;
   } = {},
 ) {
   const group = new THREE.Group();
   group.name = 'trees';
+  const veg = opts.vegetation;
+  const set = veg && veg.tier !== 'legacy' ? loadedSpecies(TREE_SETS[opts.style ?? 'touge']) : null;
+  if (veg && set?.ids.length) {
+    // levels of detail: the twig cards up close, bough cards, a few big cards, then the impostors
+    const full = veg.tier === 'full';
+    const forest = new Forest(set.species, plantTrees(terrain, density, opts.style ?? 'touge', set.ids, opts), {
+      ranges: [full ? 28 * veg.range : 0, (full ? 80 : 60) * veg.range, (full ? 190 : 160) * veg.range],
+      // (the shadow map is a square of 120 m around the car)
+      shadows: 80,
+      prepass: true,
+      // (beyond the nearest level and in the shadow map one shape per species: 40 draw calls less, each ~60 µs of
+      // main-thread time; from 30 m on a tree's turn, height, girth and tint tell it from its neighbour, not its boughs)
+      single: [false, true, true, true],
+    });
+    group.add(forest.group);
+    group.userData.lods = forest;
+    return group;
+  }
   const geo = treeGeometry();
   const mat = new THREE.MeshStandardMaterial({
     vertexColors: true,
@@ -1027,8 +1049,9 @@ export function buildTrees(
 }
 
 /** Switch tree chunks between the detailed and the impostor mesh. */
-export function updateTreeLods(trees: THREE.Object3D, camera: THREE.Vector3) {
-  (trees.userData.lods as ChunkedLods).update(camera);
+export function updateTreeLods(trees: THREE.Object3D, camera: THREE.Vector3, view?: THREE.Camera) {
+  // (the old lumps of quality low have no levels: nothing to pick)
+  (trees.userData.lods as ChunkedLods | Forest | undefined)?.update(camera, view);
 }
 
 /** Builds an indexed mesh from vertex streams (position, soft "volume" normal, colour, uv). */
@@ -1169,10 +1192,55 @@ export function buildClutter(
   surfaceTexture: (n: SurfaceName, srgb: boolean) => THREE.Texture | null,
   keepOut: { x: number; z: number; r: number }[],
   /** the autobahn's: where along / beside the road (+ = right) clutter may go, and no rocks */
-  opts: { accept?: (s: number, lateral: number) => boolean; rocks?: boolean } = {},
+  opts: { accept?: (s: number, lateral: number) => boolean; rocks?: boolean; vegetation?: VegetationQuality; style?: CourseStyle; views?: (x: number, z: number) => number } = {},
 ) {
   const group = new THREE.Group();
   group.name = 'clutter';
+  // the Blender-made bushes, rocks and undergrowth (medium quality and above); the lumps below are the low quality's
+  const veg = opts.vegetation;
+  const style = opts.style ?? 'touge';
+  const coverSet = veg && veg.tier !== 'legacy' ? loadedSpecies(COVER_SETS[style]) : null;
+  if (veg && coverSet?.ids.length) {
+    const underSet = loadedSpecies(veg.undergrowth > 0 ? UNDER_SETS[style] : []);
+    const planted = plantCover(track, terrain, density, keepOut, coverSet.ids, underSet.ids, {
+      accept: opts.accept,
+      rocks: opts.rocks,
+      undergrowth: veg.undergrowth,
+      style,
+      views: opts.views,
+    });
+    const full = veg.tier === 'full';
+    const forests = [
+      new Forest(coverSet.species, planted.cover, {
+        ranges: [full ? 16 * veg.range : 0, 42 * veg.range, 120 * veg.range],
+        shadows: 30,
+        impostors: false,
+        capacity: [200, 800, 3000, 800],
+        single: [false, true, true, true],
+        // (a bush is cards over cards as a tree is: lit once, where it is seen)
+        prepass: true,
+      }),
+    ];
+    if (planted.under.length) {
+      forests.push(
+        new Forest(underSet.species, planted.under, {
+          // (what is this small is not seen further away; the density is the quality's, not the reach)
+          // two levels only (a draw call costs more than these few triangles): the modelled blades, then crossed cards
+          ranges: [full ? 24 : 0, 24, 62 * Math.min(veg.range, 1.1)],
+          shadows: 0,
+          impostors: false,
+          capacity: [3000, 3000, 12000, 1],
+          strides: [3, 3, 6, 8],
+          // (a tuft among thousands: one shape per species, and the grass in front of the camera lit once per pixel)
+          single: [true, true, true, false],
+          prepass: true,
+        }),
+      );
+    }
+    for (const f of forests) group.add(f.group);
+    group.userData.lods = { update: (camera: THREE.Vector3) => forests.forEach((f) => f.update(camera)), stats: () => forests.map((f) => f.stats()) };
+    return group;
+  }
   const r = rng(77);
   const bushGeo = lumpGeometry(11, 0.32, 'bush');
   const rockGeo = lumpGeometry(5, 0.22, 'rock');
