@@ -7,7 +7,7 @@ type Rand = () => number;
 const bell = (rand: Rand) => Math.sqrt(-2 * Math.log(Math.max(1e-6, rand()))) * Math.cos(6.2832 * rand());
 
 /** tones: indices into the cloud's palette (Cloud.tsx fills it from the interface's colours) */
-export const TONE = { dust: 0, cyan: 1, magenta: 2, amber: 3, white: 4, green: 5, deep: 6 } as const;
+export const TONE = { dust: 0, cyan: 1, magenta: 2, amber: 3, white: 4, green: 5, deep: 6, silver: 7, bronze: 8 } as const;
 
 /**
  * The outline of a cut panel (two corners chamfered, as the interface's panels are: top left and bottom right), as
@@ -433,4 +433,99 @@ export function skyScene(kind: 'night' | 'rain' | 'dawn', aspect: number, n: num
     }
   }
   return { points, lum, tones, tone: TONE.amber, loose: 0.45, size: 1.25, gain: 1 };
+}
+
+/**
+ * A medal of grains: a disc with a fluted rim, a wreath and an emblem in its middle (the mask's picture: the medal's
+ * character; a star without one), hanging on a ribbon. Own space: its place is 1 high, centred; the disc faces the
+ * eye and has an edge, so that it can be turned a little. A gleam runs round it (`along` is the angle about the
+ * disc's centre, 0 at the top).
+ */
+export function medalShape(kind: 'gold' | 'silver' | 'bronze', n: number, rand: Rand, emblem?: { alpha: ArrayLike<number>; w: number; h: number }): Shape {
+  const points = new Float32Array(n * 3), lum = new Float32Array(n), tones = new Uint8Array(n), along = new Float32Array(n);
+  const metal = kind === 'gold' ? TONE.amber : kind === 'silver' ? TONE.silver : TONE.bronze;
+  const shine = kind === 'bronze' ? TONE.amber : TONE.white;
+  const cy = 0.17, R = 0.3, T = 0.02;
+  const put = (i: number, x: number, y: number, z: number, l: number, tone: number) => {
+    points[i * 3] = x;
+    points[i * 3 + 1] = y;
+    points[i * 3 + 2] = z;
+    lum[i] = Math.min(1, l);
+    tones[i] = tone;
+    along[i] = (Math.atan2(y - cy, x) / 6.2832 + 1.25) % 1;
+  };
+  // the emblem's filled pixels, once
+  const filled: number[] = [];
+  if (emblem) for (let k = 0; k < emblem.w * emblem.h; k++) if (emblem.alpha[k] > 110) filled.push(k);
+  const at = (x: number, y: number) => (!emblem || x < 0 || y < 0 || x >= emblem.w || y >= emblem.h ? 0 : emblem.alpha[y * emblem.w + x]);
+  for (let i = 0; i < n; i++) {
+    const role = rand();
+    if (role < 0.13) {
+      // the rim: a bright line round the face
+      const ang = rand() * 6.2832, r = R * (1 - Math.abs(bell(rand)) * 0.012);
+      put(i, Math.cos(ang) * r, cy + Math.sin(ang) * r, -T, 0.85 + 0.15 * rand(), rand() < 0.35 ? shine : metal);
+    } else if (role < 0.19) {
+      // its edge: what shows of the disc's thickness when it turns
+      const ang = rand() * 6.2832;
+      put(i, Math.cos(ang) * R, cy + Math.sin(ang) * R, -T + rand() * T * 3, 0.42, metal);
+    } else if (role < 0.25) {
+      // a second line inside the rim
+      const ang = rand() * 6.2832, r = R * (0.8 + bell(rand) * 0.006);
+      put(i, Math.cos(ang) * r, cy + Math.sin(ang) * r, -T, 0.7, metal);
+    } else if (role < 0.34) {
+      // the fluting between the two
+      const ang = (Math.floor(rand() * 64) / 64) * 6.2832, r = R * (0.835 + rand() * 0.13);
+      put(i, Math.cos(ang) * r, cy + Math.sin(ang) * r, -T, 0.5, metal);
+    } else if (role < 0.56) {
+      // the wreath: two branches from the bottom up the sides, a pair of leaves at each of nine places
+      const side = rand() < 0.5 ? -1 : 1, node = Math.floor(rand() * 9), rb = R * 0.655;
+      if (rand() < 0.2) {
+        const th = Math.PI / 2 + side * (0.16 + rand() * 2.5);
+        put(i, Math.cos(th) * rb, cy + Math.sin(th) * rb, -T, 0.55, metal);
+      } else {
+        const th = Math.PI / 2 + side * (0.22 + (node / 8.6) * 2.4);
+        const nx = Math.cos(th), ny = Math.sin(th), tx = -side * ny, ty = side * nx;
+        // (a leaf leans out of the branch, to its outside or its inside)
+        const lean = (rand() < 0.5 ? 0.62 : -0.62), dx = tx * Math.cos(lean) + nx * Math.sin(lean), dy = ty * Math.cos(lean) + ny * Math.sin(lean);
+        const u = rand(), half = Math.sin(u * Math.PI) * R * 0.042, edge = rand() < 0.7, across = edge ? (rand() < 0.5 ? -1 : 1) : (rand() * 2 - 1) * 0.6;
+        const len = R * 0.17;
+        put(i, nx * rb + dx * u * len - dy * half * across, cy + ny * rb + dy * u * len + dx * half * across, -T - 0.004, edge ? 0.85 : 0.5, edge && rand() < 0.3 ? shine : metal);
+      }
+    } else if (role < 0.8) {
+      if (emblem && filled.length) {
+        // the medal's character, its edges the brightest
+        let k = 0, x = 0, y = 0, edge = false, tries = 0;
+        do {
+          k = filled[Math.floor(rand() * filled.length)];
+          x = k % emblem.w;
+          y = Math.floor(k / emblem.w);
+          edge = at(x - 2, y) < 60 || at(x + 2, y) < 60 || at(x, y - 2) < 60 || at(x, y + 2) < 60;
+        } while (!edge && rand() > 0.25 && tries++ < 8);
+        // (its strokes' edges carry it: filled in, a character of many strokes is a blot at this size)
+        const scale = (R * 1.17) / emblem.h;
+        put(i, (x + rand() - emblem.w / 2) * scale, cy + (y + rand() - emblem.h / 2) * scale, -T - 0.012 + bell(rand) * 0.004, edge ? 1 : 0.2 + 0.12 * rand(), edge ? shine : metal);
+      } else {
+        // a star of five points: its outline, and a thinner filling
+        const point = Math.floor(rand() * 10), a0 = (point / 10) * 6.2832 - Math.PI / 2, a1 = ((point + 1) / 10) * 6.2832 - Math.PI / 2;
+        const r0 = R * (point % 2 ? 0.17 : 0.4), r1 = R * (point % 2 ? 0.4 : 0.17), u = rand(), inward = rand() < 0.7 ? 1 : Math.sqrt(rand());
+        const x = (Math.cos(a0) * r0 * (1 - u) + Math.cos(a1) * r1 * u) * inward, y = (Math.sin(a0) * r0 * (1 - u) + Math.sin(a1) * r1 * u) * inward;
+        put(i, x, cy + y, -T - 0.012, inward === 1 ? 1 : 0.5, inward === 1 ? shine : metal);
+      }
+    } else if (role < 0.86) {
+      // the face itself, faint
+      const ang = rand() * 6.2832, r = Math.sqrt(rand()) * R * 0.78;
+      put(i, Math.cos(ang) * r, cy + Math.sin(ang) * r, -T, 0.14 + 0.16 * rand(), metal);
+    } else if (role < 0.98) {
+      // the ribbon: two bands up from the ring and apart, a light stripe down the middle of each, bright edges
+      const side = rand() < 0.5 ? -1 : 1, v = rand(), a = rand() - 0.5, top = cy - R - 0.03;
+      const x = side * (0.035 + v * 0.2) + a * 0.105, y = top - v * (top + 0.56) + Math.abs(a) * 0.02;
+      const stripe = Math.abs(a) < 0.09, edge = Math.abs(a) > 0.44;
+      put(i, x, y, 0.03 + side * 0.012, (stripe ? 0.85 : edge ? 0.75 : 0.4 + 0.1 * rand()) * Math.min(1, (1 - v) * 5), stripe ? TONE.white : edge ? TONE.cyan : TONE.deep);
+    } else {
+      // the ring it hangs by
+      const ang = rand() * 6.2832;
+      put(i, Math.cos(ang) * 0.034, cy - R - 0.026 + Math.sin(ang) * 0.034, 0, 0.8, metal);
+    }
+  }
+  return { points, lum, tones, along, wave: 0.22, tone: metal, loose: 0.35, size: 1.2, gain: 1 };
 }

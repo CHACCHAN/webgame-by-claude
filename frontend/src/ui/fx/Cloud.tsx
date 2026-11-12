@@ -8,7 +8,7 @@ import { AMBIENT, EMPHASIS, OBJECT, bind, burst, createCloud, members, resizeClo
 import { createCloudRenderer } from './cloudRender';
 import { createCloudRendererGpu } from './cloudRenderGpu';
 import { gameHolder, renderHost } from '../GameCanvas';
-import { RELIEF_PITCH, RELIEF_SWAY, TONE, courseRelief, lineOutline, maskShape, panelOutline, ringOutline, shellOf, skyScene } from './shapes';
+import { RELIEF_PITCH, RELIEF_SWAY, TONE, courseRelief, lineOutline, maskShape, medalShape, panelOutline, ringOutline, shellOf, skyScene } from './shapes';
 
 /**
  * The grains over the menus (owner 11-11: fine, close to 3D particles; grains alone depict things and grains alone
@@ -20,7 +20,9 @@ import { RELIEF_PITCH, RELIEF_SWAY, TONE, courseRelief, lineOutline, maskShape, 
  *   else an element with `data-grains` (`"line"` / `"ring"` / its panel; `data-grains-tone="magenta|amber"`;
  *   `data-grains-first="<ms>"`: before all of these for its first moments), gets its edge drawn by grains.
  * - **Things**: an element with `data-cloud` is depicted by grains where it stands: `course:<id>` (the course's
- *   relief), `glyph` (the element's own text), `sky:night|rain|dawn` (a time of day and its weather as a scene). `data-cloud-fill="0…1"`: how much of it has gathered.
+ *   relief), `glyph` (the element's own text), `sky:night|rain|dawn` (a time of day and its weather as a scene),
+ *   `medal:gold|silver|bronze` (a medal, the element's text as its emblem). `data-cloud-fill="0…1"`: how much of
+ *   it has gathered.
  * While the grains depict something the app has the class `cloud-on` (the page's own picture of it steps back).
  * A slow machine gets fewer grains, down to none. Not mounted in a race, nor with the interface's motion off.
  */
@@ -80,6 +82,8 @@ const TOKENS: [number, string, number[]][] = [
   [TONE.white, '', [255, 255, 255]],
   [TONE.green, '--c-green', [110, 255, 170]],
   [TONE.deep, '', [70, 120, 190]],
+  [TONE.silver, '--c-silver', [205, 216, 230]],
+  [TONE.bronze, '--c-bronze', [224, 142, 94]],
 ];
 
 /** how many grains: a desktop, a phone */
@@ -240,33 +244,37 @@ export function Cloud() {
       if (kind === 'sky' && (arg === 'night' || arg === 'rain' || arg === 'dawn')) {
         return skyScene(arg, Number(key.split(':')[2]) || 3, objects, rng(arg.length * 131 + 7));
       }
-      if (kind === 'glyph') {
+      if (kind === 'glyph' || kind === 'medal') {
         // the element's own text in its own type, drawn into a mask
         const style = getComputedStyle(el);
         const text = el.dataset.cloudText ?? el.textContent ?? '';
         const px = 220;
         const mask = document.createElement('canvas');
         const ctx = mask.getContext('2d', { willReadFrequently: true });
-        if (!ctx || !text) return null;
-        const font = `${style.fontWeight} ${px}px ${style.fontFamily}`;
-        ctx.font = font;
-        mask.width = Math.ceil(ctx.measureText(text).width + px * 0.3);
-        mask.height = Math.ceil(px * 1.3);
-        ctx.font = font;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillStyle = '#fff';
-        ctx.fillText(text, mask.width / 2, mask.height / 2);
-        const data = ctx.getImageData(0, 0, mask.width, mask.height).data;
-        const alpha = new Uint8Array(mask.width * mask.height);
-        for (let i = 0; i < alpha.length; i++) alpha[i] = data[i * 4 + 3];
-        return maskShape(alpha, mask.width, mask.height, objects, TONE.white, rand);
+        let alpha: Uint8Array | null = null;
+        if (ctx && text) {
+          const font = `${style.fontWeight} ${px}px ${style.fontFamily}`;
+          ctx.font = font;
+          mask.width = Math.ceil(ctx.measureText(text).width + px * 0.3);
+          mask.height = Math.ceil(px * 1.3);
+          ctx.font = font;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillStyle = '#fff';
+          ctx.fillText(text, mask.width / 2, mask.height / 2);
+          const data = ctx.getImageData(0, 0, mask.width, mask.height).data;
+          alpha = new Uint8Array(mask.width * mask.height);
+          for (let i = 0; i < alpha.length; i++) alpha[i] = data[i * 4 + 3];
+        }
+        if (kind === 'medal') return arg === 'gold' || arg === 'silver' || arg === 'bronze' ? medalShape(arg, objects, rng(arg.length * 53 + 11), alpha ? { alpha, w: mask.width, h: mask.height } : undefined) : null;
+        return alpha ? maskShape(alpha, mask.width, mask.height, objects, TONE.white, rand) : null;
       }
       return null;
     };
     const keyOf = (el: HTMLElement, r: DOMRect) => {
       const asked = el.dataset.cloud ?? '';
       if (asked === 'glyph') return `glyph:${el.dataset.cloudText ?? el.textContent ?? ''}`;
+      if (asked.startsWith('medal:')) return `${asked}:${el.dataset.cloudText ?? el.textContent ?? ''}`;
       // (a sky is made for the shape of its place)
       return asked.startsWith('sky:') ? `${asked}:${(r.width / r.height).toFixed(1)}` : asked;
     };
@@ -292,9 +300,9 @@ export function Cloud() {
     const frame = (now: number) => {
       raf = requestAnimationFrame(frame);
       // a race under way with the menus still mounted (a tool that starts one through the game, not the screens):
-      // the grains rest, they take nothing from a race
+      // the grains rest, they take nothing from a race (not so the replay: it goes on behind the results)
       const phase = gameHolder.game?.phase;
-      if (phase === 'countdown' || phase === 'racing' || phase === 'replay') {
+      if (phase === 'countdown' || phase === 'racing') {
         if (!resting) {
           resting = true;
           const living = c.active;
@@ -345,7 +353,7 @@ export function Cloud() {
         else {
           const made = things.get(t.key);
           if (made && made !== 'making') bind(c, OBJECT, made);
-          else if (!made && (fontsReady || !t.key.startsWith('glyph'))) {
+          else if (!made && (fontsReady || !(t.key.startsWith('glyph') || t.key.startsWith('medal')))) {
             things.set(t.key, 'making');
             const { el, key } = t;
             setTimeout(() => {
@@ -392,6 +400,12 @@ export function Cloud() {
             p.scale = r.height * Number(shown.el.dataset.cloudScale ?? 1);
             p.yaw = Math.sin(c.time * 0.21) * 0.1 + (Number.isFinite(c.px) ? (c.px / w - 0.5) * 0.3 : 0);
             p.pitch = Math.sin(c.time * 0.17 + 1) * 0.04;
+            p.z = 0;
+          } else if (shown.key.startsWith('medal')) {
+            // a medal on its ribbon: it swings a little and turns to the pointer, and the gleam goes round it
+            p.scale = r.height * Number(shown.el.dataset.cloudScale ?? 1);
+            p.yaw = Math.sin(c.time * 0.7) * 0.42 + (Number.isFinite(c.px) ? (c.px / w - 0.5) * 0.5 : 0);
+            p.pitch = Math.sin(c.time * 0.45 + 1) * 0.08;
             p.z = 0;
           } else {
             // a glyph: it sways a little, enough to show that it is deep

@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { EMPHASIS, OBJECT, bind, createCloud, members, project, rng, stepCloud, sweep, type Shape } from '../cloud';
-import { TONE, courseRelief, maskShape, panelOutline, shellOf, skyScene } from '../shapes';
+import { TONE, courseRelief, maskShape, medalShape, panelOutline, shellOf, skyScene } from '../shapes';
 
-const palette = new Float32Array(7 * 3).fill(1);
+const palette = new Float32Array(9 * 3).fill(1);
 const run = (c: ReturnType<typeof createCloud>, seconds: number) => {
   for (let i = 0; i < seconds * 60; i++) stepCloud(c, 1 / 60);
 };
@@ -213,6 +213,48 @@ describe('the shapes of grains', () => {
       expect(s.lum![i]).toBeGreaterThanOrEqual(0);
       expect(s.lum![i]).toBeLessThanOrEqual(1.01);
     }
+  });
+
+  it('a medal: a disc on a ribbon, its emblem in the middle, in its own metal', () => {
+    const R = 0.3, cy = 0.17;
+    for (const [kind, metal] of [['gold', TONE.amber], ['silver', TONE.silver], ['bronze', TONE.bronze]] as const) {
+      const m = medalShape(kind, 6000, rng(5));
+      let rim = 0, ribbon = 0, star = 0, metalled = 0;
+      for (let i = 0; i < 6000; i++) {
+        const x = m.points[i * 3], y = m.points[i * 3 + 1], r = Math.hypot(x, y - cy);
+        expect(Number.isFinite(x + y + m.points[i * 3 + 2])).toBe(true);
+        expect(m.lum![i]).toBeGreaterThanOrEqual(0);
+        expect(m.lum![i]).toBeLessThanOrEqual(1);
+        expect(m.along![i]).toBeGreaterThanOrEqual(0);
+        expect(m.along![i]).toBeLessThan(1);
+        if (m.tones![i] === metal) metalled++;
+        if (y < cy - R - 0.07) {
+          // above the disc there is only the ribbon: none of the metal
+          ribbon++;
+          expect(m.tones![i]).not.toBe(metal);
+        } else if (Math.abs(r - R) < 0.006) rim++;
+        else if (r < R * 0.41 && m.lum![i] > 0.4) star++;
+        // nothing of the metal outside the disc and the ring it hangs by
+        if (m.tones![i] === metal) expect(r).toBeLessThan(R * 1.25);
+      }
+      expect(rim).toBeGreaterThan(700);
+      expect(ribbon).toBeGreaterThan(400);
+      expect(star).toBeGreaterThan(900);
+      expect(metalled).toBeGreaterThan(3000);
+    }
+    // with a mask the emblem is the mask's picture: a bar across the middle stays a bar
+    const w = 40, h = 52, alpha = new Uint8Array(w * h);
+    for (let y = 22; y < 30; y++) for (let x = 4; x < 36; x++) alpha[y * w + x] = 255;
+    const barred = medalShape('gold', 6000, rng(6), { alpha, w, h });
+    let bar = 0, off = 0;
+    for (let i = 0; i < 6000; i++) {
+      const x = barred.points[i * 3], y = barred.points[i * 3 + 1] - cy;
+      if (Math.hypot(x, y) > R * 0.34 || barred.points[i * 3 + 2] > -0.03) continue;
+      if (Math.abs(y) < R * 0.1 && Math.abs(x) < R * 0.345) bar++;
+      else off++;
+    }
+    expect(bar).toBeGreaterThan(700);
+    expect(off).toBe(0);
   });
 
   it('grains ride with points that travel, and start again with them at the other end', () => {

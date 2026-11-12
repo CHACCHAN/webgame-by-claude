@@ -333,15 +333,18 @@ pending. `docs/PLAN.md` holds the design.
   and its grains fly there, a shape let go scatters through the volume. `shapes.ts` makes the shapes: a course's
   relief (`courseRelief`: road, start / finish beams, the land as contour lines; laid across its place, `box` fits
   it), a glyph from a mask, the edge of a selection (`shellOf`), a sky per time of day (`skyScene`: night / rain /
-  dawn, drawn in units of its place's height for the place's aspect; on the conditions screen's selected card).
+  dawn, drawn in units of its place's height for the place's aspect; on the conditions screen's selected card), a
+  medal (`medalShape`: disc, wreath, ribbon, the element's text as its emblem by the strokes' edges; beside the
+  results card once the stamp has landed).
   `Shape.fall` makes the points with an `along` travel (the rain): their grains ride with them, without lag. In the
-  markup: `data-cloud="course:<id>"`, `"sky:<time of day>"` or `"glyph"` (`data-cloud-fill="0…1"`: how much has
+  markup: `data-cloud="course:<id>"`, `"sky:<time of day>"`, `"medal:<gold|silver|bronze>"` or `"glyph"` (`data-cloud-fill="0…1"`: how much has
   gathered, as on the loading screen) = a thing depicted where the element stands; the emphasis goes to what the pointer is on (anything with `cursor: pointer`), else the screen's
   `FocusFrame`, else an element with `data-grains` (`"line"` / `"ring"` / its panel; `data-grains-tone`;
   `data-grains-first="<ms>"`). While the grains depict, the app has the class `cloud-on` and the page's own picture
   of the same thing steps back (the title's kanji, the drawn focus frame). The count follows the grains' own cost
   on the main thread (`BUDGET` 4 ms a frame; 48 000 cost ~3–4 ms here), never the frame time. While the game is in a
-  race (`countdown` / `racing` / `replay`) the grains rest whatever screen the app is on (a tool that starts a race
+  race (`countdown` / `racing`; not `replay`, which goes on behind the results) the grains rest whatever screen the
+  app is on (a tool that starts a race
   from the title left them simulating: 3 ms a frame in a timing). What is slow in the
   step: `Math.hypot`, sines (a table), anything per grain per frame that could be done for a quarter of them in turn.
   **Nothing else on the page may make a WebGL context while the game is on WebGPU**: it lost the game's device

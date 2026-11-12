@@ -21,6 +21,9 @@ type SubmitState = { kind: 'idle' } | { kind: 'need-name' } | { kind: 'sending' 
 const memo = new WeakMap<RaceResult, { submit: SubmitState; localPB: { isNew: boolean; prev: number | null }; encoded: Promise<EncodedGhost> }>();
 const medalNew = new WeakMap<RaceResult, boolean>();
 
+/** the character on the medal of grains */
+const MEDAL_SIGN = { gold: '金', silver: '銀', bronze: '銅' } as const;
+
 /** when the card comes in after the finish (ms): the finish banner has the screen until then */
 const CARD_AT = 900;
 /** how long the time counts up, and when the medal is stamped after the card came in (ms) */
@@ -45,6 +48,13 @@ export function ResultsScreen() {
 
   useEffect(() => {
     const t = setTimeout(() => setVisible(true), again ? 0 : CARD_AT);
+    return () => clearTimeout(t);
+  }, [again]);
+  // the medal of grains gathers when the stamp lands
+  const [stamped, setStamped] = useState(again);
+  useEffect(() => {
+    if (again) return;
+    const t = setTimeout(() => setStamped(true), CARD_AT + STAMP_AT);
     return () => clearTimeout(t);
   }, [again]);
 
@@ -153,6 +163,7 @@ export function ResultsScreen() {
           <i />
         </div>
       )}
+      {medal && stamped && <div className={`medal-grains medal-${medal}`} data-cloud={`medal:${medal}`} data-cloud-text={MEDAL_SIGN[medal]} aria-hidden />}
       <div className="results-card">
         <div className="results-head">
           <div className={`verdict ${tone}`}>{verdict}</div>

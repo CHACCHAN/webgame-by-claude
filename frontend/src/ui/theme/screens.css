@@ -326,6 +326,10 @@
 .results.again .medal { animation: none; }
 .medal b { display: block; }
 .medal em { display: block; font-family: var(--font-jp); font-style: normal; letter-spacing: 0.1em; font-size: var(--fs-s); }
+/* the medal itself, of grains alone (ui/fx): its place beside the card; nothing is drawn here without them */
+.medal-grains { position: absolute; left: calc(50% + 23rem); top: calc(50% - 15rem); width: 20rem; height: 26rem; pointer-events: none; font-family: var(--font-name); font-weight: 800; }
+/* (a phone, or a screen too narrow for a place beside the card) */
+@media (max-height: 500px), (max-aspect-ratio: 3/2) { .medal-grains { display: none; } }
 .results-notes { display: grid; justify-items: center; gap: 0.35rem; min-height: 0.4rem; }
 .badge-pb { display: inline-block; font-family: var(--font-display); font-stretch: var(--w-cond); font-weight: 700; letter-spacing: 0.2em; padding: 0.15rem 1rem; background: var(--green); color: var(--void); font-variant-numeric: tabular-nums; }
 .ghost-delta { font-weight: 700; }

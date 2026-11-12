@@ -561,6 +561,23 @@ by the main session. Live since the release of 11-11 (below): the owner saw the 
   grains, close to 3D particles, that depict things and emphasise things by themselves: "the part in charge of
   beautiful expression". The 2D layer (`ui/fx/`) is to be remade on that brief.
 
+### The results' medal in grains (11-12)
+- `shapes.ts` `medalShape(gold | silver | bronze)`: a disc with a rim, fluting and an edge (it swings on its ribbon
+  and turns to the pointer), a wreath of two branches, the medal's character (金 / 銀 / 銅, the element's text through
+  a mask, drawn by its strokes' edges: filled in, 銀 was a blot at this size), a ribbon, a gleam that goes round
+  (`along` = the angle about the disc). Tones `silver` / `bronze` from the tokens. `Results.tsx`: a place beside
+  the card (`.medal-grains`, `data-cloud="medal:<kind>"`), mounted when the stamp lands; none on a phone or a
+  screen narrower than 3:2 (no room beside the card); the stamped label stays as it was.
+- The resting rule of the commit before took the grains from the results after a replay (the game stays in
+  `replay` behind them): `replay` is out of the rule again.
+- Verified on the GPU: a made-up gold result (no race driven) pictured as the medal gathers (2.6–7.2 s) and close,
+  silver and bronze close: disc, wreath, character and ribbon read in all three; 48 000 grains at 3.6–4.1 ms a
+  frame of their own, no page errors; `tools/gpu-errors.cjs` 0 on WebGPU and `?webgl=1`. vitest: 12 in `ui/fx`.
+- E2E on an isolated stack: boot and the full time-attack run with its results (SwiftShader: the markup and the
+  results flow, not the grains). tsc, vitest 170, build.
+- Not verified: a real race's result on the GPU (the made-up one only); other aspect ratios than 16:9 by picture;
+  the owner's eye.
+
 ### The condition cards' skies in grains; the grains rest in a race; the title's first shot (11-12)
 The owner asked for moving pictures on the clear night / rain / dawn cards (videos made with Gemini); Gemini's video
 generation still fails, so the selected card's sky is now a scene of grains (my proposal of 11-11, a stand-in the
