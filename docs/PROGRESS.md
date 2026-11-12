@@ -2210,4 +2210,21 @@ to be seen). The films still show the balls until they are recorded again.
 - Not verified: Safari / Firefox, a real phone (the overlay uses `:has()`); a controller; Authentik members in a
   room; vehicle replacement beyond the backend test. Known: on a phone the notice covers the room's top row for
   its 8 s.
+- **Deployed 11-12 as v2.5.0** (bundle `index-DYST8WTI.js`, local = public; leaderboard API 200; `/api/content`
+  says 2.5.0; `PATCH /api/rooms/…` without a pass answers 401; no errors in the app's log after the start).
+- With agents at the end of 11-12 (the usage limit stopped them a fifth time, resumed):
+  - **Edwards + the three fighters**: built on `worktree-agent-af9a3b6158beebe1a`, hidden behind a release switch
+    (`game/release.ts` + `config/game.php`), stand-in models. Sent back before the merge: main v2.5.0 merged in,
+    ONE server mechanism for "a vehicle a course does not offer" (the agent's `Support/Vehicles` and the online
+    work's `Room::vehiclesOn` are two), two browsers online with fighters, the upscaler and hitches at take-off.
+    It also changes shared render code (`ambientOcclusion.ts`: depth taken at texel middles; bands across open
+    ground, on main's courses too): to be looked at on every course before the merge. Whether Edwards is released
+    with the stand-in models is the owner's to say (asked 11-12).
+  - **Cars re-modelled, first three** (hayate, shiden, r34; `worktree-agent-a51f8b2d623db0a5a`; sheets in
+    `~/.local/opt/wt/models-cars/sheets/`, sent to the owner): tyres, brakes, undersides, baked shade, draw calls
+    44 → 26; the gain in the picture is small. Next there: the r34's body, the big surfaces of the other two, then
+    the remaining five. Not merged: the owner's yes is needed.
+  - **How cars are drawn** (`~/.local/opt/wt/CARLOOK_BRIEF.md`): lamp highlights on glossy surfaces, a reflection
+    of the surroundings in the paint, glass with a cabin behind it: where the gap to the photos now is.
+  - Not started: the tanks' cannon (after the Edwards merge: the same vehicle code).
 
