@@ -87,7 +87,13 @@ class RoomController extends Controller
         ]);
         $player = $this->player($request);
         $room = $this->room($code);
-        self::mustBeAllowed($data['car_id'], $room->track_id);
+        // whoever comes in by a code cannot know the room's course: a vehicle that does not run there (a fighter
+        // anywhere but at Edwards) is not refused, its driver is seated in the first that does, without a paint, and
+        // picks another in the room
+        if (! Vehicles::allowedOn($data['car_id'], $room->track_id)) {
+            $data['car_id'] = Vehicles::fallback($room->track_id);
+            $data['color'] = null;
+        }
         if ($member = $room->memberFor($player)) {
             // back in after a reload: loading the course again (and so not ready either)
             if ($member->loaded || $member->ready) {

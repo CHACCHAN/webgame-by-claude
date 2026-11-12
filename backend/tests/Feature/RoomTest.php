@@ -338,12 +338,14 @@ class RoomTest extends TestCase
         [, $h] = $this->player('Host');
         [, $b] = $this->player('Guest');
 
-        // a mountain pass: no room is made with a fighter, none is joined with one, and nobody changes to one
+        // a mountain pass: no room is made with a fighter and nobody changes to one; who joins with one (by a code:
+        // the course is not known then) is seated in a car, the paint gone
         $this->postJson('/api/rooms', ['track_id' => 'kirifuri-lakeside', 'car_id' => 'f15j'], $h)
             ->assertUnprocessable()->assertJsonValidationErrors('car_id');
         $pass = $this->createRoom($h);
-        $this->postJson("/api/rooms/{$pass}/join", ['car_id' => 'su47'], $b)->assertUnprocessable();
-        $this->postJson("/api/rooms/{$pass}/join", ['car_id' => 'supra'], $b)->assertOk();
+        $this->postJson("/api/rooms/{$pass}/join", ['car_id' => 'su47', 'color' => '#3b4049'], $b)
+            ->assertOk()->assertJsonPath('players.1.car_id', 'hayate')->assertJsonPath('players.1.color', null);
+        $this->patchJson("/api/rooms/{$pass}/me", ['car_id' => 'supra'], $b)->assertOk();
         $this->patchJson("/api/rooms/{$pass}/me", ['car_id' => 'f15c'], $b)->assertUnprocessable();
         $this->getJson("/api/rooms/{$pass}", $h)->assertJsonPath('players.1.car_id', 'supra');
 
