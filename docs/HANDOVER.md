@@ -282,6 +282,11 @@
    背景のシーンそのものが「絵」: この画面の間だけカメラが車の斜め後ろ・運転者の高さから道の先を見る（`Game.menuShot = 'sky'`）。
    粒で描く空（`skyScene`）は役目が無くなったので削除。CLAUDE.md「The title's and the replay's camera」の末尾、PROGRESS「Time & weather: the scene is the picture」。
    同じデプロイで車両サムネイル 18 枚（背景が新しい森）も公開。
+-0. **オーナーの返事待ち（2026-11-12）**: ①コース選択画面の見直し案 A / B（画像送付済み、ブランチ `course-proposal`、`?courseui=a|b` で確認可。採用後にスマホ用レイアウトと E2E を合わせる）
+   ②小物 13 点の作り直し（シート送付済み、ブランチ `worktree-agent-a0462d11d1fc0d277`。OK が出たら取り込み。読み込み 0.43 → 4.84 MB、ビデオメモリ増に注意）
+   ③About に載せる「作った人」の情報（何を載せるか未回答。既定値は中立な表記）。
+   並行作業中のエージェント（指示書は `~/.local/opt/wt/*_BRIEF.md`）: アップスケーラー変更（WebGPU = `@pmndrs/upscaler` の FSR3、WebGL 2 = three.js の FSR1Node）、遠くの影・街灯、雨音、About + AI 窓口。
+   未着手: 「黒い横線が画面半分に繰り返し表示される」（場所が特定できていない。スクリーンショットをお願いする）。
 -0. **v2.0（2026-11-12）**: バージョンは `frontend/package.json` の 1 か所（タイトル下に表示）。反映のたびに上げる（CLAUDE.md Conventions「Version」）。
    同じ反映: 地形計算を全コアで（読み込み短縮、結果はビット一致）、リザルトのスクロールバー、石垣に埋まっていた自販機、峠名の看板がどのコースでも「朧峠」だった件。
    場所の報告を調べる用に `game.lookFrom(...)`（任意の地点から撮る確認用カメラ）を追加。PROGRESS「Release 2.0」。

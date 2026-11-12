@@ -617,7 +617,16 @@ picture (a drawn sky strip, a grain sky, text). Two layouts were shown next to t
 - **A probe camera**: `game.lookFrom([s, side, up], [s, side, up])` (`Game.spy`) stands anywhere along the road
   whatever the phase; `~/.local/opt/quality/spy.cjs` takes pictures with it. Made for the owner's reports of places.
 - **Verified**: vitest 190; `tools/gpu-errors.cjs` 0 on WebGPU and on WebGL 2; the race pictures looked at.
-  E2E: not run on this tree (the six tests that pass the conditions screen ran before these changes).
+  E2E on the isolated stack built from this tree: title, a whole time attack with results and submission, the
+  phone run: 3 passed (7.7 min); the rest of the suite not run.
+- **Deployed** (`a1e9292`): the live stack serves the new bundle locally and through the public address, the
+  leaderboard answers 200, `/api/content` says version 2.0.0.
+- **Open after this release** (11-12): the course select's two layouts shown to the owner as pictures (branch
+  `course-proposal`, `?courseui=a|b`; `~/.local/opt/quality/cmp/course2/course-proposals.jpg`), decision pending;
+  the 13 re-modelled props (branch `worktree-agent-a0462d11d1fc0d277`, sheets sent) wait for the owner's look;
+  four agents at work in worktrees: the upscaler (FSR 3 of `@pmndrs/upscaler` on WebGPU, the owner's instruction),
+  shadows and lamp light far from the camera, the rain's sound, the About screen with the AI desk. Still to look
+  into: the owner's "black horizontal lines repeated over half the screen" (not found yet).
 
 ### The vehicles' lights start at their lamps; the glow in the haze no longer grains (11-12, two reports by the owner)
 The owner: 「車両のライトの発射位置が全部おかしい」, and an hour later, with a screenshot of the car select on the
