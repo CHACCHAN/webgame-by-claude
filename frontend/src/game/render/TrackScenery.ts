@@ -758,14 +758,17 @@ export function buildLampMeshes(track: Track, lamps: Lamp[], group: THREE.Group,
   inst(ceilingGeo, sodiumMat, ceiling);
 }
 
-/** Light position of the street light model: two thirds out along its arm (local −X), just under the top. */
+/**
+ * Light position of the street light model: under the luminaire's glass bowl, whose centre is 0.886 of the model's
+ * reach along its arm (local −X; tools/blender/props/street_light.py), just under the top.
+ */
 function lampHead(model: PropModel) {
   const box = new THREE.Box3();
   for (const p of model.pieces) {
     p.geometry.computeBoundingBox();
     box.union(p.geometry.boundingBox!);
   }
-  return new THREE.Vector3(box.min.x * 0.67, box.max.y - 0.25, 0);
+  return new THREE.Vector3(box.min.x * 0.886, box.max.y - 0.25, 0);
 }
 
 /**

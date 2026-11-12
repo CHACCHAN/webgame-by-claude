@@ -275,8 +275,29 @@ def bus(path):
     img.save(path)
 
 
+# ------------------------------------------------------------------------------------------------ street light
+def pole(path):
+    """the number plate strapped to a lighting pole (85 x 170 mm → 128 x 256 px): what it is, its road, its number"""
+    img = Image.new('RGB', (128, 256), (238, 238, 232))
+    d = ImageDraw.Draw(img)
+    d.rectangle([3, 3, 124, 252], outline=(40, 44, 50), width=2)
+    d.rectangle([5, 5, 122, 60], fill=(28, 70, 140))
+    centered(d, (64, 20), '道路', font(24), (255, 255, 255))
+    centered(d, (64, 44), '照明灯', font(20), (255, 255, 255))
+    centered(d, (64, 84), '朧峠線', font(24), (24, 28, 34))
+    d.line([(14, 106), (114, 106)], fill=(40, 44, 50), width=2)
+    centered(d, (64, 140), '27', font(52), (24, 28, 34))
+    d.line([(14, 176), (114, 176)], fill=(40, 44, 50), width=2)
+    centered(d, (64, 198), '管理番号', font(17, True), (60, 64, 72))
+    centered(d, (64, 226), 'OB-0127', font(20), (24, 28, 34))
+    img.save(path)
+
+
+PAINTERS = {'vending': (lambda p: vending(p), 'vending.png'), 'bus': (lambda p: bus(p), 'busstop.png'), 'pole': (lambda p: pole(p), 'pole_tag.png')}
+
 if __name__ == '__main__':
     out = sys.argv[1]
     os.makedirs(out, exist_ok=True)
     for n in sys.argv[2:]:
-        {'vending': lambda: vending(os.path.join(out, 'vending.png')), 'bus': lambda: bus(os.path.join(out, 'busstop.png'))}[n]()
+        fn, name = PAINTERS[n]
+        fn(os.path.join(out, name))

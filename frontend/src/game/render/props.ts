@@ -34,9 +34,9 @@ interface PropDef {
   base?: number;
 }
 
-// heights as built (the street light is stretched 0.5 % to the lamp height the lighting is placed for)
+// heights as built
 const PROPS: Record<PropId, PropDef> = {
-  streetLight: { file: 'street_light.glb', height: 7.6, origin: [0, 0] },
+  streetLight: { file: 'street_light.glb', height: 7.63, origin: [0, 0] },
   windTurbine: { file: 'wind_turbine.glb', height: 86, origin: [0, 0], moving: 'Blades' },
   curveMirror: { file: 'curve_mirror.glb', height: 3.57, origin: [0, 0] },
   vending: { file: 'vending_machine.glb', height: 1.83 },
