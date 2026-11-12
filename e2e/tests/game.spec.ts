@@ -150,9 +150,9 @@ test('time attack: full autodriven run, results and online submission', async ({
   await waitForTitle(page);
   await page.keyboard.press('Enter');
   await page.keyboard.press('Enter'); // TIME ATTACK
-  await expect(page.locator('.course-card.active')).toContainText('OBORO PASS');
+  await expect(page.locator('.crs-row.active')).toContainText('OBORO PASS');
   await page.keyboard.press('Enter'); // default course
-  await expect(page.locator('.choice-card.active')).toContainText('深夜・晴れ');
+  await expect(page.locator('.cond-row.active')).toContainText('深夜・晴れ');
   await page.keyboard.press('Enter'); // conditions as last time
   await expect(page.locator('.car-name')).toHaveText('SPRINTER TRUENO AE86');
   await page.locator('.cta', { hasText: 'この車に決定' }).click();
@@ -182,8 +182,8 @@ test('ghost battle against a CPU ghost', async ({ page }) => {
   await waitForTitle(page);
   await page.keyboard.press('Enter');
   await page.locator('.menu-list li', { hasText: 'GHOST BATTLE' }).click();
-  await page.locator('.course-card', { hasText: 'OBORO PASS' }).click();
-  await page.locator('.choice-card', { hasText: '深夜・晴れ' }).click();
+  await page.locator('.crs-row', { hasText: 'OBORO PASS' }).click();
+  await page.locator('.cond-row', { hasText: '深夜・晴れ' }).click();
   const row = page.locator('.lb-table tbody tr', { hasText: '朧' });
   await row.locator('button', { hasText: '挑戦' }).click();
   await page.locator('.cta', { hasText: 'この車に決定' }).click();
@@ -200,9 +200,9 @@ test('rival battle starts with an AI opponent and can be paused', async ({ page 
   await waitForTitle(page);
   await page.keyboard.press('Enter');
   await page.locator('.menu-list li', { hasText: 'RIVAL BATTLE' }).click();
-  await page.locator('.course-card', { hasText: 'OBORO PASS' }).click();
+  await page.locator('.crs-row', { hasText: 'OBORO PASS' }).click();
   // rain, manual gearbox: both reach the race
-  await page.locator('.choice-card', { hasText: '深夜・雨' }).click();
+  await page.locator('.cond-row', { hasText: '深夜・雨' }).click();
   await page.locator('.cta', { hasText: 'この車に決定' }).click();
   await page.locator('.choice-card', { hasText: 'マニュアル' }).click();
   await page.locator('.rival-card.ace').click();
@@ -233,12 +233,12 @@ test('course select switches to another mountain and its own rivals', async ({ p
   await waitForTitle(page);
   await page.keyboard.press('Enter');
   await page.locator('.menu-list li', { hasText: 'RIVAL BATTLE' }).click();
-  await expect(page.locator('.course-card')).toHaveCount(4);
+  await expect(page.locator('.crs-row')).toHaveCount(4);
   await page.keyboard.press('ArrowRight');
-  await expect(page.locator('.course-card.active')).toContainText('KIRIFURI LAKESIDE');
+  await expect(page.locator('.crs-row.active')).toContainText('KIRIFURI LAKESIDE');
   await page.keyboard.press('Enter');
   // the world is rebuilt behind the course loading screen, then the conditions open
-  await expect(page.locator('.choice-card.active')).toBeVisible({ timeout: 180_000 });
+  await expect(page.locator('.cond-row.active')).toBeVisible({ timeout: 180_000 });
   const world = await page.evaluate(() => {
     const g = (window as any).__game;
     return { id: g.course.id, length: g.track.length, lamps: g.scenery.lamps.length };
@@ -262,9 +262,9 @@ test('car select: tabs by kind, pictures, sorting, favourites, grid keys', async
   await waitForTitle(page);
   await page.keyboard.press('Enter');
   await page.keyboard.press('Enter'); // TIME ATTACK
-  await expect(page.locator('.course-card.active')).toContainText('OBORO PASS');
+  await expect(page.locator('.crs-row.active')).toContainText('OBORO PASS');
   await page.keyboard.press('Enter');
-  await expect(page.locator('.choice-card.active')).toContainText('深夜・晴れ');
+  await expect(page.locator('.cond-row.active')).toContainText('深夜・晴れ');
   await page.keyboard.press('Enter');
   // every vehicle on the first tab, each with its picture (no fallback tile)
   await expect(page.locator('.vp-tab.on')).toHaveAttribute('data-tab', 'all');
@@ -327,6 +327,6 @@ test('car select: tabs by kind, pictures, sorting, favourites, grid keys', async
   await expect(page.locator('.vp-tab.on')).toHaveAttribute('data-tab', 'car');
   await expect(page.locator('.vp-tile.on')).toHaveAttribute('data-id', 'shiden');
   await page.keyboard.press('Escape');
-  await expect(page.locator('.choice-card.active')).toContainText('深夜・晴れ');
+  await expect(page.locator('.cond-row.active')).toContainText('深夜・晴れ');
   expect(errors).toEqual([]);
 });

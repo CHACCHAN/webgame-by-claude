@@ -1,0 +1,217 @@
+/* ABOUT (ui/screens/About.tsx): one panel, five sections on a tab row, and the desk (AboutDesk.tsx). Colours and
+   sizes: tokens.css; the panel's cut is the shared rule in base.css. */
+.about-panel { --c: var(--cut-l); --room: calc(100% - var(--bar) * 2 - 5.5rem); position: absolute; left: 0; right: 0; top: calc(var(--bar) + 4.6rem); margin: 0 auto; width: min(74rem, 94vw);
+  max-height: var(--room); display: flex; flex-direction: column; animation: var(--kf-rise) var(--t-enter) var(--e-out) both; }
+/* (a section is as tall as its text; the desk's conversation takes all the room, so that its field stands still) */
+.about-panel:has(.desk[data-mode='chat']) { height: var(--room); }
+
+/* ---- the sections' tabs: a number, the name, its English; the marker is a line under the open one */
+.about-tabs { flex: none; display: grid; grid-template-columns: repeat(5, 1fr); padding-left: var(--cut-l); border-bottom: 1px solid var(--line); }
+.about-tabs button { position: relative; z-index: 1; display: grid; grid-template-columns: auto 1fr; align-items: baseline; column-gap: 0.7rem; padding: 0.85rem 1rem 0.75rem; border: 0; background: none; text-align: left; min-width: 0; }
+.about-tabs button + button::before { content: ''; position: absolute; left: 0; top: 30%; bottom: 30%; width: 1px; background: var(--line-soft); }
+.about-tabs button i { grid-row: 1 / 3; align-self: center; font-style: normal; font-family: var(--font-display); font-stretch: var(--w-cond); font-weight: 600; font-size: var(--fs-l); font-variant-numeric: tabular-nums; color: var(--faint); transition: color var(--t-fast); }
+.about-tabs b { font-size: var(--fs-m); font-weight: 700; letter-spacing: 0.04em; color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; transition: color var(--t-fast); }
+.about-tabs small { font-family: var(--font-display); font-stretch: var(--w-norm); font-weight: 500; font-size: var(--fs-2xs); letter-spacing: 0.24em; color: var(--faint); white-space: nowrap; transition: color var(--t-fast); }
+.about-tabs button:hover b { color: var(--text); }
+.about-tabs button.on b { color: var(--text); text-shadow: var(--glow-cyan-text); }
+.about-tabs button.on i, .about-tabs button.on small { color: var(--cyan); }
+.focus-frame.tab { z-index: 0; filter: none; background: linear-gradient(var(--cyan), var(--cyan)) bottom / 100% 2px no-repeat, linear-gradient(0deg, rgb(var(--c-cyan) / 0.16), rgb(var(--c-cyan) / 0) 78%); }
+
+.about-body { flex: 1; min-height: 0; overflow-y: auto; padding: 1.7rem 2.1rem 1.5rem; scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
+.about-body a { color: var(--cyan); text-decoration: none; border-bottom: 1px solid rgb(var(--c-cyan) / 0.4); }
+.about-body a:hover { border-bottom-color: var(--cyan); }
+.ab-fine { font-size: var(--fs-xs); line-height: 1.7; color: var(--muted); }
+.ab-h { display: flex; align-items: baseline; gap: var(--s-3); margin: 0; padding-bottom: 0.3rem; border-bottom: 1px solid var(--line-soft); font-weight: 400; }
+.ab-h b { font-size: var(--fs-s); letter-spacing: 0.2em; }
+.ab-h small { font-family: var(--font-display); font-stretch: var(--w-cond); font-weight: 500; font-size: var(--fs-xs); letter-spacing: 0.3em; color: var(--cyan); }
+
+/* small plates for a figure with its label (the game's counts, what this machine runs) */
+.ab-cell { --c: 5px; --fill: rgb(var(--c-ink-2) / 0.6); --tex: none; padding: 0.55rem 0.8rem 0.5rem; min-width: 0; }
+.ab-cell small { display: block; font-family: var(--font-display); font-stretch: var(--w-norm); font-weight: 500; font-size: var(--fs-2xs); letter-spacing: 0.2em; color: var(--faint); }
+.ab-cell b { font-family: var(--font-display); font-stretch: var(--w-cond); font-weight: 600; font-size: var(--fs-xl); line-height: 1.25; font-variant-numeric: tabular-nums; --count-glow: var(--glow-cyan-text); }
+.ab-cell span { margin-left: 0.35rem; font-size: var(--fs-xs); color: var(--muted); }
+.ab-cell b span { font-weight: 500; font-size: var(--fs-s); }
+
+/* ---- the game */
+.ab-game { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: 1.1rem 2.6rem; align-items: center; }
+.ab-game .ab-h { grid-column: 1 / -1; margin-top: 0.5rem; }
+.ab-hero { display: flex; align-items: center; gap: 1.5rem; }
+.ab-kanji { flex: none; font-family: var(--font-name); font-weight: 800; font-size: 8.6rem; line-height: 1; color: var(--text); text-shadow: 0 0 2.2rem rgb(var(--c-cyan) / 0.5), 0 0 0.3rem rgb(var(--c-cyan) / 0.6); }
+.ab-hero h3 { font-family: var(--font-display); font-stretch: var(--w-cond); font-weight: 700; font-size: 3.3rem; line-height: 0.96; letter-spacing: 0.07em; }
+.ab-jp { margin-top: 0.8rem; font-family: var(--font-name); font-weight: 700; font-size: var(--fs-m); letter-spacing: 0.5em; color: var(--cyan); }
+.ab-figures { display: grid; grid-template-columns: 1fr 1fr; gap: 0.55rem; }
+.ab-figures .ab-cell b { font-size: var(--fs-2xl); line-height: 1.1; }
+/* (short Japanese copy breaks between phrases where the browser can: no word cut in two at a line's end) */
+.ab-lead, .ab-modes p, .ab-contact p, .desk-empty > p, .desk-card span { word-break: auto-phrase; }
+.ab-lead { grid-column: 1 / -1; max-width: 54rem; font-size: var(--fs-m); line-height: 2; color: var(--text-2); }
+.ab-modes { grid-column: 1 / -1; list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(4, 1fr); gap: 1.1rem; }
+.ab-modes small { display: block; font-family: var(--font-display); font-stretch: var(--w-cond); font-weight: 600; font-size: var(--fs-s); letter-spacing: 0.16em; color: var(--cyan); }
+.ab-modes b { display: block; font-size: var(--fs-m); margin: 0.1rem 0 0.3rem; }
+.ab-modes p { font-size: var(--fs-s); line-height: 1.75; color: var(--text-2); }
+/* the courses: their pictures, dimmed, under their names */
+.ab-courses { grid-column: 1 / -1; list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr)); gap: 0.6rem; }
+.ab-course { --c: var(--cut-s); position: relative; isolation: isolate; min-height: 7.6rem; display: flex; flex-direction: column; justify-content: flex-end; padding: 0.7rem 0.9rem 0.75rem; }
+.ab-course::before { content: ''; position: absolute; inset: 0; z-index: -2; background: var(--art) center / cover no-repeat; }
+.ab-course::after { content: ''; position: absolute; inset: 0; z-index: -1; background: linear-gradient(180deg, rgb(var(--c-void) / 0.25), rgb(var(--c-void) / 0.9)), var(--tex-scan); }
+.ab-course small { font-family: var(--font-display); font-stretch: var(--w-cond); font-weight: 600; font-size: var(--fs-2xs); letter-spacing: 0.24em; color: var(--cyan); }
+.ab-course b { font-family: var(--font-name); font-weight: 800; font-size: var(--fs-xl); line-height: 1.3; white-space: nowrap; }
+.ab-course span { font-size: var(--fs-xs); color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ab-game .ab-fine { grid-column: 1 / -1; }
+
+/* ---- who made it (the server's configuration) */
+.ab-maker { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 2.6rem; align-items: start; }
+.ab-who small, .ab-contact small { display: block; font-family: var(--font-display); font-stretch: var(--w-norm); font-weight: 500; font-size: var(--fs-xs); letter-spacing: 0.3em; color: var(--cyan); }
+.ab-who h3 { margin: 0.5rem 0 0.9rem; font-family: var(--font-display); font-stretch: var(--w-norm); font-size: var(--fs-2xl); font-weight: 700; line-height: 1.25; letter-spacing: 0.04em; overflow-wrap: anywhere; min-height: 1.25em; }
+.ab-who p { font-size: var(--fs-m); line-height: 2; color: var(--text-2); overflow-wrap: anywhere; }
+.ab-links { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 1.1rem; }
+.about-body .ab-links a { display: inline-flex; align-items: center; gap: 0.5em; border-bottom: 1px solid var(--edge); color: var(--text); font-family: var(--font-jp); }
+.about-body .ab-links a:hover { --edge: var(--cyan); color: var(--cyan); }
+.ab-who .ab-fine { margin-top: 1.6rem; padding-top: 0.7rem; border-top: 1px solid var(--line-soft); font-size: var(--fs-xs); line-height: 1.7; color: var(--muted); }
+.ab-contact { --c: var(--cut-m); --fill: rgb(var(--c-ink-2) / 0.55); padding: 1.1rem 1.3rem 1.2rem; }
+.ab-contact b { display: block; margin: 0.35rem 0 0.4rem; font-size: var(--fs-l); }
+.ab-contact p { font-size: var(--fs-s); line-height: 1.85; color: var(--text-2); margin-bottom: 1rem; }
+
+/* ---- what it is built with: this machine's figures, then the parts */
+.ab-readout { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 0.5rem; }
+.ab-readout .ab-cell.wide { grid-column: span 2; }
+.ab-readout b.text { display: block; font-stretch: var(--w-norm); font-size: var(--fs-s); line-height: 1.45; padding: 0.3rem 0 0.15rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; user-select: text; }
+.ab-rows { margin: 0; display: grid; }
+.ab-rows.two { margin-top: 1.2rem; grid-template-columns: 1fr 1fr; column-gap: 2.6rem; }
+.ab-rows > div { display: grid; grid-template-columns: 9.5rem 1fr; gap: 1.2rem; padding: 0.75rem 0; border-top: 1px solid var(--line-soft); }
+.ab-rows.two > div { grid-template-columns: 7rem 1fr; gap: 1rem; }
+.ab-rows > div:first-child, .ab-rows.two > div:nth-child(2) { border-top-color: var(--line); }
+.ab-rows dt { font-size: var(--fs-s); font-weight: 700; line-height: 1.5; }
+.ab-rows dt small { display: block; font-family: var(--font-display); font-stretch: var(--w-cond); font-weight: 600; font-size: var(--fs-xs); letter-spacing: 0.22em; color: var(--cyan); }
+.ab-rows dd { margin: 0; font-size: var(--fs-s); line-height: 1.85; color: var(--text-2); overflow-wrap: anywhere; user-select: text; }
+
+/* ---- the desk: a state line and the two ways in, the conversation, the field */
+.about-body.is-desk { overflow: hidden; display: flex; padding-top: 1.1rem; padding-bottom: 1rem; }
+.desk { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: 0.75rem; }
+.desk-wait { display: flex; align-items: center; gap: 0.7rem; color: var(--muted); font-size: var(--fs-s); }
+.desk-head { flex: none; display: flex; align-items: center; gap: 1rem; min-height: 2.2rem; }
+.desk-status { display: inline-flex; align-items: center; gap: 0.6rem; font-family: var(--font-display); font-stretch: var(--w-norm); font-weight: 600; font-size: var(--fs-xs); letter-spacing: 0.2em; color: var(--amber); white-space: nowrap; }
+.desk-status i { width: 0.55rem; height: 0.55rem; background: currentColor; }
+.desk-status.on { color: var(--green); }
+.desk-status.on i { box-shadow: 0 0 0.6rem rgb(var(--c-green) / 0.8); animation: kf-blink 1.6s ease-in-out infinite; animation-play-state: var(--kf-idle); }
+.desk-status b { font-family: var(--font-jp); font-weight: 400; font-size: var(--fs-s); letter-spacing: 0.02em; color: var(--muted); }
+.desk-modes { margin-left: auto; display: flex; gap: 0.35rem; }
+.desk-modes .chip, .desk-kinds .chip { font-family: var(--font-jp); font-weight: 700; font-size: var(--fs-s); }
+
+.desk-log { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 0.8rem; padding: 0.9rem 0.8rem 0.9rem 0; border-top: 1px solid var(--line-soft); border-bottom: 1px solid var(--line-soft); scrollbar-width: thin; scrollbar-color: var(--line) transparent; user-select: text; }
+.desk-empty { margin: auto 0; }
+.desk-empty > b { display: block; font-size: var(--fs-xl); letter-spacing: 0.04em; margin-bottom: 0.5rem; }
+.desk-empty > p { max-width: 44rem; font-size: var(--fs-m); line-height: 1.9; color: var(--text-2); }
+.desk-quick { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.6rem; margin-top: 1.6rem; }
+.desk-card { --c: var(--cut-s); --fill: rgb(var(--c-ink-2) / 0.6); --tex: none; display: flex; flex-direction: column; justify-content: flex-start; align-items: stretch; padding: 0.85rem 1rem 0.95rem; text-align: left; transition: transform var(--t-snap) var(--e-snap); }
+.desk-card b { display: block; font-size: var(--fs-m); margin-bottom: 0.25rem; }
+.desk-card b::after { content: '›'; margin-left: 0.5em; font-family: var(--font-display); color: var(--cyan); }
+.desk-card span { display: block; font-size: var(--fs-s); line-height: 1.65; color: var(--muted); text-wrap: balance; }
+.desk-card:hover:not(:disabled) { --edge: var(--cyan); transform: translateY(-1px); }
+.desk-card:hover:not(:disabled) b { color: var(--cyan); }
+.desk-card:disabled { opacity: 0.5; cursor: default; }
+.desk-line { flex: none; max-width: min(46rem, 86%); animation: var(--kf-rise) var(--t-enter) var(--e-out) both; }
+.desk-line small { display: block; margin-bottom: 0.2rem; font-family: var(--font-display); font-stretch: var(--w-norm); font-weight: 500; font-size: var(--fs-2xs); letter-spacing: 0.22em; color: var(--faint); }
+/* (what the model wrote is text: its line breaks stand, nothing in it is markup) */
+.desk-line p { padding: 0.6rem 0.95rem; font-size: var(--fs-m); line-height: 1.85; white-space: pre-wrap; overflow-wrap: anywhere; }
+.desk-line.assistant { align-self: flex-start; }
+.desk-line.assistant small { color: var(--cyan); }
+.desk-line.assistant p { border-left: 2px solid var(--cyan); background: rgb(var(--c-ink-2) / 0.62); }
+.desk-line.user { align-self: flex-end; }
+.desk-line.user small { text-align: right; }
+.desk-line.user p { border-right: 2px solid rgb(var(--c-steel) / 0.7); background: rgb(var(--c-steel) / 0.13); }
+.desk-line.user.failed p { opacity: 0.5; }
+.desk-line.pending p { display: flex; align-items: center; gap: 0.7rem; color: var(--muted); font-size: var(--fs-s); }
+.desk-filed { --c: var(--cut-s); --edge: rgb(var(--c-green) / 0.6); --fill: rgb(var(--c-green) / 0.07); flex: none; align-self: flex-start; display: flex; align-items: baseline; flex-wrap: wrap; gap: 0.3rem 0.9rem; padding: 0.55rem 1rem; animation: var(--kf-rise) var(--t-enter) var(--e-out) both; }
+.desk-filed small { font-size: var(--fs-xs); letter-spacing: 0.2em; color: var(--green); }
+.desk-filed b { font-family: var(--font-display); font-stretch: var(--w-norm); font-weight: 700; font-size: var(--fs-l); letter-spacing: 0.22em; color: var(--green); user-select: text; }
+.desk-filed span { font-size: var(--fs-s); color: var(--text-2); }
+.desk-error { flex: none; align-self: stretch; }
+.desk-error .mini + .mini { margin-left: 0.4rem; }
+
+.desk textarea { display: block; width: 100%; resize: none; font: inherit; line-height: 1.7; color: var(--text); padding: 0.6rem 0.85rem; border: 1px solid var(--line); border-radius: 0; background: var(--well); outline: none; user-select: text;
+  scrollbar-width: thin; scrollbar-color: var(--line) transparent; transition: border-color var(--t-fast), box-shadow var(--t-fast); }
+.desk textarea:focus { border-color: var(--cyan); box-shadow: inset 0 -2px 0 var(--cyan); }
+.desk textarea::placeholder { color: var(--faint); }
+.desk-compose { flex: none; display: flex; align-items: stretch; gap: 0.6rem; }
+.desk-compose textarea { flex: 1; min-width: 0; }
+.desk-compose .cta { align-self: stretch; }
+.desk-fine { flex: none; font-size: var(--fs-xs); line-height: 1.65; color: var(--muted); }
+
+/* the plain form */
+.desk-form { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 0.75rem; padding-top: 0.9rem; border-top: 1px solid var(--line-soft); overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
+.desk-form-note { font-size: var(--fs-s); color: var(--text-2); }
+.desk-kinds { flex: none; display: flex; align-items: center; gap: 0.4rem; }
+.desk-kinds span { margin-right: 0.6rem; font-size: var(--fs-xs); letter-spacing: 0.2em; color: var(--muted); }
+.desk-form textarea { flex: none; height: 13rem; }
+.desk-form-foot { flex: none; display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+.desk-count { font-family: var(--font-display); font-stretch: var(--w-norm); font-size: var(--fs-xs); font-variant-numeric: tabular-nums; letter-spacing: 0.08em; color: var(--faint); }
+
+/* narrow windows: one column */
+@media (max-aspect-ratio: 5/4) {
+  .about-tabs small { display: none; }
+  .ab-game, .ab-maker, .ab-rows.two { grid-template-columns: minmax(0, 1fr); }
+  .ab-rows.two > div:nth-child(2) { border-top-color: var(--line-soft); }
+  .ab-modes, .desk-quick { grid-template-columns: 1fr 1fr; }
+  .ab-readout { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .ab-readout .ab-cell.wide { grid-column: span 3; }
+}
+
+/* landscape phones: the panel beside the back button's column, everything smaller, the sections scroll */
+@media (max-height: 500px) {
+  .about-panel { --c: var(--cut-m); --room: calc(100% - var(--bar) - 32px); top: calc(var(--bar) + 26px); width: min(74rem, 74vw); }
+  .about-tabs { padding-left: var(--cut-m); }
+  .about-tabs button { display: block; padding: 7px 4px 6px; text-align: center; }
+  .about-tabs button i, .about-tabs small { display: none; }
+  .about-tabs b { display: block; font-size: 11.5px; letter-spacing: 0; }
+  .about-body { padding: 10px 14px; }
+  .ab-game { grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 10px 16px; }
+  .ab-hero { gap: 10px; }
+  .ab-kanji { font-size: 58px; }
+  .ab-hero h3 { font-size: 24px; }
+  .ab-jp { margin-top: 4px; font-size: 10px; letter-spacing: 0.35em; }
+  .ab-cell { padding: 4px 8px; }
+  .ab-figures { gap: 4px; }
+  .ab-figures .ab-cell b { font-size: 19px; }
+  .ab-lead { font-size: 12px; line-height: 1.75; }
+  .ab-modes { grid-template-columns: 1fr 1fr; gap: 8px 12px; }
+  .ab-modes p { font-size: 11.5px; line-height: 1.6; }
+  .ab-game .ab-h { margin-top: 2px; }
+  .ab-courses { grid-template-columns: 1fr 1fr; gap: 5px; }
+  .ab-course { min-height: 62px; padding: 6px 9px; }
+  .ab-course b { font-size: 16px; }
+  .ab-maker { gap: 14px; }
+  .ab-who h3 { font-size: 22px; margin: 4px 0 6px; }
+  .ab-who p { font-size: 12px; line-height: 1.75; }
+  .ab-who .ab-fine { margin-top: 10px; }
+  .ab-contact { padding: 9px 12px 11px; }
+  .ab-contact p { font-size: 11.5px; line-height: 1.65; margin-bottom: 8px; }
+  .ab-readout { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; }
+  .ab-readout .ab-cell.wide { grid-column: span 2; }
+  .ab-cell b { font-size: 15px; }
+  .ab-rows.two { grid-template-columns: minmax(0, 1fr); margin-top: 8px; }
+  .ab-rows.two > div:nth-child(2) { border-top-color: var(--line-soft); }
+  .ab-rows > div, .ab-rows.two > div { grid-template-columns: 5.4rem 1fr; gap: 10px; padding: 6px 0; }
+  .ab-rows dt, .ab-rows dd { font-size: 11.5px; line-height: 1.65; }
+
+  .about-body.is-desk { padding: 6px 12px 6px; }
+  .desk { gap: 5px; }
+  .desk-head { min-height: 0; gap: 8px; }
+  .desk-status b { display: none; }
+  .desk-modes .chip, .desk-kinds .chip { padding: 5px 10px; font-size: 11.5px; }
+  .desk-log { padding: 6px 6px 6px 0; gap: 6px; }
+  .desk-empty > b { font-size: 13px; margin-bottom: 2px; }
+  .desk-empty > p { font-size: 11.5px; line-height: 1.6; }
+  .desk-quick { margin-top: 8px; gap: 5px; }
+  .desk-card { padding: 7px 8px; }
+  .desk-card b { font-size: 11.5px; margin: 0; white-space: nowrap; }
+  .desk-card b::after, .desk-card span { display: none; }
+  .desk-line { max-width: 92%; }
+  .desk-line p { padding: 5px 9px; font-size: 12.5px; line-height: 1.65; }
+  .desk-filed { padding: 5px 10px; }
+  /* (16 px: a smaller field makes a phone's browser zoom into the page when it is tapped) */
+  .desk textarea { font-size: 16px; line-height: 1.4; padding: 5px 9px; }
+  .desk-compose textarea { height: 34px; }
+  .desk-fine { font-size: 9px; line-height: 1.45; }
+  .desk-form { gap: 6px; padding-top: 6px; }
+  .desk-form textarea { height: 84px; }
+}

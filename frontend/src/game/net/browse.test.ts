@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BROWSE_INTERVAL_MS, BrowseBook, BrowseThrottle, lobbyEntries, parseBrowse } from './browse';
+import { BROWSE_INTERVAL_MS, BrowseBook, BrowseThrottle, confirmedBrowse, isConfirmed, lobbyEntries, parseBrowse } from './browse';
 import type { CarId } from '../vehicle/carSpecs';
 
 describe('BrowseThrottle (what a member sends while choosing a vehicle)', () => {
@@ -70,12 +70,15 @@ describe('BrowseThrottle (what a member sends while choosing a vehicle)', () => 
 describe('parseBrowse (anything may come off the wire)', () => {
   it('takes a known vehicle, a swatch colour, and the end message', () => {
     expect(parseBrowse({ car: 'ninjah2' })).toEqual({ car: 'ninjah2' });
-    expect(parseBrowse({ car: 'e231', livery: '#00B261' })).toEqual({ car: 'e231', livery: '#00b261' });
+    expect(parseBrowse({ car: 'e231', livery: '#00B2E5' })).toEqual({ car: 'e231', livery: '#00b2e5' });
+    expect(parseBrowse({ car: 'supra', livery: '#d8481c' })).toEqual({ car: 'supra', livery: '#d8481c' });
     expect(parseBrowse({ car: null })).toBeNull();
   });
   it('drops what it does not know', () => {
     for (const bad of [null, undefined, 'supra', 7, {}, { car: 'tardis' }, { car: 'constructor' }, { car: 3 }]) expect(parseBrowse(bad)).toBeUndefined();
     expect(parseBrowse({ car: 'supra', livery: 'url(javascript:1)' })).toEqual({ car: 'supra' });
+    // well formed, but not one of the vehicle's swatches (another vehicle's, an older build's): the vehicle only
+    expect(parseBrowse({ car: 'supra', livery: '#00b2e5' })).toEqual({ car: 'supra' });
     expect(parseBrowse({ car: 'supra' }, (c) => c !== 'supra')).toBeUndefined();
   });
 });
@@ -175,5 +178,29 @@ describe('lobbyEntries (the line-up of a room)', () => {
     expect(me({ car: 'hayate' })).toEqual({ id: 10, slot: 0, carId: 'hayate', browsing: false });
     expect(me({ car: 'r34' })).toEqual({ id: 10, slot: 0, carId: 'r34', browsing: true });
     expect(me({ car: 'e231', livery: '#00b261' })).toEqual({ id: 10, slot: 0, carId: 'e231', livery: '#00b261', browsing: true });
+  });
+
+  it("draws each member's confirmed paint; another paint looked at is browsing, the confirmed one is not", () => {
+    const painted = [
+      { id: 10, slot: 0, car_id: 'hayate' as CarId, color: '#b3121c' },
+      // (a paint the vehicle does not offer: the seat's colour, as if none)
+      { id: 11, slot: 1, car_id: 'supra' as CarId, color: '#00b2e5' },
+      { id: 12, slot: 3, car_id: 'e231' as CarId, color: null },
+    ];
+    const b = new BrowseBook();
+    b.sync(painted);
+    expect(lobbyEntries(painted, b, 12, null)).toEqual([
+      { id: 10, slot: 0, carId: 'hayate', livery: '#b3121c', browsing: false },
+      { id: 11, slot: 1, carId: 'supra', browsing: false },
+      { id: 12, slot: 3, carId: 'e231', browsing: false },
+    ]);
+    b.receive(10, { car: 'hayate', livery: '#2f6db5' });
+    expect(at(lobbyEntries(painted, b, 12, null), 10)).toEqual({ id: 10, slot: 0, carId: 'hayate', livery: '#2f6db5', browsing: true });
+    b.receive(10, { car: 'hayate', livery: '#b3121c' });
+    expect(at(lobbyEntries(painted, b, 12, null), 10)).toEqual({ id: 10, slot: 0, carId: 'hayate', livery: '#b3121c', browsing: false });
+    // looking at one's vehicle without its paint (none confirmed: the first swatch shown) is a choice in the making
+    expect(isConfirmed({ car: 'e231' }, painted[2])).toBe(true);
+    expect(isConfirmed({ car: 'e231', livery: '#f15a22' }, painted[2])).toBe(false);
+    expect(confirmedBrowse(painted[1])).toEqual({ car: 'supra' });
   });
 });

@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 import { Track } from './track/Track';
 import { COURSES, type CourseId, type CourseInfo } from './track/courses';
-import { buildTerrain, type TerrainData } from './track/terrain';
+import type { TerrainData } from './track/terrain';
+import { buildTerrainParallel, terrainStats } from './track/terrainJob';
 import { PhysicsWorld, PHYSICS_DT, initRapier } from './vehicle/PhysicsWorld';
 import { VehicleSim, emptyInput, type AssistLevel, type VehicleInput } from './vehicle/VehicleSim';
 import { CAR_ORDER, CAR_SPECS, VEHICLE_ORDER, type CarId } from './vehicle/carSpecs';
@@ -15,8 +16,13 @@ import { CarVisual } from './render/CarVisual';
 import { clearing } from './render/instancing';
 import { loadVegetation, SHADOW_LAYER, vegetationHold, vegetationLights, vegetationWeather, type VegetationQuality } from './render/vegetation';
 import { vegetationFiles } from './render/vegetationPlanting';
-import { volume, volumeSpot } from './render/volumetricLights';
+import { VOLUME_SPOTS, volume, volumeSpot } from './render/volumetricLights';
 import { gpuBytes } from './render/gpuBytes';
+import { bakeShade } from './render/farShade';
+import { dawnSun } from './track/landforms';
+import { keyShadowNode } from './render/keyShadow';
+import { LAMP_BEAM, LAMP_CANDELA } from './render/lampField';
+import { registerLampField } from './render/lampFieldNode';
 import { LightRig } from './render/LightRig';
 import { ensureVehicleModels, onModelWait, preloadVehicleModels, vehicleModelReady } from './render/vehicleModels';
 import { loadTrafficModels } from './render/trafficModels';
@@ -25,7 +31,7 @@ import { loadProps } from './render/props';
 import { loadRoadsideModels } from './render/roadsideModels';
 import { wetness } from './render/weather';
 import { findCorners, type Corner, type CornerKind } from './track/corners';
-import { RemoteRacers, SLOT_COLORS, type Peer } from './net/RemoteRacers';
+import { paintFor, RemoteRacers, type Peer } from './net/RemoteRacers';
 import { NetLink, type LocalState } from './net/NetLink';
 import type { GameRenderer } from './render/RenderHost';
 import { onlineGrid } from './net/grid';
@@ -38,6 +44,8 @@ import { TireSmoke, SkidMarks } from './fx/TireEffects';
 import { ExhaustFX, newExhaustState, type ExhaustState } from './fx/Exhaust';
 import { Rain } from './fx/Rain';
 import { AudioEngine } from './audio/AudioEngine';
+import { coverShare, rainBodyOf } from './audio/rain';
+import { kindOf } from './vehicle/kinds';
 import { GhostPlayer, GhostRecorder, type GhostData } from './race/Ghost';
 import { clamp, damp, lerp, smoothstep } from './util/math';
 import type { TrackProjection } from './track/Track';
@@ -169,8 +177,6 @@ interface Racer {
 
 const _v = new THREE.Vector3(), _w = new THREE.Vector3(), _q = new THREE.Quaternion(), _f = new THREE.Vector3();
 const _tip = new THREE.Vector3(), _back = new THREE.Vector3();
-/** real-time lamp lights hang this far (m) below the lamp fixture */
-const LAMP_LIGHT_DROP = 0.9;
 /** tyre grip on a wet road (rain) as a share of the dry grip */
 export const WET_GRIP = 0.8;
 const _zero = new THREE.Vector3();
@@ -258,7 +264,14 @@ export class Game {
   private topSpeed = 0;
   private driftT = 0;
   private bestSplits: number[] | null = null;
-  private cinematic = { shot: 0, t: 0, anchor: new THREE.Vector3(), anchorS: 0, pos: new THREE.Vector3(), side: 1, fore: 1, last: new THREE.Vector3() };
+  /** a shot a menu asks for and holds while it is up (the conditions screen: the road ahead under the sky) */
+  menuShot: 'sky' | null = null;
+  /**
+   * For probes (tools/, a report to look into): the camera stands at `from` and looks at `at`, whatever the phase.
+   * `lookFrom` sets it in the road's own terms.
+   */
+  spy: { from: THREE.Vector3; at: THREE.Vector3 } | null = null;
+  private cinematic = { shot: 0, t: 0, anchor: new THREE.Vector3(), anchorS: 0, pos: new THREE.Vector3(), side: 1, fore: 1, last: new THREE.Vector3(), look: new THREE.Vector3() };
   private garageCar: CarVisual | null = null;
   /** counts what was asked to be shown: a show that waited for a model goes ahead only if nothing came after it */
   private asked = 0;
@@ -288,8 +301,6 @@ export class Game {
   private lobby: LobbyLineup | null = null;
   /** where the line-up's camera is heading (the framing follows the members as they come, go and change vehicles) */
   private lobbyView = { focus: new THREE.Vector3(), scale: 1, ends: [new THREE.Vector3(), new THREE.Vector3()] as const };
-  /** lamp index each pooled light is attached to (-1 = free) */
-  private lampSlots: number[] = [];
   timeOfDay: TimeOfDay = 'night';
   assist: AssistLevel = 1;
   autoShift = true;
@@ -358,8 +369,23 @@ export class Game {
     await new Promise((r) => setTimeout(r, 0));
   }
 
+  /**
+   * A course laid out and its terrain on the way: the heights are worked out on the other cores
+   * (`track/terrainJob.ts`) while this thread goes on with whatever does not need them.
+   */
+  private survey(courseId: CourseId) {
+    const course = COURSES[courseId];
+    const track = new Track(course.design);
+    return { courseId, track, terrain: buildTerrainParallel(courseId, track, course.landform) };
+  }
+  /** how the last terrain was worked out (threads, ms, why not on workers): for probes */
+  readonly terrainJob = terrainStats;
+  /** the first course's, begun before the downloads so that both run at the same time */
+  private surveyed: { courseId: CourseId; track: Track; terrain: Promise<TerrainData> } | null = null;
+
   async load(courseId: CourseId, timeOfDay: TimeOfDay) {
     this.timeOfDay = timeOfDay;
+    this.surveyed = this.survey(courseId);
     await this.yieldFrame(0.05, '物理エンジンを初期化中');
     await initRapier();
     await this.yieldFrame(0.08, 'コースの素材を読み込み中');
@@ -370,14 +396,16 @@ export class Game {
     this.root.add(this.smoke.points, this.skids.mesh, this.rain.mesh, this.exhaust.group);
     this.exhaust.density = this.quality.treeDensity < 0.6 ? 0.6 : 1;
     this.remotes = new RemoteRacers(this.root, (id) => this.rideHeightOf(id), false, this.net);
-    // the lights: all of them now, none later (the street lamps' pooled lights among them)
+    // the lights: all of them now, none later (the street lamps are one of them, whatever the course)
+    registerLampField(this.renderer);
     this.lights = new LightRig(this.quality);
+    // (the sun's / moon's shadow: the map near the camera, the course's baked shade beyond it)
+    if (this.quality.shadows) this.lights.key.shadow.shadowNode = keyShadowNode(this.lights.key, this.lights.farShade, this.lights.keyMap);
     // (the trees' shadow meshes are drawn into this light's shadow map only)
     this.lights.key.shadow.camera.layers.enable(SHADOW_LAYER);
-    vegetationLights(this.lights.key, this.lights.hemi);
+    vegetationLights(this.lights.key, this.lights.hemi, this.quality.shadows ? this.lights.farShade : null);
     this.root.add(this.lights.group);
     this.scene.fog = this.lights.fog;
-    for (let i = 0; i < this.lights.lamps.length; i++) this.lampSlots.push(-1);
     this.scene.add(this.root);
     this.chase = new ChaseCamera(this.camera, (x, z) => this.terrain.heightAt(x, z));
     await this.buildWorld(courseId);
@@ -444,30 +472,39 @@ export class Game {
   private async buildWorld(courseId: CourseId) {
     const course = COURSES[courseId];
     this.course = course;
+    const ahead = this.surveyed?.courseId === courseId ? this.surveyed : this.survey(courseId);
+    this.surveyed = null;
     await this.yieldFrame(0.12, `${course.name} を測量中`);
-    this.track = new Track(course.design);
+    this.track = ahead.track;
     this.corners = findCorners(this.track);
     this.line = new RacingLine(this.track);
     await this.yieldFrame(0.25, '山の地形を生成中');
-    this.terrain = buildTerrain(this.track, course.landform);
+    // (the models that need no terrain come in while the other cores work out the heights)
+    const [terrain] = await Promise.all([
+      ahead.terrain,
+      loadVegetation(vegetationFiles(course.style ?? 'touge', this.quality.vegetation.undergrowth > 0), this.quality.vegetation.tier),
+      // the autobahn's oncoming traffic is the game's own cars (light copies of their models)
+      course.style === 'autobahn' ? ensureVehicleModels(CAR_ORDER).then(() => loadTrafficModels(CAR_ORDER)) : null,
+    ]);
+    this.terrain = terrain;
     await this.yieldFrame(0.5, '道路と森を配置中');
     this.physics = new PhysicsWorld(this.track);
-    // the autobahn's oncoming traffic is the game's own cars (light copies of their models)
-    if (course.style === 'autobahn') {
-      await ensureVehicleModels(CAR_ORDER);
-      await loadTrafficModels(CAR_ORDER);
-    }
-    await loadVegetation(vegetationFiles(course.style ?? 'touge', this.quality.vegetation.undergrowth > 0), this.quality.vegetation.tier);
     // (every level of every species stays in the scene until its shader is compiled)
     vegetationHold(true);
     vendingSpot.on = false;
-    this.scenery = buildScenery(this.track, this.terrain, { treeDensity: this.quality.treeDensity, shadows: this.quality.shadows, photoTextures: this.quality.photoTextures, treeLod: this.quality.treeLod, surfaceDetail: this.quality.surfaceDetail, vegetation: this.quality.vegetation, style: course.style });
+    this.scenery = buildScenery(this.track, this.terrain, { treeDensity: this.quality.treeDensity, shadows: this.quality.shadows, shadowHalf: this.lights.keyMap.half, photoTextures: this.quality.photoTextures, treeLod: this.quality.treeLod, surfaceDetail: this.quality.surfaceDetail, vegetation: this.quality.vegetation, style: course.style, board: { name: course.name, roman: course.nameEn } });
     // an instanced mesh without instances has an empty matrix buffer, which WebGPU refuses to bind
     const empty: THREE.Object3D[] = [];
     this.scenery.group.traverse((o) => {
       if ((o as THREE.InstancedMesh).isInstancedMesh && (o as THREE.InstancedMesh).instanceMatrix.count === 0) empty.push(o);
     });
     for (const o of empty) o.removeFromParent();
+    // the shade beyond the shadow map, for the moon of this course and for the morning sun
+    const shading = this.scenery.shadeScene;
+    if (shading) {
+      this.scenery.shades = { moon: bakeShade(shading, _v.set(...this.terrain.landform.moonDir).normalize()), sun: bakeShade(shading, new THREE.Vector3(...dawnSun(this.terrain.landform)).normalize()) };
+      this.scenery.shadeScene = null;
+    }
     await this.yieldFrame(0.75, '夜景を灯しています');
     this.env = buildEnvironment(this.terrain, this.lights);
     this.dryMaterials = {};
@@ -485,7 +522,7 @@ export class Game {
   private showWorld() {
     this.root.add(this.scenery.group, this.env.group);
     this.rain.setCovers(this.scenery.covers);
-    this.lampSlots.fill(-1);
+    this.lights.lamps.show(this.scenery.lamps);
     if (this.vending) this.lights.vending.position.copy(this.vending);
     this.lights.vending.intensity = this.vending ? 9 : 0;
     this.applyTimeOfDay(this.timeOfDay);
@@ -515,8 +552,8 @@ export class Game {
     const w: World = { course: this.course, track: this.track, corners: this.corners, line: this.line, terrain: this.terrain, physics: this.physics, scenery: this.scenery, env: this.env, dry: this.dryMaterials, vending: this.vending, mb: 0 };
     this.root.remove(w.scenery.group, w.env.group);
     this.scene.environment = null;
-    // (the lamps' pooled lights and the haze stop pointing into the course that is gone)
-    for (const l of this.lights.lamps) l.intensity = 0;
+    // (the lamps' light and the haze stop pointing into the course that is gone)
+    this.lights.lamps.intensity = 0;
     volume.lamps = [];
     w.mb = gpuBytes(w.scenery.group, w.env.group) / 1e6;
     this.kept.set(w.course.id, w);
@@ -588,15 +625,15 @@ export class Game {
     const envMap = this.env.buildEnvMap(this.renderer);
     this.scene.environment = envMap;
     this.scene.background = null;
-    // the lights' glow in the haze: the course's lamps, as bright as the pooled lights
+    // the lamps' light (by day they are off: what is left of them is their glass and the pools under them, faint),
+    // and their glow in the haze, as bright
+    this.lights.lamps.intensity = this.env.preset.lampsOn < 0.2 ? 0 : LAMP_CANDELA * this.env.preset.lampsOn;
     volume.lamps = this.scenery.lamps;
-    volume.lampIntensity = 170 * this.env.preset.lampsOn;
+    volume.lampIntensity = LAMP_CANDELA * this.env.preset.lampsOn;
+    this.lights.farShade.show(this.scenery.shades?.[tod === 'dawn' ? 'sun' : 'moon'] ?? null);
     volume.density = this.env.preset.haze;
     const lamps = this.env.preset.lampsOn;
-    for (const m of this.scenery.lightmapMats) {
-      m.userData.baseLightMap ??= m.lightMapIntensity;
-      m.lightMapIntensity = (m.userData.baseLightMap as number) * lamps;
-    }
+    this.lights.lamps.beam = LAMP_BEAM * lamps;
     for (const m of this.scenery.nightEmissive) {
       m.userData.baseIntensity ??= m.emissiveIntensity;
       m.emissiveIntensity = (m.userData.baseIntensity as number) * lamps;
@@ -613,7 +650,7 @@ export class Game {
     road.color.copy(dry.color).multiplyScalar(lerp(1, 0.6, wet));
     road.normalScale.setScalar(lerp(dry.normal, 0.08, wet));
     road.envMapIntensity = lerp(dry.env, 1.8, wet);
-    const terrain = this.scenery.lightmapMats[1];
+    const terrain = this.scenery.terrainMaterial;
     this.dryMaterials.terrain ??= terrain.roughness;
     terrain.roughness = lerp(this.dryMaterials.terrain, 0.62, wet);
     this.rain.setIntensity(wet);
@@ -833,7 +870,7 @@ export class Game {
   }
 
   /**
-   * The online waiting room: every member's vehicle on the start grid in its seat's colour (net/LobbyLineup.ts), in
+   * The online waiting room: every member's vehicle on the start grid in its paint (net/LobbyLineup.ts), in
    * place of the garage's single car, under the garage's camera (the slow swing, drag, wheel) and key light. Call it
    * again with every change of the room: a seat's model is swapped when its new one is ready. Anything else the game
    * is asked to show (`showGarage`, a race, the attract run, another course) takes the line-up away.
@@ -908,8 +945,9 @@ export class Game {
     const lane = spot ? spot.lateral : cfg.mode === 'rival' ? 2.0 : 0;
     this.player = this.createRacer(cfg.carId, gridS, lane, {
       headlights: true,
-      // the colour picked in the car select (it used to be ignored); online: the slot colour tells players apart
-      color: cfg.online ? SLOT_COLORS[cfg.online.slot % SLOT_COLORS.length] : cfg.color,
+      // the colour picked in the car select; online the member's paint as the room has it, the seat's colour without
+      // one (the seat's colour stays their mark in the tags and the HUD)
+      color: cfg.online ? paintFor(cfg.carId, cfg.color, cfg.online.slot) : cfg.color,
     });
     // a train: the high chase, and its first race starts in the cab view
     const train = !!CAR_SPECS[cfg.carId].train;
@@ -1023,14 +1061,13 @@ export class Game {
       this.step(dt, dtRaw);
     }
     this.updateVisuals(dt);
-    this.env.update(this.time, this.camera.position);
+    this.env.update(this.time, this.camera.position, this.camera.getWorldDirection(_f));
     this.rain.update(this.time, this.camera.position, this.player?.sim.velocity ?? _zero);
     this.scenery.update(this.time, this.camera.position, this.camera);
-    this.updateLampLights(dt);
     this.updateBeams();
   }
 
-  private beamPool = Array.from({ length: 4 }, volumeSpot);
+  private beamPool = Array.from({ length: VOLUME_SPOTS }, volumeSpot);
   private beamCars: CarVisual[] = [];
   /**
    * The cars with their headlights on, the one the camera is with first and the others by their distance from it:
@@ -1049,10 +1086,13 @@ export class Game {
     this.lights.beams(cars);
     const spots = volume.spots;
     spots.length = 0;
+    // (a cone from each lamp: two for a car, as long as there is room)
+    let used = 0;
     for (const visual of cars) {
-      if (spots.length >= this.beamPool.length) break;
-      if (visual.beamInto(this.beamPool[spots.length])) spots.push(this.beamPool[spots.length]);
+      if (used >= this.beamPool.length) break;
+      used += visual.beamsInto(this.beamPool, used);
     }
+    for (let k = 0; k < used; k++) spots.push(this.beamPool[k]);
   }
 
   private racers(): Racer[] {
@@ -1621,6 +1661,10 @@ export class Game {
     // (the garage's clearing among the trees closes with any other view; its own statement: written into the
     // chain above it cut the race camera off, and the car drove away from a camera left at the garage)
     if (this.phase !== 'garage') clearing.value.z = -10;
+    if (this.spy) {
+      this.camera.position.copy(this.spy.from);
+      this.camera.lookAt(this.spy.at);
+    }
 
     // ---- HUD + audio
     if (this.player) {
@@ -1654,6 +1698,14 @@ export class Game {
       const e = this.audio.engine('attract', sim.spec);
       const d = sim.position.distanceTo(this.camera.position);
       e.update(sim.rpm, sim.input.throttle, sim.boost, clamp(1 - d / 160, 0, 1) * 0.5, sim.spec.engine.redline);
+    }
+    // the rain as heard from the player's vehicle (its speed, a roof over it, what the drops land on); in the menus
+    // from the camera, with no body under the rain
+    if (this.audio && this.env?.preset.rain) {
+      const sim = this.player?.sim;
+      const at = sim ? sim.position : this.camera.position;
+      const cover = this.scenery ? coverShare(this.scenery.covers, at.x, at.y + 1.2, at.z) : 0;
+      this.audio.updateRain(sim && !this.paused ? sim.speed : 0, cover, sim ? rainBodyOf(kindOf(sim.spec)) : 'none');
     }
   }
 
@@ -1765,9 +1817,25 @@ export class Game {
    * the ground lets it see the road: a camera placed by an offset from the car alone ended up inside a slope, behind
    * a mound or with a post of the roadside across the picture.
    */
+  /**
+   * Probe: stand at `s` metres along the road, `side` metres to the left of its middle and `up` above it, and look
+   * at the place given the same way (`null`: the game's own camera again).
+   */
+  lookFrom(from: [number, number, number] | null, at: [number, number, number] = [0, 0, 0]) {
+    if (!from || !this.track) return void (this.spy = null);
+    const place = ([s, side, up]: [number, number, number]) => {
+      const p = this.track!.pointAt(s, side, new THREE.Vector3());
+      p.y += up;
+      return p;
+    };
+    this.spy = { from: place(from), at: place(at) };
+  }
+
   private cinematicCamera(dt: number, root: THREE.Object3D, trackS: number) {
     const c = this.cinematic;
     c.t += dt;
+    // (a menu holds a shot of its own: the turn of the four goes on underneath and is there again afterwards)
+    const shot = this.phase === 'attract' && this.menuShot === 'sky' ? 4 : c.shot;
     const car = root.position;
     const track = this.track;
     const shots = 4;
@@ -1785,10 +1853,10 @@ export class Game {
     // The shots that travel with the car are carried along by its own movement first, and eased only in what is
     // left: eased towards a place ahead of a fast car, the camera fell back by speed / rate (five metres at
     // 140 km/h) and the low front shot looked down on the bonnet from above it.
-    if (c.shot !== 1 && c.shot !== 3 && c.last.distanceToSquared(car) < 25) cam.position.add(_v.subVectors(car, c.last));
+    if (shot !== 1 && shot !== 3 && c.last.distanceToSquared(car) < 25) cam.position.add(_v.subVectors(car, c.last));
     c.last.copy(car);
     let fov = 45;
-    switch (c.shot) {
+    switch (shot) {
       case 0: {
         // a slow swing along the road, from ahead of the car (or behind it) to beside it, on the side of the car
         // where the road has room, and never nearer than five metres: a full orbit as wide as the road stood right
@@ -1835,6 +1903,23 @@ export class Game {
         cam.position.lerp(c.pos, 1 - Math.exp(-dt * 8));
         cam.lookAt(car.x, car.y + 0.5, car.z);
         fov = 50;
+        break;
+      }
+      case 4: {
+        // the conditions screen: behind the car and beside it, at a driver's height, looking down the road. What a
+        // time of day and its weather look like is the sky, the lamps and the road ahead, not a car from above.
+        track.pointAt(trackS, 0, _v);
+        track.pointAt(trackS, 1, _w);
+        const lateral = (car.x - _v.x) * (_w.x - _v.x) + (car.z - _v.z) * (_w.z - _v.z);
+        const s = trackS - 7.5;
+        // (on the car's left: the car stands right of the middle, clear of the screen's list)
+        track.pointAt(s, clamp(lateral - 2.6, -inside(s), inside(s)), c.pos);
+        c.pos.y = Math.max(c.pos.y, car.y) + 2.2;
+        cam.position.lerp(c.pos, 1 - Math.exp(-dt * 5));
+        track.pointAt(trackS + 38, 0, _v);
+        c.look.lerp(_w.set(_v.x, Math.max(_v.y, car.y - 1.5) + 2.4, _v.z), c.look.lengthSq() === 0 ? 1 : 1 - Math.exp(-dt * 2.5));
+        cam.lookAt(c.look);
+        fov = 56;
         break;
       }
       default: {
@@ -1981,64 +2066,6 @@ export class Game {
     }
     car.setColor(color);
     this.emit({ type: 'garage', carId: id, color });
-  }
-
-  /** Move the pooled point lights to the lamps nearest the camera. */
-  /**
-   * Real-time lights for the street lamps nearest the camera (the baked lightmap covers the rest).
-   * A light keeps its lamp while that lamp stays among the nearest ones and fades out before it moves
-   * to another, so lamp pools never pop on and off.
-   */
-  private updateLampLights(dt: number) {
-    const lampsOn = this.env.preset.lampsOn;
-    const cam = this.camera.position;
-    const lamps = this.scenery.lamps;
-    const n = this.lights.lamps.length;
-    const best: { d: number; i: number }[] = [];
-    for (let i = 0; i < lamps.length; i++) {
-      const d = lamps[i].position.distanceToSquared(cam);
-      if (best.length < n) best.push({ d, i });
-      else {
-        let worst = 0;
-        for (let k = 1; k < n; k++) if (best[k].d > best[worst].d) worst = k;
-        if (d < best[worst].d) best[worst] = { d, i };
-      }
-    }
-    const wanted = new Set(best.map((b) => b.i));
-    const assigned = new Set(this.lampSlots.filter((i) => i >= 0 && wanted.has(i)));
-    const fade = Math.min(1, dt * 4);
-    this.lights.lamps.forEach((l, k) => {
-      let lamp = this.lampSlots[k];
-      if (lampsOn < 0.2) {
-        l.intensity = 0;
-        return;
-      }
-      if (lamp >= 0 && !wanted.has(lamp)) {
-        // leaving lamp: fade out, then become free
-        l.intensity = Math.max(0, l.intensity - 170 * lampsOn * fade);
-        if (l.intensity > 0.5) return;
-        lamp = -1;
-      }
-      if (lamp < 0) {
-        const free = best.find((b) => !assigned.has(b.i));
-        if (!free) {
-          l.intensity = 0;
-          this.lampSlots[k] = -1;
-          return;
-        }
-        lamp = free.i;
-        assigned.add(lamp);
-        l.intensity = 0;
-        // below the fixture, never right against it: a point light a few cm from the rock-shed
-        // ceiling or a cutting made a blinding hot spot that flooded the screen with bloom
-        l.position.copy(lamps[lamp].position);
-        l.position.y -= LAMP_LIGHT_DROP;
-        l.color.copy(lamps[lamp].color);
-      }
-      this.lampSlots[k] = lamp;
-      const target = 170 * lampsOn * smoothstep(200, 90, Math.sqrt(lamps[lamp].position.distanceToSquared(cam)));
-      l.intensity += (target - l.intensity) * fade;
-    });
   }
 
   /** tyre grip of this course's surface in the current weather */

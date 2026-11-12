@@ -5,6 +5,8 @@
 // The page is opened with `?gputime=1` (RenderHost then asks the renderer to time its passes). A rival race driven
 // by the autopilot, uncapped; every pass of every frame is timed for DURATION seconds and averaged per pass, passes
 // named by their target's texture name and size, in the order they are drawn (`#2`: the second such pass of a frame).
+// The upscaler's compute passes (FSR 3, `@pmndrs/upscaler`: not three.js' passes) are timed by the package itself and
+// listed after them as `upscaler: <pass>`.
 // Env: URL (default http://localhost:4173/; `a@http://…,b@http://…?x=1` runs each), VARIANTS (JSON, name → settings
 // merged into the stored ones), DURATION (15 s), COURSE / TOD / QUALITY (oboro-downhill, night, ultra), W / H
 // (1920×1080), CHROME, PW_MODULE. Serve with `API_PROXY=http://127.0.0.1:9 npx vite preview`; /api is also aborted.
@@ -49,8 +51,16 @@ function instrument() {
   };
   let k = 0;
   const pool = () => b.timestampQueryPool.render;
+  P.up = { sum: {}, n: 0 };
   const tick = async () => {
     if (!P.on) return;
+    // (the last timed frame's compute passes; a pass that did not run in it is not in the list and counts as 0)
+    const fsr = window.__upscaler && window.__upscaler();
+    const up = fsr ? Object.fromEntries(fsr.gpuTimings) : {};
+    if (Object.keys(up).length) {
+      P.up.n++;
+      for (const [name, ms] of Object.entries(up)) P.up.sum[name] = (P.up.sum[name] || 0) + ms;
+    }
     if (++k % 8 === 0 && pool()) {
       await r.resolveTimestampsAsync('render');
       for (const [uid, ms] of pool().timestamps) {
@@ -95,13 +105,13 @@ async function run(browser, target) {
   const r = await page.evaluate(() => {
     const P = window.__pass;
     P.on = false;
-    return { tracked: P.tracked, frames: P.frames, passes: P.order.map((label) => ({ label, ms: P.sum[label] / P.n[label], share: P.n[label] })) };
+    return { tracked: P.tracked, frames: P.frames, passes: P.order.map((label) => ({ label, ms: P.sum[label] / P.n[label], share: P.n[label] })), compute: Object.entries(P.up.sum).map(([name, ms]) => ({ label: `upscaler: ${name}`, ms: ms / P.up.n, every: 1 })) };
   });
   const seconds = (Date.now() - t0) / 1000;
   await ctx.close();
   // (a pass that is not drawn every frame counts for the share of frames it is in)
   const most = Math.max(1, ...r.passes.map((p) => p.share));
-  const passes = r.passes.map((p) => ({ label: p.label, ms: (p.ms * p.share) / most, every: p.share / most }));
+  const passes = [...r.passes.map((p) => ({ label: p.label, ms: (p.ms * p.share) / most, every: p.share / most })), ...r.compute];
   return { name: target.name, tracked: r.tracked, fps: r.frames / seconds, total: passes.reduce((a, p) => a + p.ms, 0), passes, errors };
 }
 

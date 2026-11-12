@@ -1,7 +1,6 @@
-import * as THREE from 'three';
-import { IrradianceNode, MeshStandardNodeMaterial } from 'three/webgpu';
+import { MeshStandardNodeMaterial } from 'three/webgpu';
 import {
-  attribute, bumpMap, cameraPosition, cameraViewMatrix, clamp, float, materialLightMap, max, mix, normalWorldGeometry, normalize, positionWorld, sign,
+  attribute, bumpMap, cameraPosition, cameraViewMatrix, clamp, float, max, mix, normalWorldGeometry, normalize, positionWorld, sign,
   smoothstep, texture, vec2, vec3, vec4,
 } from 'three/tsl';
 import { HEIGHT_FLOOR, layerTexture, type LayerName } from './surfaceTextures';
@@ -171,10 +170,6 @@ export function groundMaterial(look: GroundLook, detail: GroundDetail, far = fal
       nW = normalize(mix(nTop, nRock, tRock)) as unknown as Vec3;
     } else nW = nTop;
     mat.normalNode = cameraViewMatrix.mul(vec4(nW, 0)).xyz.normalize();
-    // the baked lamp light comes from above: a stone's top takes more of it than its flank
-    const facing = clamp(nW.y.div(N.y.add(0.25)).mul(1.05).add(0.1), 0.35, 1.3);
-    (mat as unknown as { setupLightMap: (b: { material: THREE.Material & { lightMap?: unknown } }) => unknown }).setupLightMap = (b) =>
-      b.material.lightMap ? new IrradianceNode((materialLightMap as unknown as Vec3).mul(facing)) : null;
   }
   return mat;
 }

@@ -39,9 +39,9 @@ test('phone: menus by taps, back button, a race driven with the touch controls',
   await expect(page.locator('.menu-list li', { hasText: 'TIME ATTACK' })).toBeVisible();
 
   await tap('.menu-list li', 'TIME ATTACK');
-  await tap('.course-card');
-  await expect(page.locator('.choice-card').first()).toBeVisible({ timeout: 120_000 });
-  await tap('.choice-card');
+  await tap('.crs-row');
+  await expect(page.locator('.cond-row').first()).toBeVisible({ timeout: 120_000 });
+  await tap('.cond-row');
   // the car select: a tab and a tile by taps (a tap on another tile only highlights it), and its button is in view
   // without scrolling
   await expect(page.locator('.cta', { hasText: 'この車に決定' })).toBeInViewport({ timeout: 60_000 });

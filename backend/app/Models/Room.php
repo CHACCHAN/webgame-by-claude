@@ -82,6 +82,8 @@ class Room extends Model
                 'id' => $m->player_id,
                 'name' => $m->player->name,
                 'car_id' => $m->car_id,
+                // the paint picked for it (null: the seat's colour)
+                'color' => $m->color,
                 'slot' => $m->slot,
                 // the game shows the room's course (automatic) / the player pressed 準備完了
                 'loaded' => $m->loaded,

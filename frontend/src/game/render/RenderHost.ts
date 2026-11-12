@@ -3,14 +3,14 @@ import { BlendMode, RenderPipeline, WebGPURenderer, type Node, type NodeBuilder,
 import { Fn, convertToTexture, dot, float, fract, luminance, mrt, output, pass, renderOutput, sRGBTransferEOTF, sRGBTransferOETF, screenUV, sin, smoothstep, time, uniform, vec2, vec3, vec4, velocity } from 'three/tsl';
 import { bloom } from 'three/addons/tsl/display/BloomNode.js';
 import { fsr1 } from 'three/addons/tsl/display/FSR1Node.js';
-import { sharpen } from 'three/addons/tsl/display/SharpenNode.js';
 import { smaa } from 'three/addons/tsl/display/SMAANode.js';
 import { ambientOcclusion } from './ambientOcclusion';
 import { graded } from './grade';
 import { beamCones, updateVolume, volumetricLights } from './volumetricLights';
 import { compileAtPassDepth, fixInterleavedDispose, keepShaders } from './threeFixes';
 import { ErrorBurst } from './backendChoice';
-import { TemporalUpscaler, biasSceneTextures, sceneTextureBias, temporalUpscale } from './TemporalUpscaler';
+import { Upscaler } from '@pmndrs/upscaler';
+import { SceneUpscaler, biasSceneTextures, sceneTextureBias, steadyProjection } from './sceneUpscale';
 
 /** The renderer every engine module draws with (WebGPU, or its WebGL 2 backend where the browser has no WebGPU). */
 export type GameRenderer = WebGPURenderer;
@@ -28,17 +28,18 @@ export interface RenderOptions {
   /** the lights' glow in the haze */
   volumetric: boolean;
   /**
-   * The scene drawn at `renderScale` of the output and brought up to it: over time from jittered frames (WebGPU: the
-   * temporal upscaler, which is also the anti-aliasing) or within the frame (the WebGL 2 backend: FSR 1).
+   * The scene drawn at `renderScale` of the output and brought up to it: over time from jittered frames (WebGPU:
+   * FSR 3's upscaler from `@pmndrs/upscaler`, which is also the anti-aliasing; `render/sceneUpscale.ts`) or within
+   * the frame (the WebGL 2 backend: three.js' `FSR1Node`).
    */
   upscale: boolean;
-  /** the scene's resolution as a fraction of the output's, per axis (0.5 … 1; 1 = temporal anti-aliasing only) */
+  /** the scene's resolution as a fraction of the output's, per axis (FSR's modes: 1 / 1.5, 1 / 1.7, 1 / 2 …; 1 = temporal anti-aliasing only) */
   renderScale: number;
-  /** sharpening after the upscale, 0 (none) … 1 */
+  /** sharpening after the upscale (RCAS on both backends), 0 (none) … 1 */
   sharpness: number;
 }
 
-/** RCAS takes its strength in stops of attenuation: 0 = the most it does, 2 = next to none */
+/** three.js' FSR 1 takes RCAS' strength in stops of attenuation: 0 = the most it does, 2 = next to none (the package's FSR 3 takes 0 … 1 and maps it the same way) */
 const rcasStops = (sharpness: number) => 2 * (1 - Math.min(1, Math.max(0, sharpness)));
 
 /**
@@ -97,15 +98,17 @@ const COMPILE_LANES = 6;
 
 /**
  * Owns the canvas' renderer, the scene, the camera and the post-processing chain, and drives the frame loop:
- * `frame(dt)` (the game's update) then the render. Post-processing: scene (HDR) → bloom → tone mapping (AgX), output
- * colour space and the grade → SMAA → chromatic aberration → vignette → grain.
+ * `frame(dt)` (the game's update) then the render. Post-processing: scene (HDR) → (the temporal upscaler) → bloom →
+ * tone mapping (AgX), output colour space and the grade → SMAA (→ FSR 1) → chromatic aberration → vignette → grain.
  */
 export class RenderHost {
   readonly scene = new THREE.Scene();
   readonly camera = new THREE.PerspectiveCamera(60, 1, 0.25, 16000);
   private pipeline!: RenderPipeline;
   private scenePass!: ReturnType<typeof pass>;
-  private upscaler: TemporalUpscaler | null = null;
+  private upscaler: SceneUpscaler | null = null;
+  /** `?gputime`: the passes' GPU times are asked for (tools/perf-pass.cjs) */
+  private timed = false;
   private observer: ResizeObserver | null = null;
   private last = 0;
   private options: RenderOptions;
@@ -136,12 +139,17 @@ export class RenderHost {
    */
   static async create(canvas: HTMLCanvasElement, options: RenderOptions, forceWebGL = false, onTrouble?: (kind: RenderTrouble, message: string) => void) {
     // (`?gputime`: the passes' GPU times, for tools/perf-pass.cjs)
-    const renderer = new WebGPURenderer({ canvas, antialias: false, powerPreference: 'high-performance', stencil: false, forceWebGL, trackTimestamp: new URLSearchParams(location.search).has('gputime') });
+    const timed = new URLSearchParams(location.search).has('gputime');
+    const renderer = new WebGPURenderer({ canvas, antialias: false, powerPreference: 'high-performance', stencil: false, forceWebGL, trackTimestamp: timed });
     try {
       await renderer.init();
       fixInterleavedDispose(renderer);
       keepShaders(renderer);
       const host = new RenderHost(renderer, canvas, options);
+      host.timed = timed;
+      // (the upscaler's compute passes are not three.js': the tool reads their times from the package's own object,
+      // `gpuTimings`; its `settings` and debug views are there for probes as well)
+      if (timed) Object.assign(globalThis, { __upscaler: () => host.upscaler?.upscaler ?? null, __textureBias: sceneTextureBias });
       host.forPass = compileAtPassDepth(renderer, () => host.scenePass?.renderTarget ?? null);
       renderer.toneMapping = THREE.AgXToneMapping;
       renderer.setClearColor('#05070c');
@@ -213,10 +221,11 @@ export class RenderHost {
   configure(options: RenderOptions) {
     const was = this.options;
     const rebuild = options.bloom !== was.bloom || options.smaa !== was.smaa || options.extraFx !== was.extraFx || options.ao !== was.ao || options.volumetric !== was.volumetric
-      || options.upscale !== was.upscale || options.renderScale !== was.renderScale || (options.sharpness > 0) !== (was.sharpness > 0);
+      || options.upscale !== was.upscale || options.renderScale !== was.renderScale;
     this.options = options;
     this.renderer.shadowMap.enabled = options.shadows;
     this.sharpness.value = rcasStops(options.sharpness);
+    if (this.upscaler) this.upscaler.sharpness = options.sharpness;
     if (rebuild) this.buildPipeline();
     this.resize();
   }
@@ -224,6 +233,8 @@ export class RenderHost {
   private buildPipeline() {
     const o = this.options;
     this.pipeline?.dispose();
+    // (its history and working textures are several full-size float targets: freed, not left to the collector)
+    this.upscaler?.dispose();
     beamCones.value = o.volumetric ? 0 : 1;
     const pipeline = new RenderPipeline(this.renderer);
     // tone mapping happens inside the chain (SMAA and the lens effects work on the displayed colours)
@@ -231,8 +242,8 @@ export class RenderHost {
     const scenePass = pass(this.scene, this.camera);
     this.scenePass = scenePass;
     this.upscaler = null;
-    // over time where the backend has the motion vectors' own blending (WebGPU), else within the frame
-    const temporal = o.upscale && this.backend === 'webgpu';
+    // over time where the backend has compute passes and the motion vectors' own blending (WebGPU), else within the frame
+    const temporal = o.upscale && this.backend === 'webgpu' && Upscaler.isSupported(this.gpuDevice as GPUDevice);
     const spatial = o.upscale && !temporal && o.renderScale < 1;
     if (temporal || spatial) scenePass.setResolutionScale(o.renderScale);
     const colour = scenePass.getTextureNode('output');
@@ -244,9 +255,10 @@ export class RenderHost {
       scenePass.setMRT(targets);
       biasSceneTextures();
       sceneTextureBias.value = Math.log2(o.renderScale);
-      // jitters the camera, gathers the frames at the output's resolution: everything after it works at full size
-      this.upscaler = temporalUpscale(colour, scenePass.getTextureNode('depth'), scenePass.getTextureNode('velocity'), scenePass.getTextureNode('reactive'), this.camera);
-      // (its alpha is the upscaler's own bookkeeping)
+      // jitters the camera, gathers the frames at the output's resolution and sharpens: everything after it works at full size
+      this.upscaler = new SceneUpscaler(colour, scenePass.getTextureNode('depth'), scenePass.getTextureNode('velocity'), scenePass.getTextureNode('reactive'), this.camera, 1 / o.renderScale, this.timed);
+      this.upscaler.sharpness = o.sharpness;
+      // (the scene's alpha is of no use after it)
       hdr = vec4((this.upscaler as unknown as Node<'vec4'>).rgb, 1);
     }
     let lit: Node<'vec4'> = hdr;
@@ -260,10 +272,10 @@ export class RenderHost {
       lit = lit.add(glow);
     }
     let out: Node<'vec4'> = graded(renderOutput(lit));
-    // (the temporal upscaler is the anti-aliasing; FSR 1 wants an anti-aliased picture)
+    // (the temporal upscaler is the anti-aliasing, and sharpens by itself; FSR 1 wants an anti-aliased picture)
     if (o.smaa && !temporal) out = smaa(out) as unknown as Node<'vec4'>;
+    // (three.js' own node, as it is: EASU, then RCAS)
     if (spatial) out = fsr1(out, this.sharpness) as unknown as Node<'vec4'>;
-    else if (temporal && o.sharpness > 0) out = sharpen(out, this.sharpness) as unknown as Node<'vec4'>;
     if (o.bloom) out = lens(out, o.extraFx);
     pipeline.outputNode = out;
     this.pipeline = pipeline;
@@ -311,7 +323,6 @@ export class RenderHost {
         this.holding = false;
         this.renderer.setRenderTarget(null);
         this.renderer.setMRT(null);
-        this.upscaler?.steadyVelocity(false);
       }
       // What a compile leaves to the first frame (the shadow maps' own shaders, the passes after the scene's) is
       // built in that frame, at once: behind the loading screen it is waited for here, or the title would stand
@@ -326,6 +337,9 @@ export class RenderHost {
           const late = setTimeout(done, 1500);
           this.drawn = done;
         });
+        // (that frame made the upscaler; its compute pipelines are built off the main thread, and until they are
+        // there the scene is shown as it is drawn, small: not what the first picture after the loading screen should be)
+        await Promise.race([this.upscaler?.ready(), new Promise((resolve) => setTimeout(resolve, 3000))]);
       }
     };
     this.compileQueue = this.compileQueue.then(run, run);
@@ -367,7 +381,6 @@ export class RenderHost {
   private aim() {
     this.renderer.setRenderTarget(this.scenePass.renderTarget);
     this.renderer.setMRT(this.scenePass.getMRT());
-    this.upscaler?.steadyVelocity(true);
   }
 
   private resize() {
@@ -392,6 +405,11 @@ export class RenderHost {
       frame(dt);
       if (this.options.volumetric) updateVolume(this.camera);
       if (!this.holding) {
+        if (this.upscaler) {
+          // the motion vectors' projection: the camera's, here where it carries no jitter (see `steadyProjection`)
+          this.camera.updateProjectionMatrix();
+          steadyProjection.copy(this.camera.projectionMatrix);
+        }
         try {
           this.pipeline.render();
         } catch (err) {
@@ -409,6 +427,7 @@ export class RenderHost {
     void this.renderer.setAnimationLoop(null);
     this.observer?.disconnect();
     this.pipeline?.dispose();
+    this.upscaler?.dispose();
     this.renderer.dispose();
   }
 }

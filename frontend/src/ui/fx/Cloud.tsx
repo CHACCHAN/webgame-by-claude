@@ -2,12 +2,12 @@ import { useEffect, useRef } from 'react';
 import { isTouchDevice } from '../touch';
 import { COURSES, type CourseId } from '../../game/track/courses';
 import { Track } from '../../game/track/Track';
-import { bind, createCloud, resizeCloud, rng, stepCloud, type Cloud as Field, type Shape } from './cloud';
+import { FOCAL, bind, createCloud, resizeCloud, rng, stepCloud, type Cloud as Field, type Shape } from './cloud';
 import { splat } from './fluid';
 import { createCloudRenderer } from './cloudRender';
 import { createCloudRendererGpu } from './cloudRenderGpu';
 import { gameHolder, renderHost } from '../GameCanvas';
-import { RELIEF_PITCH, RELIEF_SWAY, TONE, courseRelief, maskShape, medalShape, skyScene } from './shapes';
+import { RELIEF_PITCH, RELIEF_SWAY, TONE, courseRelief, maskShape, medalShape } from './shapes';
 
 /**
  * The grains of the menus. Owner 11-12: grains around every button and dust over the whole screen all the time
@@ -15,7 +15,7 @@ import { RELIEF_PITCH, RELIEF_SWAY, TONE, courseRelief, maskShape, medalShape, s
  * one thing: **they are the picture of a thing, in the few places where a picture belongs**, and they hang in water.
  *
  * - An element with `data-cloud` is depicted by grains where it stands: `course:<id>` (the course's relief),
- *   `glyph` (the element's own text), `sky:night|rain|dawn` (a time of day and its weather as a scene),
+ *   `glyph` (the element's own text),
  *   `medal:gold|silver|bronze` (a medal, the element's text as its emblem). `data-cloud-fill="0…1"`: how much of
  *   it is there. A thing condenses when it is asked for and comes apart like ink when it is let go.
  *   `data-cloud-once="<ms>"`: an entrance only: after that long in grains the element gets `data-cloud-done` and
@@ -128,9 +128,6 @@ export function Cloud() {
         const t = new Track(info.design);
         return courseRelief({ count: t.count, pos: t.pos, startS: t.startS, finishS: t.finishS, base: (x, z) => info.landform.base(x, z), water: info.landform.waterLevel }, n, rng(arg.length * 977 + 3));
       }
-      if (kind === 'sky' && (arg === 'night' || arg === 'rain' || arg === 'dawn')) {
-        return skyScene(arg, Number(key.split(':')[2]) || 3, n, rng(arg.length * 131 + 7));
-      }
       if (kind === 'glyph' || kind === 'medal') {
         // the element's own text in its own type, drawn into a mask
         const style = getComputedStyle(el);
@@ -158,12 +155,11 @@ export function Cloud() {
       }
       return null;
     };
-    const keyOf = (el: HTMLElement, r: DOMRect) => {
+    const keyOf = (el: HTMLElement) => {
       const asked = el.dataset.cloud ?? '';
       if (asked === 'glyph') return `glyph:${el.dataset.cloudText ?? el.textContent ?? ''}`;
       if (asked.startsWith('medal:')) return `${asked}:${el.dataset.cloudText ?? el.textContent ?? ''}`;
-      // (a sky is made for the shape of its place)
-      return asked.startsWith('sky:') ? `${asked}:${(r.width / r.height).toFixed(1)}` : asked;
+      return asked;
     };
     const findThing = () => {
       thing = null;
@@ -171,7 +167,7 @@ export function Cloud() {
       for (const el of overlay.querySelectorAll<HTMLElement>('[data-cloud]')) {
         const r = el.getBoundingClientRect();
         if (r.width < 8 || r.height < 8 || r.bottom < 0 || r.top > window.innerHeight || el.dataset.cloudDone !== undefined) continue;
-        thing = { el, key: keyOf(el, r) };
+        thing = { el, key: keyOf(el) };
         return;
       }
     };
@@ -268,6 +264,9 @@ export function Cloud() {
           const p = c.place;
           const fill = shown.el.dataset.cloudFill;
           p.fill = fill === undefined ? 1 : Math.max(0, Math.min(1, Number(fill)));
+          // (where the page says the car of its film is on the course: `data-cloud-at`)
+          const at = shown.el.dataset.cloudAt;
+          p.at = at === undefined ? undefined : Number(at);
           p.x = r.left - left + r.width / 2;
           p.y = r.top - top + r.height / 2;
           if (shown.key.startsWith('course')) {
@@ -280,12 +279,32 @@ export function Cloud() {
             p.pitch = RELIEF_PITCH + Math.sin(c.time * 0.17) * 0.04;
             p.yaw = RELIEF_SWAY * (Math.sin(c.time * 0.23) * 0.45 + (pointer ? (px / w - 0.5) * 1.1 : 0));
             p.z = -10;
-          } else if (shown.key.startsWith('sky')) {
-            // a small scene in its place: it turns a little with the pointer, enough to part the near from the far
-            p.scale = r.height * Number(shown.el.dataset.cloudScale ?? 1);
-            p.yaw = Math.sin(c.time * 0.21) * 0.1 + (pointer ? (px / w - 0.5) * 0.3 : 0);
-            p.pitch = Math.sin(c.time * 0.17 + 1) * 0.04;
-            p.z = 0;
+            // the labels the page hangs on it (start, finish, the car of its film) go where those places are on
+            // the screen
+            const marks = c.shape?.marks;
+            if (marks) {
+              const cyw = Math.cos(p.yaw), syw = Math.sin(p.yaw), cp = Math.cos(p.pitch), sp = Math.sin(p.pitch), f = h * FOCAL;
+              const path = c.shape?.path;
+              for (const tag of shown.el.querySelectorAll<HTMLElement>('[data-cloud-mark]')) {
+                let mx: number, my: number, mz: number;
+                if (tag.dataset.cloudMark === 'at') {
+                  // the car's own mark: on the road where the page's film has it
+                  if (!path || p.at === undefined) continue;
+                  const j = Math.max(0, Math.min(0.9999, p.at)) * (path.length / 3 - 1), j0 = Math.floor(j) * 3, r = j - Math.floor(j);
+                  mx = path[j0] + (path[j0 + 3] - path[j0]) * r;
+                  my = path[j0 + 1] + (path[j0 + 4] - path[j0 + 1]) * r;
+                  mz = path[j0 + 2] + (path[j0 + 5] - path[j0 + 2]) * r;
+                } else {
+                  const m = Number(tag.dataset.cloudMark) * 3;
+                  mx = marks[m];
+                  my = marks[m + 1];
+                  mz = marks[m + 2];
+                }
+                const x = (cyw * mx + syw * mz) * p.scale + p.x, y = (sp * syw * mx + cp * my - sp * cyw * mz) * p.scale + p.y;
+                const z = (-cp * syw * mx + sp * my + cp * cyw * mz) * p.scale + p.z, k = f / (f + z);
+                tag.style.transform = `translate(${(w / 2 + (x - w / 2) * k - (r.left - left)).toFixed(1)}px, ${(h / 2 + (y - h / 2) * k - (r.top - top)).toFixed(1)}px)`;
+              }
+            }
           } else if (shown.key.startsWith('medal')) {
             // a medal on its ribbon: it swings a little and turns to the pointer, and the gleam goes round it
             p.scale = r.height * Number(shown.el.dataset.cloudScale ?? 1);

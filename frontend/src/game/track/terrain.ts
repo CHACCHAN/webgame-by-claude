@@ -28,6 +28,42 @@ export interface TerrainData {
   roadDistAt: (x: number, z: number) => number;
 }
 
+/** The size and place of a grid, known before any height is. */
+export interface GridFrame {
+  x0: number;
+  z0: number;
+  cell: number;
+  nx: number;
+  nz: number;
+}
+
+/**
+ * Every `n`th row of both grids, from row `k` on, packed row after row: the part of the terrain one thread works
+ * out (`TerrainPlan.stripe`). The far grid's heights are still doubles here: `finish` sinks them under the near
+ * grid before they are rounded, as the single-threaded build does (the result must be the same to the bit).
+ */
+export interface TerrainStripe {
+  k: number;
+  n: number;
+  nearH: Float32Array;
+  nearD: Float32Array;
+  nearE: Float32Array;
+  nearI: Int32Array;
+  farH: Float64Array;
+}
+
+/**
+ * The terrain of a course before its heights are worked out: the two grids' frames, the heights of any rows of
+ * them (the costly part, independent row by row: `terrainJob.ts` gives the stripes to workers) and what is left
+ * for one thread once all rows are there (`finish`).
+ */
+export interface TerrainPlan {
+  near: GridFrame;
+  far: GridFrame;
+  stripe(k: number, n: number): TerrainStripe;
+  finish(stripes: TerrainStripe[]): TerrainData;
+}
+
 /** Region where the road carves the terrain (m around the centerline). */
 const ROAD_INFLUENCE = 320;
 
@@ -97,7 +133,17 @@ function roadSamples(track: Track, lf: Landform, spacing: number): RoadSample[] 
  * legs sit on a consistent hillside), then the road corridor is cut/filled
  * with embankments. The bridge zone is never filled, leaving a gorge.
  */
-export function buildTerrain(track: Track, lf: Landform, opts: { nearCell?: number; farCell?: number } = {}): TerrainData {
+export function buildTerrain(track: Track, lf: Landform, opts: TerrainOptions = {}): TerrainData {
+  const plan = planTerrain(track, lf, opts);
+  return plan.finish([plan.stripe(0, 1)]);
+}
+
+export interface TerrainOptions {
+  nearCell?: number;
+  farCell?: number;
+}
+
+export function planTerrain(track: Track, lf: Landform, opts: TerrainOptions = {}): TerrainPlan {
   const nearCell = opts.nearCell ?? lf.grid?.near ?? 4;
   const farCell = opts.farCell ?? lf.grid?.far ?? 24;
   // flat graded ground beyond the drivable edges (a motorway's median, opposite carriageway and verges)
@@ -248,39 +294,18 @@ export function buildTerrain(track: Track, lf: Landform, opts: { nearCell?: numb
   const nz0 = Math.floor((minZ - margin) / nearCell) * nearCell;
   const nnx = Math.ceil((maxX + margin - nx0) / nearCell) + 1;
   const nnz = Math.ceil((maxZ + margin - nz0) / nearCell) + 1;
-  const nearH = new Float32Array(nnx * nnz);
-  const nearD = new Float32Array(nnx * nnz);
-  const nearE = new Float32Array(nnx * nnz);
-  const nearI = new Int32Array(nnx * nnz);
   const info = { dist: 0, roadY: 0, idx: -1, lat: 0 };
-  for (let j = 0; j < nnz; j++) {
+  /** one row of the near grid into the arrays, from index `at` on */
+  const nearRow = (j: number, at: number, H: Float32Array, D: Float32Array, E: Float32Array, I: Int32Array) => {
     const z = nz0 + j * nearCell;
     for (let i = 0; i < nnx; i++) {
       const x = nx0 + i * nearCell;
-      nearH[j * nnx + i] = finalHeight(x, z, info);
-      nearD[j * nnx + i] = info.dist;
-      nearI[j * nnx + i] = info.idx;
-      nearE[j * nnx + i] = info.idx < 0 ? 1e6 : info.dist - (track.width[info.idx] / 2 + 1.2 + (info.lat < 0 ? formation.left : formation.right));
+      H[at + i] = finalHeight(x, z, info);
+      D[at + i] = info.dist;
+      I[at + i] = info.idx;
+      E[at + i] = info.idx < 0 ? 1e6 : info.dist - (track.width[info.idx] / 2 + 1.2 + (info.lat < 0 ? formation.left : formation.right));
     }
-  }
-  // Hairpins: a grid point that belongs to the other leg's cutting can sit above this leg's road edge,
-  // and bilinear interpolation then lifts the ground over the asphalt. Keep every road corridor clear.
-  for (let k = 0; k < track.count; k++) {
-    if (track.zone[k] === 'bridge') continue;
-    const px = track.pos[k * 3], py = track.pos[k * 3 + 1], pz = track.pos[k * 3 + 2];
-    const reach = track.width[k] / 2 + 1.2 + nearCell;
-    const i0 = Math.max(0, Math.floor((px - reach - nx0) / nearCell)), i1 = Math.min(nnx - 1, Math.ceil((px + reach - nx0) / nearCell));
-    const j0 = Math.max(0, Math.floor((pz - reach - nz0) / nearCell)), j1 = Math.min(nnz - 1, Math.ceil((pz + reach - nz0) / nearCell));
-    for (let jj = j0; jj <= j1; jj++) {
-      for (let ii = i0; ii <= i1; ii++) {
-        const g = jj * nnx + ii;
-        if (Math.abs(nearI[g] - k) < 40) continue;
-        if (Math.hypot(nx0 + ii * nearCell - px, nz0 + jj * nearCell - pz) > reach) continue;
-        nearH[g] = Math.min(nearH[g], py - 0.45 - Math.abs(track.bank[k]) * reach);
-      }
-    }
-  }
-  const near: HeightGrid = { x0: nx0, z0: nz0, cell: nearCell, nx: nnx, nz: nnz, heights: nearH, roadDist: nearD, edgeDist: nearE };
+  };
 
   // ---- far grid (pure landform; dips below the near grid so the near mesh wins)
   const cxm = (minX + maxX) / 2, czm = (minZ + maxZ) / 2;
@@ -290,18 +315,9 @@ export function buildTerrain(track: Track, lf: Landform, opts: { nearCell?: numb
   const fx0 = Math.floor((cxm - fw / 2) / farCell) * farCell, fz0 = Math.floor((czm - fd / 2) / farCell) * farCell;
   const fnx = Math.ceil(fw / farCell) + 1;
   const fnz = Math.ceil(fd / farCell) + 1;
-  const farH = new Float32Array(fnx * fnz);
   const nearX1 = nx0 + (nnx - 1) * nearCell, nearZ1 = nz0 + (nnz - 1) * nearCell;
-  // lowest near-grid height within one far cell of (x, z): the coarse mesh must stay under every road
-  // cut of the near mesh, not only under the point it sits on
-  const nearMin = (x: number, z: number) => {
-    const i0 = Math.max(0, Math.floor((x - farCell - nx0) / nearCell)), i1 = Math.min(nnx - 1, Math.ceil((x + farCell - nx0) / nearCell));
-    const j0 = Math.max(0, Math.floor((z - farCell - nz0) / nearCell)), j1 = Math.min(nnz - 1, Math.ceil((z + farCell - nz0) / nearCell));
-    let m = Infinity;
-    for (let jj = j0; jj <= j1; jj++) for (let ii = i0; ii <= i1; ii++) m = Math.min(m, nearH[jj * nnx + ii]);
-    return m;
-  };
-  for (let j = 0; j < fnz; j++) {
+  /** one row of the far grid: the landform alone, sunk towards the grid's edges (not yet under the near grid) */
+  const farRow = (j: number, at: number, H: Float64Array) => {
     const z = fz0 + j * farCell;
     for (let i = 0; i < fnx; i++) {
       const x = fx0 + i * farCell;
@@ -310,33 +326,110 @@ export function buildTerrain(track: Track, lf: Landform, opts: { nearCell?: numb
       const edge = Math.min(i, fnx - 1 - i, j, fnz - 1 - j) * farCell;
       const floor = lf.waterLevel !== null ? lf.waterLevel - 30 : Math.min(h, 120);
       h = lerp(Math.min(h, floor), h, smoothstep(0, 1600, edge));
-      // under the near mesh the far mesh is hidden: sink it below the lowest near terrain around it
-      // (the outermost cell is kept so the two meshes meet at the near grid's border)
-      const inside = x > nx0 + farCell && x < nearX1 - farCell && z > nz0 + farCell && z < nearZ1 - farCell;
-      if (inside) h = Math.min(h - 30, nearMin(x, z) - 8);
-      farH[j * fnx + i] = h;
+      H[at + i] = h;
     }
-  }
-  const far: HeightGrid = { x0: fx0, z0: fz0, cell: farCell, nx: fnx, nz: fnz, heights: farH };
-
-  const sample = (g: HeightGrid, arr: Float32Array, x: number, z: number) => {
-    const gx = clamp((x - g.x0) / g.cell, 0, g.nx - 1.001);
-    const gz = clamp((z - g.z0) / g.cell, 0, g.nz - 1.001);
-    const i = Math.floor(gx), j = Math.floor(gz);
-    const fx = gx - i, fz = gz - j;
-    const a = arr[j * g.nx + i], b = arr[j * g.nx + i + 1];
-    const c = arr[(j + 1) * g.nx + i], d = arr[(j + 1) * g.nx + i + 1];
-    return lerp(lerp(a, b, fx), lerp(c, d, fx), fz);
   };
-  const inNear = (x: number, z: number) => x >= nx0 && x <= nearX1 && z >= nz0 && z <= nearZ1;
 
-  return {
-    near,
-    far,
-    landform: lf,
-    heightAt: (x, z) => (inNear(x, z) ? sample(near, nearH, x, z) : sample(far, farH, x, z)),
-    roadDistAt: (x, z) => (inNear(x, z) ? sample(near, nearD, x, z) : 1e6),
+  const rowsOf = (rows: number, k: number, n: number) => (k < rows ? Math.ceil((rows - k) / n) : 0);
+  const stripe = (k: number, n: number): TerrainStripe => {
+    const nr = rowsOf(nnz, k, n), fr = rowsOf(fnz, k, n);
+    const out: TerrainStripe = { k, n, nearH: new Float32Array(nr * nnx), nearD: new Float32Array(nr * nnx), nearE: new Float32Array(nr * nnx), nearI: new Int32Array(nr * nnx), farH: new Float64Array(fr * fnx) };
+    for (let r = 0; r < nr; r++) nearRow(k + r * n, r * nnx, out.nearH, out.nearD, out.nearE, out.nearI);
+    for (let r = 0; r < fr; r++) farRow(k + r * n, r * fnx, out.farH);
+    return out;
   };
+
+  const finish = (stripes: TerrainStripe[]): TerrainData => {
+    const nearH = new Float32Array(nnx * nnz);
+    const nearD = new Float32Array(nnx * nnz);
+    const nearE = new Float32Array(nnx * nnz);
+    const nearI = new Int32Array(nnx * nnz);
+    const farRaw = new Float64Array(fnx * fnz);
+    // every row of both grids exactly once
+    const nearSeen = new Uint8Array(nnz), farSeen = new Uint8Array(fnz);
+    for (const st of stripes) {
+      const nr = rowsOf(nnz, st.k, st.n), fr = rowsOf(fnz, st.k, st.n);
+      if (st.nearH.length !== nr * nnx || st.nearD.length !== nr * nnx || st.nearE.length !== nr * nnx || st.nearI.length !== nr * nnx || st.farH.length !== fr * fnx) throw new Error('terrain: a stripe of the wrong size');
+      for (let r = 0; r < nr; r++) {
+        const j = st.k + r * st.n, a = r * nnx, b = a + nnx;
+        nearH.set(st.nearH.subarray(a, b), j * nnx);
+        nearD.set(st.nearD.subarray(a, b), j * nnx);
+        nearE.set(st.nearE.subarray(a, b), j * nnx);
+        nearI.set(st.nearI.subarray(a, b), j * nnx);
+        nearSeen[j]++;
+      }
+      for (let r = 0; r < fr; r++) {
+        const j = st.k + r * st.n;
+        farRaw.set(st.farH.subarray(r * fnx, (r + 1) * fnx), j * fnx);
+        farSeen[j]++;
+      }
+    }
+    if (nearSeen.some((c) => c !== 1) || farSeen.some((c) => c !== 1)) throw new Error('terrain: rows missing or given twice');
+    // Hairpins: a grid point that belongs to the other leg's cutting can sit above this leg's road edge,
+    // and bilinear interpolation then lifts the ground over the asphalt. Keep every road corridor clear.
+    for (let k = 0; k < track.count; k++) {
+      if (track.zone[k] === 'bridge') continue;
+      const px = track.pos[k * 3], py = track.pos[k * 3 + 1], pz = track.pos[k * 3 + 2];
+      const reach = track.width[k] / 2 + 1.2 + nearCell;
+      const i0 = Math.max(0, Math.floor((px - reach - nx0) / nearCell)), i1 = Math.min(nnx - 1, Math.ceil((px + reach - nx0) / nearCell));
+      const j0 = Math.max(0, Math.floor((pz - reach - nz0) / nearCell)), j1 = Math.min(nnz - 1, Math.ceil((pz + reach - nz0) / nearCell));
+      for (let jj = j0; jj <= j1; jj++) {
+        for (let ii = i0; ii <= i1; ii++) {
+          const g = jj * nnx + ii;
+          if (Math.abs(nearI[g] - k) < 40) continue;
+          if (Math.hypot(nx0 + ii * nearCell - px, nz0 + jj * nearCell - pz) > reach) continue;
+          nearH[g] = Math.min(nearH[g], py - 0.45 - Math.abs(track.bank[k]) * reach);
+        }
+      }
+    }
+    const near: HeightGrid = { x0: nx0, z0: nz0, cell: nearCell, nx: nnx, nz: nnz, heights: nearH, roadDist: nearD, edgeDist: nearE };
+
+    // ---- far grid: under the near mesh it is hidden
+    const farH = new Float32Array(fnx * fnz);
+    // lowest near-grid height within one far cell of (x, z): the coarse mesh must stay under every road
+    // cut of the near mesh, not only under the point it sits on
+    const nearMin = (x: number, z: number) => {
+      const i0 = Math.max(0, Math.floor((x - farCell - nx0) / nearCell)), i1 = Math.min(nnx - 1, Math.ceil((x + farCell - nx0) / nearCell));
+      const j0 = Math.max(0, Math.floor((z - farCell - nz0) / nearCell)), j1 = Math.min(nnz - 1, Math.ceil((z + farCell - nz0) / nearCell));
+      let m = Infinity;
+      for (let jj = j0; jj <= j1; jj++) for (let ii = i0; ii <= i1; ii++) m = Math.min(m, nearH[jj * nnx + ii]);
+      return m;
+    };
+    for (let j = 0; j < fnz; j++) {
+      const z = fz0 + j * farCell;
+      for (let i = 0; i < fnx; i++) {
+        const x = fx0 + i * farCell;
+        let h = farRaw[j * fnx + i];
+        // sink it below the lowest near terrain around it
+        // (the outermost cell is kept so the two meshes meet at the near grid's border)
+        const inside = x > nx0 + farCell && x < nearX1 - farCell && z > nz0 + farCell && z < nearZ1 - farCell;
+        if (inside) h = Math.min(h - 30, nearMin(x, z) - 8);
+        farH[j * fnx + i] = h;
+      }
+    }
+    const far: HeightGrid = { x0: fx0, z0: fz0, cell: farCell, nx: fnx, nz: fnz, heights: farH };
+
+    const sample = (g: HeightGrid, arr: Float32Array, x: number, z: number) => {
+      const gx = clamp((x - g.x0) / g.cell, 0, g.nx - 1.001);
+      const gz = clamp((z - g.z0) / g.cell, 0, g.nz - 1.001);
+      const i = Math.floor(gx), j = Math.floor(gz);
+      const fx = gx - i, fz = gz - j;
+      const a = arr[j * g.nx + i], b = arr[j * g.nx + i + 1];
+      const c = arr[(j + 1) * g.nx + i], d = arr[(j + 1) * g.nx + i + 1];
+      return lerp(lerp(a, b, fx), lerp(c, d, fx), fz);
+    };
+    const inNear = (x: number, z: number) => x >= nx0 && x <= nearX1 && z >= nz0 && z <= nearZ1;
+
+    return {
+      near,
+      far,
+      landform: lf,
+      heightAt: (x, z) => (inNear(x, z) ? sample(near, nearH, x, z) : sample(far, farH, x, z)),
+      roadDistAt: (x, z) => (inNear(x, z) ? sample(near, nearD, x, z) : 1e6),
+    };
+  };
+
+  return { near: { x0: nx0, z0: nz0, cell: nearCell, nx: nnx, nz: nnz }, far: { x0: fx0, z0: fz0, cell: farCell, nx: fnx, nz: fnz }, stripe, finish };
 }
 
 export { DS };

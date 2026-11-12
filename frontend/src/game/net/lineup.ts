@@ -10,7 +10,7 @@ import { footprint, onlineGrid, type GridSpot } from './grid';
 export interface LineupEntry {
   slot: number;
   carId: CarId;
-  /** a train's line or the cockroach's colouring, when one is picked; everything else wears the seat's colour */
+  /** the paint picked (a car's colour, a train's line, a livery); without one the vehicle wears the seat's colour */
   livery?: string;
   browsing: boolean;
 }

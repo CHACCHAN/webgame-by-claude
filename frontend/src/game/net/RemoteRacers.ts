@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import { CarVisual } from '../render/CarVisual';
 import { CAR_SPECS, type CarId } from '../vehicle/carSpecs';
+import { offeredPaint } from '../vehicle/paints';
+import { specForLivery } from '../vehicle/trains';
 import type { PhysicsWorld, RAPIER } from '../vehicle/PhysicsWorld';
 import { ProxyCar } from './ProxyCar';
 import { newExhaustState, type ExhaustState } from '../fx/Exhaust';
@@ -10,7 +12,10 @@ import { newPose } from './PeerTrack';
 
 export type { NetState } from './codec';
 
-/** Paint per grid slot so identical cars stay distinguishable (also shown in the lobby and HUD). */
+/**
+ * Colour per grid slot: the member's mark in name tags, the HUD and the lists (two members may pick the same paint),
+ * and the paint of a vehicle whose member picked none.
+ */
 export const SLOT_COLORS = ['#2a62d8', '#d6283c', '#ecedef', '#22dd44', '#cc99dd'];
 
 export interface Peer {
@@ -18,7 +23,12 @@ export interface Peer {
   name: string;
   carId: CarId;
   slot: number;
+  /** the paint they picked (drawn only if the vehicle offers it; else the slot's colour) */
+  color?: string | null;
 }
+
+/** What a member's vehicle is painted with online: their pick if the vehicle offers it, else the seat's colour. */
+export const paintFor = (carId: CarId, color: string | null | undefined, slot: number) => offeredPaint(carId, color) ?? SLOT_COLORS[slot % SLOT_COLORS.length];
 
 interface RemoteCar {
   peer: Peer;
@@ -58,9 +68,11 @@ export class RemoteRacers {
     for (const [id, car] of this.cars) if (!peers.some((p) => p.id === id)) this.remove(id, car);
     for (const peer of peers) {
       if (this.cars.has(peer.id)) continue;
-      const spec = CAR_SPECS[peer.carId];
+      const paint = paintFor(peer.carId, peer.color, peer.slot);
+      // a train as fitted for its line (the model of that line)
+      const spec = specForLivery(CAR_SPECS[peer.carId], paint);
       const ride = this.rideHeightOf(peer.carId);
-      const visual = new CarVisual(spec, { headlights: true, shadows: this.shadows, rideHeight: ride, bodyColor: SLOT_COLORS[peer.slot % SLOT_COLORS.length] });
+      const visual = new CarVisual(spec, { headlights: true, shadows: this.shadows, rideHeight: ride, bodyColor: paint });
       const g = grid(peer.slot);
       visual.root.position.copy(g.position).add(new THREE.Vector3(0, ride, 0));
       visual.root.quaternion.setFromAxisAngle(new THREE.Vector3(0, 1, 0), g.heading);
@@ -121,10 +133,10 @@ export class RemoteRacers {
   }
 
   /** Progress of every remote car for live positions. */
-  standings(): { id: number; name: string; slot: number; s: number; fin: number | null; lastHeard: number }[] {
+  standings(): { id: number; name: string; slot: number; paint: string | undefined; s: number; fin: number | null; lastHeard: number }[] {
     return [...this.cars.values()].map((c) => {
       const st = c.body.rx.track.newest;
-      return { id: c.peer.id, name: c.peer.name, slot: c.peer.slot, s: st?.s ?? 0, fin: st?.fin ?? null, lastHeard: c.body.rx.lastHeard };
+      return { id: c.peer.id, name: c.peer.name, slot: c.peer.slot, paint: c.visual.color, s: st?.s ?? 0, fin: st?.fin ?? null, lastHeard: c.body.rx.lastHeard };
     });
   }
 

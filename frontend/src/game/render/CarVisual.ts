@@ -10,7 +10,7 @@ import { clamp, damp } from '../util/math';
 import { beamCones, type VolumeSpot } from './volumetricLights';
 import { HEADLIGHT } from './LightRig';
 
-const _q = new THREE.Quaternion(), _p = new THREE.Vector3();
+const _q = new THREE.Quaternion(), _p = new THREE.Vector3(), _aim = new THREE.Vector3();
 const AXIS_Y = new THREE.Vector3(0, 1, 0), AXIS_X = new THREE.Vector3(1, 0, 0);
 /** the materials of a car model's parts that throw shadows */
 const SHADOW_PARTS = /^(paint|accent|trim|glass|tire|rim)$/;
@@ -41,9 +41,16 @@ export class CarVisual {
   readonly spec: CarSpec;
   /** the body colour (a train's or the cockroach's livery swatch) */
   color: string | undefined;
-  /** where the headlights' real light starts and what it is aimed at; the light itself is one of the game's pooled spots (render/LightRig.ts) */
+  /**
+   * Where the headlights' real light starts and what it is aimed at; the light itself is one of the game's pooled
+   * spots (render/LightRig.ts): one per vehicle, so it starts between the lamps, at their height, just ahead of
+   * the nose (inside the body the shell would throw its shadow over all of it).
+   */
   private lampOrigin: THREE.Object3D | null = null;
   private lampAim: THREE.Object3D | null = null;
+  /** the lamps themselves, in the frame of what they hang on: where the glow in the haze starts (a cone each) */
+  private lampSources: THREE.Vector3[] = [];
+  private lampParent: THREE.Object3D | null = null;
   private beamIntensity = 0;
   private beams: THREE.Mesh[] = [];
   /** brightness of the beam cones (shared by this car's cones) */
@@ -93,15 +100,36 @@ export class CarVisual {
     else if (spec.popUpLamps && this.rig.fromModel && !opts.ghost) this.buildPods(spec.popUpLamps);
 
     if (opts.headlights && !opts.ghost) {
-      // a train's lamps can sit back on a long nose: its light starts at the tip, clear of the body's shadow
-      const front = spec.train ? trainNoseZ(spec.train) + 0.2 : (this.rig.anchors.headlights[0]?.z ?? 2);
       // a train's lamps sit on its leading car, which follows the path and not the simulated bogie's yaw
-      const lamps = this.rig.lampParent ?? this.rig.root;
+      const lamps = (this.lampParent = this.rig.lampParent ?? this.rig.root);
+      // the beams come out of the raised pods on pop-up cars
+      const sources = this.pods.length ? this.pods.map((h) => new THREE.Vector3(h.position.x, h.position.y + POD.h * 0.55, h.position.z + POD.d)) : this.rig.anchors.headlights;
+      // The light comes from where the lamps are (owner 11-12: every vehicle's light started in the wrong place:
+      // at one height per kind — above a car's bonnet, at a motorcycle's front wheel, under a train's roof lamps).
+      const height = sources.length ? sources.reduce((sum, v) => sum + v.y, 0) / sources.length : traitsOf(spec).lampHeight;
+      const lens = sources.length ? Math.max(...sources.map((v) => v.z)) : 2;
+      let front = lens + 0.1;
+      if (spec.train) {
+        // a train's lamps can sit back on a long nose: its light starts at the tip, clear of the body's shadow
+        front = trainNoseZ(spec.train) + 0.3;
+      } else {
+        // just ahead of whatever of the body stands before the lamps (a bumper, a bike's front wheel); a skinned
+        // model's box is its rest pose's, in another scale
+        const box = new THREE.Box3();
+        this.rig.root.traverse((o) => {
+          const m = o as THREE.SkinnedMesh;
+          if (m.isMesh && !m.isSkinnedMesh) box.expandByObject(m);
+        });
+        if (!box.isEmpty()) front = Math.max(front, Math.min(box.max.z, lens + 0.6) + 0.05);
+      }
       const origin = (this.lampOrigin = new THREE.Object3D());
       const aim = (this.lampAim = new THREE.Object3D());
-      origin.position.set(0, traitsOf(spec).lampHeight, front + 0.1);
+      origin.position.set(0, height, front);
       aim.position.set(0, -0.4, front + 30);
       lamps.add(origin, aim);
+      // (two lamps close together glow as one: a Shinkansen's pair on the cab roof)
+      const spread = sources.length ? Math.max(...sources.map((v) => v.x)) - Math.min(...sources.map((v) => v.x)) : 0;
+      this.lampSources = spread >= 0.5 ? sources.map((v) => v.clone()) : [new THREE.Vector3(0, height, lens)];
       // volumetric-ish beam cones
       const beamMat = new MeshBasicNodeMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, fog: false });
       {
@@ -113,9 +141,6 @@ export class CarVisual {
         const a = pow(clampNode(uv().y, 0, 1), 2.2).mul(edge).mul(this.beamLevel).mul(beamCones);
         beamMat.colorNode = vec4(vec3(1, 0.93, 0.8).mul(a), 1);
       }
-      // the beams come out of the raised pods on pop-up cars
-      const sources = this.pods.length ? this.pods.map((h) => new THREE.Vector3(h.position.x, h.position.y + POD.h * 0.55, h.position.z + POD.d)) : this.rig.anchors.headlights;
-      if (this.pods.length) origin.position.y = sources[0].y;
       for (const hl of sources) {
         const cone = new THREE.Mesh(new THREE.ConeGeometry(3.2, 22, 24, 1, true), beamMat);
         // apex at the lamp, dipping towards the road 22 m ahead (more from high lamps, e.g. a train's roof lamps)
@@ -150,16 +175,27 @@ export class CarVisual {
     this.setBrakeLights(false);
   }
 
-  /** The headlights' cone, for the glow in the haze (render/volumetricLights.ts): false when the car has none or they are off. */
-  beamInto(out: VolumeSpot): boolean {
-    if (!this.lampOrigin || !(this.beamIntensity > 0) || !this.root.visible) return false;
-    this.lampOrigin.getWorldPosition(out.position);
-    this.lampAim!.getWorldPosition(out.direction).sub(out.position).normalize();
-    out.color.set(HEADLIGHT.color);
-    out.intensity = this.beamIntensity;
-    out.angle = HEADLIGHT.angle;
-    out.penumbra = HEADLIGHT.penumbra;
-    return true;
+  /**
+   * The headlights' cones, for the glow in the haze (render/volumetricLights.ts): one from each lamp, into `pool`
+   * from `at` on, as many as fit. Returns how many (0 when the car has no lamps or they are off).
+   */
+  beamsInto(pool: VolumeSpot[], at: number): number {
+    if (!this.lampOrigin || !this.lampParent || !(this.beamIntensity > 0) || !this.root.visible) return 0;
+    // (this also brings the lamps' parent up to date)
+    this.lampOrigin.getWorldPosition(_p);
+    this.lampAim!.getWorldPosition(_aim).sub(_p).normalize();
+    const n = Math.min(this.lampSources.length, pool.length - at);
+    for (let k = 0; k < n; k++) {
+      const out = pool[at + k];
+      out.position.copy(this.lampSources[k]).applyMatrix4(this.lampParent.matrixWorld);
+      out.direction.copy(_aim);
+      out.color.set(HEADLIGHT.color);
+      // (together they are the one real light)
+      out.intensity = this.beamIntensity / this.lampSources.length;
+      out.angle = HEADLIGHT.angle;
+      out.penumbra = HEADLIGHT.penumbra;
+    }
+    return n;
   }
 
   /** The headlights as a real light, for one of the game's pooled spots (`LightRig.beams`): 0 when dark or absent. */

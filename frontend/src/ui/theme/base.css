@@ -51,9 +51,9 @@ h1, h2, h3, p { margin: 0; }
 [data-count]::after { content: attr(data-count); position: absolute; inset: 0; -webkit-text-fill-color: currentColor; text-shadow: var(--count-glow, none); text-align: inherit; }
 
 /* ---- cut panels: two corners chamfered, a hairline that follows the cut, scanlines, dark glass */
-.cut, .panel, .fault, .ol-panel, .choice-card, .course-card, .rival-card, .vp-detail, .vp-tile, .menu-desc, .cta, .mini, .chip, .tabs button, .vp-tab,
+.cut, .panel, .fault, .ol-panel, .choice-card, .rival-card, .vp-detail, .vp-tile, .menu-desc, .cta, .mini, .chip, .tabs button, .vp-tab,
 .ol-vehicle, .ol-slots li, .ol-standings li, .results-grid .cell, .specs-row div, .local-ghost, .notice, .versus, .ghost-tag, .hud-plate,
-.voice-panel, .voice-status, .touch-back, .fs-toggle, .tc-btn, .tc-half, .tc-pedal, .start-guide, .online-standings, .net-stats, .minimap-box, .vs-line, .rival-line, .pause-box, .drift-guide {
+.voice-panel, .voice-status, .about-panel, .ab-cell, .ab-contact, .ab-course, .desk-card, .desk-filed, .touch-back, .fs-toggle, .tc-btn, .tc-half, .tc-pedal, .start-guide, .online-standings, .net-stats, .minimap-box, .vs-line, .rival-line, .pause-box, .drift-guide {
   --c: var(--cut-m);
   --edge: var(--line);
   --fill: var(--glass);

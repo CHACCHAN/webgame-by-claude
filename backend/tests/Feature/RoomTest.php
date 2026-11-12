@@ -226,6 +226,43 @@ class RoomTest extends TestCase
         $this->getJson("/api/rooms/{$code}", $h)->assertJsonPath('players.1.loaded', true)->assertJsonPath('players.1.ready', true);
     }
 
+    public function test_the_paint_is_kept_with_the_car_and_garbage_is_refused(): void
+    {
+        [, $h] = $this->player('HOST');
+        [, $b] = $this->player('B');
+        $code = $this->postJson('/api/rooms', ['track_id' => 'kirifuri-lakeside', 'car_id' => 'raijin', 'color' => '#1D4FA8'], $h)
+            ->assertCreated()->assertJsonPath('players.0.color', '#1d4fa8')->json('code');
+        // none picked: null (the seat's colour)
+        $this->postJson("/api/rooms/{$code}/join", ['car_id' => 'hayate'], $b)->assertOk()->assertJsonPath('players.1.color', null);
+        $this->patchJson("/api/rooms/{$code}/me", ['loaded' => true, 'ready' => true], $b)->assertOk();
+
+        // a paint alone: kept, and the ready stays (it changes nothing of the race)
+        $this->patchJson("/api/rooms/{$code}/me", ['color' => '#b3121c'], $b)
+            ->assertOk()->assertJsonPath('players.1.color', '#b3121c')->assertJsonPath('players.1.car_id', 'hayate')->assertJsonPath('players.1.ready', true);
+        $this->getJson("/api/rooms/{$code}", $h)->assertJsonPath('players.1.color', '#b3121c');
+        // the car with its paint
+        $this->patchJson("/api/rooms/{$code}/me", ['car_id' => 'e231', 'color' => '#f0a020'], $b)
+            ->assertOk()->assertJsonPath('players.1.car_id', 'e231')->assertJsonPath('players.1.color', '#f0a020')->assertJsonPath('players.1.ready', false);
+        // another car without one: the old paint was the old vehicle's
+        $this->patchJson("/api/rooms/{$code}/me", ['car_id' => 'supra'], $b)->assertOk()->assertJsonPath('players.1.color', null);
+        // null takes a paint back
+        $this->patchJson("/api/rooms/{$code}/me", ['color' => null], $h)->assertOk()->assertJsonPath('players.0.color', null);
+
+        foreach (['red', '#12345', '#1234567', '#gggggg', 'url(x)', 12, ['#ffffff']] as $bad) {
+            $this->patchJson("/api/rooms/{$code}/me", ['color' => $bad], $b)->assertStatus(422);
+            $this->postJson("/api/rooms/{$code}/join", ['car_id' => 'hayate', 'color' => $bad], $b)->assertStatus(422);
+        }
+        $this->getJson("/api/rooms/{$code}", $h)->assertJsonPath('players.1.color', null);
+        // a request that changes nothing
+        $this->patchJson("/api/rooms/{$code}/me", [], $b)->assertStatus(422);
+
+        // not during a race
+        $this->patchJson("/api/rooms/{$code}/me", ['loaded' => true, 'ready' => true], $b)->assertOk();
+        $this->patchJson("/api/rooms/{$code}/me", ['loaded' => true], $h)->assertOk();
+        $this->postJson("/api/rooms/{$code}/start", [], $h)->assertOk();
+        $this->patchJson("/api/rooms/{$code}/me", ['color' => '#ffffff'], $b)->assertStatus(409);
+    }
+
     public function test_the_host_needs_no_ready_and_a_new_host_inherits_the_start_button(): void
     {
         [, $h] = $this->player('HOST');

@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { DAWN_SUN, dawnSun } from '../track/landforms';
 import { MeshBasicNodeMaterial, PMREMGenerator, SpriteNodeMaterial } from 'three/webgpu';
 import {
   Fn, abs, cameraProjectionMatrix, clamp, cos, dot, exp, float, floor, fract, instancedBufferAttribute, max, mix, mod, modelViewMatrix, normalize,
@@ -111,7 +112,7 @@ export const PRESETS: Record<TimeOfDay, Preset> = {
     haze: 0.003,
     keyColor: '#ffbf80',
     keyIntensity: 2.6,
-    keyDir: new THREE.Vector3(0.82, 0.16, 0.55).normalize(),
+    keyDir: new THREE.Vector3(...DAWN_SUN).normalize(),
     hemiSky: '#9cb6d6',
     hemiGround: '#3d3427',
     hemiIntensity: 0.9,
@@ -129,6 +130,8 @@ export const PRESETS: Record<TimeOfDay, Preset> = {
     overcast: 0,
   },
 };
+
+const NO_AHEAD = new THREE.Vector3();
 
 /** a uniform the rig sets by `.value` */
 type U<T> = { value: T };
@@ -202,7 +205,8 @@ export interface EnvironmentRig {
   cloudSea: THREE.Mesh;
   preset: Preset;
   apply(tod: TimeOfDay, scene: THREE.Scene, renderer: GameRenderer): void;
-  update(time: number, focus: THREE.Vector3): void;
+  /** `ahead`: where the camera at `focus` looks (the shadow map is laid out in front of it) */
+  update(time: number, focus: THREE.Vector3, ahead?: THREE.Vector3): void;
   /** draws the reflection environment of the time of day last applied into the game's one target, and returns it */
   buildEnvMap(renderer: GameRenderer): THREE.Texture;
   /** frees what the reflection environment was drawn from */
@@ -314,7 +318,7 @@ export function buildEnvironment(terrain: TerrainData, lights: LightRig): Enviro
     preset: PRESETS.night,
     apply(tod, scene, renderer) {
       const p = { ...PRESETS[tod] };
-      if (tod !== 'dawn') p.keyDir = new THREE.Vector3(...lf.moonDir).normalize();
+      p.keyDir = new THREE.Vector3(...(tod === 'dawn' ? dawnSun(lf) : lf.moonDir)).normalize();
       rig.preset = p;
       skyUniforms.uZenith.value.set(p.zenith);
       skyUniforms.uHorizon.value.set(p.horizon);
@@ -345,15 +349,14 @@ export function buildEnvironment(terrain: TerrainData, lights: LightRig): Enviro
       city.visible = p.cityLights > 0;
       cloudSea.visible = p.seaOfClouds > 0;
     },
-    update(time, focus) {
+    update(time, focus, ahead = NO_AHEAD) {
       skyUniforms.uTime.value = time;
       sky.position.copy(focus);
       cityLights.uniforms.uTime.value = time;
       cloudU.uTime.value = time;
       seaNormal.offset.set(time * 0.002, time * 0.0013);
-      // keep the shadow frustum around the focus point
-      key.position.copy(focus).addScaledVector(rig.preset.keyDir, 250);
-      key.target.position.copy(focus);
+      // the shadow map goes with the camera
+      lights.aimKey(focus, ahead, rig.preset.keyDir);
     },
     buildEnvMap(renderer) {
       // environment for reflections: the sky plus a ring of warm lights, drawn into the game's one target (the

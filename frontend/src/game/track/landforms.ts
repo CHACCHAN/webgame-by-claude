@@ -20,6 +20,18 @@ export interface CityDef {
  * the road is shaped by the road itself (see terrain.ts); the landform decides
  * slopes, water, where towns sit and what decorates the horizon.
  */
+/** direction towards the morning sun (9° up), unless a course's landform has its own */
+export const DAWN_SUN: [number, number, number] = [0.82, 0.16, 0.55];
+export const dawnSun = (lf: { dawnSun?: [number, number, number] }) => lf.dawnSun ?? DAWN_SUN;
+
+/** a sun's direction from its bearing (degrees, 0 = +x, 90 = +z) and its height (degrees up) */
+const sunAt = (bearing: number, up: number): [number, number, number] => {
+  const a = (bearing * Math.PI) / 180, e = (up * Math.PI) / 180;
+  return [Math.cos(a) * Math.cos(e), Math.sin(e), Math.sin(a) * Math.cos(e)];
+};
+/** the caldera's morning sun: 26° up, over the eastern rim (28 % of the road in the land's shade; six bearings and heights compared in pictures, 11-12) */
+const KIRIFURI_SUN = sunAt(75, 26);
+
 export interface Landform {
   base(x: number, z: number): number;
   /** 0..1 weight of mountain relief (0 on plains, towns and lakes) */
@@ -37,6 +49,12 @@ export interface Landform {
   cityGlow?: number;
   /** direction towards the moon at night (scenic placement per course) */
   moonDir: [number, number, number];
+  /**
+   * direction towards the morning sun, where the course wants another than `DAWN_SUN` (`dawnSun`). The land throws
+   * its own shadow (`render/farShade.ts`): under the common sun, 9° up, 90 % of the caldera's road lay in the
+   * mountains' shade whatever the bearing, and the dawn was a dusk (`npx tsx tools/sun-sweep.ts <course> <degrees up>…`).
+   */
+  dawnSun?: [number, number, number];
   /** height of the dawn sea of clouds */
   cloudLevel: number;
   /**
@@ -130,6 +148,7 @@ export const CALDERA: Landform = {
   cityGlowDir: [-0.4, 0, 0.9],
   cityGlow: 0.4,
   moonDir: [-0.45, 0.42, 0.79],
+  dawnSun: KIRIFURI_SUN,
   cloudLevel: 320,
   features: { towers: [[1500, -1200], [-1300, 600]] },
 };

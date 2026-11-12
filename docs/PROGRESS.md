@@ -561,6 +561,108 @@ by the main session. Live since the release of 11-11 (below): the owner saw the 
   grains, close to 3D particles, that depict things and emphasise things by themselves: "the part in charge of
   beautiful expression". The 2D layer (`ui/fx/`) is to be remade on that brief.
 
+### Time & weather: the scene is the picture (11-12, the owner's choice of layout A)
+The owner (11-12): the screen where the weather is chosen looks somehow dowdy; rework the layout and show it in
+pictures first, the decision follows. What was wrong (my reading): three cards across the middle hid the scene
+that changes with the choice, the camera looked down on the car's roof, and the cards mixed three kinds of
+picture (a drawn sky strip, a grain sky, text). Two layouts were shown next to the old one
+(`~/.local/opt/quality/cmp/cond2/conditions-proposals.jpg`); the owner: 「A案でよいと思います」.
+- **Layout A, now the screen** (`ConditionsScreen`, `.cond*` in `screens.css`): the three conditions as a list on
+  the left where the menus have theirs (row `FocusFrame`, ↑↓ and ←→), the selected one's description and three
+  readouts at the bottom left (grip in % from the course's surface × `WET_GRIP` with a bar, lamps on / off, sight
+  in three steps; amber for what the rain worsens). Nothing covers the road and the sky.
+- **The camera is held for the screen**: `Game.menuShot = 'sky'` (case 4 of `cinematicCamera`): 7.5 m behind the
+  car and 2.6 m to its left at 2.2 m, looking 38 m down the road, eased; the car stands right of the middle, clear
+  of the list. Set and given back by the screen's effect (checked: `null` again after Esc).
+- **Removed**: the cards and their drawn sky strips for this screen (the gearbox screen keeps its two cards), the
+  grain skies (`skyScene`, `data-cloud="sky:…"`, their test): a picture of the sky next to the sky itself had no
+  job left. `Shape.fall` (travelling points) stays in `cloud.ts` with its test, unused.
+- Phones (844×390): the list top left, the panel above the two touch buttons (it lay under them at first: seen on
+  the picture, moved). Standing phones show the rotate notice as before.
+- **Verified** (GPU, headless Chrome, RX 5700 XT; `~/.local/opt/quality/condshots.cjs` → `cmp/cond3`): night /
+  rain / dawn at 1280×720 and 1920×1080 on WebGPU, on WebGL 2 (`?webgl=1`), with UI motion off, on a phone
+  (touch, 844×390): all looked at; no page errors. vitest 185 (one fewer: the grain sky's). `tools/gpu-errors.cjs`:
+  0 on WebGPU and on WebGL 2; the race picture looked at. E2E on the isolated stack, the six tests that pass the
+  screen (time attack, ghost battle, rival battle, course select, car select, phone): 6 passed (14.1 min).
+  The shot on the other three courses (霧降 / 天狼 / アウトバーン, the three conditions each, 1280×720): looked at,
+  the car and the road ahead are in view on all of them, nothing in front of the camera.
+- **Not verified**: a real phone; other GPUs; the whole E2E suite.
+- Seen on these pictures and reported by the owner the same hour: the glow of the car's own headlights stands as a
+  ball above its bonnet (the next section).
+
+### Release 2.0 (11-12): version, the terrain on all cores, three reports by the owner
+- **Version** (owner: 「バージョンがずっとv1.0なの気になる 常に更新していいと思う … v2.0かな?」): 2.0.0, written once in
+  `frontend/package.json` (`src/version.ts`: the title's foot, a run's `client_version`; the server's default in
+  `config/game.php` says the same and a vitest compares). The rule for raising it is in CLAUDE.md (Conventions).
+- **A course's terrain is worked out on all cores but one** (the owner's yes to using all the machine's resources
+  for loading): `track/terrain.ts` `planTerrain` → `stripe(k, n)` → `finish`, `terrain.worker.ts`, `terrainJob.ts`,
+  begun in `Game.load` before the downloads. The result is the same to the bit as `buildTerrain`'s on all four
+  courses (Node: whole and in 7 stripes; `track.test.ts`: 5 stripes in any order, missing / double / wrong-size rows
+  refused). In the browser (GPU Chrome, 1280×720, high, three paired runs, load 4 of 20 cores,
+  `~/.local/opt/quality/loadtime.cjs`): 16 workers, no fallback, no page error; the job takes 0.6–2.1 s beside the
+  downloads; **first load 10.0 → 9.5 s, a change of course 5.4 → 4.2 s (medians; single runs 8.7–16.0 s and
+  3.6–6.5 s: the machine is shared, the gain on the first load is within the scatter)**. Not verified: the fallback
+  in a browser (no Worker, a failing worker, the 20 s limit: the code path is the old `buildTerrain`), phones.
+- **Results: a scrollbar came up for a moment** (owner). Reproduced: for ~0.4 s while the card builds up, the last
+  part rises into place from under the card's edge and the card (`overflow-y: auto`) offered to scroll by 13–15 px
+  (`~/.local/opt/quality/resultscroll.cjs`: 3 of ~78 samples at 1920×911, 1280×720, 1366×650, time attack and rival).
+  The card scrolls only once it stands (`Results.tsx` `settled` → `.results.settled .results-card`); after: 0 samples.
+- **The vending machines stood half inside the retaining wall** (owner; seen on 朧峠 and 天狼, on 霧降 they were sunk
+  0.4 m into the verge): placed 1.6 m behind the barrier line, where the remade roadside (11-11) has its wall from
+  0.95 m on. They now stand on the strip in front of it (0.48 m out) on a concrete plinth as high as the ground at
+  their backs; their light moved with them. Pictures on the three passes, dawn and night (`cmp/vend1` before,
+  `cmp/vend2` after). Seen on the way and fixed: **the pass name board said 朧峠 / OBORO PASS / 452 m on every
+  course**; it now carries the course's own name and the road's height there (`makeSignTexture('kanban', board)`).
+  Not done: at night the machines' fronts burn out in the bloom (the labels cannot be read).
+- **A probe camera**: `game.lookFrom([s, side, up], [s, side, up])` (`Game.spy`) stands anywhere along the road
+  whatever the phase; `~/.local/opt/quality/spy.cjs` takes pictures with it. Made for the owner's reports of places.
+- **Verified**: vitest 190; `tools/gpu-errors.cjs` 0 on WebGPU and on WebGL 2; the race pictures looked at.
+  E2E on the isolated stack built from this tree: title, a whole time attack with results and submission, the
+  phone run: 3 passed (7.7 min); the rest of the suite not run.
+- **Deployed** (`a1e9292`): the live stack serves the new bundle locally and through the public address, the
+  leaderboard answers 200, `/api/content` says version 2.0.0.
+- **Open after this release** (11-12): the course select's two layouts shown to the owner as pictures (branch
+  `course-proposal`, `?courseui=a|b`; `~/.local/opt/quality/cmp/course2/course-proposals.jpg`), decision pending;
+  the 13 re-modelled props (branch `worktree-agent-a0462d11d1fc0d277`, sheets sent) wait for the owner's look;
+  four agents at work in worktrees: the upscaler (FSR 3 of `@pmndrs/upscaler` on WebGPU, the owner's instruction),
+  shadows and lamp light far from the camera, the rain's sound, the About screen with the AI desk. Still to look
+  into: the owner's "black horizontal lines repeated over half the screen" (not found yet).
+
+### The vehicles' lights start at their lamps; the glow in the haze no longer grains (11-12, two reports by the owner)
+The owner: 「車両のライトの発射位置が全部おかしい」, and an hour later, with a screenshot of the car select on the
+autobahn (a motorcycle, the camera in its beam): 「正面から光を浴びると画面上部がつぶつぶになります」.
+- **What was wrong with the places** (measured on every vehicle, `~/.local/opt/quality/lamps.cjs`):
+  the lamp anchors were the middle of the lamp material's bounding box per half of the car, 20–27 cm inside the
+  lamps on models whose lamp parts wrap round the corner; the one real spot light per vehicle started at a height
+  by kind (0.75 m cars, 0.45 m bikes, 1.1 m trains) on the centre line, whatever the model: from the front wheel of
+  the NSR, from under the floor of a train whose lamps sit on the roof line, and its glow in the haze was one cone
+  from that point (a ball of light above the bonnet of a low car).
+- **Now**: an anchor is the area-weighted centroid of the lamp material's triangles per side (`CarModel.deriveAnchors`
+  → `sides`; lamps closer than 0.3 m to each other are one lamp on the centre line: the bikes). The spot starts
+  between the lamps at their height, just ahead of the nose (`CarVisual`: `max(lens + 0.1, min(nose, lens + 0.6) +
+  0.05)`, the nose from the unskinned meshes; trains at their measured lamps), so the bonnet does not catch its own
+  light. The glow in the haze is one cone per lamp (`CarVisual.lampSources`, `beamsInto`; lamps closer than 0.5 m
+  glow as one), the intensity shared; the pool is 8 cones (`VOLUME_SPOTS`, was 4).
+  After: s15 ±0.60 m, r34 ±0.68, supra ±0.54, raijin ±0.61, the Cybertruck on its light bar, the bikes one lamp at
+  x = 0, trains at 2.85–3.37 m (their own lamps). `KIND_TRAITS.lampHeight` is only the fallback for a model without
+  lamp parts now.
+- **The grain**: a cone's six steps were spread at equal angles over the whole view ray. From inside a beam, looking
+  at its lamp, none or one of them fell into the light, by the pixel's dither: lit or unlit by chance, and visible
+  wherever the depth-keeping blur cannot average (leaves, nets, the sky's edge). The steps are now taken only on the
+  part of the ray that is inside the cone and its reach (ray × cone as a quadratic, the interval by case, clamped to
+  the reach sphere), at equal angles within it. A beam seen from the side looks as before.
+- **Cost**: the volume pass 0.22 → 0.34 ms of GPU time (1080p, ultra, rival race at night, `tools/perf-pass.cjs`,
+  load ~4 of 20 cores; a frame is ~6.5 ms there). Eight cones and the interval are the difference.
+- **Verified** (GPU, headless Chrome, RX 5700 XT): the anchors and origins of all 18 vehicles as numbers before and
+  after; the car select before / after on nine vehicles (`cmp/lamps4`: the NSR's light leaves its lamp, no glow
+  above the U9's bonnet, the E235's comes from its roof lamps, the roach's from its eyes); the chase view before /
+  after (`cmp/lamps3`: hardly a difference, as it should be); the owner's case reproduced and gone
+  (`cmp/grain1/sheet-top.jpg`); one car on WebGL 2 and at quality `low` looked at. vitest 188;
+  `tools/gpu-errors.cjs`: 0 on WebGPU and on WebGL 2.
+- **Left as it is**: in a view from the front the road just before the camera shines (the lamp's mirror image on
+  wet asphalt: right); stars on a rear window are the street lamps' highlights in the bloom, not the car's lamps.
+- **Not verified**: other GPUs, a phone; every vehicle × every paint in the race (the anchors do not depend on paint).
+
 ### The grains reconsidered: pictures only, in water; no dust, no ornaments (11-12, the owner's word)
 The owner (11-12): the grains are too many; grains decorating the buttons and particles spread over the whole
 screen all the time are "しつこい"; reconsider all of it; a fluid-simulation-like expression would be beautiful; do
@@ -642,7 +744,7 @@ commit reverts it: the merge `b4e8db2`).
 - Not verified: other GPUs (the two-pass trees lean on equal depths between two shaders: a driver that rounds them
   differently leaves flat-lit pixels, by design no holes); the forest on phones (they start on `low`, which has none of it; a phone set to medium or
   higher: untested); frame rates on a weaker GPU than the RX 5700 XT; the whole E2E suite;
-  the vehicle thumbnails still show the old trees behind the cars (not re-rendered).
+  the vehicle thumbnails still show the old trees behind the cars (re-rendered since: `a62a10c`, all 18 looked at).
 
 ### The results' medal in grains (11-12)
 - `shapes.ts` `medalShape(gold | silver | bronze)`: a disc with a rim, fluting and an edge (it swings on its ribbon
@@ -1796,3 +1898,173 @@ drawn every frame, no culling), street-lamp point lights 0.4–0.7 ms.
 - Car models could be replaced by artist GLBs following the contract in docs/ASSETS.md.
 - Engine sound, corner warning beeps and the music loop points are unverified by ear in this environment.
 - Touch controls (mobile) are not implemented (PC is the target).
+
+## Rain sound remade (11-12, v2.0.1)
+
+The owner's report: the rain sounds uniform. Measured on the old one: a 2 s loop of white noise through two filters
+(correlation with itself 2 s later 1.000), level spread 0.03 dB, the same signal in both ears, almost nothing below
+1 kHz, the same at any speed and under a roof. Now an AudioWorklet (`audio/rain.ts`): far wash with gusts (7 s and
+16 s walks), ~2 500 drops a second around the listener, drops on the vehicle (roof and glass for a car, the helmet on
+a bike, cab glass on a train, none on the cockroach), tyre spray growing with speed, drips and a muffled wash under
+a rock shed. Standing still it keeps the old long-term level (−25.2 against −24.6 dBFS); +2.5 dB at 100 km/h,
++5 dB at 150 km/h; 12–15 dB quieter under a roof. 35–58 µs per 128 samples in Node (1.3–2.2 % of a core).
+
+- Verified: offline renders and their figures (`tools/rain-wav.ts`: old against new, eight scenarios), spectrograms
+  looked at, six vitests (bounded, deterministic per seed, silent when dry, levels, ears apart), tsc, 196 vitests;
+  in the game on the GPU: the node appears with the first rain, gets the car's speed and kind in a race, fades to
+  zero after the weather changes.
+- Deployed 11-12 as v2.0.1: `gpu-errors.cjs` 0 on WebGPU and WebGL 2, a race picture looked at, the live stack
+  and the public address serve the built bundle, `/api/content` says 2.0.1, the worklet's file answers 200.
+- Not verified: **how it sounds** (nobody has listened: the WAVs went to the owner), the roof in the browser (the
+  20 s drive passed none), bike / train / cockroach in the browser, phones' cost, the fallback without AudioWorklet,
+  the level in the full mix against engine and music.
+
+## Release 2.1 (11-12): course select with a film, About and the desk, paint online
+
+**Course select.** The owner found the cards with a grain relief under them "added on afterwards". Two layouts
+went to them as pictures (A: the relief as the stage, B: the course art); then they proposed themselves: a
+recording of play whose car's progress drives the grains. My first build put film, relief, speed, clock and a
+height profile side by side; the owner's correction: **the grains go over the film**, and **not too much
+information: it tires**. Adopted (their word: 「その提案を採用」, which I read as this layout together with my
+two proposals: each course at the time of day that suits it, one fixed car):
+- `CoursesScreen`: list on the left, the selected course's words and three figures bottom left, on the right a
+  film of a run (the game's AI driver in the hayate) with the course's relief of grains over the film's sky. The
+  page reads the film's clock every frame, looks up the car's share of the course in the film's track and writes
+  `data-cloud-at`; the grains light the road behind the car, keep the road ahead dark, a ring rides where it is
+  (`cloud.ts` `Placement.at`, `Shape.part` / `path`; `Cloud.tsx` `data-cloud-mark="at"`).
+- Films: `tools/course-clip.cjs` (frame by frame on the GPU, the game stepped by hand) + `course-clip-encode.sh`
+  (720p, CRF 34): oboro night 12.4 MB / 114 s, kirifuri dawn 11.6 MB / 97 s, tenrou night 7.2 MB / 84 s, autobahn
+  dawn 22.7 MB / 175 s; 52 MB in all, fetched only on this screen, one at a time. nginx: `/video/` (a missing film
+  is a 404).
+- Without grains (motion off, a software renderer) the drawn line stands in; with motion off the film stands on
+  its still; without a film the course's art and the relief's own running light.
+- The old cards, the two other proposals, the height profile and the scale bar are gone.
+
+**About and the desk** (agent): main menu このゲームについて: overview, maker (configuration only), technology,
+credits, and a desk: questions answered by a language model through the server and the rivals' gateway, reports
+(bug / request / other) filed by the model's tool call or by a plain form into `reports.jsonl` in the `desk`
+volume; `php artisan desk:reports` reads and closes them. CLAUDE.md "About and the desk".
+
+**Paint online** (agent): the online vehicle select offers the paints like single player's (same component, the
+`colors` switch is gone); `room_players.color` (migration), told to the others, drawn in the waiting room and the
+race; the seat's colour stays the member's mark; a change of paint alone keeps `ready`.
+
+- Verified: tsc; vitest 210 (new: the car's light on a relief, paints, desk client); backend tests on the
+  combined tree 62 passed (724 assertions); E2E on an isolated stack, software rendering: 9 passed before the
+  paint merge (About ×3, menus, a whole time attack with submission, ghost battle, rival battle, course select,
+  phone) and again after it the online waiting room, course select, car select and phone (see below); pictures
+  on the GPU looked at: course select at 1920×1080, 1280×720, 844×390 (phone), 768×1024 (portrait), motion
+  off, three courses at mid-film, a film missing; the stack serves the film (200, whole length) and answers 404
+  for a missing one. The agents' own checks are in their reports (About: 42 pictures on the GPU with the API
+  played by the script; paint: two players on the GPU against an isolated stack, both sides).
+- Deployed 11-12 as v2.1.0 (a dump of the database first: `pre-2.1.0.sql.gz` in the `backups` volume; the
+  migration ran): `gpu-errors.cjs` 0 on WebGPU and WebGL 2, a race picture looked at; the live stack and the
+  public address serve the built bundle, `/api/content` says 2.1.0 and `desk {enabled, ai}`, the four films answer
+  200 (and 206 for a range, through the tunnel too). **The desk against the real gateway** (the agent could not):
+  a question answered in Japanese in 7.4 s, a report filed by the model's tool call in 11 s and read with
+  `desk:reports` (then closed as my test).
+- Not verified: the films' playback on a phone and on a slow line (52 MB in all, 7–23 MB each); Firefox / Safari
+  (container units size the film's box; without them it takes the stage's width); the course select with a
+  gamepad; the rest of the E2E suite; the desk's answers' quality beyond those two, and its limits behind
+  Cloudflare; a member's report; paint for trains / creatures online in a picture.
+
+## Light and shadow that do not end near the camera (11-12, v2.1.1)
+
+The owner's report: shadows and the street lamps' light were there only near the camera. Causes (agent, code of
+the day + pictures): the key light's shadow map was a ±60 m square centred on the camera (half of it behind the
+viewer, a visible line 60 m ahead, "lit" beyond it; the land never threw a shadow, trees only within 80 m); the
+lamps were six pooled point lights given to the lamps nearest the camera and faded out by 200 m, plus light maps
+on road and ground only: a far lamp lit nothing but its pool on the asphalt.
+
+- Lamps: one light for all of a course's lamps (`render/lampField.ts`, `lampFieldNode.ts`): a grid of cells with
+  up to four lamps each and a table, read per pixel; every lamp lights road, walls, rails and trees at any
+  distance; the pool under a lamp is part of it (`userData.lampBeam`), the light maps are gone.
+- Shadows: the map lies ahead of the camera (4096 → ±100 m, 2048 → ±80 m, 1024 → ±60 m, moved in whole texels);
+  beyond it a baked shade per course and light (`render/farShade.ts`: the land, rock-shed roofs, the trees' share
+  of light), cross-faded at the map's edge (`render/keyShadow.ts`). Grid, table and shade share one texture
+  (`render/lightAtlas.ts`: the 16-texture limit of a fragment shader).
+- Kirifuri at dawn keeps the land's own shadow off (`Landform.dawnShade: false`): with it ~90 % of the caldera's
+  road lies in shade under a 9° sun and the dawn reads as dusk (the owner's to choose; pictures
+  `~/.local/opt/wt/far/cmp-nb-kirifuri-dawn.jpg`).
+
+- Verified by the agent (RX 5700 XT, WebGPU): tsc, vitest, build; `gpu-errors` 0 on WebGPU and WebGL 2;
+  before | after pictures on fixed viewpoints, four courses, night / rain / dawn, ultra, and Oboro at medium and
+  low (`~/.local/opt/wt/far/sheet-*.jpg`); baked shade against the shadow map on the same view 0.86–1.07 over
+  12 views; `perf-pass` on Oboro, ultra, 1080p, in both orders: night no measurable change (scene pass 5.3–5.4 ms
+  after, 4.9–6.4 before, load 3–21), dawn 0.9–1.8 ms cheaper; hitch at a change of time of day not worse.
+- Verified by me on the merged tree (main + this): tsc; vitest 225; build; `gpu-errors` 0 / 0 (WebGPU, WebGL 2)
+  and the race picture; the upscaler on (`quality`, 140 km/h, Oboro and Kirifuri, night and dawn, 32 pictures:
+  no page error, no smear on the lit walls or the shadows); a whole run by the AI on Oboro at night (3446
+  pictures) and Kirifuri at dawn (2899), frame-to-frame brightness jumps measured and the twelve largest of each
+  looked at: all are things passing the camera (mirror posts, shed pillars), none a lamp or a shadow switching
+  (`~/.local/opt/wt/far/drive/`).
+- Not verified: 4K; phones; pictures on the WebGL 2 backend (errors only); medium / low on courses other than
+  Oboro; Tenrou and the autobahn driven as a whole; the bake's time in the browser on a slow machine (Node:
+  36–66 ms heights + 100–145 ms per light; main thread, behind the loading screen); E2E (nothing of theirs
+  touched).
+- Left as it is: `tools/perf-gpu.cjs` still reads `game.lampLights` (the old WebGLRenderer-only tool); the road's
+  `uv1` attribute is still built and no longer read. The course select's films were recorded before this change
+  (the lamps light the walls more now): to be recorded again together with the props' re-modelling.
+- Seen on the way, not from this change: Kirifuri's far caldera wall shows the far trees as large blotches at
+  dawn (before and after alike); the exhaust's puffs read as white balls behind the car at dawn.
+- Deployed 11-12 as v2.1.1 (bundle `index-D1rLr9WI.js`): the same bundle at the local and the public address,
+  `/api/content` says 2.1.1, leaderboard 200, a film's range request 206 through the tunnel.
+
+## Release 2.2 (11-12): the upscaler is FSR 3 on WebGPU; the exhaust's white balls
+
+**Upscaler** (the owner's request of 11-12; agent). WebGPU: `@pmndrs/upscaler` 0.5.0 (MIT; an independent
+implementation of FSR 2/3's temporal upscaling as compute passes on the game's own device, no frame generation)
+replaces our resolve on three's `TAAUNode` (`render/sceneUpscale.ts`; `TemporalUpscaler.ts` is gone; the B2
+entry above describes the old one). WebGL 2 keeps three.js' `FSR1Node`. Modes by FSR's ratios (1.3 / 1.5 / 1.7 /
+2; the shown percentages are the same). The settings row says which one runs. The package's pre-exposure is
+fixed at 0.01 (its auto-exposure dimmed the lamps' glow by 20–35 %); the rain marks the reactive mask twice as
+strongly. CLAUDE.md "Upscaler".
+- The agent's numbers (RX 5700 XT, quality mode, load next to each in its report): fine detail at 200 km/h
+  (mean |picture − 2 px blur|, six viewpoints) FSR 3 1.38–3.21, old upscaler 1.92–4.27, native 2.37–5.88: softer
+  in moving textures; edges clean where the old one stair-stepped; a still picture's flicker 0.005–0.013 %
+  (night) / 0.09–0.14 % (dawn) of pixels against the old 0.03–0.07 / 0.17–0.44; night brightness 0.988 of
+  native. GPU time (`perf-pass`): upscale passes 0.94 ms at 1080p (old 0.34), 3.54 ms at 4K (old 1.44); the
+  whole frame at 4K: native 20.7, old 16.2, FSR 3 18.0 ms. Device-loss fallback with the upscaler on: ok.
+- Verified by me on the merged tree (main with the far light + this + the exhaust): tsc; vitest 225; build;
+  `gpu-errors` 0 in all four (WebGPU / WebGL 2 × upscaler off / on) and the race picture with it on; shaders
+  built per stage with it on: racing 0, as before (load 88 / title 16 / garage 18 / race start 19 / restart 6;
+  load 4); 32 moving pictures (140 km/h, Oboro and Kirifuri, night and dawn) next to the old upscaler's on the
+  same views: the lamp field and the far shade look the same under both, no smear; a still night scene's
+  flicker 0.07–0.08 % of pixels over 8/255 (medium, Oboro; the agent's lower figure was on the autobahn).
+- Not verified: E2E (no spec touches it); modes other than quality beyond switching; phones, other GPUs and
+  browsers; thin lines over time in video; a real device loss.
+- For the owner: softer at speed and 0.6 ms (1080p) / 2.1 ms (4K) dearer than the old one, cleaner edges and a
+  stiller picture; sharpness 0.8 recovers a little (default left at 0.5). Off by default as before.
+
+**Exhaust.** The white balls behind a moving car (seen in the course select's films, brightest at dawn) were
+the exhaust's puffs: thinned out with speed in number only, a few a second at full opacity. What is seen now
+falls with the speed (`fx/Exhaust.ts` `exhaustSeen`: half at 22 km/h, none from 90 km/h); pulling away is still
+a plume. Verified: 700 pictures of Kirifuri's start at dawn next to the same frames before
+(`~/.local/opt/wt/far/drive2/exhaust-before-after.jpg`). The tyres' smoke in a slide is untouched (it is meant
+to be seen). The films still show the balls until they are recorded again.
+- Deployed 11-12 as v2.2.0 (bundle `index-CofCe0oY.js`): the same bundle at the local and the public address,
+  `/api/content` says 2.2.0, leaderboard 200 at both.
+
+## v2.2.1 (11-12): the cockroach's colours stopped the game; Kirifuri's morning sun; the maker on the About screen
+
+- **Players' report through the desk** (`PVW7D6`: after changing the cockroach's colour it is not drawn).
+  Reproduced on the v2.1.0 build on the GPU (`tools/paint-drawn.cjs roach`: the two plain liveries and everything
+  after them 0.00 % of the frame). Cause (agent): a plain livery set `map = null` on materials already drawn;
+  three.js' shadow shader keeps a reference to the source material's map, the next shadow map read `null.matrix`
+  and every frame from then on threw: the picture stood still, garage and race alike, on both backends. Fix:
+  a white stand-in texel (`RoachModel.applyLivery`), the slot is never emptied. Verified by me on the build:
+  `paint-drawn.cjs roach keikyu1000 hayate` on WebGPU (17 states drawn, 0 errors) and `roach` on WebGL 2, the
+  pictures of four states looked at, `gpu-errors` 0 / 0, vitest 228 (new: `roachLivery.test.ts`).
+- **Kirifuri at dawn** (the owner chose: a higher sun and the land's shadow): `Landform.dawnSun`, the caldera's
+  26° up over the eastern rim (bearing 75°); `dawnShade` is gone. Six suns were compared in pictures on the eight
+  fixed viewpoints (`~/.local/opt/quality/cmp/sun-cands-*.jpg`); with this one 28 % of the road lies in the land's
+  shade (32 % with the trees), the sun stands in the picture in two of the eight views, and the lake side has
+  long shadows across the road. Verified: the eight views of the final build looked at
+  (`cmp/rel221-kirifuri-dawn.jpg`), Oboro's dawn unchanged. Not verified: a whole run at dawn on the final sun.
+  The course select's Kirifuri film was recorded under the old sun (to be recorded again with the others).
+- **About**: the owner gave the maker's name and the repository's link: `ABOUT_CREATOR` / `ABOUT_LINKS` in the
+  live `.env` (not in the repository); `/api/content` returns them (checked), the link answers 200.
+- The owner's other answers (11-12): the films are recorded again together with the props; FSR 3's softness is
+  accepted as it is; the black horizontal lines are gone on their side (nothing was changed for them knowingly).
+- Still with agents, stopped twice by the usage limit: the cockroach's wings in the air (a model change: sheet to
+  the owner first), the rain's loudness and a 雨音 setting.

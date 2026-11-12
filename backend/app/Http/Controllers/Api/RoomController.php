@@ -12,6 +12,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Broadcast;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 /**
  * Online battle rooms. The lobby, the start signal and the results go through this API; while
@@ -20,12 +21,26 @@ use Illuminate\Validation\Rule;
  */
 class RoomController extends Controller
 {
+    /**
+     * A vehicle's paint as the game's swatches give it. The server does not know which colours a vehicle offers
+     * (the game's lists): it keeps any well-formed one, and the game that draws it falls back to the seat's colour
+     * for one its vehicle does not offer.
+     */
+    private const COLOR_RULE = ['sometimes', 'nullable', 'string', 'regex:/^#[0-9a-fA-F]{6}$/'];
+
+    /** @param array<string, mixed> $data */
+    private static function color(array $data): ?string
+    {
+        return isset($data['color']) ? strtolower($data['color']) : null;
+    }
+
     public function store(Request $request): JsonResponse
     {
         $data = $request->validate([
             'track_id' => ['required', 'string', Rule::in(array_keys(config('game.tracks')))],
             'time_of_day' => ['sometimes', 'string', Rule::in(config('game.times_of_day'))],
             'car_id' => ['required', 'string', Rule::in(array_keys(config('game.cars')))],
+            'color' => self::COLOR_RULE,
         ]);
         $player = $this->player($request);
 
@@ -41,7 +56,7 @@ class RoomController extends Controller
                 'status' => 'waiting',
                 'race_no' => 0,
             ]);
-            $room->members()->create(['player_id' => $player->id, 'car_id' => $data['car_id'], 'slot' => 0]);
+            $room->members()->create(['player_id' => $player->id, 'car_id' => $data['car_id'], 'color' => self::color($data), 'slot' => 0]);
 
             return $room;
         });
@@ -58,6 +73,7 @@ class RoomController extends Controller
     {
         $data = $request->validate([
             'car_id' => ['required', 'string', Rule::in(array_keys(config('game.cars')))],
+            'color' => self::COLOR_RULE,
         ]);
         $player = $this->player($request);
         $room = $this->room($code);
@@ -92,7 +108,7 @@ class RoomController extends Controller
             while (in_array($slot, $taken, true)) {
                 $slot++;
             }
-            $room->members()->create(['player_id' => $player->id, 'car_id' => $data['car_id'], 'slot' => $slot]);
+            $room->members()->create(['player_id' => $player->id, 'car_id' => $data['car_id'], 'color' => self::color($data), 'slot' => $slot]);
             $room->touch();
 
             return null;
@@ -110,21 +126,31 @@ class RoomController extends Controller
     /**
      * The member's own state: the car, `loaded` (sent by the game once it shows the room's course) and `ready`
      * (the 準備完了 button, a toggle). Another car takes the ready back; nobody is ready before their game has loaded.
+     * `color`: the vehicle's paint (null: none, the seat's colour). Another car sent without one drops the old paint
+     * (it was that vehicle's); another paint alone keeps the ready: it changes nothing of the race.
      */
     public function update(Request $request, string $code): JsonResponse
     {
         $data = $request->validate([
-            'car_id' => ['required_without_all:loaded,ready', 'string', Rule::in(array_keys(config('game.cars')))],
+            // (a request without any of these is refused below: `required_without_all` takes a null colour for none)
+            'car_id' => ['sometimes', 'string', Rule::in(array_keys(config('game.cars')))],
+            'color' => self::COLOR_RULE,
             'loaded' => ['sometimes', 'boolean'],
             'ready' => ['sometimes', 'boolean'],
         ]);
+        if (! array_intersect_key($data, array_flip(['car_id', 'color', 'loaded', 'ready']))) {
+            throw ValidationException::withMessages(['car_id' => '車両を指定してください']);
+        }
         [$room, $member] = $this->membership($request, $code);
-        if (isset($data['car_id']) && $room->status === 'racing') {
+        if ((isset($data['car_id']) || array_key_exists('color', $data)) && $room->status === 'racing') {
             return response()->json(['message' => 'レース中は車を変更できません'], 409);
         }
         $changes = [];
         if (isset($data['car_id']) && $data['car_id'] !== $member->car_id) {
-            $changes += ['car_id' => $data['car_id'], 'ready' => false];
+            $changes += ['car_id' => $data['car_id'], 'color' => null, 'ready' => false];
+        }
+        if (array_key_exists('color', $data)) {
+            $changes['color'] = self::color($data);
         }
         if ($request->has('loaded')) {
             $changes['loaded'] = $request->boolean('loaded');

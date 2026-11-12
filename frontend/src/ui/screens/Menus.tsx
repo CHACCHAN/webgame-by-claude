@@ -12,6 +12,7 @@ import { currentCourseId, useSettings } from '../../store/settings';
 import { decodeGhost } from '../../game/race/Ghost';
 import { api, loadCarBests, loadLocalBest, loadRivalRecord } from '../../api/client';
 import { medalFor } from '../../game/race/medals';
+import { versionLabel } from '../../version';
 import { formatTime } from '../format';
 import { sfx } from '../sfx';
 import { COLORS } from './Cars';
@@ -130,7 +131,7 @@ export function TitleScreen() {
         </div>
       </div>
       <div className="title-foot">
-        <span>v1.0</span>
+        <span>{versionLabel()}</span>
         <span>© 2026 Touge Nocturne Project ― 峠・人物は架空です。車名・車両デザインは各メーカーの商標・意匠です（私的利用の非公開作品）</span>
       </div>
     </div>
@@ -167,6 +168,7 @@ export function ModesScreen() {
     { id: 'rank', label: 'RANKING', jp: 'ランキング', desc: 'コースごとのオンラインランキングを確認する。', action: () => { set({ mode: 'time_attack' }); go('leaderboard'); } },
     { id: 'settings', group: '整える', label: 'SETTINGS', jp: '設定', desc: 'グラフィック品質、サウンド、運転アシスト、表示。', action: () => go('settings') },
     { id: 'controls', label: 'CONTROLS', jp: '操作方法', desc: 'キーボード / ゲームパッド / スマホの操作を確認する。', action: () => go('controls') },
+    { id: 'about', group: '知る', label: 'ABOUT', jp: 'このゲームについて', desc: 'このゲームのこと、つくった人、技術、クレジット。AI窓口では遊び方の相談と、不具合の報告・要望を受け付けています。', action: () => go('about') },
     ...accountRow,
   ];
   // (the account row comes once the server has answered, and can go: the focus never points past the list)
@@ -313,6 +315,69 @@ function CourseMap({ id }: { id: CourseId }) {
   );
 }
 
+/**
+ * A film of a whole run on a course (`public/video/courses/<id>.mp4`: the game's own driver, recorded frame by frame
+ * with `tools/course-clip.cjs`) and where its car is at every moment (`<id>.json`: every `step` seconds the share
+ * of the course it has covered).
+ */
+interface RunTrack {
+  step: number;
+  u: number[];
+}
+const runTracks = new Map<CourseId, Promise<RunTrack | null>>();
+function runTrack(id: CourseId) {
+  let t = runTracks.get(id);
+  if (!t) runTracks.set(id, (t = fetch(`/video/courses/${id}.json`).then((r) => (r.ok ? (r.json() as Promise<RunTrack>) : null)).catch(() => null)));
+  return t;
+}
+
+/**
+ * The film of the run, and the course's relief in step with it (the owner's idea, 11-12): the film's clock says
+ * where its car is on the course, and the relief's grains follow that (`data-cloud-at`: the road behind the car lit,
+ * the road ahead waiting, a mark where it is), not a clock of their own: paused or looped, they stay with the
+ * picture. With UI motion off the film stands still on its first picture; a film that cannot be had leaves the
+ * course's own picture, and the relief keeps its running light.
+ */
+function CourseRun({ id }: { id: CourseId }) {
+  const box = useRef<HTMLDivElement>(null);
+  const moving = useSettings((s) => s.uiMotion);
+  const [lost, setLost] = useState(false);
+  useEffect(() => {
+    let raf = 0, track: RunTrack | null = null, live = true;
+    void runTrack(id).then((t) => {
+      if (live) track = t;
+    });
+    const film = box.current?.querySelector('video');
+    const relief = box.current?.parentElement?.querySelector<HTMLElement>('.crs-relief');
+    let shown = -1;
+    const tick = () => {
+      raf = requestAnimationFrame(tick);
+      if (!track || !film || !relief || film.readyState < 2) return;
+      const f = Math.min(track.u.length - 1.001, film.currentTime / track.step), k = Math.floor(f);
+      const u = track.u[k] + (track.u[k + 1] - track.u[k]) * (f - k);
+      if (Math.abs(u - shown) < 0.00005) return;
+      shown = u;
+      relief.dataset.cloudAt = u.toFixed(4);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => {
+      live = false;
+      cancelAnimationFrame(raf);
+    };
+  }, [id, lost]);
+  return (
+    <div className="crs-run" ref={box} style={{ backgroundImage: `url(${COURSES[id].art})` }}>
+      {!lost && <video src={`/video/courses/${id}.mp4`} poster={`/video/courses/${id}.jpg`} muted loop playsInline autoPlay={moving} preload={moving ? 'auto' : 'none'} onError={() => setLost(true)} />}
+      {!lost && <span className="run-cap">CPU ドライバーの走行</span>}
+    </div>
+  );
+}
+
+/**
+ * Course select (11-12, after the owner found the cards with grains under them added-on, and chose this): the
+ * courses as a list, the selected one's words and figures under it, and on the right a film of a run on it with
+ * the course's relief of grains over the film's sky, lit as far as the film's car has come (`CourseRun`).
+ */
 export function CoursesScreen() {
   const { go, set, mode } = useApp();
   const [i, setI] = useState(Math.max(0, COURSE_ORDER.indexOf(currentCourseId())));
@@ -338,47 +403,55 @@ export function CoursesScreen() {
     if (a === 'confirm') void choose(COURSE_ORDER[i]);
     if (a === 'back') { sfx.back(); go('modes'); }
   });
-  const cards = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    // (narrow screens stack the cards and scroll)
-    cards.current?.querySelector('.course-card.active')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
-  }, [i]);
+  const id = COURSE_ORDER[i], c = COURSES[id], info = courseFigures(id);
+  const best = Math.min(...Object.values(loadCarBests(id)).filter((v): v is number => typeof v === 'number'));
+  const grip = Math.round(c.surface.grip * 100);
   return (
-    <div className="screen courses">
+    <div className="screen courses crs">
       <ScreenHead jp="コース選択" en="SELECT COURSE" note={mode === 'ghost' ? 'ゴーストバトル' : undefined} />
-      <div className="course-cards focus-box stagger" ref={cards}>
-        {COURSE_ORDER.map((id, k) => {
-          const c = COURSES[id];
-          const info = courseFigures(id);
-          const best = Math.min(...Object.values(loadCarBests(id)).filter((v): v is number => typeof v === 'number'));
-          return (
-            <div key={id} className={`course-card ${k === i ? 'active' : ''}`} {...hoverSelect(() => setI(k))} onClick={() => { setI(k); void choose(id); }}>
-              <div className="cc-art" style={{ backgroundImage: `url(${c.art})` }}>
-                <CourseMap id={id} />
-              </div>
-              <div className="cc-body">
-                <div className="cc-en">{c.nameEn}</div>
-                <div className="cc-name">{c.name}</div>
-                <div className="cc-tag">{c.tagline}</div>
-                <p>{c.description}</p>
-                <div className="cc-stats">
-                  <span><small>LENGTH</small>{info.km} km</span>
-                  <span><small>DROP</small>{info.drop} m</span>
-                  <span className={isFinite(best) ? 'has-best' : ''}><small>BEST</small>{isFinite(best) ? formatTime(best) : '--:--.---'}</span>
-                </div>
-                <div className="cc-road">
-                  <small>ROAD</small>
-                  {c.surface.label}・グリップ {Math.round(c.surface.grip * 100)}%
-                </div>
-              </div>
-            </div>
-          );
-        })}
-        <FocusFrame on=".course-card.active" deps={[i]} pad={5} />
+      <div className="cond-list crs-list focus-box stagger">
+        {COURSE_ORDER.map((cid, k) => (
+          <div key={cid} className={`cond-row crs-row ${k === i ? 'active' : ''}`} {...hoverSelect(() => setI(k))} onClick={() => { setI(k); void choose(cid); }}>
+            <span className="cw-jp">{COURSES[cid].name}</span>
+            <span className="cw-en">{COURSES[cid].nameEn}</span>
+            <span className="crs-km">{courseFigures(cid).km}<small>km</small></span>
+          </div>
+        ))}
+        <FocusFrame on=".crs-row.active" deps={[i]} kind="row" />
       </div>
-      {/* the selected course as a relief of grains, turning under the cards (ui/fx/Cloud.tsx) */}
-      <div className="course-relief" data-cloud={`course:${COURSE_ORDER[i]}`} aria-hidden />
-      <Hint items={[['lr', 'コース'], ['ok', '決定']]} />
+      <div className="cond-panel crs-panel" key={id}>
+        <strong>{c.tagline}</strong>
+        <p>{c.description}</p>
+        <dl className="cond-read">
+          <div>
+            <dt>標高差<small>DROP</small></dt>
+            <dd><b>{info.drop}</b><i>m</i></dd>
+          </div>
+          <div className={grip < 100 ? 'warn' : ''}>
+            <dt>路面グリップ<small>GRIP</small></dt>
+            <dd><b>{grip}</b><i>%</i><span className="cr-bar"><span style={{ width: `${Math.min(100, grip / 1.1)}%` }} /></span></dd>
+          </div>
+          <div className={isFinite(best) ? 'has-best' : 'off'}>
+            <dt>自己ベスト<small>BEST</small></dt>
+            <dd>{isFinite(best) ? <b>{formatTime(best)}</b> : <em>記録なし</em>}</dd>
+          </div>
+        </dl>
+        <div className="crs-road">{c.surface.label}</div>
+      </div>
+      <div className="crs-stage" key={`stage-${id}`}>
+        <div className="crs-film">
+          <CourseRun id={id} />
+          {/* the course over the film's sky (ui/fx/Cloud.tsx hangs the labels on its start, its finish and the
+              car); without grains (motion off, a software renderer) the drawn line stands in */}
+          <div className="crs-relief" data-cloud={`course:${id}`}>
+            <CourseMap id={id} />
+            <span className="crs-tag start" data-cloud-mark="0"><span>スタート</span></span>
+            <span className="crs-tag end" data-cloud-mark="1"><span>ゴール</span></span>
+            <span className="crs-tag car" data-cloud-mark="at"><em /></span>
+          </div>
+        </div>
+      </div>
+      <Hint items={[['ud', 'コース'], ['ok', '決定']]} />
     </div>
   );
 }

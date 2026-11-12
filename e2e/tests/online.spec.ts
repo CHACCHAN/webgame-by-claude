@@ -251,7 +251,7 @@ test('online battle: five in one room (three games, two more through the API), e
 });
 
 /** The waiting room's line-up on this screen: what stands in each seat (null when the line-up is not up). */
-const lineup = (page: Page) => page.evaluate(() => (window as any).__game.lobbyState as { slot: number; carId: string | null; browsing: boolean; pending: string | null }[] | null);
+const lineup = (page: Page) => page.evaluate(() => (window as any).__game.lobbyState as { slot: number; carId: string | null; livery: string | null; browsing: boolean; pending: string | null }[] | null);
 /** Waits until the seat shows this vehicle (its model swapped in), looked at or confirmed. */
 const seat = (page: Page, slot: number, carId: string, browsing = false) => page.waitForFunction(([slot, carId, browsing]) => {
   const e = (window as any).__game.lobbyState?.find((x: any) => x.slot === slot);
@@ -324,6 +324,21 @@ test('online waiting room: the members\' vehicles stand on the course; one being
   await expect(row.locator('em.ready')).toHaveCount(1);
   await expect(row.locator('span')).toHaveText('SPRINTER TRUENO AE86');
 
+  // the paint is chosen in the same select: confirmed, the seat wears it on both screens, and the ready stays
+  // (another paint changes nothing of the race); the others without a paint keep their seat's colour
+  await guest.page.locator('.ol-vehicle').click();
+  await guest.page.locator('.vp .colors .swatch').nth(1).click();
+  await expect(guest.page.locator('.vp .colors .swatch.on')).toHaveAttribute('style', /179, 18, 28|#b3121c/i);
+  await guest.page.locator('.vp .cta', { hasText: 'この車でエントリー' }).click();
+  await expect(guest.page.locator('.vp')).toHaveCount(0);
+  const seatPaint = (page: Page, slot: number) => lineup(page).then((l) => l?.find((e) => e.slot === slot && !e.pending && !e.browsing)?.livery ?? null);
+  for (const p of both) await expect.poll(() => seatPaint(p.page, 2), { timeout: 240_000 }).toBe('#b3121c');
+  for (const p of both) expect(await seatPaint(p.page, 1)).toBeNull();
+  await expect(guest.page.locator('.ol-vehicle-paint')).toHaveCount(1);
+  await expect(row.locator('em.ready')).toHaveCount(1);
+  await expect(guest.page.locator('.ol-ready')).toHaveText('準備完了を取り消す');
+  await expect(start).toHaveText('レース開始');
+
   // confirmed in the select: the model is swapped for good, and another vehicle takes the ready back
   await guest.page.locator('.ol-vehicle').click();
   await guest.page.locator('.vp-tile[data-id="roach"]').click();
@@ -354,6 +369,12 @@ test('online waiting room: the members\' vehicles stand on the course; one being
     expect(await lineupsInScene(p.page)).toBe(0);
     expect((await game(p.page)).remotes).toHaveLength(2);
   }
+  // in the race each car wears its member's paint (the guest's: the cockroach's first colouring, as it stood in the
+  // select; the member without one: the seat's colour), the guest's own car too
+  const roachPaint = await guest.page.evaluate(() => (window as any).__game.player.visual.color);
+  expect(roachPaint).toMatch(/^#[0-9a-f]{6}$/);
+  const paints = (await game(host.page)).remotes.map((r: any) => [r.slot, r.paint]).sort();
+  expect(paints).toEqual([[1, '#d6283c'], [2, roachPaint]]);
   for (const p of both) expect(p.errors).toEqual([]);
   for (const p of both) await p.ctx.close();
 });

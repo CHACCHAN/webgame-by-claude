@@ -41,6 +41,9 @@ services:
     volumes:
       # generated keys (docker/php/entrypoint.sh): kept across deploys
       - secrets:/var/lib/touge
+      # the desk's reports (About → AI窓口; backend/config/desk.php): one JSON line each, read with
+      # `docker compose exec app php artisan desk:reports`
+      - desk:/var/www/backend/storage/app/desk
     environment:
       APP_NAME: "Touge Nocturne"
       APP_ENV: ${APP_ENV:-production}
@@ -74,6 +77,16 @@ services:
       LLM_API_URL: ${LLM_API_URL:-}
       LLM_TAUNT_MODELS: ${LLM_TAUNT_MODELS:-gemini-3.5-flash-lite,sarashina-3-mini}
       LLM_DECIDE_MODELS: ${LLM_DECIDE_MODELS:-sarashina-3-mini,gemini-3.5-flash-lite}
+      # the desk (About → AI窓口): its model through the same gateway (no key or no URL = the report form only)
+      LLM_DESK_MODELS: ${LLM_DESK_MODELS:-gemini-3.8-flash}
+      LLM_DESK_EFFORT: ${LLM_DESK_EFFORT:-high}
+      DESK_ENABLED: ${DESK_ENABLED:-true}
+      # reports an hour per address (the E2E run files one each time: a test stack may want more)
+      DESK_REPORTS_PER_HOUR: ${DESK_REPORTS_PER_HOUR:-6}
+      # who made the game, as the About screen shows it (backend/config/about.php); empty = the project's name, no links
+      ABOUT_CREATOR: ${ABOUT_CREATOR:-}
+      ABOUT_CREATOR_NOTE: ${ABOUT_CREATOR_NOTE:-}
+      ABOUT_LINKS: ${ABOUT_LINKS:-}
       # members log in through Authentik (backend/config/authentik.php); without these everyone is a guest.
       # The provider's redirect URI: <the game's public address>/api/auth/callback
       AUTHENTIK_BASE_URL: ${AUTHENTIK_BASE_URL:-}
@@ -123,6 +136,8 @@ services:
       PGPASSWORD: ${DB_PASSWORD:-touge}
     volumes:
       - backups:/backups
+      # the desk's reports go into the day's backup too (read only here)
+      - desk:/desk:ro
       - ./docker/backup/backup.sh:/usr/local/bin/backup.sh:ro
     entrypoint: ["/bin/sh", "/usr/local/bin/backup.sh"]
     depends_on:
@@ -219,6 +234,7 @@ networks:
 volumes:
   pgdata:
   secrets:
+  desk:
   backups:
   tts:
   vite_node_modules:

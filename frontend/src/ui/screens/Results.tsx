@@ -28,6 +28,8 @@ const MEDAL_SIGN = { gold: '金', silver: '銀', bronze: '銅' } as const;
 const CARD_AT = 900;
 /** how long the time counts up, and when the medal is stamped after the card came in (ms) */
 const COUNT_MS = 1100, STAMP_AT = 1500;
+/** the card's last part is in place (the latest `--at` in screens.css + the entrance) */
+const BUILT_MS = 2600;
 
 /**
  * The results build up step by step: the finish banner, then the card with the time counting to its figure, the
@@ -48,6 +50,14 @@ export function ResultsScreen() {
 
   useEffect(() => {
     const t = setTimeout(() => setVisible(true), again ? 0 : CARD_AT);
+    return () => clearTimeout(t);
+  }, [again]);
+  // the card may scroll (a low window) only once it stands: its parts rise into place from below, and the last
+  // of them reached under the card's edge on the way, which brought a scrollbar up for a moment (owner 11-12)
+  const [settled, setSettled] = useState(again);
+  useEffect(() => {
+    if (again) return;
+    const t = setTimeout(() => setSettled(true), CARD_AT + BUILT_MS);
     return () => clearTimeout(t);
   }, [again]);
   // the medal of grains gathers when the stamp lands
@@ -155,7 +165,7 @@ export function ResultsScreen() {
   const rival = result.rivalLevel ? COURSES[result.trackId].rivals[result.rivalLevel] : null;
 
   return (
-    <div className={`screen results ${visible ? 'in' : ''}${again ? ' again' : ''}`} data-wipe="none">
+    <div className={`screen results ${visible ? 'in' : ''}${again ? ' again' : ''}${settled ? ' settled' : ''}`} data-wipe="none">
       {!again && (
         <div className={`finish-banner ${tone}`} aria-hidden>
           <i />

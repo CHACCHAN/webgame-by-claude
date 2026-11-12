@@ -75,7 +75,7 @@ export function SettingsScreen() {
       rows: [
         { kind: 'list', label: 'グラフィック品質', value: qLabel[s.quality], note: '影・木の密度・ポストエフェクトの量。重いときはここから下げます', change: (d) => { s.set({ quality: cycle(qualities, s.quality, d) }); setNeedsReload(true); } },
         { kind: 'level', label: '解像度スケール', value: pct(s.resolutionScale), level: (s.resolutionScale - 0.5) / 0.5, note: '画面より小さく描いて引き伸ばします。下げるほど軽く、粗くなります', change: (d) => s.set({ resolutionScale: step(s.resolutionScale, d, 0.1, 0.5, 1) }) },
-        { kind: 'switch', label: 'アップスケーリング', value: onOff(s.upscale), on: s.upscale, note: '低い解像度で描いて拡大し、負荷を下げます', change: () => s.set({ upscale: !s.upscale }) },
+        { kind: 'switch', label: 'アップスケーリング', value: onOff(s.upscale), on: s.upscale, note: `低い解像度で描いて拡大し、負荷を下げます（${running?.backend === 'webgl2' ? 'FSR 1' : 'FSR 3'}）`, change: () => s.set({ upscale: !s.upscale }) },
         ...(s.upscale
           ? [
               { kind: 'list' as const, label: '描画解像度', value: `${upscaleLabel[s.upscaleMode]} ${pct(UPSCALE_SCALE[s.upscaleMode])}`, note: '低いほど軽く、細部は甘くなります', change: (d: number) => s.set({ upscaleMode: cycle(upscaleModes, s.upscaleMode, d) }) },

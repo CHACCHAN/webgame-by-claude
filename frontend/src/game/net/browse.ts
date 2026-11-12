@@ -1,4 +1,5 @@
 import { CAR_SPECS, type CarId } from '../vehicle/carSpecs';
+import { offeredPaint } from '../vehicle/paints';
 
 /**
  * Vehicles being browsed in an online waiting room. A member's confirmed vehicle is the room's (`room.updated`, from
@@ -9,7 +10,7 @@ import { CAR_SPECS, type CarId } from '../vehicle/carSpecs';
  * the two (`lobbyEntries`).
  */
 
-/** `client-browse`: the vehicle a member is looking at (with the livery picked for it, if any); `car: null` = none any more. */
+/** `client-browse`: the vehicle a member is looking at (with the paint picked for it, if any); `car: null` = none any more. */
 export interface BrowseMessage {
   car: CarId | null;
   livery?: string;
@@ -87,8 +88,9 @@ export function parseBrowse(data: unknown, allowed?: (car: CarId) => boolean): B
   if (car === null) return null;
   if (typeof car !== 'string' || !Object.hasOwn(CAR_SPECS, car)) return undefined;
   if (allowed && !allowed(car as CarId)) return undefined;
-  // a colour as the garage's swatches give it (#rrggbb); anything else is dropped, the vehicle still counts
-  return typeof livery === 'string' && /^#[0-9a-f]{6}$/i.test(livery) ? { car: car as CarId, livery: livery.toLowerCase() } : { car: car as CarId };
+  // a paint the vehicle offers (one of its swatches); anything else is dropped, the vehicle still counts
+  const paint = typeof livery === 'string' ? offeredPaint(car as CarId, livery) : undefined;
+  return paint ? { car: car as CarId, livery: paint } : { car: car as CarId };
 }
 
 interface Seen extends Browse {
@@ -156,17 +158,27 @@ export interface LobbyEntry {
   id: number;
   slot: number;
   carId: CarId;
+  /** its paint (none: the seat's colour) */
   livery?: string;
-  /** not their confirmed vehicle: the one they are looking at in the picker (選択中) */
+  /** not their confirmed vehicle and paint: the ones they are looking at in the picker (選択中) */
   browsing: boolean;
 }
 
+/** A member's confirmed vehicle as it is drawn: with the paint they picked, if it is one the vehicle offers. */
+export function confirmedBrowse(p: { car_id: CarId; color?: string | null }): Browse {
+  const livery = offeredPaint(p.car_id, p.color);
+  return livery ? { car: p.car_id, livery } : { car: p.car_id };
+}
+
+/** Whether a vehicle looked at is the member's confirmed one, in its confirmed paint. */
+export const isConfirmed = (b: Browse, p: { car_id: CarId; color?: string | null }) => b.car === p.car_id && (b.livery ?? null) === (confirmedBrowse(p).livery ?? null);
+
 /**
- * The line-up of a room: each member's confirmed vehicle, or the one they are looking at (`own` for the local
- * player `selfId`, the book for the others). Looking at one's confirmed vehicle is not browsing.
+ * The line-up of a room: each member's confirmed vehicle in their paint, or the one they are looking at (`own` for
+ * the local player `selfId`, the book for the others). Looking at one's confirmed vehicle in its paint is not browsing.
  */
 export function lobbyEntries(
-  players: readonly { id: number; slot: number; car_id: CarId }[],
+  players: readonly { id: number; slot: number; car_id: CarId; color?: string | null }[],
   book: BrowseBook,
   selfId: number | null,
   own: Browse | null,
@@ -174,8 +186,9 @@ export function lobbyEntries(
   return players
     .map((p): LobbyEntry => {
       const b = p.id === selfId ? own : book.get(p.id);
-      if (b && (b.car !== p.car_id || b.livery)) return { id: p.id, slot: p.slot, carId: b.car, ...(b.livery ? { livery: b.livery } : {}), browsing: true };
-      return { id: p.id, slot: p.slot, carId: p.car_id, browsing: false };
+      if (b && !isConfirmed(b, p)) return { id: p.id, slot: p.slot, carId: b.car, ...(b.livery ? { livery: b.livery } : {}), browsing: true };
+      const c = confirmedBrowse(p);
+      return { id: p.id, slot: p.slot, carId: c.car, ...(c.livery ? { livery: c.livery } : {}), browsing: false };
     })
     .sort((a, b) => a.slot - b.slot);
 }

@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import type { Node, TextureNode } from 'three/webgpu';
-import { Fn, atan, dot, float, int, screenCoordinate, smoothstep, tan, uniform, uniformArray, uv, vec2, vec3, vec4 } from 'three/tsl';
+import { Fn, atan, dot, float, int, max, min, screenCoordinate, select, smoothstep, tan, uniform, uniformArray, uv, vec2, vec3, vec4 } from 'three/tsl';
 import { scaledTexture, screenView, surfaceBlur, toScreenSpace } from './screenSpace';
 
 /**
@@ -8,14 +8,15 @@ import { scaledTexture, screenView, surfaceBlur, toScreenSpace } from './screenS
  * from the street lamps and the headlights. Worked out per pixel from the depth buffer, half the output's size:
  * - a street lamp shines equally over its lower half-space, as far as a radius: the light gathered along the view
  *   ray is a closed form (the integral of 1/d² − 1/R² along a line), no steps;
- * - a headlight is a cone: a few steps along the ray, placed where the light is (equal angles seen from the lamp),
- *   turned per pixel in the five-pixel pattern the blur cancels.
+ * - a headlight is a cone: a few steps along the part of the ray that is inside it, placed where the light is (equal
+ *   angles seen from the lamp), turned per pixel in the five-pixel pattern the blur cancels.
  * No shadows in the air (a tree does not cut a shaft), but the scene cuts the ray: a lamp's glow ends at the wall
  * behind it and does not shine through the car in front of it, which the old sprites and beam cones could not do.
  */
 
-/** the lamps nearest the camera that glow, and the headlight cones */
-const LAMPS = 16, SPOTS = 4;
+/** the lamps nearest the camera that glow, and the headlight cones (a cone per headlamp: four cars' pairs) */
+const LAMPS = 16, SPOTS = 8;
+export const VOLUME_SPOTS = SPOTS;
 /** a lamp further than this from the camera does not glow (m); it fades in over the last third */
 const LAMP_REACH = 210;
 /** how far from a lamp its light still shows in the air (m) */
@@ -159,8 +160,28 @@ export function volumetricLights(depth: TextureNode, camera: THREE.PerspectiveCa
       const colour = (uSpotColour.element(k) as unknown as Node<'vec4'>).toVar();
       const b = dot(S.xyz, ray).toVar();
       const h = dot(S.xyz, S.xyz).sub(b.mul(b)).max(0.01).sqrt().toVar();
+      // The part of the ray that is inside the cone (a quadratic in the distance along it), in front of the scene
+      // and within the light's reach: the steps go there and nowhere else. Spread over the whole ray, a camera
+      // standing in a beam and looking at its lamp had one step or none in the light (it lies in a sixth of the
+      // angle seen from the lamp) and the pixels came out lit or unlit by chance: grains wherever the blur could
+      // not even them out (foliage, a net: the owner's "the top of the screen turns grainy in the light", 11-12).
+      const cos2 = axis.w.mul(axis.w).toVar();
+      const run = dot(ray, axis.xyz).toVar(), apex = dot(S.xyz, axis.xyz).toVar();
+      const qa = run.mul(run).sub(cos2).toVar();
+      const qb = cos2.mul(b).sub(run.mul(apex)).toVar();
+      const qc = apex.mul(apex).sub(cos2.mul(dot(S.xyz, S.xyz))).toVar();
+      const root = qb.mul(qb).sub(qa.mul(qc)).max(0).sqrt().toVar();
+      const inv = float(1).div(select(qa.abs().lessThan(1e-5), float(1e-5), qa)).toVar();
+      const r0 = qb.negate().sub(root).mul(inv).toVar(), r1 = qb.negate().add(root).mul(inv).toVar();
+      // (a ray across the cone is inside between the two; a ray that runs along it is inside from one of them on,
+      // on the side the light shines to)
+      const across = qa.lessThan(0), forward = run.greaterThan(0);
+      const enter = select(across, min(r0, r1), select(forward, max(r0, r1), float(-1e6)));
+      const leave = select(across, max(r0, r1), select(forward, float(1e6), min(r0, r1)));
+      const within = float(SPOT_REACH * SPOT_REACH).sub(h.mul(h)).max(0).sqrt().toVar();
+      const t0 = max(enter, max(b.sub(within), 0)).toVar(), t1 = min(leave, min(b.add(within), end)).toVar();
       // steps at equal angles as seen from the lamp: where 1/d² is large there are many
-      const from = atan(b.negate().div(h)).toVar(), span = atan(end.sub(b).div(h)).sub(from).toVar();
+      const from = atan(t0.sub(b).div(h)).toVar(), span = atan(t1.sub(b).div(h)).sub(from).max(0).toVar();
       const lit = float(0).toVar();
       for (let i = 0; i < STEPS; i++) {
         const t = b.add(h.mul(tan(from.add(span.mul(turn.add(i).div(STEPS))))));

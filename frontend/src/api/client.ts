@@ -2,8 +2,9 @@
 import type { CarId } from '../game/vehicle/carSpecs';
 import type { EncodedGhost } from '../game/race/Ghost';
 import type { TimeOfDay } from '../game/render/Environment';
+import { APP_VERSION } from '../version';
 
-export const CLIENT_VERSION = '1.0.0';
+export const CLIENT_VERSION = APP_VERSION;
 const BASE = (import.meta.env.VITE_API_BASE as string | undefined) ?? '/api';
 /** a guest's token carried over the trip to Authentik and back, so the records just set become the member's */
 const CLAIM_KEY = 'touge-claim';
@@ -142,6 +143,8 @@ export interface RoomMember {
   id: number;
   name: string;
   car_id: CarId;
+  /** the paint they picked for it (#rrggbb; null or missing: none, the seat's colour) */
+  color?: string | null;
   slot: number;
   /** their game has loaded the room's course (reported by the game itself) */
   loaded: boolean;
@@ -170,8 +173,75 @@ export interface RealtimeInfo {
   max_players: number;
 }
 
+/** Who made the game, as the server's configuration says (never written into the client). */
+export interface AboutInfo {
+  creator: string;
+  note: string;
+  links: { label: string; url: string }[];
+}
+/** What the desk offers on this server: reports at all, and a model to talk to. */
+export interface DeskInfo {
+  enabled: boolean;
+  ai: boolean;
+}
+export type DeskKind = 'bug' | 'request' | 'other';
+export interface DeskMessage {
+  role: 'user' | 'assistant';
+  content: string;
+}
+export interface DeskFiled {
+  /** the number the player is given (受付番号) */
+  id: string;
+  kind: DeskKind;
+}
+/** what the player's machine says about itself with a question or a report: short enums and whole numbers only */
+export type DeskFacts = Record<string, string | number | boolean | undefined>;
+
+/** the server's limits (backend config/desk.php), kept here so that nothing is sent only to be refused */
+export const DESK_LIMITS = { messages: 16, messageChars: 1200, totalChars: 8000, reportChars: 2000 } as const;
+
+/**
+ * The part of a conversation that is sent: the newest messages that fit the server's limits, beginning with one of
+ * the player's (a model wants the first word to be the user's). The conversation on the screen can be longer.
+ */
+export function deskWindow(messages: DeskMessage[]): DeskMessage[] {
+  const out: DeskMessage[] = [];
+  let total = 0;
+  for (let i = messages.length - 1; i >= 0 && out.length < DESK_LIMITS.messages; i--) {
+    const content = messages[i].content.slice(0, DESK_LIMITS.messageChars);
+    if (total + content.length > DESK_LIMITS.totalChars) break;
+    total += content.length;
+    out.unshift({ role: messages[i].role, content });
+  }
+  while (out.length && out[0].role !== 'user') out.shift();
+  return out;
+}
+
 export const api = {
   health: () => request<{ status: string; database: string; version: string }>('/health'),
+
+  /** The About screen: the maker (the server's configuration) and what the desk offers. */
+  about: () =>
+    request<{ about?: Partial<AboutInfo>; desk?: Partial<DeskInfo> }>('/content').then((r) => ({
+      about: {
+        creator: typeof r.about?.creator === 'string' && r.about.creator ? r.about.creator : 'Touge Nocturne Project',
+        note: typeof r.about?.note === 'string' ? r.about.note : '',
+        // (a link is opened by the browser: only web addresses, whatever the server says)
+        links: (Array.isArray(r.about?.links) ? r.about.links : []).filter((l) => l && typeof l.label === 'string' && /^https?:\/\//i.test(String(l.url))),
+      } as AboutInfo,
+      desk: { enabled: !!r.desk?.enabled, ai: !!r.desk?.enabled && !!r.desk?.ai } as DeskInfo,
+    })),
+
+  /**
+   * The desk (About → AI窓口). `chat`: the conversation so far in, the model's answer out, and the report's number
+   * when it filed one (503 = no model to ask: the form remains). `report`: the plain form, no model.
+   */
+  desk: {
+    chat: (messages: DeskMessage[], facts: DeskFacts, signal?: AbortSignal) =>
+      request<{ reply: string; filed?: DeskFiled }>('/desk/chat', { method: 'POST', body: JSON.stringify({ messages: deskWindow(messages), facts }), signal }),
+    report: (kind: DeskKind, text: string, facts: DeskFacts) =>
+      request<{ filed: DeskFiled }>('/desk/report', { method: 'POST', body: JSON.stringify({ kind, text: text.slice(0, DESK_LIMITS.reportChars), facts }) }),
+  },
 
   /** The login through Authentik (members); everything of it happens on the server, the browser only goes there and back. */
   auth: {
@@ -236,13 +306,14 @@ export const api = {
   },
 
   rooms: {
-    create: (p: StoredPlayer, trackId: string, timeOfDay: TimeOfDay, carId: CarId) =>
-      request<RoomState>('/rooms', { method: 'POST', body: JSON.stringify({ track_id: trackId, time_of_day: timeOfDay, car_id: carId }) }, p.token),
+    create: (p: StoredPlayer, trackId: string, timeOfDay: TimeOfDay, carId: CarId, color: string | null) =>
+      request<RoomState>('/rooms', { method: 'POST', body: JSON.stringify({ track_id: trackId, time_of_day: timeOfDay, car_id: carId, color }) }, p.token),
     get: (p: StoredPlayer, code: string) => request<RoomState>(`/rooms/${encodeURIComponent(code)}`, {}, p.token),
-    join: (p: StoredPlayer, code: string, carId: CarId) =>
-      request<RoomState>(`/rooms/${encodeURIComponent(code)}/join`, { method: 'POST', body: JSON.stringify({ car_id: carId }) }, p.token),
-    setCar: (p: StoredPlayer, code: string, carId: CarId) =>
-      request<RoomState>(`/rooms/${encodeURIComponent(code)}/me`, { method: 'PATCH', body: JSON.stringify({ car_id: carId }) }, p.token),
+    join: (p: StoredPlayer, code: string, carId: CarId, color: string | null) =>
+      request<RoomState>(`/rooms/${encodeURIComponent(code)}/join`, { method: 'POST', body: JSON.stringify({ car_id: carId, color }) }, p.token),
+    /** the vehicle and its paint (another paint alone keeps the 準備完了; another vehicle takes it back) */
+    setCar: (p: StoredPlayer, code: string, carId: CarId, color: string | null) =>
+      request<RoomState>(`/rooms/${encodeURIComponent(code)}/me`, { method: 'PATCH', body: JSON.stringify({ car_id: carId, color }) }, p.token),
     setLoaded: (p: StoredPlayer, code: string) =>
       request<RoomState>(`/rooms/${encodeURIComponent(code)}/me`, { method: 'PATCH', body: JSON.stringify({ loaded: true }) }, p.token),
     setReady: (p: StoredPlayer, code: string, ready: boolean) =>

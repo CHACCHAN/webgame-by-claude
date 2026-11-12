@@ -22,8 +22,6 @@ export interface VehiclePickerProps {
   initial: CarId;
   /** the colour picked earlier (null: each vehicle's first) */
   initialColor?: string | null;
-  /** offer the colours / liveries (not online: there every grid slot has its paint) */
-  colors?: boolean;
   /** the vehicle that is entered now (online), marked while others are looked at */
   entered?: CarId;
   confirmLabel: string;
@@ -80,7 +78,7 @@ function Bars({ id }: { id: CarId }) {
  * favourite, Enter confirms, Esc goes back. Mouse and touch: a tile highlights, the highlighted tile again (or the
  * button) confirms.
  */
-export function VehiclePicker({ title, titleEn, vehicles, initial, initialColor = null, colors = true, entered, confirmLabel, overlay, onConfirm, onBack, onBrowse, extra }: VehiclePickerProps) {
+export function VehiclePicker({ title, titleEn, vehicles, initial, initialColor = null, entered, confirmLabel, overlay, onConfirm, onBack, onBrowse, extra }: VehiclePickerProps) {
   const favourites = useGarage((s) => s.favourites);
   const sort = useGarage((s) => s.sort);
   const [id, setId] = useState<CarId>(vehicles.includes(initial) ? initial : vehicles[0]);
@@ -93,7 +91,7 @@ export function VehiclePicker({ title, titleEn, vehicles, initial, initialColor 
   const tabs = useMemo(() => pickerTabs(vehicles, favourites), [vehicles, favourites]);
   const list = useMemo(() => sortVehicles(tabVehicles(vehicles, tab, favourites), sort), [vehicles, tab, favourites, sort]);
   const palette = COLORS[id];
-  const color = colors ? (picked && palette.includes(picked) ? picked : palette[0]) : undefined;
+  const color = picked && palette.includes(picked) ? picked : palette[0];
   // a train's figures as fitted for the line picked, a two-seat fighter's mass
   const spec = jetForLivery(specForLivery(CAR_SPECS[id], color), color);
 
@@ -103,7 +101,7 @@ export function VehiclePicker({ title, titleEn, vehicles, initial, initialColor 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
   useEffect(() => {
-    if (color) gameHolder.game?.setGarageColor(color);
+    gameHolder.game?.setGarageColor(color);
   }, [color]);
   const browse = useRef(onBrowse);
   browse.current = onBrowse;
@@ -167,7 +165,7 @@ export function VehiclePicker({ title, titleEn, vehicles, initial, initialColor 
   };
   const nextSort = () => setSort(SORTS[(SORTS.findIndex((s) => s.key === sort) + 1) % SORTS.length].key);
   const nextColor = () => {
-    if (!color || palette.length < 2) return;
+    if (palette.length < 2) return;
     setPicked(palette[(palette.indexOf(color) + 1) % palette.length]);
     sfx.move();
   };
@@ -177,7 +175,7 @@ export function VehiclePicker({ title, titleEn, vehicles, initial, initialColor 
   };
   const confirm = () => {
     sfx.confirm();
-    onConfirm(id, colors ? picked : null);
+    onConfirm(id, picked);
   };
   useMenuInput((a) => {
     if (a === 'left' || a === 'right' || a === 'up' || a === 'down') move(a);
@@ -195,8 +193,7 @@ export function VehiclePicker({ title, titleEn, vehicles, initial, initialColor 
   const orbit = useGarageOrbit();
   const sortLabel = SORTS.find((s) => s.key === sort)?.label ?? '';
   const badge = traitsOf(spec).badge;
-  const hints: [HintKey, string][] = [['all', '車両'], ['tab', 'タブ'], ['sort', '並べ替え'], ['fav', 'お気に入り'], ['ok', '決定']];
-  if (colors) hints.splice(3, 0, ['color', 'カラー']);
+  const hints: [HintKey, string][] = [['all', '車両'], ['tab', 'タブ'], ['sort', '並べ替え'], ['color', 'カラー'], ['fav', 'お気に入り'], ['ok', '決定']];
   return (
     <div ref={root} className={`screen vp${overlay ? ' vp-over' : ''}${orbit.dragging ? ' orbiting' : ''}`} {...orbit.handlers}>
       <div className="vp-browse">
@@ -266,14 +263,12 @@ export function VehiclePicker({ title, titleEn, vehicles, initial, initialColor 
         <p className="car-desc">{spec.description}</p>
         <Bars id={id} />
         {extra?.(id)}
-        {colors && (
-          <div className="colors">
-            {palette.map((c) => (
-              <button key={c} className={c === color ? 'swatch on' : 'swatch'} style={{ background: c }} onClick={() => setPicked(c)} aria-label={liveryName(id, c) ?? `color ${c}`} title={liveryName(id, c) ?? undefined} />
-            ))}
-            {color && liveryName(id, color) && <span className="livery-name">{liveryName(id, color)}</span>}
-          </div>
-        )}
+        <div className="colors">
+          {palette.map((c) => (
+            <button key={c} className={c === color ? 'swatch on' : 'swatch'} style={{ background: c }} onClick={() => setPicked(c)} aria-label={liveryName(id, c) ?? `color ${c}`} title={liveryName(id, c) ?? undefined} />
+          ))}
+          {liveryName(id, color) && <span className="livery-name">{liveryName(id, color)}</span>}
+        </div>
         <div className="vp-actions">
           <button className="cta" onClick={confirm}>
             {confirmLabel} <span>▶</span>

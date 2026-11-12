@@ -121,19 +121,10 @@ export function buildRoach(spec: CarSpec, opts: { bodyColor?: string } = {}): Ca
     }
     lamps = [new THREE.Vector3(eyeX, eyes.y, eyes.z), new THREE.Vector3(-eyeX, eyes.y, eyes.z)];
   }
-  const base = tinted.map((m) => ({ color: m.color.clone(), map: m.map, metalness: m.metalness, roughness: m.roughness }));
+  const base = tinted.map(liveryBase);
   const setLivery = (color: string) => {
     const liv = info.liveries.find((l) => l.swatch === color) ?? info.liveries[0];
-    tinted.forEach((m, i) => {
-      const b = base[i];
-      const map = liv.plain ? null : b.map;
-      if (m.map !== map) m.needsUpdate = true;
-      m.map = map;
-      if (liv.plain) m.color.set(liv.plain);
-      else m.color.setRGB(b.color.r * (liv.gain?.[0] ?? 1), b.color.g * (liv.gain?.[1] ?? 1), b.color.b * (liv.gain?.[2] ?? 1));
-      m.metalness = liv.metal ? 1 : b.metalness;
-      m.roughness = liv.metal ? 0.3 : b.roughness;
-    });
+    tinted.forEach((m, i) => applyLivery(m, base[i], liv));
   };
   setLivery(opts.bodyColor ?? info.liveries[0].swatch);
 
@@ -165,6 +156,55 @@ export function buildRoach(spec: CarSpec, opts: { bodyColor?: string } = {}): Ca
 
   const anchors = { exhaust: new THREE.Vector3(), headlights: lamps.map((l) => l.clone().setZ(l.z + 0.1)), taillights: [] as THREE.Vector3[] };
   return { root, body, wheels, materials: carMats, headlightTargets: [], anchors, fromModel: !!model, creature };
+}
+
+type Livery = CreatureInfo['liveries'][number];
+/** what a livery changes of a material, as the model has it */
+export interface LiveryBase {
+  color: THREE.Color;
+  map: THREE.Texture | null;
+  metalness: number;
+  roughness: number;
+}
+export const liveryBase = (m: THREE.MeshStandardMaterial): LiveryBase => ({ color: m.color.clone(), map: m.map, metalness: m.metalness, roughness: m.roughness });
+
+/**
+ * One white texel that stands in for a colour texture under a plain livery, sampled as that texture is (the same
+ * sampler and colour space: the material's shader stays the one it has).
+ */
+const blanks = new WeakMap<THREE.Texture, THREE.Texture>();
+function blankLike(map: THREE.Texture) {
+  let t = blanks.get(map);
+  if (!t) {
+    t = new THREE.DataTexture(new Uint8Array([255, 255, 255, 255]), 1, 1);
+    t.name = 'livery-blank';
+    t.colorSpace = map.colorSpace;
+    t.wrapS = map.wrapS;
+    t.wrapT = map.wrapT;
+    t.magFilter = map.magFilter;
+    t.minFilter = map.minFilter;
+    // (a mipmap filter without mipmaps is an incomplete texture in WebGL: black)
+    t.generateMipmaps = true;
+    t.needsUpdate = true;
+    blanks.set(map, t);
+  }
+  return t;
+}
+
+/**
+ * Put a livery on one of the model's materials. **A material that has a colour texture keeps one**: a plain livery
+ * swaps in a white texel, it never sets `map` to null. Taking the map away from a material that was already drawn
+ * stopped the whole game (players' reports, v2.1.0: "the cockroach is not drawn after a change of colour"): three.js
+ * 0.186 builds a shadow caster's shadow shader with a reference to the material's `map` (its alpha) and does not
+ * build it again when the material changes, so the next shadow map read `null.matrix` and every frame from then on
+ * threw. The same texture slot also means no shader is built for a change of livery.
+ */
+export function applyLivery(m: THREE.MeshStandardMaterial, b: LiveryBase, liv: Livery) {
+  m.map = b.map && liv.plain ? blankLike(b.map) : b.map;
+  if (liv.plain) m.color.set(liv.plain);
+  else m.color.setRGB(b.color.r * (liv.gain?.[0] ?? 1), b.color.g * (liv.gain?.[1] ?? 1), b.color.b * (liv.gain?.[2] ?? 1));
+  m.metalness = liv.metal ? 1 : b.metalness;
+  m.roughness = liv.metal ? 0.3 : b.roughness;
 }
 
 /** the compound eyes' patch of the roach_body atlas in glTF UVs (roach_tex.py LAYOUT['eye'] = u 0.75–1, v 0–0.15, v flipped) */
