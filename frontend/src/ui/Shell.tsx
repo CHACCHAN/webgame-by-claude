@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useApp, type Screen } from '../store/app';
 import { currentCourseId, useSettings } from '../store/settings';
-import { useOnline } from '../store/online';
+import { dismissRoomNotice, useOnline } from '../store/online';
 import { COURSES } from '../game/track/courses';
 import { CAR_SPECS } from '../game/vehicle/carSpecs';
 import { fullscreenSupported, toggleFullscreen, useFullscreen } from './fullscreen';
@@ -103,6 +103,8 @@ const BACK_LABEL: Partial<Record<Screen, string>> = { modes: 'タイトル', onl
  */
 export function ShellNav({ screen, back }: { screen: Screen; back: boolean }) {
   const fullscreen = useFullscreen();
+  // (a picker over the screen: back closes that, whatever the screen's own back is called)
+  const over = useApp((s) => s.over);
   return (
     <div className="shell-nav">
       {back && (
@@ -113,7 +115,7 @@ export function ShellNav({ screen, back }: { screen: Screen; back: boolean }) {
             window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', bubbles: true }));
           }}
         >
-          ◀ {BACK_LABEL[screen] ?? '戻る'}
+          ◀ {(!over && BACK_LABEL[screen]) || '戻る'}
           <kbd className="k-key">Esc</kbd>
           <PadKey name="B" />
         </button>
@@ -125,6 +127,18 @@ export function ShellNav({ screen, back }: { screen: Screen; back: boolean }) {
       )}
     </div>
   );
+}
+
+/**
+ * A picker is up over the screen that mounted it (an online room's car select, its change of course): the shell's
+ * back button closes the picker, and must not wear the screen's own word (退出).
+ */
+export function useOverScreen(on = true) {
+  useEffect(() => {
+    if (!on) return;
+    useApp.getState().set({ over: true });
+    return () => useApp.getState().set({ over: false });
+  }, [on]);
 }
 
 /** how long the game must be busy before the mark shows (short work passes unseen), and its fade out */
@@ -201,6 +215,36 @@ export function AccountNotice() {
       ) : (
         <Notice title="ログインできませんでした">時間をおいてもう一度お試しください。ゲストのままでも遊べます。</Notice>
       )}
+    </div>
+  );
+}
+
+/**
+ * What the host of an online room changed (store/online.ts `RoomNotice`), said once to the members over whatever
+ * the game shows then (the room, the loading screen of the new course): why the game loads, why a 準備完了 is gone.
+ */
+export function RoomNotice() {
+  const notice = useOnline((s) => s.notice);
+  useEffect(() => {
+    if (!notice) return;
+    const t = setTimeout(dismissRoomNotice, NOTICE_MS);
+    return () => clearTimeout(t);
+  }, [notice]);
+  if (!notice) return null;
+  const course = notice.course && COURSES[notice.course];
+  const title = course
+    ? `ホストがコースを「${course.name}」に変更しました`
+    : notice.conditions
+      ? `ホストが時間帯・天候を「${TOD_JP[notice.conditions]}」に変更しました`
+      : 'ルームの設定が変更されました';
+  return (
+    <div className="account-notice room-notice" key={notice.n} onClick={dismissRoomNotice}>
+      <Notice kind="info" title={title}>
+        {course && notice.conditions && `時間帯・天候は「${TOD_JP[notice.conditions]}」です。`}
+        {course && 'コースを読み込みます。'}
+        {notice.replaced && `${CAR_SPECS[notice.replaced[0]].name} はこのコースを走れないため、エントリーを ${CAR_SPECS[notice.replaced[1]].name} に変更しました。`}
+        {notice.unready && '準備完了は取り消されました。確認してもう一度押してください。'}
+      </Notice>
     </div>
   );
 }

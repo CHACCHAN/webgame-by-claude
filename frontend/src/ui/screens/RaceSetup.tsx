@@ -1,9 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useApp } from '../../store/app';
 import { currentCourseId, useSettings } from '../../store/settings';
 import { useMenuInput, hoverSelect } from '../useMenuInput';
 import { gameHolder } from '../GameCanvas';
-import { COURSES } from '../../game/track/courses';
+import { COURSES, type CourseInfo } from '../../game/track/courses';
 import { WET_GRIP } from '../../game/Game';
 import type { TimeOfDay } from '../../game/render/Environment';
 import { startRaceFromState } from './Menus';
@@ -24,31 +24,7 @@ export const CONDITIONS: { id: TimeOfDay; en: string; jp: string; desc: string; 
  */
 export function ConditionsScreen() {
   const { go, afterLoad, mode } = useApp();
-  const tod = useSettings((s) => s.timeOfDay);
-  const [i, setI] = useState(Math.max(0, CONDITIONS.findIndex((c) => c.id === tod)));
   const course = COURSES[currentCourseId()];
-  useEffect(() => {
-    // rebuilding the sky and env map takes a moment: only once the cursor rests
-    const t = setTimeout(() => gameHolder.game?.applyTimeOfDay(CONDITIONS[i].id), 180);
-    return () => clearTimeout(t);
-  }, [i]);
-  const choose = (k = i) => {
-    sfx.confirm();
-    useSettings.getState().set({ timeOfDay: CONDITIONS[k].id });
-    gameHolder.game?.applyTimeOfDay(CONDITIONS[k].id);
-    go(afterLoad);
-  };
-  useMenuInput((a) => {
-    if (a === 'left' || a === 'up') { setI((x) => (x + CONDITIONS.length - 1) % CONDITIONS.length); sfx.move(); }
-    if (a === 'right' || a === 'down') { setI((x) => (x + 1) % CONDITIONS.length); sfx.move(); }
-    if (a === 'confirm') choose();
-    if (a === 'back') {
-      sfx.back();
-      // the world keeps the conditions that were last confirmed
-      gameHolder.game?.applyTimeOfDay(useSettings.getState().timeOfDay);
-      go('courses');
-    }
-  });
   // the camera goes behind the car and looks down the road: the scene itself is the picture of the condition
   useEffect(() => {
     const game = gameHolder.game;
@@ -56,16 +32,60 @@ export function ConditionsScreen() {
     game.menuShot = 'sky';
     return () => { game.menuShot = null; };
   }, []);
+  return (
+    <ConditionsSelect
+      head={<ScreenHead jp="時間帯・天候" en="TIME & WEATHER" note={`${course.name}${mode === 'ghost' ? '・ゴーストバトル' : ''}`} />}
+      course={course}
+      initial={useSettings.getState().timeOfDay}
+      onLook={(tod) => gameHolder.game?.applyTimeOfDay(tod)}
+      onChoose={(tod) => {
+        useSettings.getState().set({ timeOfDay: tod });
+        gameHolder.game?.applyTimeOfDay(tod);
+        go(afterLoad);
+      }}
+      onBack={() => {
+        // the world keeps the conditions that were last confirmed
+        gameHolder.game?.applyTimeOfDay(useSettings.getState().timeOfDay);
+        go('courses');
+      }}
+    />
+  );
+}
+
+/**
+ * The list of conditions itself, with the selected one's words and figures: the time & weather screen is this, and
+ * so is an online room's change of conditions (`plain`: the words without the figures; `current`: the room's,
+ * marked in the list). `onLook`: the condition the cursor rests on, for the scene behind to show.
+ */
+export function ConditionsSelect({ head, course, initial, current, plain, confirm = '決定', onLook, onChoose, onBack }: { head: ReactNode; course: CourseInfo; initial: TimeOfDay; current?: TimeOfDay; plain?: boolean; confirm?: string; onLook: (tod: TimeOfDay) => void; onChoose: (tod: TimeOfDay) => void; onBack: () => void }) {
+  const [i, setI] = useState(Math.max(0, CONDITIONS.findIndex((c) => c.id === initial)));
+  const look = useRef(onLook);
+  look.current = onLook;
+  useEffect(() => {
+    // rebuilding the sky and env map takes a moment: only once the cursor rests
+    const t = setTimeout(() => look.current(CONDITIONS[i].id), 180);
+    return () => clearTimeout(t);
+  }, [i]);
+  const choose = (k = i) => {
+    sfx.confirm();
+    onChoose(CONDITIONS[k].id);
+  };
+  useMenuInput((a) => {
+    if (a === 'left' || a === 'up') { setI((x) => (x + CONDITIONS.length - 1) % CONDITIONS.length); sfx.move(); }
+    if (a === 'right' || a === 'down') { setI((x) => (x + 1) % CONDITIONS.length); sfx.move(); }
+    if (a === 'confirm') choose();
+    if (a === 'back') { sfx.back(); onBack(); }
+  });
   const sel = CONDITIONS[i];
   const grip = Math.round(course.surface.grip * (sel.id === 'rain' ? WET_GRIP : 1) * 100);
   return (
-    <div className="screen cond">
-      <ScreenHead jp="時間帯・天候" en="TIME & WEATHER" note={`${course.name}${mode === 'ghost' ? '・ゴーストバトル' : ''}`} />
+    <div className={`screen cond${plain ? ' cond-plain' : ''}`}>
+      {head}
       <div className="cond-list focus-box stagger">
         {CONDITIONS.map((c, k) => (
           <div key={c.id} className={`cond-row ${k === i ? 'active' : ''}`} {...hoverSelect(() => setI(k))} onClick={() => { setI(k); choose(k); }}>
             <span className="cw-no">0{k + 1}</span>
-            <span className="cw-jp">{c.jp}</span>
+            <span className="cw-jp">{c.jp}{c.id === current && <em className="row-now">現在</em>}</span>
             <span className="cw-en">{c.en}</span>
           </div>
         ))}
@@ -74,22 +94,24 @@ export function ConditionsScreen() {
       {/* what the selected one means for the drive (the others' figures are a key away: the scene changes with them) */}
       <div className="cond-panel" key={i}>
         <p>{sel.desc}</p>
-        <dl className="cond-read">
-          <div className={sel.id === 'rain' ? 'warn' : ''}>
-            <dt>グリップ<small>GRIP</small></dt>
-            <dd><b>{grip}</b><i>%</i><span className="cr-bar"><span style={{ width: `${Math.min(100, grip / 1.1)}%` }} /></span></dd>
-          </div>
-          <div className={sel.lamps === '消灯' ? 'off' : ''}>
-            <dt>街灯<small>LAMPS</small></dt>
-            <dd><span className="cr-lamp" /><em>{sel.lamps}</em></dd>
-          </div>
-          <div className={sel.id === 'rain' ? 'warn' : ''}>
-            <dt>視界<small>SIGHT</small></dt>
-            <dd><span className={`cr-steps s${sel.id === 'dawn' ? 3 : sel.id === 'night' ? 2 : 1}`}><span /><span /><span /></span><em>{sel.sight}</em></dd>
-          </div>
-        </dl>
+        {!plain && (
+          <dl className="cond-read">
+            <div className={sel.id === 'rain' ? 'warn' : ''}>
+              <dt>グリップ<small>GRIP</small></dt>
+              <dd><b>{grip}</b><i>%</i><span className="cr-bar"><span style={{ width: `${Math.min(100, grip / 1.1)}%` }} /></span></dd>
+            </div>
+            <div className={sel.lamps === '消灯' ? 'off' : ''}>
+              <dt>街灯<small>LAMPS</small></dt>
+              <dd><span className="cr-lamp" /><em>{sel.lamps}</em></dd>
+            </div>
+            <div className={sel.id === 'rain' ? 'warn' : ''}>
+              <dt>視界<small>SIGHT</small></dt>
+              <dd><span className={`cr-steps s${sel.id === 'dawn' ? 3 : sel.id === 'night' ? 2 : 1}`}><span /><span /><span /></span><em>{sel.sight}</em></dd>
+            </div>
+          </dl>
+        )}
       </div>
-      <Hint items={[['ud', '選択'], ['ok', '決定']]} />
+      <Hint items={[['ud', '選択'], ['ok', confirm]]} />
     </div>
   );
 }

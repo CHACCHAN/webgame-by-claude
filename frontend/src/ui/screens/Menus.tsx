@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { isTouchDevice } from '../touch';
 import { enterFullscreen } from '../fullscreen';
 import { gameHolder } from '../GameCanvas';
@@ -380,12 +380,10 @@ function CourseRun({ id }: { id: CourseId }) {
  */
 export function CoursesScreen() {
   const { go, set, mode } = useApp();
-  const [i, setI] = useState(Math.max(0, COURSE_ORDER.indexOf(currentCourseId())));
   useEffect(() => {
     void gameHolder.game?.audio?.playMusic('bgm_menu');
   }, []);
   const choose = async (id: CourseId) => {
-    sfx.confirm();
     useSettings.getState().set({ courseId: id });
     const game = gameHolder.game;
     if (game && game.course.id !== id) {
@@ -397,22 +395,43 @@ export function CoursesScreen() {
     set({ loading: null });
     go('conditions');
   };
+  return (
+    <CourseSelect
+      head={<ScreenHead jp="コース選択" en="SELECT COURSE" note={mode === 'ghost' ? 'ゴーストバトル' : undefined} />}
+      initial={currentCourseId()}
+      onChoose={(id) => void choose(id)}
+      onBack={() => go('modes')}
+    />
+  );
+}
+
+/**
+ * The course select itself: the list, the selected course's words and figures, the film of a run with the relief
+ * over it. The course select screen is this, and so is an online room's change of course (`plain`: the words
+ * without the figures; `current`: the room's course, marked in the list).
+ */
+export function CourseSelect({ head, initial, current, plain, confirm = '決定', onChoose, onBack }: { head: ReactNode; initial: CourseId; current?: CourseId; plain?: boolean; confirm?: string; onChoose: (id: CourseId) => void; onBack: () => void }) {
+  const [i, setI] = useState(Math.max(0, COURSE_ORDER.indexOf(initial)));
+  const choose = (id: CourseId) => {
+    sfx.confirm();
+    onChoose(id);
+  };
   useMenuInput((a) => {
     if (a === 'left' || a === 'up') { setI((x) => (x + COURSE_ORDER.length - 1) % COURSE_ORDER.length); sfx.move(); }
     if (a === 'right' || a === 'down') { setI((x) => (x + 1) % COURSE_ORDER.length); sfx.move(); }
-    if (a === 'confirm') void choose(COURSE_ORDER[i]);
-    if (a === 'back') { sfx.back(); go('modes'); }
+    if (a === 'confirm') choose(COURSE_ORDER[i]);
+    if (a === 'back') { sfx.back(); onBack(); }
   });
   const id = COURSE_ORDER[i], c = COURSES[id], info = courseFigures(id);
-  const best = Math.min(...Object.values(loadCarBests(id)).filter((v): v is number => typeof v === 'number'));
+  const best = plain ? Infinity : Math.min(...Object.values(loadCarBests(id)).filter((v): v is number => typeof v === 'number'));
   const grip = Math.round(c.surface.grip * 100);
   return (
-    <div className="screen courses crs">
-      <ScreenHead jp="コース選択" en="SELECT COURSE" note={mode === 'ghost' ? 'ゴーストバトル' : undefined} />
+    <div className={`screen courses crs${plain ? ' crs-plain' : ''}`}>
+      {head}
       <div className="cond-list crs-list focus-box stagger">
         {COURSE_ORDER.map((cid, k) => (
-          <div key={cid} className={`cond-row crs-row ${k === i ? 'active' : ''}`} {...hoverSelect(() => setI(k))} onClick={() => { setI(k); void choose(cid); }}>
-            <span className="cw-jp">{COURSES[cid].name}</span>
+          <div key={cid} className={`cond-row crs-row ${k === i ? 'active' : ''}`} {...hoverSelect(() => setI(k))} onClick={() => { setI(k); choose(cid); }}>
+            <span className="cw-jp">{COURSES[cid].name}{cid === current && <em className="row-now">現在</em>}</span>
             <span className="cw-en">{COURSES[cid].nameEn}</span>
             <span className="crs-km">{courseFigures(cid).km}<small>km</small></span>
           </div>
@@ -422,20 +441,22 @@ export function CoursesScreen() {
       <div className="cond-panel crs-panel" key={id}>
         <strong>{c.tagline}</strong>
         <p>{c.description}</p>
-        <dl className="cond-read">
-          <div>
-            <dt>標高差<small>DROP</small></dt>
-            <dd><b>{info.drop}</b><i>m</i></dd>
-          </div>
-          <div className={grip < 100 ? 'warn' : ''}>
-            <dt>路面グリップ<small>GRIP</small></dt>
-            <dd><b>{grip}</b><i>%</i><span className="cr-bar"><span style={{ width: `${Math.min(100, grip / 1.1)}%` }} /></span></dd>
-          </div>
-          <div className={isFinite(best) ? 'has-best' : 'off'}>
-            <dt>自己ベスト<small>BEST</small></dt>
-            <dd>{isFinite(best) ? <b>{formatTime(best)}</b> : <em>記録なし</em>}</dd>
-          </div>
-        </dl>
+        {!plain && (
+          <dl className="cond-read">
+            <div>
+              <dt>標高差<small>DROP</small></dt>
+              <dd><b>{info.drop}</b><i>m</i></dd>
+            </div>
+            <div className={grip < 100 ? 'warn' : ''}>
+              <dt>路面グリップ<small>GRIP</small></dt>
+              <dd><b>{grip}</b><i>%</i><span className="cr-bar"><span style={{ width: `${Math.min(100, grip / 1.1)}%` }} /></span></dd>
+            </div>
+            <div className={isFinite(best) ? 'has-best' : 'off'}>
+              <dt>自己ベスト<small>BEST</small></dt>
+              <dd>{isFinite(best) ? <b>{formatTime(best)}</b> : <em>記録なし</em>}</dd>
+            </div>
+          </dl>
+        )}
         <div className="crs-road">{c.surface.label}</div>
       </div>
       <div className="crs-stage" key={`stage-${id}`}>
@@ -451,7 +472,7 @@ export function CoursesScreen() {
           </div>
         </div>
       </div>
-      <Hint items={[['ud', 'コース'], ['ok', '決定']]} />
+      <Hint items={[['ud', 'コース'], ['ok', confirm]]} />
     </div>
   );
 }
@@ -460,6 +481,10 @@ export function CoursesScreen() {
 export function CourseLoadingScreen() {
   const c = COURSES[currentCourseId()];
   const progress = useApp((s) => s.loading?.progress ?? 0);
+  // an online room's course (store/online.ts): whose doing this load is, and what comes after it
+  const room = useOnline((s) => s.room);
+  const why = useOnline((s) => s.loadingFor);
+  const host = !!room && room.host_id === useOnline.getState().player?.id;
   return (
     <div className="screen boot course-loading">
       <div className="boot-art" style={{ backgroundImage: `url(${c.art}), url(/img/keyart.webp)` }} />
@@ -469,6 +494,13 @@ export function CourseLoadingScreen() {
         <div className="cl-en">{c.nameEn}</div>
         <div className="cl-name">{c.name}</div>
         <div className="cl-tag">{c.tagline}</div>
+        {room && why && (
+          <div className="cl-room">
+            <small>ONLINE ROOM {room.code}</small>
+            <b>{why === 'join' ? 'ルームのコースを読み込んでいます' : host ? 'コースを変更しました' : 'ホストがコースを変更しました'}</b>
+            <span>{host && why === 'change' ? '全員の読み込みが終わるとスタートできます。' : '読み込みが終わるとルームに入ります。ほかのメンバーにも読み込み中と表示されています。'}</span>
+          </div>
+        )}
       </div>
       <BootLog />
     </div>

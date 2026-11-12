@@ -8,6 +8,7 @@ import { showRoomLineup } from '../../store/lobby';
 import { sfx } from '../sfx';
 import { VehiclePicker, VehicleThumb } from './VehiclePicker';
 import { liveryName } from '../screens/Cars';
+import { useOverScreen } from '../Shell';
 
 /** The vehicle next to (`d` = ±1) the entered one in the course's list: what ← → open the car select on. */
 export function neighbourVehicle(course: string, id: CarId, d: number): CarId {
@@ -35,6 +36,7 @@ export function OnlineVehicle({ carId, course, disabled, picking, onPicking, roo
     if (disabled && picking) onPicking(null);
   }, [disabled, picking, onPicking]);
   const host = document.querySelector('.overlay');
+  useOverScreen(!!picking && !disabled);
   return (
     <>
       <button
