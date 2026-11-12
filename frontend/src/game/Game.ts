@@ -19,6 +19,7 @@ import { vegetationFiles } from './render/vegetationPlanting';
 import { VOLUME_SPOTS, volume, volumeSpot } from './render/volumetricLights';
 import { gpuBytes } from './render/gpuBytes';
 import { bakeShade } from './render/farShade';
+import { dawnSun } from './track/landforms';
 import { keyShadowNode } from './render/keyShadow';
 import { LAMP_BEAM, LAMP_CANDELA } from './render/lampField';
 import { registerLampField } from './render/lampFieldNode';
@@ -501,7 +502,7 @@ export class Game {
     // the shade beyond the shadow map, for the moon of this course and for the morning sun
     const shading = this.scenery.shadeScene;
     if (shading) {
-      this.scenery.shades = { moon: bakeShade(shading, _v.set(...this.terrain.landform.moonDir).normalize()), sun: bakeShade(shading, PRESETS.dawn.keyDir, this.terrain.landform.dawnShade !== false) };
+      this.scenery.shades = { moon: bakeShade(shading, _v.set(...this.terrain.landform.moonDir).normalize()), sun: bakeShade(shading, new THREE.Vector3(...dawnSun(this.terrain.landform)).normalize()) };
       this.scenery.shadeScene = null;
     }
     await this.yieldFrame(0.75, '夜景を灯しています');

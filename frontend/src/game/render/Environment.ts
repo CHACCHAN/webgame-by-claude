@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { DAWN_SUN, dawnSun } from '../track/landforms';
 import { MeshBasicNodeMaterial, PMREMGenerator, SpriteNodeMaterial } from 'three/webgpu';
 import {
   Fn, abs, cameraProjectionMatrix, clamp, cos, dot, exp, float, floor, fract, instancedBufferAttribute, max, mix, mod, modelViewMatrix, normalize,
@@ -111,7 +112,7 @@ export const PRESETS: Record<TimeOfDay, Preset> = {
     haze: 0.003,
     keyColor: '#ffbf80',
     keyIntensity: 2.6,
-    keyDir: new THREE.Vector3(0.82, 0.16, 0.55).normalize(),
+    keyDir: new THREE.Vector3(...DAWN_SUN).normalize(),
     hemiSky: '#9cb6d6',
     hemiGround: '#3d3427',
     hemiIntensity: 0.9,
@@ -317,7 +318,7 @@ export function buildEnvironment(terrain: TerrainData, lights: LightRig): Enviro
     preset: PRESETS.night,
     apply(tod, scene, renderer) {
       const p = { ...PRESETS[tod] };
-      if (tod !== 'dawn') p.keyDir = new THREE.Vector3(...lf.moonDir).normalize();
+      p.keyDir = new THREE.Vector3(...(tod === 'dawn' ? dawnSun(lf) : lf.moonDir)).normalize();
       rig.preset = p;
       skyUniforms.uZenith.value.set(p.zenith);
       skyUniforms.uHorizon.value.set(p.horizon);

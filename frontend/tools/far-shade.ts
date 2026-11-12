@@ -7,12 +7,10 @@ import * as fs from 'node:fs';
 import * as THREE from 'three';
 import { COURSES } from '../src/game/track/courses';
 import { Track } from '../src/game/track/Track';
+import { dawnSun } from '../src/game/track/landforms';
 import { buildTerrain } from '../src/game/track/terrain';
 import { bakeShade, litUnder, shadeAt, shadeScene, SHADE_SIZE, type ShadeCaster } from '../src/game/render/farShade';
 import { plantTrees, TREE_SETS } from '../src/game/render/vegetationPlanting';
-
-/** the morning sun (`PRESETS.dawn.keyDir` of render/Environment.ts, which does not load in Node) */
-const SUN = new THREE.Vector3(0.82, 0.16, 0.55).normalize();
 
 const [courseId = 'oboro-downhill', light = 'sun', out] = process.argv.slice(2);
 const course = COURSES[courseId as keyof typeof COURSES];
@@ -23,9 +21,9 @@ const casters: ShadeCaster[] = plantTrees(terrain, 1, course.style ?? 'touge', i
 let t = performance.now();
 const scene = shadeScene(terrain, casters);
 const tScene = performance.now() - t;
-const dir = light === 'sun' ? SUN : new THREE.Vector3(...terrain.landform.moonDir).normalize();
+const dir = new THREE.Vector3(...(light === 'sun' ? dawnSun(terrain.landform) : terrain.landform.moonDir)).normalize();
 t = performance.now();
-const field = bakeShade(scene, dir, light !== 'sun' || terrain.landform.dawnShade !== false);
+const field = bakeShade(scene, dir);
 const tBake = performance.now() - t;
 let land = 0, all = 0;
 const N = SHADE_SIZE;

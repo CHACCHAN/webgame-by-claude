@@ -127,8 +127,9 @@ pending. `docs/PLAN.md` holds the design.
   road or ground any more; never add point lights for lamps. The sun's / moon's shadow map lies ahead of the camera
   (`LightRig.aimKey`, `shadowHalfFor`), its node is `render/keyShadow.ts`: inside the map the shadow map × the
   land's baked shade, beyond it `render/farShade.ts` (land, rock-shed roofs, the trees' share of light; baked in
-  `Game.buildWorld` for the course's moon and the dawn sun; `Landform.dawnShade: false` leaves the land's own
-  shadow out at dawn: the caldera's road would lie 90 % in shade). Whatever changes terrain, roofs or the casting
+  `Game.buildWorld` for the course's moon and its morning sun: `dawnSun(landform)`, the common `DAWN_SUN` 9° up or
+  a landform's own `dawnSun`: the caldera's is 26° up, because under the common one 90 % of its road lay in the
+  mountains' shade; `npx tsx tools/sun-sweep.ts <course> <degrees up>…` gives that share by bearing). Whatever changes terrain, roofs or the casting
   trees at run time would not reach the bake (`npx tsx tools/far-shade.ts <course> [moon|sun]` shows it). Grid,
   table and shade share one texture (`render/lightAtlas.ts`) because a fragment shader may sample 16 textures and
   the ground and the cast concrete use 14: new per-course light data goes into the atlas, never into another

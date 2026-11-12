@@ -149,7 +149,7 @@ const CROWN_REACH = 170;
 
 /**
  * How high the shadow reaches in every cell, and what the trees leave of the light, for light coming from `toLight`
- * (unit vector towards the sun / moon). `landShades: false`: the land itself throws no shadow (`Landform.dawnShade`),
+ * (unit vector towards the sun / moon). `landShades: false`: the land itself throws no shadow,
  * only the roofs and the trees do.
  */
 export function bakeShade(scene: ShadeScene, toLight: { x: number; y: number; z: number }, landShades = true): ShadeField {
