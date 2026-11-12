@@ -17,12 +17,12 @@ import { deskFacts } from './aboutFacts';
 const KIND_JP: Record<DeskKind, string> = { bug: '不具合の報告', request: '要望', other: 'ご連絡' };
 const KINDS: [DeskKind, string][] = [['bug', '不具合'], ['request', '要望'], ['other', 'その他']];
 
-/** what a tap asks for the player: the first two begin a report, the others are questions */
-const QUICK: [string, string][] = [
-  ['バグを報告する', '不具合を報告したいです。'],
-  ['要望を送る', '要望を送りたいです。'],
-  ['操作を知りたい', '操作方法を教えてください。'],
-  ['速く走るコツ', '速く走るコツを教えてください。'],
+/** what a tap asks for the player (label, what it is for, the question sent): two begin a report, two are questions */
+const QUICK: [string, string, string][] = [
+  ['バグを報告する', 'どこで何が起きたかを聞き取って、開発者に届けます。', '不具合を報告したいです。'],
+  ['要望を送る', 'ほしい機能、車、コースなど。', '要望を送りたいです。'],
+  ['操作を知りたい', 'キーボード、ゲームパッド、スマホの操作。', '操作方法を教えてください。'],
+  ['速く走るコツ', 'ブレーキング、ドリフト、設定の見直し。', '速く走るコツを教えてください。'],
 ];
 
 /** what is being written, kept while the player looks at another section (the page's memory, as the conversation) */
@@ -118,6 +118,14 @@ function Chat({ lines, busy, toForm }: { lines: DeskLine[]; busy: boolean; toFor
           <div className="desk-empty">
             <b>TOUGE NOCTURNE の総合窓口です。</b>
             <p>遊び方や設定、うまく動かないときの相談にお答えします。不具合の報告や要望もここで受け付けて、開発者に渡します。</p>
+            <div className="desk-quick">
+              {QUICK.map(([label, note, question]) => (
+                <button key={label} className="desk-card" disabled={busy} onClick={() => { sfx.confirm(); ask(question); }}>
+                  <b>{label}</b>
+                  <span>{note}</span>
+                </button>
+              ))}
+            </div>
           </div>
         )}
         {lines.map((l, i) =>
@@ -155,13 +163,6 @@ function Chat({ lines, busy, toForm }: { lines: DeskLine[]; busy: boolean; toFor
           </div>
         )}
       </div>
-      {lines.length === 0 && (
-        <div className="desk-quick">
-          {QUICK.map(([label, ask1]) => (
-            <button key={label} className="chip" disabled={busy} onClick={() => { sfx.confirm(); ask(ask1); }}>{label}</button>
-          ))}
-        </div>
-      )}
       <form
         className="desk-compose"
         onSubmit={(e) => {

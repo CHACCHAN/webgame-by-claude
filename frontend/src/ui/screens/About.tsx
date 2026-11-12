@@ -1,10 +1,10 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { REVISION } from 'three';
 import { useApp } from '../../store/app';
 import { useDesk } from '../../store/desk';
 import { useSettings, type QualityLevel } from '../../store/settings';
 import { useMenuInput } from '../useMenuInput';
-import { COURSE_ORDER } from '../../game/track/courses';
+import { COURSES, COURSE_ORDER } from '../../game/track/courses';
 import { VEHICLE_ORDER } from '../../game/vehicle/carSpecs';
 import { PHYSICS_HZ } from '../../game/vehicle/PhysicsWorld';
 import { TRAIN_INFO, TRAIN_ORDER } from '../../game/vehicle/trains';
@@ -25,7 +25,7 @@ import { gpuName } from './aboutFacts';
 
 type Section = 'game' | 'maker' | 'tech' | 'credits' | 'desk';
 const SECTIONS: { id: Section; en: string; jp: string }[] = [
-  { id: 'game', en: 'THE GAME', jp: 'このゲームについて' },
+  { id: 'game', en: 'OVERVIEW', jp: '概要' },
   { id: 'maker', en: 'MAKER', jp: 'つくった人' },
   { id: 'tech', en: 'TECH', jp: '技術' },
   { id: 'credits', en: 'CREDITS', jp: 'クレジット' },
@@ -127,6 +127,7 @@ function GameSection() {
         夜の峠を全開で駆け下りる、ブラウザで動く 3D レースゲームです。インストールは要りません。キーボード、ゲームパッド、横向きに持ったスマートフォンで走れます。
         車とバイクのほかに、電車や、もっと妙なものにも乗れます。
       </p>
+      <Heading jp="モード" en="MODES" />
       <ol className="ab-modes">
         {MODES.map(([en, jp, text]) => (
           <li key={en}>
@@ -136,8 +137,28 @@ function GameSection() {
           </li>
         ))}
       </ol>
+      <Heading jp="コース" en="COURSES" />
+      <ul className="ab-courses">
+        {COURSE_ORDER.map((id) => (
+          <li key={id} className="ab-course" style={{ '--art': `url(${COURSES[id].art})` } as CSSProperties}>
+            <small>{COURSES[id].nameEn}</small>
+            <b>{COURSES[id].name}</b>
+            <span>{COURSES[id].tagline}</span>
+          </li>
+        ))}
+      </ul>
       <p className="ab-fine">峠・人物は架空です。車名・車両デザインは各メーカーの商標・意匠です（私的利用の非公開作品）。</p>
     </div>
+  );
+}
+
+/** a part of a section: its name with a hairline, as the settings' groups */
+function Heading({ jp, en }: { jp: string; en: string }) {
+  return (
+    <h4 className="ab-h">
+      <b>{jp}</b>
+      <small>{en}</small>
+    </h4>
   );
 }
 
