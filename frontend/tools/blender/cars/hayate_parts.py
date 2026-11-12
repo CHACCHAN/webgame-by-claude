@@ -16,6 +16,8 @@ import hayate_ffd as FF
 import hayate_details as DT
 import hayate_tex as TX
 import hayate_interior as IN
+import hayate_extra as EX
+import car_common as CC
 
 # ---------------------------------------------------------------- materials
 
@@ -48,12 +50,17 @@ def materials():
     M['headlight'] = _principled('headlight', '#dfe6ee', metallic=0.8, roughness=0.12, emissive='#fff4e0')
     M['taillight'] = _principled('taillight', '#6a0808', roughness=0.25, emissive='#ff1a10')
     M['tire'] = _principled('tire', '#181818', roughness=0.92)
-    M['rim'] = _principled('rim', '#a7aaae', metallic=1.0, roughness=0.34)
+    # silver-painted alloy: flake under lacquer, part diffuse (pure metal turns black at night, with nothing to mirror)
+    M['rim'] = _principled('rim', '#c3c6ca', metallic=0.6, roughness=0.36)
+    # the body's lettering: the satin silver the wheels had before they became painted alloy (light letters vanish
+    # on white paint)
+    M['badge'] = _principled('badge', '#8a8d92', metallic=0.85, roughness=0.34)
     M['brake'] = _principled('brake', '#55575b', metallic=1.0, roughness=0.55)   # bare cast-iron calipers
     M['popup_lens'] = _principled('popup_lens', '#dfe6ee', metallic=0.8, roughness=0.15, emissive='#fff4e0')   # fluted glass over the chrome reflector
     M['interior'] = _principled('interior', '#2a2a2d', roughness=0.85)
     M['amber'] = _principled('amber', '#e07a10', roughness=0.2, emissive='#ff8a10')
-    M['reverse'] = _principled('reverse', '#b9bec3', metallic=1.0, roughness=0.14)   # clear lens over a chrome reflector
+    # clear lens over a silvered reflector (part diffuse: pure mirror metal is a black hole at night)
+    M['reverse'] = _principled('reverse', '#d4d8dc', metallic=0.35, roughness=0.22)
     M['disc'] = _principled('disc', '#77787b', metallic=1.0, roughness=0.40)
     M['plate'] = _principled('plate', '#ffffff', roughness=0.5)
     # painted textures: the lenses glow through their own pattern (as in the game: emissiveMap = map)
@@ -62,10 +69,11 @@ def materials():
         img = paint()
         t = TX.apply(M[name], img)
         TX.emission_from(M[name], t)
-    TX.apply(M['tire'], TX.tyre(), multiply='#202020')
     img = TX.plate()
     if img is not None:
         TX.apply(M['plate'], img)
+    for name in CC.SWATCHES:           # the shared parts' materials (car_common)
+        CC.material_for(M, name)
     return M, {}
 
 
@@ -159,11 +167,13 @@ def build_all(body, root, M, count, ffd=True):
     DT.mirror(det)
     DT.window_trim(det, bvh)
     DT.cowl_and_wipers(det, bvh)
+    EX.sym(det, bvh)
     det.mirror_x()
     asym = K.Mesh('details_asym')
     DT.fuel_lid(asym, bvh)
     DT.plates(asym, bvh)
     DT.badges(asym, bvh)
+    EX.asym(asym, bvh)
     det.merge(asym)
     # the lamp lenses go to their own objects (the game finds the lamps from the bounds of the meshes using them)
     for name, target in (('headlight', lamps_f), ('taillight', lamps_r)):
@@ -190,17 +200,33 @@ def build_all(body, root, M, count, ffd=True):
     if ffd is not False:
         parts['ffd'] = FF.apply_to_body(body, parts['popups'], None if ffd is True else ffd)
 
+    # under the floor (after the fitted field: it hangs from the floor as it is), and the parts added in 2026-11
+    ub = K.Mesh('underbody')
+    CC.underbody(ub, 0.19, BD.ZF, BD.ZR, BD.TRACK_F, BD.TRACK_R, BD.R_TYRE, tip=(DT.EXHAUST[0], DT.EXHAUST[1], BD.Z_RBUMP + 0.35),
+                 layout='FR', axle='live')
+    o = CC.build(ub, body, M, sharp_deg=40)
+    count['underbody'] = tris_of(o)
+
     count['wheels'] = 0
     for name, x, z, front in (('fl', BD.TRACK_F / 2, BD.ZF, True), ('fr', -BD.TRACK_F / 2, BD.ZF, True),
                               ('rl', BD.TRACK_R / 2, BD.ZR, False), ('rr', -BD.TRACK_R / 2, BD.ZR, False)):
         pivot = K.empty(f'wheel_{name}', root, (x, BD.R_TYRE, z))
         spin = K.empty(f'spin_{name}', pivot)
-        sm, cm = WH.wheel_meshes(front)
-        if x < 0:
-            sm, cm = sm.mirrored(), cm.mirrored()
-        o1 = sm.build(spin, M, name=f'wheel_{name}_parts')
-        o2 = cm.build(pivot, M, name=f'caliper_{name}')
+        sm, cm, info = WH.wheel_meshes(front, 1 if x > 0 else -1)
+        if 'tire' not in M or not M['tire'].get('car_common'):
+            M['tire'] = CC.tyre_material(info, 'NOCTURNE', '185/60R14 82H')
+            M['tire']['car_common'] = True
+        o1 = CC.build(sm, spin, M, name=f'wheel_{name}_parts')
+        o2 = CC.build(cm, pivot, M, name=f'caliper_{name}')
         count['wheels'] += tris_of(o1) + tris_of(o2)
+
+    # one material for everything the game does not swap (per moving part), and the sky's share baked into it
+    trim = CC.Atlas('trim')
+    rim = CC.Atlas('rim', size=512, fill=('#c3c6ca', 0.36, 0.6))
+    rim.region('disc', CC.disc_image(), 0.34, 1.0)
+    made = CC.consolidate(root, trim, rim)
+    tyres = [o for o in root.children_recursive if o.type == 'MESH' and any(m and m.name == 'tire' for m in o.data.materials)]
+    CC.bake_ao(root, made + tyres)
     return parts
 
 
