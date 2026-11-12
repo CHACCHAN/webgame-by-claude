@@ -310,7 +310,11 @@ class Atlas:
             nt.links.new(orm.outputs[0], sep.inputs[0])
             nt.links.new(sep.outputs[1], p.inputs['Roughness'])
             nt.links.new(sep.outputs[2], p.inputs['Metallic'])
-            m.diffuse_color = (*_to_lin(self.base.mean((0, 1))), 1.0)
+            lin = _to_lin(self.base).mean((0, 1))
+            m.diffuse_color = (*lin, 1.0)
+            # the autobahn's traffic copies take ONE colour per material, the texture's mean (trafficModels.ts
+            # roleOf): above a luminance of 0.08 a material with a metalness map counts as bright metal
+            print(f'CC atlas {self.name}: mean luminance {0.2126 * lin[0] + 0.7152 * lin[1] + 0.0722 * lin[2]:.3f}')
             self._material = m
         return self._material
 
@@ -362,7 +366,7 @@ def apply_modifiers(root):
         o.data = me
 
 
-def consolidate(root, trim, rim, keep=LIVE, own=('tire',)):
+def consolidate(root, trim, rim, keep=LIVE, own=('tire', 'plate')):
     """
     Move every face whose material is neither swapped by the game (`keep`) nor has a texture set of its own (`own`)
     into one object per moving part, with the atlas material: `rim` for what hangs on a wheel, `trim` for the rest.

@@ -71,7 +71,7 @@ def lamp_report(root):
 def finish(root, body, mats):
     """after the body's last deformation (car_common): the underside (a front engine driving all four wheels, the
     rear on arms, one silencer along the left of the tail), the floor undersealed, the plain materials into two
-    painted atlases, every corner's share of the sky. The grille's mesh picture repeats, so it stays a material."""
+    painted atlases, every corner's share of the sky. The grille's mesh picture repeats, so it stays a material; so does the plate (car_common)."""
     import car_common as CC
     import hayate_kit as HK
     import r34_fit as FIT
@@ -85,7 +85,7 @@ def finish(root, body, mats):
     trim = CC.Atlas('trim')
     rim = CC.Atlas('rim', size=512, fill=('#8a8c8f', 0.32, 0.85))
     rim.region('disc', CC.disc_image(), 0.38, 0.85)
-    made = CC.consolidate(root, trim, rim, own=('tire', 'grille'))
+    made = CC.consolidate(root, trim, rim, own=('tire', 'plate', 'grille'))
     tyres = [o for o in root.children_recursive
              if o.type == 'MESH' and any(m and m.name == 'tire' for m in o.data.materials)]
     CC.bake_ao(root, made + tyres)
