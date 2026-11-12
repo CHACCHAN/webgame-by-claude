@@ -52,7 +52,9 @@ Route::middleware(AuthenticatePlayer::class)->group(function () {
         Route::post('/rooms', [RoomController::class, 'store']);
         Route::get('/rooms/{code}', [RoomController::class, 'show']);
         Route::post('/rooms/{code}/join', [RoomController::class, 'join']);
+        Route::patch('/rooms/{code}', [RoomController::class, 'settings']);
         Route::patch('/rooms/{code}/me', [RoomController::class, 'update']);
+        Route::post('/rooms/{code}/kick', [RoomController::class, 'kick']);
         Route::post('/rooms/{code}/leave', [RoomController::class, 'leave']);
         Route::post('/rooms/{code}/start', [RoomController::class, 'start']);
         Route::post('/rooms/{code}/finish', [RoomController::class, 'finish']);
