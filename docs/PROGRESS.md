@@ -2179,4 +2179,5 @@ to be seen). The films still show the balls until they are recorded again.
 - Verified: tsc; vitest 238; on the GPU the course select asks for all twelve files with their stamps, all answer
   (200 / 206), the four films play, no page errors (`~/.local/opt/quality/cmp/rel242/filmreq.cjs`); `gpu-errors`
   on WebGPU 0. After the deploy: see the line below.
-
+- **Deployed 11-12 as v2.4.2** (bundle `index-B4hwCPUr.js`, local = public; leaderboard API 200; `/api/content`
+  says 2.4.2; the public address answers the four stamped films with the lengths of the files in the tree).
