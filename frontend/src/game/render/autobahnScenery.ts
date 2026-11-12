@@ -13,13 +13,11 @@ import SIGN_ATLAS from './autobahnSigns.json';
 import {
   LED,
   SODIUM,
-  bakeTerrainLightmap,
   buildClutter,
   buildLampMeshes,
   buildTrees,
   buildTurbines,
   gridGeometry,
-  lampPool,
   surfaceDetailOf,
   updateTreeLods,
   type Lamp,
@@ -43,9 +41,8 @@ import { concreteMaterial } from './structureMaterials';
  */
 
 const MEDIAN = 2.6;
-/** road lightmap: rows every LM_STEP samples on the main road, LM_W columns across both carriageways */
+/** the road's second uv set (no longer read: the lamps' pools were a light map on it): rows every LM_STEP samples */
 const LM_STEP = 4;
-const LM_W = 32;
 const UP = new THREE.Vector3(0, 1, 0);
 
 type Signs = Record<string, { x: number; y: number; w: number; h: number; w_m: number; h_m: number }>;
@@ -252,38 +249,6 @@ function coloured(parts: [THREE.BufferGeometry, string][]) {
       return g;
     }),
   );
-}
-
-/** Row by row lamp light: `at(r, c, out)` gives texel (r, c)'s world position, or false for an unlit row. */
-function bakeLightmap(rows: number, lamps: Lamp[], at: (r: number, c: number, out: THREE.Vector3) => boolean) {
-  const data = new Uint8Array(LM_W * rows * 4);
-  const p = new THREE.Vector3(), mid = new THREE.Vector3();
-  for (let r = 0; r < rows; r++) {
-    for (let c = 0; c < LM_W; c++) data[(r * LM_W + c) * 4 + 3] = 255;
-    if (!at(r, LM_W / 2, mid)) continue;
-    const near = lamps.filter((l) => (l.position.x - mid.x) ** 2 + (l.position.z - mid.z) ** 2 < 95 * 95);
-    if (!near.length) continue;
-    for (let c = 0; c < LM_W; c++) {
-      at(r, c, p);
-      let rr = 0, gg = 0, bb = 0;
-      for (const l of near) {
-        const k = lampPool(l.position.x - p.x, l.position.y - p.y, l.position.z - p.z);
-        rr += l.color.r * k;
-        gg += l.color.g * k;
-        bb += l.color.b * k;
-      }
-      const o = (r * LM_W + c) * 4;
-      data[o] = Math.min(255, rr * 255);
-      data[o + 1] = Math.min(255, gg * 255);
-      data[o + 2] = Math.min(255, bb * 255);
-    }
-  }
-  const tex = new THREE.DataTexture(data, LM_W, rows, THREE.RGBAFormat);
-  tex.channel = 1;
-  tex.magFilter = THREE.LinearFilter;
-  tex.minFilter = THREE.LinearFilter;
-  tex.needsUpdate = true;
-  return tex;
 }
 
 /** A sign face (and its grey back) as a quad of the sign atlas. */
@@ -911,23 +876,10 @@ export function buildAutobahnScenery(track: Track, terrain: TerrainData, quality
   farMat.polygonOffsetUnits = 4;
   group.add(tiles(gridGeometry(terrain.far, terrain, false, !!detail), terrain.far.nx, terrain.far.nz, 8, 4, farMat, 'terrain-far'));
 
-  // ---------------------------------------------------------------- baked lamp light
-  roadMaterial.lightMap = bakeLightmap(lmRows, lamps, (r, c, out) => {
-    if (r < mainRows) {
-      track.pointAt(Math.min(r * LM_STEP, end), lerp(LM_LAT[0], LM_LAT[1], (c + 0.5) / LM_W), out);
-      return true;
-    }
-    if (r < blackRow) {
-      const row = slip[r - slipRow0];
-      out.copy(slipLeft(row, -0.6 + ((c + 0.5) / LM_W) * 9.2));
-      return true;
-    }
-    return false;
-  });
-  roadMaterial.lightMapIntensity = 17;
-  terrainMat.lightMap = bakeTerrainLightmap(terrain.near, lamps);
-  // the pools of light on the verges stay dimmer than the road (a row of LED lamps lit the ground like snow)
-  terrainMat.lightMapIntensity = 7;
+  // ---------------------------------------------------------------- the pools under the lamps
+  // (`render/lampField.ts`; the verges stay dimmer than the road: a row of LED lamps lit the ground like snow)
+  roadMaterial.userData.lampBeam = 1;
+  terrainMat.userData.lampBeam = 7 / 17;
 
   // ---------------------------------------------------------------- trees, bushes, turbines
   const inForest = (s: number) => inRanges(s, forests);
@@ -987,7 +939,7 @@ export function buildAutobahnScenery(track: Track, terrain: TerrainData, quality
     lamps,
     roadMaterial,
     nightEmissive,
-    lightmapMats: [roadMaterial, terrainMat],
+    terrainMaterial: terrainMat,
     covers: new Float32Array(covers),
     shadeScene: shadows ? shadeScene(terrain, (trees.userData.casters as ShadeCaster[] | undefined) ?? [], covers) : null,
     update(time, cameraPos, view) {

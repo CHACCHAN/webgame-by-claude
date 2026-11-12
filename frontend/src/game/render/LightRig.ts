@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import type { PMREMGenerator } from 'three/webgpu';
 import { FarShade } from './farShade';
 import { LampField } from './lampField';
+import { LightAtlas } from './lightAtlas';
 
 /** a car's headlights as a real light (the pooled spots take these values when they are a car's) */
 export const HEADLIGHT = { color: '#fff1dc', intensity: 260, distance: 140, angle: 0.48, penumbra: 0.55, decay: 1.4 };
@@ -48,13 +49,15 @@ export class LightRig {
   readonly key = new THREE.DirectionalLight('#ffffff', 1);
   readonly hemi = new THREE.HemisphereLight('#ffffff', '#000000', 1);
   readonly fog = new THREE.FogExp2('#000000', 0.0005);
-  readonly lamps = new LampField();
+  /** the course's fixed light as numbers for the shaders: the lamps' grid and the far shade share one texture */
+  readonly atlas = new LightAtlas();
+  readonly lamps = new LampField(this.atlas);
   readonly vending = new THREE.PointLight('#e8f4ff', 0, 14, 1.6);
   private readonly spots: THREE.SpotLight[] = [];
   /** the first spot is the garage's light from above (set its values on `showroom`), not a car's headlights */
   showroomOn = false;
   /** the shade beyond the shadow map, and of the land (the course's baked field: `Game.applyTimeOfDay` shows it) */
-  readonly farShade = new FarShade();
+  readonly farShade = new FarShade(this.atlas);
   /** where the key light's shadow map lies: its middle, its two axes, half its side (the shader fades it out at the edge) */
   readonly keyMap = { at: new THREE.Vector3(), x: new THREE.Vector3(1, 0, 0), y: new THREE.Vector3(0, 0, 1), half: 60 };
   /** the reflection environment and what draws it (`Environment.buildEnvMap`) */

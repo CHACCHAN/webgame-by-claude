@@ -20,7 +20,7 @@ import { VOLUME_SPOTS, volume, volumeSpot } from './render/volumetricLights';
 import { gpuBytes } from './render/gpuBytes';
 import { bakeShade } from './render/farShade';
 import { keyShadowNode } from './render/keyShadow';
-import { LAMP_CANDELA } from './render/lampField';
+import { LAMP_BEAM, LAMP_CANDELA } from './render/lampField';
 import { registerLampField } from './render/lampFieldNode';
 import { LightRig } from './render/LightRig';
 import { ensureVehicleModels, onModelWait, preloadVehicleModels, vehicleModelReady } from './render/vehicleModels';
@@ -400,7 +400,7 @@ export class Game {
     if (this.quality.shadows) this.lights.key.shadow.shadowNode = keyShadowNode(this.lights.key, this.lights.farShade, this.lights.keyMap);
     // (the trees' shadow meshes are drawn into this light's shadow map only)
     this.lights.key.shadow.camera.layers.enable(SHADOW_LAYER);
-    vegetationLights(this.lights.key, this.lights.hemi);
+    vegetationLights(this.lights.key, this.lights.hemi, this.quality.shadows ? this.lights.farShade : null);
     this.root.add(this.lights.group);
     this.scene.fog = this.lights.fog;
     this.scene.add(this.root);
@@ -622,7 +622,7 @@ export class Game {
     const envMap = this.env.buildEnvMap(this.renderer);
     this.scene.environment = envMap;
     this.scene.background = null;
-    // the lamps' light (by day they are off: what is left of them is their glass and the baked pools, faint),
+    // the lamps' light (by day they are off: what is left of them is their glass and the pools under them, faint),
     // and their glow in the haze, as bright
     this.lights.lamps.intensity = this.env.preset.lampsOn < 0.2 ? 0 : LAMP_CANDELA * this.env.preset.lampsOn;
     volume.lamps = this.scenery.lamps;
@@ -630,10 +630,7 @@ export class Game {
     this.lights.farShade.show(this.scenery.shades?.[tod === 'dawn' ? 'sun' : 'moon'] ?? null);
     volume.density = this.env.preset.haze;
     const lamps = this.env.preset.lampsOn;
-    for (const m of this.scenery.lightmapMats) {
-      m.userData.baseLightMap ??= m.lightMapIntensity;
-      m.lightMapIntensity = (m.userData.baseLightMap as number) * lamps;
-    }
+    this.lights.lamps.beam = LAMP_BEAM * lamps;
     for (const m of this.scenery.nightEmissive) {
       m.userData.baseIntensity ??= m.emissiveIntensity;
       m.emissiveIntensity = (m.userData.baseIntensity as number) * lamps;
@@ -650,7 +647,7 @@ export class Game {
     road.color.copy(dry.color).multiplyScalar(lerp(1, 0.6, wet));
     road.normalScale.setScalar(lerp(dry.normal, 0.08, wet));
     road.envMapIntensity = lerp(dry.env, 1.8, wet);
-    const terrain = this.scenery.lightmapMats[1];
+    const terrain = this.scenery.terrainMaterial;
     this.dryMaterials.terrain ??= terrain.roughness;
     terrain.roughness = lerp(this.dryMaterials.terrain, 0.62, wet);
     this.rain.setIntensity(wet);

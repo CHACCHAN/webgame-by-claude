@@ -42,8 +42,8 @@ export interface SceneryResult {
   roadMaterial: THREE.MeshStandardMaterial;
   /** emissive materials that should brighten at night */
   nightEmissive: THREE.MeshStandardMaterial[];
-  /** materials carrying the baked lamp lightmap (scaled with lamp state) */
-  lightmapMats: THREE.MeshStandardMaterial[];
+  /** the near ground's material (its roughness follows the rain) */
+  terrainMaterial: THREE.MeshStandardMaterial;
   /**
    * roofs over the road (the rock sheds), for the rain to stop under: quads of 9 floats each, corners a b c d in
    * order (x, z pairs) and the roof slab's top height
@@ -135,13 +135,10 @@ export function buildScenery(track: Track, terrain: TerrainData, quality: Scener
   // ------------------------------------------------------------- lamps
   placeLamps(track, sides, lamps);
   buildLampMeshes(track, lamps, group, nightEmissive);
-  // baked pools of lamp light on the road and the ground around it
-  const roadLightmap = bakeRoadLightmap(track, lamps, road.geometry);
-  roadMaterial.lightMap = roadLightmap;
-  roadMaterial.lightMapIntensity = 17;
-  terrainMat.lightMap = bakeTerrainLightmap(terrain.near, lamps);
-  terrainMat.lightMapIntensity = 13;
-  const lightmapMats = [roadMaterial, terrainMat];
+  // the pool of light under a lamp (`render/lampField.ts`): the road takes all of it, the ground beside it less
+  // (what the two baked light maps gave, 17 and 13)
+  roadMaterial.userData.lampBeam = 1;
+  terrainMat.userData.lampBeam = 13 / 17;
 
   // ------------------------------------------------------------- signs
   buildSigns(track, terrain, sides, group, quality.board);
@@ -162,7 +159,7 @@ export function buildScenery(track: Track, terrain: TerrainData, quality: Scener
     lamps,
     roadMaterial,
     nightEmissive,
-    lightmapMats,
+    terrainMaterial: terrainMat,
     covers: new Float32Array(covers),
     shadeScene: quality.shadows ? shadeScene(terrain, (trees.userData.casters as ShadeCaster[] | undefined) ?? [], covers) : null,
     update(time, cameraPos, view) {
@@ -195,6 +192,7 @@ function plainRoadside(
   const concreteMat = new THREE.MeshStandardMaterial({ map: makeConcreteTexture(false, concretePhoto), normalMap: concreteN, roughness: 0.9 });
   const latticeTex = makeConcreteTexture(true, concretePhoto);
   const latticeMat = new THREE.MeshStandardMaterial({ map: latticeTex, normalMap: concreteN, roughness: 0.92, side: THREE.DoubleSide });
+  for (const m of [steel, postMat, concreteMat, latticeMat]) m.userData.lampBeam = 1;
 
   const railGeos: THREE.BufferGeometry[] = [];
   const curbGeos: THREE.BufferGeometry[] = [];
@@ -308,78 +306,6 @@ export function plainTerrainMaterial(surfaceTexture: (n: SurfaceName, srgb: bool
 export function surfaceDetailOf(quality: SceneryQuality): 0 | GroundDetail {
   const d = Math.round(quality.surfaceDetail ?? 0);
   return d > 0 && layersLoaded() ? (Math.min(d, 3) as GroundDetail) : 0;
-}
-
-/** Soft pool of light under a lamp head at height h: roughly cos³ falloff. */
-export function lampPool(dx: number, dy: number, dz: number) {
-  const d2 = dx * dx + dy * dy + dz * dz;
-  const h = Math.max(dy, 0.5);
-  const cos = h / Math.sqrt(d2);
-  return (cos * cos * cos * 55) / (d2 + 4);
-}
-
-function bakeRoadLightmap(track: Track, lamps: Lamp[], geo: THREE.BufferGeometry) {
-  const rows = geo.userData.lightmapRows as number;
-  const step = geo.userData.lightmapStep as number;
-  const W = 16;
-  const data = new Uint8Array(W * rows * 4);
-  const sorted = [...lamps].sort((a, b) => a.s - b.s);
-  const p = new THREE.Vector3();
-  for (let r = 0; r < rows; r++) {
-    const i = Math.min(r * step, track.count - 1);
-    const hw = track.width[i] / 2 + SHOULDER;
-    const near = sorted.filter((l) => Math.abs(l.s - i) < 70);
-    for (let c = 0; c < W; c++) {
-      const lat = -hw - 0.6 + ((c + 0.5) / W) * 2 * (hw + 0.6);
-      track.pointAt(i, lat, p);
-      let rr = 0, gg = 0, bb = 0;
-      for (const l of near) {
-        const k = lampPool(l.position.x - p.x, l.position.y - p.y, l.position.z - p.z);
-        rr += l.color.r * k;
-        gg += l.color.g * k;
-        bb += l.color.b * k;
-      }
-      const o = (r * W + c) * 4;
-      data[o] = Math.min(255, rr * 255);
-      data[o + 1] = Math.min(255, gg * 255);
-      data[o + 2] = Math.min(255, bb * 255);
-      data[o + 3] = 255;
-    }
-  }
-  const tex = new THREE.DataTexture(data, W, rows, THREE.RGBAFormat);
-  tex.channel = 1;
-  tex.magFilter = THREE.LinearFilter;
-  tex.minFilter = THREE.LinearFilter;
-  tex.needsUpdate = true;
-  return tex;
-}
-
-export function bakeTerrainLightmap(g: HeightGrid, lamps: Lamp[]) {
-  const { nx, nz, cell, x0, z0, heights } = g;
-  const data = new Uint8Array(nx * nz * 4);
-  const R = 40;
-  for (const l of lamps) {
-    const ci = Math.round((l.position.x - x0) / cell), cj = Math.round((l.position.z - z0) / cell);
-    const span = Math.ceil(R / cell);
-    for (let j = Math.max(0, cj - span); j <= Math.min(nz - 1, cj + span); j++)
-      for (let i = Math.max(0, ci - span); i <= Math.min(nx - 1, ci + span); i++) {
-        const x = x0 + i * cell, z = z0 + j * cell;
-        const dy = l.position.y - heights[j * nx + i];
-        if (dy < 0) continue;
-        const k = lampPool(l.position.x - x, dy, l.position.z - z);
-        const o = (j * nx + i) * 4;
-        data[o] = Math.min(255, data[o] + l.color.r * k * 255);
-        data[o + 1] = Math.min(255, data[o + 1] + l.color.g * k * 255);
-        data[o + 2] = Math.min(255, data[o + 2] + l.color.b * k * 255);
-      }
-  }
-  for (let k = 3; k < data.length; k += 4) data[k] = 255;
-  const tex = new THREE.DataTexture(data, nx, nz, THREE.RGBAFormat);
-  tex.channel = 1;
-  tex.magFilter = THREE.LinearFilter;
-  tex.minFilter = THREE.LinearFilter;
-  tex.needsUpdate = true;
-  return tex;
 }
 
 /** what covers the ground at a place: [town 0..1, forest 0..1] (the `surf` attribute's z and w) */

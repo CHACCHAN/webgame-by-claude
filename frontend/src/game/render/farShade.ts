@@ -1,4 +1,7 @@
 import * as THREE from 'three';
+import { SHADE_SIZE, type LightAtlas } from './lightAtlas';
+
+export { SHADE_SIZE };
 
 /**
  * The shadows that the shadow map cannot hold: the sun's / moon's shade far from the camera, and the shade of the
@@ -18,8 +21,7 @@ import * as THREE from 'three';
  * the light holds (its own top, or the shadow already over it), lowered by the light's slope over that step.
  */
 
-/** cells along each side (the grid is stretched over the course's near terrain, so a cell is 2–8 m) */
-export const SHADE_SIZE = 768;
+// (`SHADE_SIZE` cells along each side: the grid is stretched over the course's near terrain, so a cell is 2–8 m)
 
 /** something that stands on the land and shades it: a disc of radius `r` (m) with its top at `top` */
 export interface ShadeCaster {
@@ -204,29 +206,23 @@ export function litUnder(f: ShadeField, top: number, y: number) {
 }
 
 /**
- * The shade of the course that is shown, as the one texture the shaders read (the light's shader is built once:
- * another course or another light writes other numbers into it).
+ * The shade of the course that is shown, in the texture the shaders read (`LightAtlas`, its first rows; the light's
+ * shader is built once: another course or another light writes other numbers into it).
  */
 export class FarShade {
-  readonly texture: THREE.DataTexture;
   /** x0, z0, cells per metre along x and z */
   readonly frame = new THREE.Vector4(0, 0, 1, 1);
   /** base, range, 1 / soft; w: 1 while there is a field (0: everything is lit) */
   readonly scale = new THREE.Vector4(0, 1, 1, 0);
+  private shown: ShadeField | null = null;
 
-  constructor() {
-    this.texture = new THREE.DataTexture(new Uint8Array(SHADE_SIZE * SHADE_SIZE * 4), SHADE_SIZE, SHADE_SIZE, THREE.RGBAFormat, THREE.UnsignedByteType);
-    this.texture.magFilter = this.texture.minFilter = THREE.NearestFilter;
-    this.texture.generateMipmaps = false;
-    this.texture.name = 'far-shade';
-    this.texture.needsUpdate = true;
-  }
+  constructor(readonly atlas: LightAtlas) {}
 
   show(f: ShadeField | null) {
     this.scale.w = f ? 1 : 0;
-    if (!f) return;
-    (this.texture.image.data as Uint8Array).set(f.data);
-    this.texture.needsUpdate = true;
+    if (!f || f === this.shown) return;
+    this.shown = f;
+    this.atlas.put(0, SHADE_SIZE, f.data);
     this.frame.set(f.x0, f.z0, 1 / f.cx, 1 / f.cz);
     this.scale.set(f.base, f.range, 1 / f.soft, 1);
   }

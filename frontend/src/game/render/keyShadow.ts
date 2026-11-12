@@ -1,6 +1,7 @@
 import type * as THREE from 'three';
 import { abs, clamp, float, floor, ivec2, max, mix, positionWorld, renderGroup, shadow, smoothstep, textureLoad, uniform, vec2 } from 'three/tsl';
-import { SHADE_SIZE, type FarShade } from './farShade';
+import type { FarShade } from './farShade';
+import { SHADE_SIZE } from './lightAtlas';
 
 type N = any; // eslint-disable-line @typescript-eslint/no-explicit-any
 
@@ -25,7 +26,7 @@ export function bakedShade(shade: FarShade, P: N = positionWorld): N {
   const g: N = P.xz.sub(frame.xy).mul(frame.zw).sub(0.5);
   const i: N = floor(g).toVar(), f: N = g.sub(i).toVar();
   const read = (dx: number, dz: number): N => {
-    const t: N = textureLoad(shade.texture, ivec2(clamp(i.add(vec2(dx, dz)), 0, SHADE_SIZE - 1) as N));
+    const t: N = textureLoad(shade.atlas.texture, ivec2(clamp(i.add(vec2(dx, dz)), 0, SHADE_SIZE - 1) as N));
     return vec2(t.r.mul(256).add(t.g), t.b.mul(256).add(t.a));
   };
   const tops: N = mix(mix(read(0, 0), read(1, 0), f.x), mix(read(0, 1), read(1, 1), f.x), f.y).mul(255 / 65535).mul(scale.y).add(scale.x);

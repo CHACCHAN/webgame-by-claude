@@ -1,4 +1,6 @@
 import * as THREE from 'three';
+import type { FarShade } from './farShade';
+import { bakedShade } from './keyShadow';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import { MeshBasicNodeMaterial, MeshSSSNodeMaterial, MeshStandardNodeMaterial } from 'three/webgpu';
@@ -46,6 +48,7 @@ type N = any;
 
 /** objects on this layer are drawn into the key light's shadow map only (Game enables it on that shadow camera) */
 export const SHADOW_LAYER = 1;
+
 
 export type VegetationTier = 'legacy' | 'lite' | 'full';
 
@@ -143,8 +146,11 @@ const keyDir = (uniform(keyAt).setGroup(renderGroup) as N).onFrameUpdate(() => {
   const key = farLights?.[0] as THREE.DirectionalLight | undefined;
   return key ? keyAt.copy(key.position).sub(key.target.position).normalize() : keyAt;
 });
-export function vegetationLights(key: THREE.DirectionalLight, sky: THREE.Light) {
+/** the course's baked shade (`render/farShade.ts`): a ridge's shadow on the trees that take none from the shadow map */
+let landShade: FarShade | null = null;
+export function vegetationLights(key: THREE.DirectionalLight, sky: THREE.Light, shade: FarShade | null = null) {
   farLights = [key, sky];
+  landShade = shade;
 }
 
 export function vegetationWeather(rain: number, dark = 0) {
@@ -432,7 +438,13 @@ function instanceNodes(): InstanceNodes {
     seed: fract(B.w),
     shade: (far: boolean) => {
       const dim: N = smoothstep(0.05, 0.45, away).mul(far ? 0.72 : 0.6);
-      return float(1).sub(far ? dim : dim.mul(smoothstep(55, 110, foot.sub(viewer).length())));
+      const beyond: N = smoothstep(55, 110, foot.sub(viewer).length());
+      const own: N = float(1).sub(far ? dim : dim.mul(beyond));
+      if (!landShade) return own;
+      // in the shadow a ridge throws across the valley (the land's baked shade, read at two thirds of a grown
+      // tree's height): the trees near the camera lose the sun through the shadow's node, these here
+      const cast: N = mix(0.4, 1, bakedShade(landShade, foot.add(vec3(0, B.x.mul(8), 0))).x);
+      return own.min(far ? cast : mix(1, cast, beyond));
     },
   };
 }
