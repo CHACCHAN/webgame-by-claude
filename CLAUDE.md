@@ -207,7 +207,14 @@ pending. `docs/PLAN.md` holds the design.
   <trains|cars|props|creatures|nature> [ids] [--render [dir]]` (Blender 5.2 headless → GLB → glTF-Transform: meshopt, WebP;
   trains also palette textures). Scenery: `tools/blender/props/<id>.py` → `public/models/props/<id>.glb`; size,
   facing (+Z = front) and origin are set in `PROPS` (`render/props.ts`), placement in `TrackScenery.ts`. Each model
-  falls back to the procedural shape when it fails to load. The cockroach: `tools/blender/creatures/roach.py` (skinned,
+  falls back to the procedural shape when it fails to load. The props' surfaces (re-modelled 11-12, v2.4) are
+  procedural materials baked into one atlas per model by `props/prop_bake.py` (`surface()` materials → `finish()`:
+  base colour, occlusion / roughness / metalness, normal, glow; Cycles on the CPU), so a prop is one material = one
+  draw call; what is written on them is painted by `paint.py` (invented names, no brands). A tall thing's red
+  obstruction light is `render/beacons.ts` (`buildBeacons` with the lamp positions: one camera-facing quad per
+  lamp, sized in pixels in both directions (6–12 px of a 1080-line screen), `BEACON_RATE` flashes a minute, all
+  together, lit while the road's lamps are; a turbine's two lenses flash through the model's emissive map), never
+  a far light of `Environment.buildCityLights` (that was an 18 px red ball over every turbine). The cockroach: `tools/blender/creatures/roach.py` (skinned,
   scuttle cycle resampled at export). A train's line variants (`KINDS.trains.variants`) are the same script with
   `--variant <name>` → `<id>-<name>.glb`.
 - Cars are all our own Blender models (`tools/blender/cars/<id>.py` + `<id>_*.py`, fitted to photos with the files in

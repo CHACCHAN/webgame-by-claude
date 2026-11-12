@@ -512,12 +512,11 @@ function buildCityLights(terrain: TerrainData) {
   if (fw) {
     for (let i = 0; i < 64; i++) push(fw[0], 45, fw[1], neon[i % 3], 3.2, 3 + i / 64);
   }
-  // antenna towers and wind turbines carry blinking aviation lights
+  // antenna towers carry blinking aviation lights (the wind turbines' are their own: render/beacons.ts)
   for (const [x, z] of lf.features.towers) {
     const y = terrain.heightAt(x, z);
     for (let h = 0; h < 4; h++) push(x, y + 15 + h * 18, z, red, 3.8, 2);
   }
-  for (const [x, z] of lf.features.turbines ?? []) push(x, terrain.heightAt(x, z) + 63, z, red, 3.4, 2);
 
   // one camera-facing quad per light (WebGPU has no sized points): the position, colour, size and animation kind
   // of each are per-instance attributes

@@ -2125,4 +2125,34 @@ to be seen). The films still show the balls until they are recorded again.
   likewise); the garage thumbnail was not made again (folded, it looks as before from that angle); no E2E.
 - Known: paused in mid-air the wings keep beating; from the chase camera the hind wings are edge-on for part of
   the beat.
+- **Deployed 11-12 as v2.3.0** (bundle `index-jIVxcRFV.js`, local = public; leaderboard API 200; `/api/content`
+  says 2.3.0; the public `roach.glb` is the new one, 950 080 bytes). Desk reports `V4TNGQ`, `4PHH4G`, `2V9D3R` closed.
+
+## Release 2.4 (11-12): the thirteen props re-modelled; the turbines' obstruction lights
+
+- **The props** (agent, branch `worktree-agent-a0462d11d1fc0d277`; sheets sent 11-12, the owner: "シート全部見たので
+  入れていいよ"): street light, vending machine, curve mirror, bus stop, cone, torii, stone lantern, wind turbine,
+  sign gantry, emergency phone, village house, farmhouse, church: real construction (footings, base plates and
+  bolts, brackets, gutters) and used surfaces baked per model into one atlas by `tools/blender/props/prop_bake.py`
+  (one material = one draw call a prop). `public/models/props` 0.43 → 4.7 MB. Merged onto main by the agent
+  (one conflict, `TrackScenery.ts`, the vending machines' place and light: main's side taken).
+- **The owner on the live game (11-12)**: the wind turbine looked like the old one (it was: the branch was not in)
+  and its red lamp by night was "a huge round red lamp". It was a far light of `Environment.buildCityLights`
+  (up to 18 px with a wide glow = a 2–4 m ball on a turbine 100–170 m away, on the tower's axis above the nacelle,
+  a square-wave blink, each turbine at its own time, also drawn where no turbine stood). Now (agent): two lamps
+  with 0.3 m lenses on posts on the nacelle (in the model, lit through its emissive map) and `render/beacons.ts`:
+  one camera-facing quad per lamp, 6–12 px of a 1080-line screen at any distance, 30 soft flashes a minute, all
+  turbines together, lit while the road's lamps are (night and rain). The autobahn's turbines share it.
+  Sheet: `~/.local/opt/wt/models-props/sheets/wind_turbine_light.jpg` (before / after at 40 m, 300 m, 1.5 km;
+  sent to the owner).
+- Verified by me on the merged build: tsc; vitest 236; `gpu-errors` 0 / 0 / 0 (WebGPU, WebGL 2, WebGPU with the
+  upscaler); fixed viewpoints looked at: all four courses by night (32), Oboro and Tenrou at dawn (16), the same
+  two by night on the move with the upscaler (16) (`~/.local/opt/quality/cmp/rel240-a.jpg`, `-b.jpg`); the race
+  pictures of `gpu-errors` (the autobahn's new gantry over the start). By the agent: the new turbine is what is
+  drawn (Tenrou 9, autobahn 10 instances, no fallback), the lamp's views in the sheet, the lamp on WebGL 2.
+- Not verified: the flash watched running (stills at fixed moments only); rain and dawn pictures of the lamp;
+  quality low / medium; phones; frame cost and video memory of the new props (no paired run: the machine was
+  busy with three agents; the earlier figure: +4.4 MB of downloads); E2E.
+- **The course select's films are from before all of today's changes** (props, lamp field, exhaust, Kirifuri's
+  sun): being recorded again after this deploy.
 
