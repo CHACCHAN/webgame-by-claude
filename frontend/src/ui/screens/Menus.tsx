@@ -168,6 +168,7 @@ export function ModesScreen() {
     { id: 'rank', label: 'RANKING', jp: 'ランキング', desc: 'コースごとのオンラインランキングを確認する。', action: () => { set({ mode: 'time_attack' }); go('leaderboard'); } },
     { id: 'settings', group: '整える', label: 'SETTINGS', jp: '設定', desc: 'グラフィック品質、サウンド、運転アシスト、表示。', action: () => go('settings') },
     { id: 'controls', label: 'CONTROLS', jp: '操作方法', desc: 'キーボード / ゲームパッド / スマホの操作を確認する。', action: () => go('controls') },
+    { id: 'about', group: '知る', label: 'ABOUT', jp: 'このゲームについて', desc: 'このゲームのこと、つくった人、技術、クレジット。AI窓口では遊び方の相談と、不具合の報告・要望を受け付けています。', action: () => go('about') },
     ...accountRow,
   ];
   // (the account row comes once the server has answered, and can go: the focus never points past the list)

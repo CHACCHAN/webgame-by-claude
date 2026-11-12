@@ -26,6 +26,7 @@ const PLACES: Partial<Record<Screen, [string, string]>> = {
   cars: ['CAR LIST', '車両一覧'],
   settings: ['SETTINGS', '設定'],
   controls: ['CONTROLS', '操作方法'],
+  about: ['ABOUT', 'このゲームについて'],
   leaderboard: ['RANKING', 'ランキング'],
 };
 /** the screens of the way to a race, in order (the ghost list only in ghost battles, the rival only in rival battles) */

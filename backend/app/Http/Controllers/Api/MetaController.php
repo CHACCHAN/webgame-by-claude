@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Run;
+use App\Services\DeskMind;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
 use Throwable;
@@ -51,6 +52,11 @@ class MetaController extends Controller
         // whether members can log in (Authentik); without it everyone is a guest
         $auth = ['enabled' => AuthController::enabled()];
 
-        return response()->json(['version' => config('game.version'), 'tracks' => $tracks, 'cars' => $cars, 'realtime' => $realtime, 'ai' => $ai, 'auth' => $auth]);
+        // the About screen: who made the game (configuration: config/about.php), and whether the desk takes reports
+        // and has a model to talk to (config/desk.php)
+        $about = ['creator' => config('about.creator'), 'note' => config('about.note'), 'links' => config('about.links')];
+        $desk = ['enabled' => (bool) config('desk.enabled'), 'ai' => (bool) config('desk.enabled') && app(DeskMind::class)->available()];
+
+        return response()->json(['version' => config('game.version'), 'tracks' => $tracks, 'cars' => $cars, 'realtime' => $realtime, 'ai' => $ai, 'auth' => $auth, 'about' => $about, 'desk' => $desk]);
     }
 }
