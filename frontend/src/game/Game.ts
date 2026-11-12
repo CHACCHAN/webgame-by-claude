@@ -1302,6 +1302,9 @@ export class Game {
     const room = this.track.length - 200 - r.proj.s;
     if ((sim.forwardSpeed >= sim.spec.jet!.vr && straight && d.t > 0.8) || room < 0) {
       d.rotate(sim.position, heading, sim.speed);
+      // (this step's travel at once: handed over where it stands, the body stood still for a step, its velocity
+      // read zero, and that went to the other players as a hit: they saw the aircraft stop for a packet and jump on)
+      d.step(dt);
       sim.carry(d.position, d.quaternion, { spool: 1, afterburner: 1 });
     }
   }

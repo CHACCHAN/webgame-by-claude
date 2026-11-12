@@ -331,6 +331,45 @@ describe('the take-off after the finish', () => {
     }
   });
 
+  it('takes the aircraft over from the simulation without a standstill: its velocity goes on, step by step', () => {
+    // as Game.depart hands it over: the path begun where the body is, this step's travel at once, then carried.
+    // (Handed over where it stood, the body's velocity read zero for a step: the other players got that as a hit
+    // and saw the aircraft stop and jump on.)
+    const physics = new PhysicsWorld(track);
+    const at = track.zone.indexOf('runway') + 800;
+    const sim = new VehicleSim(physics, CAR_SPECS.f15j, track.pointAt(at), track.headingAt(at));
+    sim.reset(track.pointAt(at), track.headingAt(at), 90);
+    const input = emptyInput();
+    input.throttle = 1;
+    const step = () => {
+      sim.input = input;
+      sim.preStep(PHYSICS_DT);
+      physics.step();
+      sim.postStep(PHYSICS_DT);
+    };
+    for (let k = 0; k < 60; k++) step();
+    const before = sim.velocity.length();
+    expect(before).toBeGreaterThan(85);
+    const d = new Departure(CAR_SPECS.f15j);
+    d.rotate(sim.position, Math.atan2(sim.forward.x, sim.forward.z), sim.speed);
+    d.step(PHYSICS_DT);
+    sim.carry(d.position, d.quaternion, { spool: 1, afterburner: 1 });
+    const from = sim.position.clone();
+    let slowest = Infinity, fastest = 0;
+    for (let k = 0; k < 240; k++) {
+      step();
+      slowest = Math.min(slowest, sim.velocity.length());
+      fastest = Math.max(fastest, sim.velocity.length());
+      d.step(PHYSICS_DT);
+      sim.carry(d.position, d.quaternion, { spool: 1, afterburner: 1 });
+    }
+    physics.dispose();
+    expect(slowest).toBeGreaterThan(before * 0.97);
+    expect(fastest).toBeLessThan(before + 40);
+    // two seconds on at that speed and more
+    expect(sim.position.distanceTo(from)).toBeGreaterThan(before * 1.95);
+  });
+
   it('from far above the lift-off speed it is off at once', () => {
     const { log } = fly('f15j', 220);
     expect(log.find((x) => x.stage === 'climb')!.t).toBeLessThan(0.6);
