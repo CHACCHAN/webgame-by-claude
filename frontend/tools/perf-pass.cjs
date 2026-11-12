@@ -55,7 +55,8 @@ function instrument() {
   const tick = async () => {
     if (!P.on) return;
     // (the last timed frame's compute passes; a pass that did not run in it is not in the list and counts as 0)
-    const up = window.__upscaleTimes ? window.__upscaleTimes() : {};
+    const fsr = window.__upscaler && window.__upscaler();
+    const up = fsr ? Object.fromEntries(fsr.gpuTimings) : {};
     if (Object.keys(up).length) {
       P.up.n++;
       for (const [name, ms] of Object.entries(up)) P.up.sum[name] = (P.up.sum[name] || 0) + ms;

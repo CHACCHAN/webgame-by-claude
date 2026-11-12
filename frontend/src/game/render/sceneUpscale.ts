@@ -31,7 +31,7 @@ export class SceneUpscaler extends UpscalerNode {
   // (`_` names: three.js walks a node's other properties as parts of the graph)
   private _sharpness = 0;
 
-  /** `ratio`: output size / scene size per axis; `timed`: the passes' GPU times are gathered (`times`) */
+  /** `ratio`: output size / scene size per axis; `timed`: the package gathers its passes' GPU times (`upscaler.gpuTimings`) */
   constructor(colour: TextureNode, depth: TextureNode, motion: TextureNode, reactive: TextureNode, camera: Camera, ratio: number, timed = false) {
     super(colour, depth, motion, camera, { ratio, reactive, gpuTiming: timed });
     velocity.setProjectionMatrix(steadyProjection);
@@ -53,11 +53,6 @@ export class SceneUpscaler extends UpscalerNode {
 
   private apply() {
     if (this.upscaler) this.upscaler.settings.sharpness = this._sharpness;
-  }
-
-  /** GPU time (ms) of each of the upscaler's compute passes in the last timed frame (empty unless made `timed`) */
-  get times(): ReadonlyMap<string, number> {
-    return this.upscaler?.gpuTimings ?? new Map();
   }
 
   /**

@@ -147,8 +147,9 @@ export class RenderHost {
       keepShaders(renderer);
       const host = new RenderHost(renderer, canvas, options);
       host.timed = timed;
-      // (the upscaler's compute passes are not three.js': their times are read here by the tool)
-      if (timed) (globalThis as { __upscaleTimes?: () => Record<string, number> }).__upscaleTimes = () => Object.fromEntries(host.upscaler?.times ?? []);
+      // (the upscaler's compute passes are not three.js': the tool reads their times from the package's own object,
+      // `gpuTimings`; its `settings` and debug views are there for probes as well)
+      if (timed) Object.assign(globalThis, { __upscaler: () => host.upscaler?.upscaler ?? null, __textureBias: sceneTextureBias });
       host.forPass = compileAtPassDepth(renderer, () => host.scenePass?.renderTarget ?? null);
       renderer.toneMapping = THREE.AgXToneMapping;
       renderer.setClearColor('#05070c');
