@@ -602,6 +602,10 @@ Verified (RX 5700 XT, Chrome headless, WebGPU; build of this tree on vite previe
 Not verified: other GPUs and real phones; how the stroke feels in the hand (pictures of a scripted stroke only);
 the owner's opinion.
 
+Live (11-12, `e1799be`): `docker compose up -d --build`; the served bundle is the built one, locally and through the
+public address; leaderboard 200 on both; one picture of the live main menu (no grains, no page errors, no API
+writes). A 55 s recording went to the owner (`~/.local/opt/quality/cmp/fluidrec1`, `fluidrec.cjs`).
+
 ### The forest is in: trees, bushes, undergrowth, rocks remade; a course's shaders built once (11-12)
 The `nature` package (three rounds by an agent, each reviewed by me on pictures) is merged: twelve own species from
 Blender scripts, planted by altitude, slope and distance to the road, on medium and up (`low` keeps the old trees).
