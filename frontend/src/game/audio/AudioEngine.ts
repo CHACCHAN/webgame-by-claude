@@ -13,6 +13,9 @@ import vvvfWorkletUrl from './vvvf/vvvf.worklet.ts?worker&url';
 import { runningParams } from './running';
 import type { RunningProcessorOptions } from './running.worklet';
 import runningWorkletUrl from './running.worklet.ts?worker&url';
+import type { RainBody } from './rain';
+import type { RainProcessorOptions } from './rain.worklet';
+import rainWorkletUrl from './rain.worklet.ts?worker&url';
 
 /** the VVVF control patterns (JSON from tools/vvvf-patterns.ts), each loaded when a train needs it */
 const VVVF_PATTERNS = import.meta.glob<VvvfData>('./vvvf/patterns/*.json', { import: 'default' });
@@ -436,26 +439,72 @@ export class AudioEngine {
     this.wind.filter.frequency.setTargetAtTime(300 + speed * 18, t, 0.1);
   }
 
+  private rainNode: AudioWorkletNode | null = null;
+  /** the plain filtered noise, where AudioWorklet is missing */
   private rainGain: GainNode | null = null;
-  /** Rain ambience: hiss + low rumble from filtered noise. */
+  private rainLevel = 0;
+  private rainBody: RainBody = 'none';
+  private rainStarting: Promise<void> | null = null;
+
+  /**
+   * The weather's rain, 0…1 (Game.applyTimeOfDay): the AudioWorklet 'rain' (audio/rain.ts: the hillside's wash, the
+   * drops around and on the body, the spray), made the first time it rains and kept; it eases in and out by itself
+   * and costs next to nothing while it is dry.
+   */
   setRain(level: number) {
-    if (!this.rainGain) {
+    this.rainLevel = level;
+    if (this.rainNode) this.rainNode.parameters.get('level')!.setValueAtTime(level, this.ctx.currentTime);
+    else if (this.rainGain) this.rainGain.gain.setTargetAtTime(level * 0.16, this.ctx.currentTime, 0.5);
+    else if (level > 0 && !this.rainStarting) {
+      this.rainStarting = this.startRain();
+      this.loading.push(this.rainStarting);
+    }
+  }
+
+  /** Where the rain is heard from: speed (m/s), share under a roof (`coverShare`) and what it falls on (`rainBodyOf`). */
+  updateRain(speed: number, cover: number, body: RainBody) {
+    const n = this.rainNode;
+    if (body !== this.rainBody) {
+      this.rainBody = body;
+      n?.port.postMessage({ body });
+    }
+    if (!n) return;
+    const t = this.ctx.currentTime;
+    n.parameters.get('speed')!.setValueAtTime(speed, t);
+    n.parameters.get('cover')!.setValueAtTime(cover, t);
+  }
+
+  /** the rain's output node (probes put an analyser on it), null before the first rain */
+  get rainOutput(): AudioNode | null {
+    return this.rainNode ?? this.rainGain;
+  }
+
+  private async startRain() {
+    const ok = this.ctx.audioWorklet ? await this.ctx.audioWorklet.addModule(rainWorkletUrl).then(() => true, () => false) : false;
+    if (ok) {
+      const processorOptions: RainProcessorOptions = { seed: (Math.random() * 2 ** 32) >>> 0 };
+      const node = new AudioWorkletNode(this.ctx, 'rain', { numberOfInputs: 0, outputChannelCount: [2], processorOptions });
+      node.port.postMessage({ body: this.rainBody });
+      node.connect(this.sfx);
+      this.rainNode = node;
+    } else {
+      // the old rain: hiss from filtered noise
       const src = this.ctx.createBufferSource();
       src.buffer = this.noise;
       src.loop = true;
-      const hp = this.ctx.createBiquadFilter();
-      hp.type = 'bandpass';
-      hp.frequency.value = 5200;
-      hp.Q.value = 0.5;
+      const bp = this.ctx.createBiquadFilter();
+      bp.type = 'bandpass';
+      bp.frequency.value = 5200;
+      bp.Q.value = 0.5;
       const lp = this.ctx.createBiquadFilter();
       lp.type = 'lowpass';
       lp.frequency.value = 9000;
       this.rainGain = this.ctx.createGain();
       this.rainGain.gain.value = 0;
-      src.connect(hp).connect(lp).connect(this.rainGain).connect(this.sfx);
+      src.connect(bp).connect(lp).connect(this.rainGain).connect(this.sfx);
       src.start();
     }
-    this.rainGain.gain.setTargetAtTime(level * 0.16, this.ctx.currentTime, 0.5);
+    this.setRain(this.rainLevel);
   }
 
   silenceDriving() {
