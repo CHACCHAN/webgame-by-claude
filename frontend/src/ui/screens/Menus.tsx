@@ -335,10 +335,12 @@ const filmFile = (id: CourseId, ext: 'mp4' | 'jpg' | 'json') => {
   const rev = (FILMS as Record<string, string | undefined>)[id];
   return `/video/courses/${id}.${ext}${rev ? `?v=${rev}` : ''}`;
 };
+/** a course has a film when it has a stamp (a new course has none until its run is recorded: nothing is asked for) */
+const hasFilm = (id: CourseId) => id in FILMS;
 const runTracks = new Map<CourseId, Promise<RunTrack | null>>();
 function runTrack(id: CourseId) {
   let t = runTracks.get(id);
-  if (!t) runTracks.set(id, (t = fetch(filmFile(id, 'json')).then((r) => (r.ok ? (r.json() as Promise<RunTrack>) : null)).catch(() => null)));
+  if (!t) runTracks.set(id, (t = !hasFilm(id) ? Promise.resolve(null) : fetch(filmFile(id, 'json')).then((r) => (r.ok ? (r.json() as Promise<RunTrack>) : null)).catch(() => null)));
   return t;
 }
 
@@ -352,7 +354,9 @@ function runTrack(id: CourseId) {
 function CourseRun({ id }: { id: CourseId }) {
   const box = useRef<HTMLDivElement>(null);
   const moving = useSettings((s) => s.uiMotion);
-  const [lost, setLost] = useState(false);
+  // (the course whose film could not be had: the next course in the list has its own)
+  const [failed, setFailed] = useState<CourseId | null>(null);
+  const lost = failed === id || !hasFilm(id);
   useEffect(() => {
     let raf = 0, track: RunTrack | null = null, live = true;
     void runTrack(id).then((t) => {
@@ -378,7 +382,7 @@ function CourseRun({ id }: { id: CourseId }) {
   }, [id, lost]);
   return (
     <div className="crs-run" ref={box} style={{ backgroundImage: `url(${COURSES[id].art})` }}>
-      {!lost && <video src={filmFile(id, 'mp4')} poster={filmFile(id, 'jpg')} muted loop playsInline autoPlay={moving} preload={moving ? 'auto' : 'none'} onError={() => setLost(true)} />}
+      {!lost && <video src={filmFile(id, 'mp4')} poster={filmFile(id, 'jpg')} muted loop playsInline autoPlay={moving} preload={moving ? 'auto' : 'none'} onError={() => setFailed(id)} />}
       {!lost && <span className="run-cap">CPU ドライバーの走行</span>}
     </div>
   );

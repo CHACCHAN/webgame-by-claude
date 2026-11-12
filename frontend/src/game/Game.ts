@@ -1915,8 +1915,10 @@ export class Game {
     cam.position.copy(this.departEye);
     cam.lookAt(this.departAim.x, this.departAim.y + 1.5, this.departAim.z);
     // the results card stands in the middle of the screen: the aircraft climbs through the free upper part of the
-    // picture, a seventh of its height from the top (the card's title begins at three tenths)
-    cam.rotateX((-0.36 * cam.fov * Math.PI) / 180);
+    // picture, a seventh of its height from the top (the card's title begins at three tenths). An online battle's
+    // results stand in the upper half (an eighth to under a half): there it climbs through the lower part, seven
+    // tenths down, the sky all around it
+    cam.rotateX(((this.config?.online ? 0.2 : -0.36) * cam.fov * Math.PI) / 180);
     // a long lens as it goes away: the aircraft keeps about a fifth of the picture's width for the first 2.5 km
     const fov = clamp((2 * Math.atan(20 / Math.max(cam.position.distanceTo(at), 1)) * 180) / Math.PI, 0.9, 58);
     cam.fov = damp(cam.fov, fov, 3.5, dt);
