@@ -287,6 +287,9 @@ class Atlas:
         px = np.empty(w * h * 4, np.float32)
         img.pixels.foreach_get(px)
         rgb = px.reshape(h, w, 4)[..., :3]
+        while max(w, h) > self.n // 2:                     # a picture never takes more than a quarter of the atlas
+            rgb = (rgb[0::2, 0::2] + rgb[1::2, 0::2] + rgb[0::2, 1::2] + rgb[1::2, 1::2]) / 4
+            h, w = rgb.shape[:2]
         if tint is not None:
             rgb = _to_srgb(_to_lin(rgb) * tint)
         self.region(name, rgb, rough, metal)
@@ -473,10 +476,13 @@ def _occluders(objects, skip=('glass',), ground=None):
     return BVHTree.FromPolygons(verts, polys, all_triangles=False)
 
 
-def bake_ao(root, objects, reach=0.55, rays=24, floor=0.16, power=0.9):
+def bake_ao(root, objects, reach=0.55, rays=24, floor=0.16, power=0.9, wheel=(0.38, 0.22)):
     """
     The vertex colour `Col` of `objects`: the share of the sky each corner sees, floor … 1. Occluders: every mesh of
-    the car but the glass, and the ground; for what hangs on a wheel, that wheel's own parts only (it turns).
+    the car but the glass, and the ground; for what hangs on a wheel, that wheel's own parts only (it turns), with
+    the reach and floor of `wheel` (a disc behind its spokes is in half shade, not in the dark).
+    A corner that sees nothing is tried from its other side too: a sheet whose faces were wound inwards (a plate
+    laid on the bumper) is drawn double-sided by the game and would else be baked as if it were inside the car.
     """
     bpy.context.view_layer.update()
     meshes = [o for o in root.children_recursive if o.type == 'MESH']
@@ -486,9 +492,11 @@ def bake_ao(root, objects, reach=0.55, rays=24, floor=0.16, power=0.9):
     dirs = _hemisphere(rays)
     for o in objects:
         w = _under_wheel(o)
+        far, low = reach, floor
         if w is None:
             bvh = everything
         else:
+            far, low = wheel
             # the pivot of the whole wheel (wheel_xx), also for what hangs on its spin node
             while w.parent is not None and WHEEL.match(w.parent.name):
                 w = w.parent
@@ -507,16 +515,22 @@ def bake_ao(root, objects, reach=0.55, rays=24, floor=0.16, power=0.9):
             c = cache.get(key)
             if c is None:
                 n = (R @ nrm).normalized()
-                p = M @ me.vertices[loop.vertex_index].co + n * 0.004
-                t = n.orthogonal().normalized()
-                b = n.cross(t)
-                hit = 0.0
-                for d in dirs:
-                    w_ = t * d.x + b * d.y + n * d.z
-                    loc, _, _, dist = bvh.ray_cast(p, w_, reach)
-                    if loc is not None:
-                        hit += 1.0 - 0.6 * dist / reach
-                c = cache[key] = floor + (1 - floor) * max(0.0, 1 - hit / rays) ** power
+                c = 0.0
+                for side in (1.0, -1.0):
+                    m_ = n * side
+                    p = M @ me.vertices[loop.vertex_index].co + m_ * 0.004
+                    t = m_.orthogonal().normalized()
+                    b = m_.cross(t)
+                    hit = 0.0
+                    for d in dirs:
+                        w_ = t * d.x + b * d.y + m_ * d.z
+                        loc, _, _, dist = bvh.ray_cast(p, w_, far)
+                        if loc is not None:
+                            hit += 1.0 - 0.6 * dist / far
+                    c = max(c, max(0.0, 1 - hit / rays))
+                    if c > 0.12:
+                        break
+                c = cache[key] = low + (1 - low) * c ** power
             cols[li, :3] = c
         attr = me.color_attributes.get('Col') or me.color_attributes.new('Col', 'FLOAT_COLOR', 'CORNER')
         attr.data.foreach_set('color', cols.ravel())
@@ -704,7 +718,7 @@ def disc_image(w=256, h=32, seed=3):
     """the friction face: scored round and round (u = round the disc, v = inner → outer edge), a rusty margin where
     the pad does not reach"""
     rng = np.random.default_rng(seed)
-    rows = 0.50 + 0.10 * rng.random((h, 1), dtype=np.float32) + 0.03 * rng.random((h, w), dtype=np.float32)
+    rows = 0.36 + 0.09 * rng.random((h, 1), dtype=np.float32) + 0.03 * rng.random((h, w), dtype=np.float32)
     rgb = np.repeat(rows[..., None] * np.ones((1, w, 1), np.float32), 3, -1) * np.array([1.0, 0.99, 0.97], np.float32)
     v = (np.arange(h) + 0.5) / h
     margin = np.clip(np.maximum((0.10 - v) / 0.06, (v - 0.94) / 0.04), 0, 1)[:, None, None]
@@ -716,7 +730,7 @@ def brake_disc(mesh, r_disc, x_face, thick=0.022, r_hat=0.075, hat=0.034, vented
     """
     A disc for a LEFT wheel: the outer friction face at x_face (from the wheel's centre plane), the hat rising
     outward to the hub face; `vented`: a groove with the vanes' dark gap round the edge. Materials: disc (its image:
-    atlas.region('disc', disc_image(), 0.34, 1.0)), disc_edge, disc_vent, disc_hat.
+    atlas.region('disc', disc_image(), 0.38, 0.85)), disc_edge, disc_vent, disc_hat.
     """
     xi = x_face - thick
     prof = [(xi, r_hat + 0.004), (xi, r_disc)]
@@ -772,6 +786,29 @@ def caliper(mesh, r_disc, x_face, thick=0.022, kind='floating', angle=-62.0, col
 
 # ---------------------------------------------------------------------------------------------------- underside
 
+def underseal(objects, mats, y_max=0.27, z_lim=1.75, src='paint', mat='trim'):
+    """the floor is undersealed, not body colour: faces of `src` that look down, lie under y_max and between the
+    bumpers get `mat`"""
+    for o in objects:
+        me = o.data
+        names = [m.name if m else '' for m in me.materials]
+        if src not in names:
+            continue
+        if mat not in names:
+            me.materials.append(mats[mat])
+            names.append(mat)
+        i_src, i_mat = names.index(src), names.index(mat)
+        M = o.matrix_world
+        R = M.to_3x3()
+        for p in me.polygons:
+            if p.material_index != i_src:
+                continue
+            c, n = M @ p.center, (R @ p.normal).normalized()
+            if n.z < -0.9 and c.z < y_max and abs(c.y) < z_lim:
+                p.material_index = i_mat
+        me.update()
+
+
 def tube(mesh, mat, pts, r, seg=8, cap=True):
     """a round tube along game-frame points (r: a radius, or one per point)"""
     pts = [Vector(p) for p in pts]
@@ -824,14 +861,15 @@ def can(mesh, mat, centre, rx, ry, length, seg=16, round_end=0.25, across=False)
 
 def underbody(mesh, y0, zf, zr, track_f, track_r, r_tyre, tip, layout='FR', axle='live', twin=False,
               engine=(0.0, 0.32), tank=None, clearance=0.115, rails=0.40, z_ends=(1.75, -1.75), silencer='along',
-              twin_gap=0.045):
+              twin_gap=0.045, silencer_y=None):
     """
     The underside, hanging under a floor at height y0: engine sump and gearbox (layout FR / AWD: a front engine; EV:
     a flat battery case instead), propshaft, differential, the rear axle (`live`: a rigid axle with trailing links;
     `irs`: driveshafts and arms), front crossmember, arms and anti-roll bar, the exhaust from the engine to the
     tailpipe at `tip` (x, y, z: where the car's own tailpipe starts; `twin`: two pipes twin_gap either side of it),
     the fuel tank, floor rails. silencer: the rear one lies `along` the car beside the tank, or `across` it behind
-    the axle (then the tank sits ahead of the axle, out of sight).
+    the axle (then the tank sits ahead of the axle, out of sight); silencer_y: its middle's height when the tail's
+    floor is not at the tailpipe's height.
     engine: the sump's (z rear, z front) relative to the front axle; tank: (x0, x1, z0, z1) or None for its usual place.
     """
     low = clearance
@@ -875,8 +913,9 @@ def underbody(mesh, y0, zf, zr, track_f, track_r, r_tyre, tip, layout='FR', axle
         tube(mesh, 'u_steel', [(s * 0.30, y0 - 0.005, zf - 0.13), (s * (xf - 0.01), r_tyre - 0.02, zf - 0.12)], 0.008, seg=5, cap=False)
         ellipsoid(mesh, 'u_rubber', (s * 0.33, y0 - 0.006, zf - 0.13), (0.06, 0.022, 0.022), seg=8, rings=5)
     mesh.cylinder('u_steel', (0.0, y0 - 0.005, zf - 0.13), 0.022, 0.56, axis='x', segments=8, cap=False)
-    bar = [(-xf + 0.03, yb + 0.02, zf + 0.03), (-xf + 0.05, y0 - 0.045, zf + 0.30), (-0.30, y0 - 0.05, zf + 0.36), (0.30, y0 - 0.05, zf + 0.36),
-           (xf - 0.05, y0 - 0.045, zf + 0.30), (xf - 0.03, yb + 0.02, zf + 0.03)]
+    ya = max(low + 0.015, y0 - 0.05)                         # (never under the ground clearance)
+    bar = [(-xf + 0.03, yb + 0.02, zf + 0.03), (-xf + 0.05, ya + 0.005, zf + 0.30), (-0.30, ya, zf + 0.36), (0.30, ya, zf + 0.36),
+           (xf - 0.05, ya + 0.005, zf + 0.30), (xf - 0.03, yb + 0.02, zf + 0.03)]
     tube(mesh, 'u_steel', bar, 0.011, seg=6)
     # ---- propshaft and the final drive
     yd = r_tyre + 0.005
@@ -930,12 +969,13 @@ def underbody(mesh, y0, zf, zr, track_f, track_r, r_tyre, tip, layout='FR', axle
     tube(mesh, 'u_exhaust', [(xe, ye, zc - 0.15), (xe, ye, zm + 0.20)], 0.024, seg=8, cap=False)
     can(mesh, 'u_exhaust', (xe, max(ye + 0.004, low + 0.054), zm), 0.085, 0.048, 0.42, seg=12)
     zt = tip[2]
-    ym = max(low + 0.065, tip[1] + 0.01)
+    ym = max(low + 0.065, tip[1] + 0.01) if silencer_y is None else silencer_y
     if silencer == 'across':
         # one wide can across the tail, fed from the middle, the pipes leaving its end on the tailpipe's side
-        mlen = 0.62
-        xm = side * min(0.10, abs(tip[0]) - mlen / 2 + 0.06)
-        mz = max(zt + 0.22, min(zr - 0.34, zt + 0.30))
+        mlen = 0.70
+        gap = twin_gap if twin else 0.0
+        xm = side * max(0.0, abs(tip[0]) + gap + 0.03 - mlen / 2)
+        mz = min(zr - r_tyre - 0.175, zt + 0.30)               # behind the wheel wells
         rise = [(xe, ye, zm - 0.20), (xe, ye + 0.01, zr + 0.34), (xe * 1.25, over, zr + 0.10), (xe * 1.1, over - 0.02, zr - 0.12),
                 (xm - side * 0.12, ym + 0.02, mz + 0.14), (xm - side * 0.12, ym, mz + 0.06)]
         tube(mesh, 'u_exhaust', rise, 0.026, seg=8, cap=False)

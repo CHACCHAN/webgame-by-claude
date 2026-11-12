@@ -223,7 +223,7 @@ def build_all(body, root, M, count, ffd=True):
     # one material for everything the game does not swap (per moving part), and the sky's share baked into it
     trim = CC.Atlas('trim')
     rim = CC.Atlas('rim', size=512, fill=('#c3c6ca', 0.36, 0.6))
-    rim.region('disc', CC.disc_image(), 0.34, 1.0)
+    rim.region('disc', CC.disc_image(), 0.38, 0.85)
     made = CC.consolidate(root, trim, rim)
     tyres = [o for o in root.children_recursive if o.type == 'MESH' and any(m and m.name == 'tire' for m in o.data.materials)]
     CC.bake_ao(root, made + tyres)
