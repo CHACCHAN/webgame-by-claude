@@ -19,10 +19,10 @@ const KINDS: [DeskKind, string][] = [['bug', '不具合'], ['request', '要望']
 
 /** what a tap asks for the player (label, what it is for, the question sent): two begin a report, two are questions */
 const QUICK: [string, string, string][] = [
-  ['バグを報告する', 'どこで何が起きたかを聞き取って、開発者に届けます。', '不具合を報告したいです。'],
+  ['バグを報告する', '起きたことを聞き取って、開発者に届けます。', '不具合を報告したいです。'],
   ['要望を送る', 'ほしい機能、車、コースなど。', '要望を送りたいです。'],
-  ['操作を知りたい', 'キーボード、ゲームパッド、スマホの操作。', '操作方法を教えてください。'],
-  ['速く走るコツ', 'ブレーキング、ドリフト、設定の見直し。', '速く走るコツを教えてください。'],
+  ['操作を知りたい', 'キーボード・パッド・スマホの操作。', '操作方法を教えてください。'],
+  ['速く走るコツ', 'ブレーキ、ドリフト、設定の見直し。', '速く走るコツを教えてください。'],
 ];
 
 /** what is being written, kept while the player looks at another section (the page's memory, as the conversation) */
