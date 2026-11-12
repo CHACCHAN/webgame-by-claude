@@ -37,12 +37,13 @@ interface PropDef {
 // heights as built
 const PROPS: Record<PropId, PropDef> = {
   streetLight: { file: 'street_light.glb', height: 7.63, origin: [0, 0] },
-  windTurbine: { file: 'wind_turbine.glb', height: 86, origin: [0, 0], moving: 'Blades' },
-  curveMirror: { file: 'curve_mirror.glb', height: 3.57, origin: [0, 0] },
-  vending: { file: 'vending_machine.glb', height: 1.83 },
-  torii: { file: 'torii.glb', height: 4.6 },
-  stoneLantern: { file: 'stone_lantern.glb', height: 1.6 },
-  busStop: { file: 'bus_stop.glb', height: 2.59, origin: [0, 0] },
+  windTurbine: { file: 'wind_turbine.glb', height: 86.8, origin: [0, 0], moving: 'Blades', base: 0 },
+  // (what stands on a footing: the footing reaches below y = 0, since the ground under a prop is never quite level)
+  curveMirror: { file: 'curve_mirror.glb', height: 3.669, origin: [0, 0], base: 0 },
+  vending: { file: 'vending_machine.glb', height: 2.02, origin: [0, 0], base: 0 },
+  torii: { file: 'torii.glb', height: 4.85, origin: [0, 0], base: 0 },
+  stoneLantern: { file: 'stone_lantern.glb', height: 1.75, origin: [0, 0], base: 0 },
+  busStop: { file: 'bus_stop.glb', height: 2.946, origin: [0, 0], base: 0 },
   cone: { file: 'traffic_cone.glb', height: 0.7 },
   // the autobahn's (heights as built; their foundations reach below the ground)
   signGantry: { file: 'sign_gantry.glb', height: 8.75, origin: [0, 0], base: 0 },

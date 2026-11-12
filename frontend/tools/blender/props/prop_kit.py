@@ -294,7 +294,7 @@ class M:
             bm.faces.new(vr[-1][::-1])
         self.add(bm, mat)
 
-    def lathe(self, mat, profile, seg=16, cx=0.0, cz=0.0, y_of=None):
+    def lathe(self, mat, profile, seg=16, cx=0.0, cz=0.0, y_of=None, caps=(True, True)):
         """revolve [(radius, y), ...] (bottom to top) about the Y axis through (cx, cz); a radius 0 end is a point"""
         bm = bmesh.new()
         rings = []
@@ -315,10 +315,10 @@ class M:
                     bm.faces.new([a[k], a[k2], b[0]])
                 else:
                     bm.faces.new([a[k], a[k2], b[k2], b[k]])
-        for ring in (rings[0], rings[-1]):
-            if len(ring) > 2:
+        for ring, want in ((rings[0], caps[0]), (rings[-1], caps[1])):
+            if want and len(ring) > 2:
                 bm.faces.new(ring)
-        self.add(bm, mat)
+        self.add(bm, mat, closed=caps[0] and caps[1], flip=True)   # (as built, the faces look inwards)
 
     def prism(self, mat, outline, y0, y1, scale0=1.0, scale1=1.0, cap0=True, cap1=True):
         """plan outline [(x, z)] extruded from y0 to y1, scaled about its centre by scale0 → scale1"""

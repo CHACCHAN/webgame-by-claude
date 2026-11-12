@@ -311,6 +311,63 @@ def _islands(me, layer):
     return mesh_utils.mesh_linked_uv_islands(me)
 
 
+_HEMI = []
+for _i in range(14):
+    # fourteen directions over a hemisphere about +Z (a golden-angle spiral)
+    _z = 1.0 - (_i + 0.5) / 14 * 0.55
+    _r = math.sqrt(1.0 - _z * _z)
+    _HEMI.append((_r * math.cos(_i * 2.39996), _r * math.sin(_i * 2.39996), _z))
+
+
+def prepare(ob, max_len, reach=0.025):
+    """
+    Before the unwrap: edges longer than `max_len` are cut (a pole made of full-length faces could not be cut into
+    pieces of the atlas), and faces that nothing can see (a box's side inside another part, a cap inside a shell: every
+    ray from them ends within `reach` metres) are tagged to take next to no room in the atlas.
+    """
+    from mathutils import Vector
+    from mathutils.bvhtree import BVHTree
+    me = ob.data
+    bm = bmesh.new()
+    bm.from_mesh(me)
+    for cuts in list(range(8, 0, -1)) * 2:
+        long = [e for e in bm.edges if math.ceil(e.calc_length() / max_len) - 1 == cuts or (cuts == 8 and e.calc_length() / max_len > 9)]
+        if long:
+            bmesh.ops.subdivide_edges(bm, edges=long, cuts=cuts, use_grid_fill=True)
+    bm.normal_update()
+    bm.faces.ensure_lookup_table()
+    tree = BVHTree.FromBMesh(bm)
+    dens = bm.faces.layers.float.get('dense') or bm.faces.layers.float.new('dense')
+    hidden = 0
+    for f in bm.faces:
+        n = f.normal
+        if n.length < 0.5:
+            continue
+        t = n.orthogonal().normalized()
+        b = n.cross(t)
+        c = f.calc_center_median()
+        pts = [c] + [c + (v.co - c) * 0.7 for v in f.verts]
+        seen = False
+        for q in pts:
+            o = q + n * 2e-4
+            for hx, hy, hz in _HEMI:
+                d = t * hx + b * hy + n * hz
+                hit = tree.ray_cast(o, d)
+                # free, or something's outside a good way off; a hit from behind means the point lies inside a part
+                if hit[0] is None or (hit[3] > reach and hit[1].dot(d) < 0):
+                    seen = True
+                    break
+            if seen:
+                break
+        if not seen:
+            f[dens] = 0.12 if f[dens] <= 0 else min(f[dens], 0.12)
+            hidden += 1
+    total = len(bm.faces)
+    bm.to_mesh(me)
+    bm.free()
+    return hidden, total
+
+
 def unwrap(objects, max_len=1.6, margin=0.004, angle=66.0):
     """
     One atlas (UV layer `atlas`) over all the objects' faces. Islands longer than `max_len` metres are cut across
@@ -318,6 +375,8 @@ def unwrap(objects, max_len=1.6, margin=0.004, angle=66.0):
     """
     bpy.ops.object.select_all(action='DESELECT')
     for ob in objects:
+        hidden, total = prepare(ob, max_len)
+        print(f'ATLAS {ob.name}: {hidden} of {total} faces are buried')
         me = ob.data
         if me.uv_layers:
             me.uv_layers[0].name = 'src'
@@ -364,9 +423,19 @@ def unwrap(objects, max_len=1.6, margin=0.004, angle=66.0):
             where = {li: k for k, li in enumerate(loops)}
             lo, hi = pts[:, 0].min(), pts[:, 0].max()
             parts = max(1, math.ceil((hi - lo) / max_len)) if scale else 1
+            box = (hi - lo) * (pts[:, 1].max() - pts[:, 1].min())
+            # a ring (little of its bounding box is its own): cut into sectors about its middle, each then laid straight
+            ring = scale and len(isl) >= 8 and a3 < 0.3 * box and (pts[:, 1].max() - pts[:, 1].min()) > 0.45 * (hi - lo)
+            if ring:
+                parts = 6
             bins = [[] for _ in range(parts)]
             for pi in isl:
                 li = list(me.polygons[pi].loop_indices)
+                if ring:
+                    cx = sum(pts[where[i], 0] for i in li) / len(li)
+                    cy = sum(pts[where[i], 1] for i in li) / len(li)
+                    bins[min(parts - 1, int((math.atan2(cy, cx) / (2 * math.pi) + 0.5) * parts))].append(li)
+                    continue
                 mid = sum(pts[where[i], 0] for i in li) / len(li)
                 bins[min(parts - 1, int((mid - lo) / max(hi - lo, 1e-9) * parts))].append(li)
             for b in bins:
@@ -383,6 +452,18 @@ def unwrap(objects, max_len=1.6, margin=0.004, angle=66.0):
     bpy.ops.mesh.select_all(action='SELECT')
     bpy.ops.uv.pack_islands(rotate=True, rotate_method='CARDINAL', scale=True, margin_method='FRACTION', margin=margin, shape_method='CONCAVE')
     bpy.ops.object.mode_set(mode='OBJECT')
+    # what came of it: the share of the atlas in use, and a plain face's texels per metre in a texture 1024 px wide
+    used = area = 0.0
+    for ob in objects:
+        me = ob.data
+        uv = me.uv_layers['atlas'].data
+        dens = me.attributes.get('dense')
+        for poly in me.polygons:
+            q = [uv[li].uv for li in poly.loop_indices]
+            used += abs(sum(q[i].x * q[(i + 1) % len(q)].y - q[(i + 1) % len(q)].x * q[i].y for i in range(len(q)))) / 2
+            w = dens.data[poly.index].value if dens is not None else 1.0
+            area += poly.area * (w if w > 0 else 1.0) ** 2
+    print(f'ATLAS {used * 100:.0f} % in use, {1024 * math.sqrt(used / max(area, 1e-9)):.0f} px/m per 1024 px')
 
 
 # ---------------------------------------------------------------------------------------------------- the bake
@@ -463,12 +544,13 @@ def _save(img, path, srgb_file):
     K.write_png(path, _to_srgb(a) if srgb_file else a, srgb_colour=srgb_file)
 
 
-def finish(objects, out, name, size=1024, orm_size=None, emit_size=None, normal=True, normal_strength=1.0,
+def finish(objects, out, name, size=1024, orm_size=None, emit_size=None, normal=True, normal_size=None, normal_strength=1.0,
            near=0.10, wide=0.6, edge=0.012, ground=True, max_len=1.6, margin=0.004, mask_samples=24, angle=66.0,
            roughness_floor=0.0, mat_name=None):
     """
     Unwrap, bake and re-material the objects (see the module's header). Returns the material.
-      size / orm_size / emit_size   pixels of base colour + normal / occlusion-roughness-metal / glow
+      size / orm_size / emit_size / normal_size   pixels of base colour / occlusion-roughness-metal / glow / normal map
+                                    (the last three default to `size`)
       near, wide, edge              reach in metres of the two occlusion masks and of the edge mask
       ground                        a ground plane at y = 0 takes part in the occlusion (the foot of a prop is darker)
     """
@@ -522,7 +604,7 @@ def finish(objects, out, name, size=1024, orm_size=None, emit_size=None, normal=
     # 2. the channels, each through an emission shader
     has_emit = any(CH[m.name]['emit'] is not None for m in used)
 
-    def emit_pass(tag, sock_of, res, colourspace, samples=2):
+    def emit_pass(tag, sock_of, res, colourspace, samples=8):
         img = bpy.data.images.new(f'{name}_{tag}', res, res, alpha=False, float_buffer=True)
         img.colorspace_settings.name = 'Non-Color'
         for m in used:
@@ -565,7 +647,8 @@ def finish(objects, out, name, size=1024, orm_size=None, emit_size=None, normal=
     emit_img = emit_pass('emit', lambda c, g: c['emit'], emit_size or size, 'sRGB') if has_emit else None
     nimg = None
     if normal:
-        nimg = bpy.data.images.new(f'{name}_normal', size, size, alpha=False, float_buffer=True)
+        nsize = normal_size or size
+        nimg = bpy.data.images.new(f'{name}_normal', nsize, nsize, alpha=False, float_buffer=True)
         nimg.colorspace_settings.name = 'Non-Color'
         for m in used:
             c = CH[m.name]
@@ -576,7 +659,7 @@ def finish(objects, out, name, size=1024, orm_size=None, emit_size=None, normal=
             for n in c['graph'].nt.nodes:
                 if n.type == 'BUMP':
                     n.inputs['Strength'].default_value = normal_strength
-        _bake(objects, 'NORMAL', 4, px)
+        _bake(objects, 'NORMAL', 4, max(2, nsize // 256))
     # 3. files, and the one material that uses them
     files = {}
     for tag, img in (('base', base), ('orm', orm), ('normal', nimg), ('emit', emit_img)):

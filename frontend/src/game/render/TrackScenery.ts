@@ -842,7 +842,9 @@ function buildSigns(track: Track, sides: ReturnType<typeof classifySides>, group
     const model = prop('vending');
     const machines: THREE.Matrix4[] = [];
     for (let k = 0; k < 3; k++) {
-      track.pointAt(i + k * 1.3, side * (track.width[i] / 2 + SHOULDER + 1.6), p);
+      // The model stands on its own pad right behind the barrier line, over the gutter, its back to the retaining
+      // wall (whose foot is 0.95 m behind that line: 1.6 m out, the machines stood inside the wall).
+      track.pointAt(i + k * 1.3, side * (track.width[i] / 2 + SHOULDER + (model ? 0.5 : 1.6)), p);
       if (model) {
         machines.push(new THREE.Matrix4().compose(p, new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), yaw), new THREE.Vector3(1, 1, 1)));
         continue;
@@ -868,8 +870,8 @@ function buildSigns(track: Track, sides: ReturnType<typeof classifySides>, group
       };
       group.add(placeProp(model, machines, { castShadow: true, material: glow, name: 'vending-machines' }).group);
     }
-    // the machines light their surroundings
-    track.pointAt(i + 1, side * (track.width[i] / 2 + SHOULDER), p);
+    // the machines light their surroundings (the light 1.1 m before their fronts, as it was: nearer, it burns them out)
+    track.pointAt(i + 1, side * (track.width[i] / 2 + SHOULDER - (model ? 1.1 : 0)), p);
     vendingSpot.position.set(p.x, p.y + 1.4, p.z);
     vendingSpot.on = true;
   }
