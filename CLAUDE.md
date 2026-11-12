@@ -83,7 +83,8 @@ pending. `docs/PLAN.md` holds the design.
   must not reach the scene (WebGPU refuses its empty buffer; `Game` drops them from the scenery).
   A post pass at less than full size is `rtt(node, null, null, { resolutionScale })` (`convertToTexture` is always full
   size). three's `GTAONode` cost 3.2 ms at 4K whatever its settings: the occlusion is our own (`render/ambientOcclusion.ts`).
-  Measure a new pass with `tools/perf-pass.cjs` before keeping it.
+  Measure a new pass with `tools/perf-pass.cjs` before keeping it (compare two builds in both orders: the one
+  measured second came out 0.4–1 ms cheaper).
   `render/threeFixes.ts`: three.js 0.186 keeps a destroyed GPU buffer on an `InterleavedBuffer` after
   `geometry.dispose()` (a model shown, freed and shown again froze the picture on WebGPU); check whether it is still
   needed when three.js is updated. A check that starts a race directly does not cover this: go through the garage
@@ -119,6 +120,20 @@ pending. `docs/PLAN.md` holds the design.
   second fog or PMREM target; change intensity / colour / position (a car's headlights are `CarVisual.headlight()`
   → the rig's three spots via `Game.updateBeams`; the vending machine's light is `vendingSpot`). Measure with
   `~/.local/opt/quality/hitch.cjs` (frame gaps over 40 ms per action).
+  Light that does not end near the camera (11-12, v2.1.1): the street lamps are ONE light of that fixed set,
+  `LightRig.lamps` (`render/lampField.ts`, its node `lampFieldNode.ts`): per course a grid (cell ≥ 8 m, at most 4
+  lamps a cell, 255 a course) + a table, so every lamp lights whatever stands near it at any distance. The pool
+  under a lamp falls only on materials with `userData.lampBeam` (set before the shader is built). No light maps on
+  road or ground any more; never add point lights for lamps. The sun's / moon's shadow map lies ahead of the camera
+  (`LightRig.aimKey`, `shadowHalfFor`), its node is `render/keyShadow.ts`: inside the map the shadow map × the
+  land's baked shade, beyond it `render/farShade.ts` (land, rock-shed roofs, the trees' share of light; baked in
+  `Game.buildWorld` for the course's moon and the dawn sun; `Landform.dawnShade: false` leaves the land's own
+  shadow out at dawn: the caldera's road would lie 90 % in shade). Whatever changes terrain, roofs or the casting
+  trees at run time would not reach the bake (`npx tsx tools/far-shade.ts <course> [moon|sun]` shows it). Grid,
+  table and shade share one texture (`render/lightAtlas.ts`) because a fragment shader may sample 16 textures and
+  the ground and the cast concrete use 14: new per-course light data goes into the atlas, never into another
+  texture. The forest picks its shadow level around the map's middle (`shadowsAt: 'map'`); its far levels take the
+  land's shade (`vegetationLights(key, sky, shade)`).
   A course's terrain heights are worked out on all cores but one (owner 11-12: loading may use all the machine's
   resources): `track/terrainJob.ts` gives every `n`th row of the two grids to a module worker each
   (`terrain.worker.ts` lays the course out again from its id; `planTerrain` → `stripe(k, n)` → `finish`), begun in

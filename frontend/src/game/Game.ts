@@ -18,6 +18,10 @@ import { loadVegetation, SHADOW_LAYER, vegetationHold, vegetationLights, vegetat
 import { vegetationFiles } from './render/vegetationPlanting';
 import { VOLUME_SPOTS, volume, volumeSpot } from './render/volumetricLights';
 import { gpuBytes } from './render/gpuBytes';
+import { bakeShade } from './render/farShade';
+import { keyShadowNode } from './render/keyShadow';
+import { LAMP_BEAM, LAMP_CANDELA } from './render/lampField';
+import { registerLampField } from './render/lampFieldNode';
 import { LightRig } from './render/LightRig';
 import { ensureVehicleModels, onModelWait, preloadVehicleModels, vehicleModelReady } from './render/vehicleModels';
 import { loadTrafficModels } from './render/trafficModels';
@@ -172,8 +176,6 @@ interface Racer {
 
 const _v = new THREE.Vector3(), _w = new THREE.Vector3(), _q = new THREE.Quaternion(), _f = new THREE.Vector3();
 const _tip = new THREE.Vector3(), _back = new THREE.Vector3();
-/** real-time lamp lights hang this far (m) below the lamp fixture */
-const LAMP_LIGHT_DROP = 0.9;
 /** tyre grip on a wet road (rain) as a share of the dry grip */
 export const WET_GRIP = 0.8;
 const _zero = new THREE.Vector3();
@@ -298,8 +300,6 @@ export class Game {
   private lobby: LobbyLineup | null = null;
   /** where the line-up's camera is heading (the framing follows the members as they come, go and change vehicles) */
   private lobbyView = { focus: new THREE.Vector3(), scale: 1, ends: [new THREE.Vector3(), new THREE.Vector3()] as const };
-  /** lamp index each pooled light is attached to (-1 = free) */
-  private lampSlots: number[] = [];
   timeOfDay: TimeOfDay = 'night';
   assist: AssistLevel = 1;
   autoShift = true;
@@ -395,14 +395,16 @@ export class Game {
     this.root.add(this.smoke.points, this.skids.mesh, this.rain.mesh, this.exhaust.group);
     this.exhaust.density = this.quality.treeDensity < 0.6 ? 0.6 : 1;
     this.remotes = new RemoteRacers(this.root, (id) => this.rideHeightOf(id), false, this.net);
-    // the lights: all of them now, none later (the street lamps' pooled lights among them)
+    // the lights: all of them now, none later (the street lamps are one of them, whatever the course)
+    registerLampField(this.renderer);
     this.lights = new LightRig(this.quality);
+    // (the sun's / moon's shadow: the map near the camera, the course's baked shade beyond it)
+    if (this.quality.shadows) this.lights.key.shadow.shadowNode = keyShadowNode(this.lights.key, this.lights.farShade, this.lights.keyMap);
     // (the trees' shadow meshes are drawn into this light's shadow map only)
     this.lights.key.shadow.camera.layers.enable(SHADOW_LAYER);
-    vegetationLights(this.lights.key, this.lights.hemi);
+    vegetationLights(this.lights.key, this.lights.hemi, this.quality.shadows ? this.lights.farShade : null);
     this.root.add(this.lights.group);
     this.scene.fog = this.lights.fog;
-    for (let i = 0; i < this.lights.lamps.length; i++) this.lampSlots.push(-1);
     this.scene.add(this.root);
     this.chase = new ChaseCamera(this.camera, (x, z) => this.terrain.heightAt(x, z));
     await this.buildWorld(courseId);
@@ -489,13 +491,19 @@ export class Game {
     // (every level of every species stays in the scene until its shader is compiled)
     vegetationHold(true);
     vendingSpot.on = false;
-    this.scenery = buildScenery(this.track, this.terrain, { treeDensity: this.quality.treeDensity, shadows: this.quality.shadows, photoTextures: this.quality.photoTextures, treeLod: this.quality.treeLod, surfaceDetail: this.quality.surfaceDetail, vegetation: this.quality.vegetation, style: course.style, board: { name: course.name, roman: course.nameEn } });
+    this.scenery = buildScenery(this.track, this.terrain, { treeDensity: this.quality.treeDensity, shadows: this.quality.shadows, shadowHalf: this.lights.keyMap.half, photoTextures: this.quality.photoTextures, treeLod: this.quality.treeLod, surfaceDetail: this.quality.surfaceDetail, vegetation: this.quality.vegetation, style: course.style, board: { name: course.name, roman: course.nameEn } });
     // an instanced mesh without instances has an empty matrix buffer, which WebGPU refuses to bind
     const empty: THREE.Object3D[] = [];
     this.scenery.group.traverse((o) => {
       if ((o as THREE.InstancedMesh).isInstancedMesh && (o as THREE.InstancedMesh).instanceMatrix.count === 0) empty.push(o);
     });
     for (const o of empty) o.removeFromParent();
+    // the shade beyond the shadow map, for the moon of this course and for the morning sun
+    const shading = this.scenery.shadeScene;
+    if (shading) {
+      this.scenery.shades = { moon: bakeShade(shading, _v.set(...this.terrain.landform.moonDir).normalize()), sun: bakeShade(shading, PRESETS.dawn.keyDir, this.terrain.landform.dawnShade !== false) };
+      this.scenery.shadeScene = null;
+    }
     await this.yieldFrame(0.75, '夜景を灯しています');
     this.env = buildEnvironment(this.terrain, this.lights);
     this.dryMaterials = {};
@@ -513,7 +521,7 @@ export class Game {
   private showWorld() {
     this.root.add(this.scenery.group, this.env.group);
     this.rain.setCovers(this.scenery.covers);
-    this.lampSlots.fill(-1);
+    this.lights.lamps.show(this.scenery.lamps);
     if (this.vending) this.lights.vending.position.copy(this.vending);
     this.lights.vending.intensity = this.vending ? 9 : 0;
     this.applyTimeOfDay(this.timeOfDay);
@@ -543,8 +551,8 @@ export class Game {
     const w: World = { course: this.course, track: this.track, corners: this.corners, line: this.line, terrain: this.terrain, physics: this.physics, scenery: this.scenery, env: this.env, dry: this.dryMaterials, vending: this.vending, mb: 0 };
     this.root.remove(w.scenery.group, w.env.group);
     this.scene.environment = null;
-    // (the lamps' pooled lights and the haze stop pointing into the course that is gone)
-    for (const l of this.lights.lamps) l.intensity = 0;
+    // (the lamps' light and the haze stop pointing into the course that is gone)
+    this.lights.lamps.intensity = 0;
     volume.lamps = [];
     w.mb = gpuBytes(w.scenery.group, w.env.group) / 1e6;
     this.kept.set(w.course.id, w);
@@ -616,15 +624,15 @@ export class Game {
     const envMap = this.env.buildEnvMap(this.renderer);
     this.scene.environment = envMap;
     this.scene.background = null;
-    // the lights' glow in the haze: the course's lamps, as bright as the pooled lights
+    // the lamps' light (by day they are off: what is left of them is their glass and the pools under them, faint),
+    // and their glow in the haze, as bright
+    this.lights.lamps.intensity = this.env.preset.lampsOn < 0.2 ? 0 : LAMP_CANDELA * this.env.preset.lampsOn;
     volume.lamps = this.scenery.lamps;
-    volume.lampIntensity = 170 * this.env.preset.lampsOn;
+    volume.lampIntensity = LAMP_CANDELA * this.env.preset.lampsOn;
+    this.lights.farShade.show(this.scenery.shades?.[tod === 'dawn' ? 'sun' : 'moon'] ?? null);
     volume.density = this.env.preset.haze;
     const lamps = this.env.preset.lampsOn;
-    for (const m of this.scenery.lightmapMats) {
-      m.userData.baseLightMap ??= m.lightMapIntensity;
-      m.lightMapIntensity = (m.userData.baseLightMap as number) * lamps;
-    }
+    this.lights.lamps.beam = LAMP_BEAM * lamps;
     for (const m of this.scenery.nightEmissive) {
       m.userData.baseIntensity ??= m.emissiveIntensity;
       m.emissiveIntensity = (m.userData.baseIntensity as number) * lamps;
@@ -641,7 +649,7 @@ export class Game {
     road.color.copy(dry.color).multiplyScalar(lerp(1, 0.6, wet));
     road.normalScale.setScalar(lerp(dry.normal, 0.08, wet));
     road.envMapIntensity = lerp(dry.env, 1.8, wet);
-    const terrain = this.scenery.lightmapMats[1];
+    const terrain = this.scenery.terrainMaterial;
     this.dryMaterials.terrain ??= terrain.roughness;
     terrain.roughness = lerp(this.dryMaterials.terrain, 0.62, wet);
     this.rain.setIntensity(wet);
@@ -1052,10 +1060,9 @@ export class Game {
       this.step(dt, dtRaw);
     }
     this.updateVisuals(dt);
-    this.env.update(this.time, this.camera.position);
+    this.env.update(this.time, this.camera.position, this.camera.getWorldDirection(_f));
     this.rain.update(this.time, this.camera.position, this.player?.sim.velocity ?? _zero);
     this.scenery.update(this.time, this.camera.position, this.camera);
-    this.updateLampLights(dt);
     this.updateBeams();
   }
 
@@ -2058,64 +2065,6 @@ export class Game {
     }
     car.setColor(color);
     this.emit({ type: 'garage', carId: id, color });
-  }
-
-  /** Move the pooled point lights to the lamps nearest the camera. */
-  /**
-   * Real-time lights for the street lamps nearest the camera (the baked lightmap covers the rest).
-   * A light keeps its lamp while that lamp stays among the nearest ones and fades out before it moves
-   * to another, so lamp pools never pop on and off.
-   */
-  private updateLampLights(dt: number) {
-    const lampsOn = this.env.preset.lampsOn;
-    const cam = this.camera.position;
-    const lamps = this.scenery.lamps;
-    const n = this.lights.lamps.length;
-    const best: { d: number; i: number }[] = [];
-    for (let i = 0; i < lamps.length; i++) {
-      const d = lamps[i].position.distanceToSquared(cam);
-      if (best.length < n) best.push({ d, i });
-      else {
-        let worst = 0;
-        for (let k = 1; k < n; k++) if (best[k].d > best[worst].d) worst = k;
-        if (d < best[worst].d) best[worst] = { d, i };
-      }
-    }
-    const wanted = new Set(best.map((b) => b.i));
-    const assigned = new Set(this.lampSlots.filter((i) => i >= 0 && wanted.has(i)));
-    const fade = Math.min(1, dt * 4);
-    this.lights.lamps.forEach((l, k) => {
-      let lamp = this.lampSlots[k];
-      if (lampsOn < 0.2) {
-        l.intensity = 0;
-        return;
-      }
-      if (lamp >= 0 && !wanted.has(lamp)) {
-        // leaving lamp: fade out, then become free
-        l.intensity = Math.max(0, l.intensity - 170 * lampsOn * fade);
-        if (l.intensity > 0.5) return;
-        lamp = -1;
-      }
-      if (lamp < 0) {
-        const free = best.find((b) => !assigned.has(b.i));
-        if (!free) {
-          l.intensity = 0;
-          this.lampSlots[k] = -1;
-          return;
-        }
-        lamp = free.i;
-        assigned.add(lamp);
-        l.intensity = 0;
-        // below the fixture, never right against it: a point light a few cm from the rock-shed
-        // ceiling or a cutting made a blinding hot spot that flooded the screen with bloom
-        l.position.copy(lamps[lamp].position);
-        l.position.y -= LAMP_LIGHT_DROP;
-        l.color.copy(lamps[lamp].color);
-      }
-      this.lampSlots[k] = lamp;
-      const target = 170 * lampsOn * smoothstep(200, 90, Math.sqrt(lamps[lamp].position.distanceToSquared(cam)));
-      l.intensity += (target - l.intensity) * fade;
-    });
   }
 
   /** tyre grip of this course's surface in the current weather */

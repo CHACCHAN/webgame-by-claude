@@ -37,6 +37,12 @@ export interface Landform {
   cityGlow?: number;
   /** direction towards the moon at night (scenic placement per course) */
   moonDir: [number, number, number];
+  /**
+   * `false`: at dawn the land throws no shadow of its own here (`render/farShade.ts`). The dawn's sun stands 9° up
+   * for every course; in a basin as deep as the caldera 90 % of the road would lie in the mountains' shade at that
+   * hour, whatever the sun's bearing, and the dawn would be a dusk (the owner's to choose).
+   */
+  dawnShade?: boolean;
   /** height of the dawn sea of clouds */
   cloudLevel: number;
   /**
@@ -130,6 +136,7 @@ export const CALDERA: Landform = {
   cityGlowDir: [-0.4, 0, 0.9],
   cityGlow: 0.4,
   moonDir: [-0.45, 0.42, 0.79],
+  dawnShade: false,
   cloudLevel: 320,
   features: { towers: [[1500, -1200], [-1300, 600]] },
 };

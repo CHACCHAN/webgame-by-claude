@@ -1967,3 +1967,43 @@ race; the seat's colour stays the member's mark; a change of paint alone keeps `
   (container units size the film's box; without them it takes the stage's width); the course select with a
   gamepad; the rest of the E2E suite; the desk's answers' quality beyond those two, and its limits behind
   Cloudflare; a member's report; paint for trains / creatures online in a picture.
+
+## Light and shadow that do not end near the camera (11-12, v2.1.1)
+
+The owner's report: shadows and the street lamps' light were there only near the camera. Causes (agent, code of
+the day + pictures): the key light's shadow map was a ±60 m square centred on the camera (half of it behind the
+viewer, a visible line 60 m ahead, "lit" beyond it; the land never threw a shadow, trees only within 80 m); the
+lamps were six pooled point lights given to the lamps nearest the camera and faded out by 200 m, plus light maps
+on road and ground only: a far lamp lit nothing but its pool on the asphalt.
+
+- Lamps: one light for all of a course's lamps (`render/lampField.ts`, `lampFieldNode.ts`): a grid of cells with
+  up to four lamps each and a table, read per pixel; every lamp lights road, walls, rails and trees at any
+  distance; the pool under a lamp is part of it (`userData.lampBeam`), the light maps are gone.
+- Shadows: the map lies ahead of the camera (4096 → ±100 m, 2048 → ±80 m, 1024 → ±60 m, moved in whole texels);
+  beyond it a baked shade per course and light (`render/farShade.ts`: the land, rock-shed roofs, the trees' share
+  of light), cross-faded at the map's edge (`render/keyShadow.ts`). Grid, table and shade share one texture
+  (`render/lightAtlas.ts`: the 16-texture limit of a fragment shader).
+- Kirifuri at dawn keeps the land's own shadow off (`Landform.dawnShade: false`): with it ~90 % of the caldera's
+  road lies in shade under a 9° sun and the dawn reads as dusk (the owner's to choose; pictures
+  `~/.local/opt/wt/far/cmp-nb-kirifuri-dawn.jpg`).
+
+- Verified by the agent (RX 5700 XT, WebGPU): tsc, vitest, build; `gpu-errors` 0 on WebGPU and WebGL 2;
+  before | after pictures on fixed viewpoints, four courses, night / rain / dawn, ultra, and Oboro at medium and
+  low (`~/.local/opt/wt/far/sheet-*.jpg`); baked shade against the shadow map on the same view 0.86–1.07 over
+  12 views; `perf-pass` on Oboro, ultra, 1080p, in both orders: night no measurable change (scene pass 5.3–5.4 ms
+  after, 4.9–6.4 before, load 3–21), dawn 0.9–1.8 ms cheaper; hitch at a change of time of day not worse.
+- Verified by me on the merged tree (main + this): tsc; vitest 225; build; `gpu-errors` 0 / 0 (WebGPU, WebGL 2)
+  and the race picture; the upscaler on (`quality`, 140 km/h, Oboro and Kirifuri, night and dawn, 32 pictures:
+  no page error, no smear on the lit walls or the shadows); a whole run by the AI on Oboro at night (3446
+  pictures) and Kirifuri at dawn (2899), frame-to-frame brightness jumps measured and the twelve largest of each
+  looked at: all are things passing the camera (mirror posts, shed pillars), none a lamp or a shadow switching
+  (`~/.local/opt/wt/far/drive/`).
+- Not verified: 4K; phones; pictures on the WebGL 2 backend (errors only); medium / low on courses other than
+  Oboro; Tenrou and the autobahn driven as a whole; the bake's time in the browser on a slow machine (Node:
+  36–66 ms heights + 100–145 ms per light; main thread, behind the loading screen); E2E (nothing of theirs
+  touched).
+- Left as it is: `tools/perf-gpu.cjs` still reads `game.lampLights` (the old WebGLRenderer-only tool); the road's
+  `uv1` attribute is still built and no longer read. The course select's films were recorded before this change
+  (the lamps light the walls more now): to be recorded again together with the props' re-modelling.
+- Seen on the way, not from this change: Kirifuri's far caldera wall shows the far trees as large blotches at
+  dawn (before and after alike); the exhaust's puffs read as white balls behind the car at dawn.

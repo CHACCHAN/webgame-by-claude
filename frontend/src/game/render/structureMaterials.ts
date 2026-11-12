@@ -34,6 +34,8 @@ const LAYER: Record<ConcreteKind, { c: LayerName; n: LayerName; tile: number; ti
 export function concreteMaterial(kind: ConcreteKind, opts: { doubleSide?: boolean; brightness?: number; uvScale?: number } = {}): MeshStandardNodeMaterial {
   const L = LAYER[kind];
   const mat = new MeshStandardNodeMaterial({ metalness: 0, roughness: 1, side: opts.doubleSide ? THREE.DoubleSide : THREE.FrontSide });
+  // the pool under a street lamp falls on walls, kerbs and decks as on the road (`render/lampField.ts`)
+  mat.userData.lampBeam = 1;
   mat.name = `concrete-${kind}`;
   mat.envMapIntensity = 0.35;
   // (`uvScale`: for geometry whose uv is not in metres, the metres one unit of it stands for)
@@ -99,6 +101,7 @@ export const METAL: Record<string, [number, number, number, number, number]> = {
 
 export function metalMaterial(): MeshStandardNodeMaterial {
   const mat = new MeshStandardNodeMaterial({ side: THREE.DoubleSide });
+  mat.userData.lampBeam = 1;
   mat.name = 'roadside-metal';
   const tint = attribute('tint', 'vec3') as unknown as Vec3;
   const pbr = attribute('pbr', 'vec2') as unknown as Vec2;
