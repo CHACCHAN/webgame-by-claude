@@ -1,7 +1,10 @@
+import { ROACH_INFO } from '../vehicle/roach';
+
 /**
  * Synthesised running sound of the cockroach (joke entry): the patter of six legs (a loop of dry ticks played
  * faster with speed, turning into a rattle), a wing-like buzz that rises with speed and a rush of air. `speed`
- * below is the share of the top speed (motor rpm / redline: one fixed ratio).
+ * below is the share of the top speed (motor rpm / redline: one fixed ratio). In the air its wings are out
+ * (`flight`): the air they move, chopped by the beat, over a low drone.
  */
 export class BugSound {
   private ctx: BaseAudioContext;
@@ -14,6 +17,11 @@ export class BugSound {
   private air: AudioBufferSourceNode;
   private airGain: GainNode;
   private airFilter: BiquadFilterNode;
+  private beat: OscillatorNode;
+  private drone: OscillatorNode;
+  private flutter: AudioBufferSourceNode;
+  private flutterGain: GainNode;
+  private droneGain: GainNode;
 
   constructor(ctx: BaseAudioContext, noise: AudioBuffer, destination: AudioNode) {
     this.ctx = ctx;
@@ -61,6 +69,46 @@ export class BugSound {
     this.airGain.gain.value = 0;
     this.air.connect(this.airFilter).connect(this.airGain).connect(this.out);
     this.air.start();
+    // the wings: noise through a band, its level swung between nothing and full by the beat, and a drone four
+    // times as high as the beat (the wings' own tone, as low as wings of that size would have it)
+    const beats = ROACH_INFO.flight.rate;
+    this.flutter = ctx.createBufferSource();
+    this.flutter.buffer = noise;
+    this.flutter.loop = true;
+    const band = ctx.createBiquadFilter();
+    band.type = 'bandpass';
+    band.frequency.value = 520;
+    band.Q.value = 0.8;
+    const chop = ctx.createGain();
+    chop.gain.value = 0.5;
+    this.beat = ctx.createOscillator();
+    this.beat.frequency.value = beats;
+    const depth = ctx.createGain();
+    depth.gain.value = 0.5;
+    this.beat.connect(depth).connect(chop.gain);
+    this.flutterGain = ctx.createGain();
+    this.flutterGain.gain.value = 0;
+    this.flutter.connect(band).connect(chop).connect(this.flutterGain).connect(this.out);
+    this.drone = ctx.createOscillator();
+    this.drone.type = 'sawtooth';
+    this.drone.frequency.value = beats * 4;
+    const soft = ctx.createBiquadFilter();
+    soft.type = 'lowpass';
+    soft.frequency.value = 420;
+    this.droneGain = ctx.createGain();
+    this.droneGain.gain.value = 0;
+    this.drone.connect(soft).connect(this.droneGain).connect(this.out);
+    this.flutter.start();
+    this.beat.start();
+    this.drone.start();
+  }
+
+  /** the wings: 0 folded … 1 out and beating (render/RoachModel.ts) */
+  flight(level: number) {
+    const t = this.ctx.currentTime;
+    const l = Math.max(0, Math.min(1, level));
+    this.flutterGain.gain.setTargetAtTime(l * 0.42, t, 0.04);
+    this.droneGain.gain.setTargetAtTime(l * 0.07, t, 0.04);
   }
 
   update(rpm: number, throttle: number, _boost: number, volume: number, redline: number) {
@@ -88,6 +136,9 @@ export class BugSound {
     this.ticks.stop();
     this.buzz.stop();
     this.air.stop();
+    this.flutter.stop();
+    this.beat.stop();
+    this.drone.stop();
     this.out.disconnect();
   }
 }

@@ -1681,6 +1681,8 @@ export class Game {
         // a train's sound follows its tractive effort (it builds up after a notch-on, as in VehicleSim)
         // a train's flanges squeal in tight curves (lateral acceleration = yaw rate × speed)
         if ('cornering' in e) e.cornering(sim.yawRate * sim.forwardSpeed);
+        // a creature's wings are heard as far as they are out (thrown into the air)
+        if ('flight' in e) e.flight(this.player.visual.flight);
         e.update(sim.rpm, sim.spec.train ? sim.traction : sim.input.throttle, sim.boost, 1, sim.spec.engine.redline, sim.input.brake);
         let skid = 0;
         for (const w of sim.wheels) if (w.grounded) skid = Math.max(skid, w.skid);
@@ -1691,6 +1693,7 @@ export class Game {
           const re = this.audio.engine('rival', this.rival.sim.spec);
           const d = this.rival.sim.position.distanceTo(this.camera.position);
           re.update(this.rival.sim.rpm, this.rival.input.throttle, this.rival.sim.boost, clamp(1 - d / 140, 0, 1) * 0.8, this.rival.sim.spec.engine.redline);
+          if ('flight' in re) re.flight(this.rival.visual.flight);
         }
       }
     } else if (this.audio && this.attractCar && this.phase === 'attract') {
