@@ -25,6 +25,8 @@ export interface Settings {
   masterVolume: number;
   sfxVolume: number;
   musicVolume: number;
+  /** the rain's sound, a share of the effects' volume (0: no rain sound is made at all) */
+  rainVolume: number;
   assist: AssistLevel;
   autoShift: boolean;
   showGhost: boolean;
@@ -59,6 +61,7 @@ export const useSettings = create<Settings>()(
       masterVolume: 0.8,
       sfxVolume: 1,
       musicVolume: 0.6,
+      rainVolume: 1,
       assist: 1,
       autoShift: true,
       showGhost: true,

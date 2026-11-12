@@ -75,6 +75,60 @@ function startGame(host: RenderHost) {
         for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
         return { b64: btoa(bin), ms };
       };
+      // dev hook for tools/rain-mix.ts: what the game's sound chain makes of a vehicle driven by a plan, with or
+      // without the rain, rendered offline. `plan`: one [seconds, rpm, throttle, boost, brake, speed m/s] per update
+      // (Game.update's audio part, once per frame). Rendered channels: 0, 1 what is heard (after the master's
+      // compressor), 2, 3 the master before the compressor, 4 the vehicle's own sound alone (its `out`); `pick` says
+      // which come back, as base64 float32 one after another
+      w.__renderMix = async (
+        id: CarId,
+        plan: [number, number, number, number, number, number][],
+        o: { pick: number[]; rain?: number; cover?: number; volumes?: [number, number, number, number] },
+        rate = 48000,
+      ) => {
+        const [{ AudioEngine }, { CAR_SPECS }, { rainBodyOf }, { kindOf }] = await Promise.all([
+          import('../game/audio/AudioEngine'), import('../game/vehicle/carSpecs'), import('../game/audio/rain'), import('../game/vehicle/kinds'),
+        ]);
+        const spec = CAR_SPECS[id];
+        const seconds = plan[plan.length - 1][0] + 0.5;
+        const ctx = new OfflineAudioContext(6, Math.ceil(seconds * rate), rate);
+        const audio = new AudioEngine(ctx);
+        audio.setVolumes(...(o.volumes ?? [1, 1, 0, 1]));
+        const e = audio.engine('player', spec);
+        const merge = ctx.createChannelMerger(6), split = ctx.createChannelSplitter(2);
+        const fixed = (channels: number) => {
+          const g = ctx.createGain();
+          g.channelCount = channels;
+          g.channelCountMode = 'explicit';
+          return g;
+        };
+        audio.master.connect(fixed(2)).connect(split);
+        split.connect(merge, 0, 2);
+        split.connect(merge, 1, 3);
+        e.out.connect(fixed(1)).connect(merge, 0, 4);
+        merge.connect(ctx.destination);
+        if (o.rain) audio.setRain(o.rain);
+        await audio.loaded();
+        const body = rainBodyOf(kindOf(spec));
+        for (const [t, rpm, throttle, boost, brake, speed] of plan) {
+          void ctx.suspend(Math.round((t * rate) / 128) * (128 / rate)).then(() => {
+            e.update(rpm, throttle, boost, 1, spec.engine.redline, brake);
+            audio.updateTyres(0, speed);
+            audio.updateWind(speed);
+            if (o.rain) audio.updateRain(speed, o.cover ?? 0, body);
+            void ctx.resume();
+          }, () => undefined);
+        }
+        const t0 = performance.now();
+        const buf = await ctx.startRendering();
+        const ms = performance.now() - t0;
+        let bin = '';
+        for (const c of o.pick) {
+          const bytes = new Uint8Array(buf.getChannelData(c).buffer);
+          for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+        }
+        return { b64: btoa(bin), ms };
+      };
     }
     game.on((e) => {
       const app = useApp.getState();

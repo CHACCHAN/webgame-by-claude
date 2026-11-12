@@ -51,6 +51,12 @@ const MUSIC: Record<string, Partial<LoopConfig>> = {
   bgm_ghost: { ...RACE, loopFrom: 73.84, loopAt: 184.94 },
 };
 
+/**
+ * the plain rain's gain in full rain (filtered noise, where AudioWorklet is missing): −35.8 dB(A), the synthesised
+ * rain's level standing over a long time (it was 0.16 = −25.8 dB(A) while that one was 10 dB higher: audio/rain.ts)
+ */
+const RAIN_PLAIN = 0.05;
+
 /** Synthesised engine/tyre/wind audio built with WebAudio nodes only. */
 export class EngineSound {
   private ctx: BaseAudioContext;
@@ -193,6 +199,8 @@ export class AudioEngine {
   readonly master: GainNode;
   readonly sfx: GainNode;
   readonly music: GainNode;
+  /** the weather's rain: a volume of its own (settings 雨音) under the effects' */
+  readonly rain: GainNode;
   /** everything but a spoken line: it steps back while one is said */
   private bed: GainNode;
   private voice: GainNode;
@@ -215,6 +223,8 @@ export class AudioEngine {
     this.bed.connect(this.master);
     this.sfx = this.ctx.createGain();
     this.sfx.connect(this.bed);
+    this.rain = this.ctx.createGain();
+    this.rain.connect(this.sfx);
     this.music = this.ctx.createGain();
     this.music.gain.value = 0.5;
     this.music.connect(this.bed);
@@ -273,11 +283,17 @@ export class AudioEngine {
     if (this.ctx.state !== 'running') void this.ctx.resume();
   }
 
-  setVolumes(master: number, sfx: number, music: number) {
+  setVolumes(master: number, sfx: number, music: number, rain = 1) {
     this.master.gain.value = master;
     this.sfx.gain.value = sfx;
     this.music.gain.value = music;
     this.voice.gain.value = sfx;
+    this.rain.gain.value = rain;
+    // (turned all the way down, the rain is not made at all; turned up again while it rains, it starts)
+    if (rain > 0 !== this.rainWanted) {
+      this.rainWanted = rain > 0;
+      this.setRain(this.rainLevel);
+    }
   }
 
   /**
@@ -442,19 +458,25 @@ export class AudioEngine {
   private rainNode: AudioWorkletNode | null = null;
   /** the plain filtered noise, where AudioWorklet is missing */
   private rainGain: GainNode | null = null;
+  private rainSource: AudioBufferSourceNode | null = null;
   private rainLevel = 0;
   private rainBody: RainBody = 'none';
   private rainStarting: Promise<void> | null = null;
+  private rainReady: Promise<boolean> | null = null;
+  /** false while the rain's volume is 0: then no rain sound runs */
+  private rainWanted = true;
 
   /**
    * The weather's rain, 0…1 (Game.applyTimeOfDay): the AudioWorklet 'rain' (audio/rain.ts: the hillside's wash, the
    * drops around and on the body, the spray), made the first time it rains and kept; it eases in and out by itself
-   * and costs next to nothing while it is dry.
+   * and costs next to nothing while it is dry. With the rain's volume at 0 (`setVolumes`) it is taken down: no
+   * worklet runs for a sound nobody hears.
    */
   setRain(level: number) {
     this.rainLevel = level;
-    if (this.rainNode) this.rainNode.parameters.get('level')!.setValueAtTime(level, this.ctx.currentTime);
-    else if (this.rainGain) this.rainGain.gain.setTargetAtTime(level * 0.16, this.ctx.currentTime, 0.5);
+    if (!this.rainWanted) this.stopRain();
+    else if (this.rainNode) this.rainNode.parameters.get('level')!.setValueAtTime(level, this.ctx.currentTime);
+    else if (this.rainGain) this.rainGain.gain.setTargetAtTime(level * RAIN_PLAIN, this.ctx.currentTime, 0.5);
     else if (level > 0 && !this.rainStarting) {
       this.rainStarting = this.startRain();
       this.loading.push(this.rainStarting);
@@ -474,18 +496,22 @@ export class AudioEngine {
     n.parameters.get('cover')!.setValueAtTime(cover, t);
   }
 
-  /** the rain's output node (probes put an analyser on it), null before the first rain */
+  /** the rain's source (probes: is one running?), null before the first rain and while the rain's volume is 0 */
   get rainOutput(): AudioNode | null {
     return this.rainNode ?? this.rainGain;
   }
 
   private async startRain() {
-    const ok = this.ctx.audioWorklet ? await this.ctx.audioWorklet.addModule(rainWorkletUrl).then(() => true, () => false) : false;
+    this.rainReady ??= this.ctx.audioWorklet ? this.ctx.audioWorklet.addModule(rainWorkletUrl).then(() => true, () => false) : Promise.resolve(false);
+    const ok = await this.rainReady;
+    this.rainStarting = null;
+    // (turned all the way down while the module was loading)
+    if (!this.rainWanted) return;
     if (ok) {
       const processorOptions: RainProcessorOptions = { seed: (Math.random() * 2 ** 32) >>> 0 };
       const node = new AudioWorkletNode(this.ctx, 'rain', { numberOfInputs: 0, outputChannelCount: [2], processorOptions });
       node.port.postMessage({ body: this.rainBody });
-      node.connect(this.sfx);
+      node.connect(this.rain);
       this.rainNode = node;
     } else {
       // the old rain: hiss from filtered noise
@@ -501,10 +527,24 @@ export class AudioEngine {
       lp.frequency.value = 9000;
       this.rainGain = this.ctx.createGain();
       this.rainGain.gain.value = 0;
-      src.connect(bp).connect(lp).connect(this.rainGain).connect(this.sfx);
+      src.connect(bp).connect(lp).connect(this.rainGain).connect(this.rain);
       src.start();
+      this.rainSource = src;
     }
     this.setRain(this.rainLevel);
+  }
+
+  private stopRain() {
+    if (this.rainNode) {
+      this.rainNode.port.postMessage('stop');
+      this.rainNode.disconnect();
+      this.rainNode = null;
+    }
+    if (this.rainGain) {
+      this.rainSource?.stop();
+      this.rainGain.disconnect();
+      this.rainGain = this.rainSource = null;
+    }
   }
 
   silenceDriving() {
