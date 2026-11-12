@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { shadeScene, type ShadeCaster } from './farShade';
 import { vegetationFrame } from './vegetation';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { Track } from '../track/Track';
@@ -934,6 +935,7 @@ export function buildAutobahnScenery(track: Track, terrain: TerrainData, quality
   const trees = buildTrees(terrain, quality.treeDensity, quality.treeLod, {
     vegetation: quality.vegetation,
     style: 'autobahn',
+    shadowHalf: quality.shadowHalf,
     clearance: -OUT + 5,
     keep: clear,
     // the land around is wide and mostly far forest: big chunks (draw calls) where only the far mesh ever shows
@@ -987,6 +989,7 @@ export function buildAutobahnScenery(track: Track, terrain: TerrainData, quality
     nightEmissive,
     lightmapMats: [roadMaterial, terrainMat],
     covers: new Float32Array(covers),
+    shadeScene: shadows ? shadeScene(terrain, (trees.userData.casters as ShadeCaster[] | undefined) ?? [], covers) : null,
     update(time, cameraPos, view) {
       vegetationFrame(time, cameraPos);
       updateTreeLods(trees, cameraPos, view);

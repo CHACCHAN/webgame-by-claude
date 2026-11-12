@@ -130,6 +130,8 @@ export const PRESETS: Record<TimeOfDay, Preset> = {
   },
 };
 
+const NO_AHEAD = new THREE.Vector3();
+
 /** a uniform the rig sets by `.value` */
 type U<T> = { value: T };
 interface SkyUniforms {
@@ -202,7 +204,8 @@ export interface EnvironmentRig {
   cloudSea: THREE.Mesh;
   preset: Preset;
   apply(tod: TimeOfDay, scene: THREE.Scene, renderer: GameRenderer): void;
-  update(time: number, focus: THREE.Vector3): void;
+  /** `ahead`: where the camera at `focus` looks (the shadow map is laid out in front of it) */
+  update(time: number, focus: THREE.Vector3, ahead?: THREE.Vector3): void;
   /** draws the reflection environment of the time of day last applied into the game's one target, and returns it */
   buildEnvMap(renderer: GameRenderer): THREE.Texture;
   /** frees what the reflection environment was drawn from */
@@ -345,15 +348,14 @@ export function buildEnvironment(terrain: TerrainData, lights: LightRig): Enviro
       city.visible = p.cityLights > 0;
       cloudSea.visible = p.seaOfClouds > 0;
     },
-    update(time, focus) {
+    update(time, focus, ahead = NO_AHEAD) {
       skyUniforms.uTime.value = time;
       sky.position.copy(focus);
       cityLights.uniforms.uTime.value = time;
       cloudU.uTime.value = time;
       seaNormal.offset.set(time * 0.002, time * 0.0013);
-      // keep the shadow frustum around the focus point
-      key.position.copy(focus).addScaledVector(rig.preset.keyDir, 250);
-      key.target.position.copy(focus);
+      // the shadow map goes with the camera
+      lights.aimKey(focus, ahead, rig.preset.keyDir);
     },
     buildEnvMap(renderer) {
       // environment for reflections: the sky plus a ring of warm lights, drawn into the game's one target (the

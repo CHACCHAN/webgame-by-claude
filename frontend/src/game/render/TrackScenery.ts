@@ -22,6 +22,7 @@ import { placeProp, prop, type PropModel } from './props';
 import type { CourseStyle } from '../track/courses';
 import { ChunkedLods, cutout } from './instancing';
 import { Forest, vegetationFrame, type VegetationQuality } from './vegetation';
+import { shadeScene, type ShadeCaster, type ShadeField, type ShadeScene } from './farShade';
 import { cityWeight, COVER_SETS, loadedSpecies, plantCover, plantTrees, townWeight, TREE_SETS, UNDER_SETS, viewLimiter } from './vegetationPlanting';
 import { buildAutobahnScenery } from './autobahnScenery';
 import { layBridges, layRoadside, layRocksheds, Roadside } from './roadside';
@@ -48,6 +49,10 @@ export interface SceneryResult {
    * order (x, z pairs) and the roof slab's top height
    */
   covers: Float32Array;
+  /** what shades the course (land, trees, roofs), until the game has baked its far shade from it (`render/farShade.ts`) */
+  shadeScene?: ShadeScene | null;
+  /** the baked shade under the moon and under the morning sun (`Game.buildWorld`) */
+  shades?: { moon: ShadeField; sun: ShadeField };
   /** `view`: the camera of the picture, when it is one that looks from `cameraPos` (the forest then draws what it sees) */
   update(time: number, cameraPos: THREE.Vector3, view?: THREE.Camera): void;
 }
@@ -58,6 +63,8 @@ export const LED = new THREE.Color('#e4ecff');
 export interface SceneryQuality {
   treeDensity: number;
   shadows: boolean;
+  /** half the side of the sun's / moon's shadow map (m, `LightRig.keyMap`): the trees inside it throw shadows */
+  shadowHalf?: number;
   photoTextures: boolean;
   treeLod: number;
   /** the Blender-made vegetation (render/vegetation.ts); without it, or as `legacy`, the old procedural cedar and lumps */
@@ -143,7 +150,7 @@ export function buildScenery(track: Track, terrain: TerrainData, quality: Scener
 
   // ------------------------------------------------------------- trees
   // (what the pass is known for stays in sight: the sea and the town below, the lake)
-  const trees = buildTrees(terrain, quality.treeDensity, quality.treeLod, { vegetation: quality.vegetation, views });
+  const trees = buildTrees(terrain, quality.treeDensity, quality.treeLod, { vegetation: quality.vegetation, views, shadowHalf: quality.shadowHalf });
   group.add(trees);
   const clutter = buildClutter(track, terrain, quality.treeDensity, surfaceTexture, keepOut, { vegetation: quality.vegetation, views });
   group.add(clutter);
@@ -157,6 +164,7 @@ export function buildScenery(track: Track, terrain: TerrainData, quality: Scener
     nightEmissive,
     lightmapMats,
     covers: new Float32Array(covers),
+    shadeScene: quality.shadows ? shadeScene(terrain, (trees.userData.casters as ShadeCaster[] | undefined) ?? [], covers) : null,
     update(time, cameraPos, view) {
       vegetationFrame(time, cameraPos);
       updateTreeLods(trees, cameraPos, view);
@@ -977,6 +985,8 @@ export function buildTrees(
     /** the road's views, which the trees keep open (`vegetationPlanting.ts` `viewLimiter`) */
     views?: (x: number, z: number) => number;
     style?: CourseStyle;
+    /** half the side of the shadow map (default: the 60 m of before) */
+    shadowHalf?: number;
   } = {},
 ) {
   const group = new THREE.Group();
@@ -986,10 +996,21 @@ export function buildTrees(
   if (veg && set?.ids.length) {
     // levels of detail: the twig cards up close, bough cards, a few big cards, then the impostors
     const full = veg.tier === 'full';
-    const forest = new Forest(set.species, plantTrees(terrain, density, opts.style ?? 'touge', set.ids, opts), {
+    const plants = plantTrees(terrain, density, opts.style ?? 'touge', set.ids, opts);
+    // What the trees shade far from the camera, where no shadow map reaches: a disc per crown (`render/farShade.ts`).
+    // The same trees that throw shadows into the map (`Planted.casts`: those by the road), or the road would be
+    // sunlit near the camera and in the whole forest's shade further on.
+    group.userData.casters = plants.filter((p) => p.casts !== false && !p.far).map((p): ShadeCaster => {
+      const frame = (set.species[p.species].model.variants[p.variant] ?? set.species[p.species].model.variants[0])?.impostor;
+      const tall = (frame?.height ?? 12) * p.scale;
+      return { x: p.x, z: p.z, r: (frame?.half ?? tall * 0.22) * p.scale * p.girth * 0.85, top: p.y + tall * 0.94 };
+    });
+    const forest = new Forest(set.species, plants, {
       ranges: [full ? 28 * veg.range : 0, (full ? 80 : 60) * veg.range, (full ? 190 : 160) * veg.range],
-      // (the shadow map is a square of 120 m around the car)
-      shadows: 80,
+      // (the shadow map is a square around a point ahead of the camera: the trees in a circle that covers all of
+      // it but the corners)
+      shadows: (opts.shadowHalf ?? 60) * 1.33,
+      shadowsAt: 'map',
       prepass: true,
       // (beyond the nearest level and in the shadow map one shape per species: 40 draw calls less, each ~60 µs of
       // main-thread time; from 30 m on a tree's turn, height, girth and tint tell it from its neighbour, not its boughs)

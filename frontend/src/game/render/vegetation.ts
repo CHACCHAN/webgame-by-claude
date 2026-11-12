@@ -816,6 +816,11 @@ export interface ForestOptions {
   ranges: [number, number, number];
   /** how far around the viewer the trees throw shadows (0: none) */
   shadows: number;
+  /**
+   * `map`: that distance counts from the middle of the sun's / moon's shadow map instead (`LightRig.aimKey` lays the
+   * map out ahead of the camera: the trees in it are not the ones around the viewer)
+   */
+  shadowsAt?: 'viewer' | 'map';
   impostors?: boolean;
   /** side of a chunk (m) */
   chunk?: number;
@@ -900,6 +905,7 @@ export class Forest {
   private levels: Level[] = [];
   private impostorMeshes: { mesh: THREE.Mesh; count: number }[] = [];
   private reach = uniform(0);
+  private shadowsAtMap = false;
   private materials = new Map<number, THREE.Material>();
   /** per species: what its meshes hand to the shared shaders */
   private kins: Kin[];
@@ -1014,7 +1020,9 @@ export class Forest {
         });
       });
     }
-    this.reach.value = opts.shadows;
+    // (the shader's own limit counts from the viewer: with the map ahead of the camera the picking alone decides)
+    this.shadowsAtMap = opts.shadowsAt === 'map';
+    this.reach.value = this.shadowsAtMap ? 1e5 : opts.shadows;
 
     // the impostors: every plant of a species in one mesh that never changes
     if (impostors) {
@@ -1079,8 +1087,9 @@ export class Forest {
    * them: the others were shaded vertex by vertex behind the camera), picked again when it has turned; the shadow
    * level keeps them all (what stands behind the camera throws its shadow into the picture).
    */
-  update(camera: THREE.Vector3, view?: THREE.Camera) {
+  update(viewer: THREE.Vector3, view?: THREE.Camera) {
     const cone = groundCone(view, this.cone);
+    const map = this.shadowsAtMap && farLights ? (farLights[0] as THREE.DirectionalLight).target.position : viewer;
     if (this.showingAll && !held) {
       this.showingAll = false;
       for (const lv of this.levels) for (const lm of lv.meshes) lm.mesh.visible = lm.n > 0, lm.pre && (lm.pre.visible = lm.n > 0);
@@ -1088,6 +1097,8 @@ export class Forest {
     for (const lv of this.levels) {
       if (!lv.meshes.length) continue;
       const shadow = lv === this.levels[3];
+      // (the trees of the shadow map are those around its middle)
+      const camera = shadow ? map : viewer;
       const half = shadow ? Math.PI : cone.half;
       // (turned, or the view grown wider than the margin it was picked with)
       const turned = half < Math.PI ? Math.abs(Math.atan2(Math.sin(cone.az - lv.az), Math.cos(cone.az - lv.az))) + Math.max(0, half - lv.half) : lv.half < Math.PI ? 9 : 0;
