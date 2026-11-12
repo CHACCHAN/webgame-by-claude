@@ -2167,4 +2167,16 @@ to be seen). The films still show the balls until they are recorded again.
   select on the GPU with each film at 15 % and 60 % (`~/.local/opt/quality/cmp/rel241/sheet.jpg`: the films play,
   the relief's ring is where the film's car is, no page errors); tsc, vitest 236.
 - Not verified: the films watched whole; phones.
+- **Deployed 11-12 as v2.4.1** (bundle `index-BE7An1Ro.js`, local = public, API 200) — **and the public address
+  still served the old films**: `/video/` answers `max-age=86400`, Cloudflare's edge had the morning's film
+  (`cf-cache-status: HIT`, age 9 h, the old length) while the track JSON came fresh: old film, new track.
+
+## v2.4.2 (11-12): the films are asked for with a stamp of their content
+
+- `ui/screens/courseFilms.json` (id → the first eight hex digits of the film's SHA-1, written by
+  `tools/course-clip-encode.sh`); `CourseRun` fetches `<id>.mp4|jpg|json?v=<stamp>`. New vitest
+  `courseFilms.test.ts`: every stamp is its film's, every film has one.
+- Verified: tsc; vitest 238; on the GPU the course select asks for all twelve files with their stamps, all answer
+  (200 / 206), the four films play, no page errors (`~/.local/opt/quality/cmp/rel242/filmreq.cjs`); `gpu-errors`
+  on WebGPU 0. After the deploy: see the line below.
 

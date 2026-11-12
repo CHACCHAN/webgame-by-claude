@@ -495,7 +495,12 @@ pending. `docs/PLAN.md` holds the design.
   drawn line stands in; a film that is not there: the course's art, the relief's own running light. The films are
   our own footage: `tools/course-clip.cjs` (the game's AI driver in the hayate, stepped by hand, on the GPU) →
   `tools/course-clip-encode.sh` (720p, H.264 CRF 34, ~12 MB a course; ffmpeg in a container). **After a change of
-  a course's design or of the game's look: record and encode again** (the track must match the road).
+  a course's design or of the game's look: record and encode again** (the track must match the road). The film,
+  its still and its track are asked for with the film's stamp (`ui/screens/courseFilms.json`, written by the encode
+  script, a vitest compares it with the files): **whatever is under `/video/` has a fixed name and is kept for a day
+  by browsers and by Cloudflare's edge** (v2.4.1 went out with the old films still served, next to the new tracks),
+  so a file there that can change is fetched with a stamp of its content. Everything else under `public/` is
+  `no-cache` (revalidated); `/assets/` is hashed.
 - About and the desk (`ui/screens/About.tsx`, `AboutDesk.tsx`, `store/desk.ts`, `ui/theme/about.css`; server
   `DeskController`, `Services/DeskMind.php`, `Services/DeskReports.php`, `config/desk.php`, `config/about.php`). The
   maker's name, note and links are configuration (`ABOUT_*` in `.env` → `/api/content` `about`): never a person's

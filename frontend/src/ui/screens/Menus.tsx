@@ -7,6 +7,7 @@ import { useMenuInput, hoverSelect } from '../useMenuInput';
 import { CAR_SPECS, singleRatio } from '../../game/vehicle/carSpecs';
 import type { AILevel } from '../../game/ai/AIDriver';
 import { COURSES, COURSE_ORDER, type CourseId } from '../../game/track/courses';
+import FILMS from './courseFilms.json';
 import { Track } from '../../game/track/Track';
 import { currentCourseId, useSettings } from '../../store/settings';
 import { decodeGhost } from '../../game/race/Ghost';
@@ -324,10 +325,20 @@ interface RunTrack {
   step: number;
   u: number[];
 }
+/**
+ * The three files of a course's film are fetched with the film's stamp (`courseFilms.json`, written by
+ * `tools/course-clip-encode.sh`: the first hex digits of the film's SHA-1): their names are fixed and `/video/` is
+ * kept for a day by browsers and by the CDN's edge, so a film recorded again was shown as the old one, with the new
+ * film's track (v2.4.1). A vitest compares the stamps with the files.
+ */
+const filmFile = (id: CourseId, ext: 'mp4' | 'jpg' | 'json') => {
+  const rev = (FILMS as Record<string, string | undefined>)[id];
+  return `/video/courses/${id}.${ext}${rev ? `?v=${rev}` : ''}`;
+};
 const runTracks = new Map<CourseId, Promise<RunTrack | null>>();
 function runTrack(id: CourseId) {
   let t = runTracks.get(id);
-  if (!t) runTracks.set(id, (t = fetch(`/video/courses/${id}.json`).then((r) => (r.ok ? (r.json() as Promise<RunTrack>) : null)).catch(() => null)));
+  if (!t) runTracks.set(id, (t = fetch(filmFile(id, 'json')).then((r) => (r.ok ? (r.json() as Promise<RunTrack>) : null)).catch(() => null)));
   return t;
 }
 
@@ -367,7 +378,7 @@ function CourseRun({ id }: { id: CourseId }) {
   }, [id, lost]);
   return (
     <div className="crs-run" ref={box} style={{ backgroundImage: `url(${COURSES[id].art})` }}>
-      {!lost && <video src={`/video/courses/${id}.mp4`} poster={`/video/courses/${id}.jpg`} muted loop playsInline autoPlay={moving} preload={moving ? 'auto' : 'none'} onError={() => setLost(true)} />}
+      {!lost && <video src={filmFile(id, 'mp4')} poster={filmFile(id, 'jpg')} muted loop playsInline autoPlay={moving} preload={moving ? 'auto' : 'none'} onError={() => setLost(true)} />}
       {!lost && <span className="run-cap">CPU ドライバーの走行</span>}
     </div>
   );
