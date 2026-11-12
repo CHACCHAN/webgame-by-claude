@@ -41,6 +41,8 @@
 .ab-jp { margin-top: 0.8rem; font-family: var(--font-name); font-weight: 700; font-size: var(--fs-m); letter-spacing: 0.5em; color: var(--cyan); }
 .ab-figures { display: grid; grid-template-columns: 1fr 1fr; gap: 0.55rem; }
 .ab-figures .ab-cell b { font-size: var(--fs-2xl); line-height: 1.1; }
+/* (short Japanese copy breaks between phrases where the browser can: no word cut in two at a line's end) */
+.ab-lead, .ab-modes p, .ab-contact p, .desk-empty > p, .desk-card span { word-break: auto-phrase; }
 .ab-lead { grid-column: 1 / -1; max-width: 54rem; font-size: var(--fs-m); line-height: 2; color: var(--text-2); }
 .ab-modes { grid-column: 1 / -1; list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(4, 1fr); gap: 1.1rem; }
 .ab-modes small { display: block; font-family: var(--font-display); font-stretch: var(--w-cond); font-weight: 600; font-size: var(--fs-s); letter-spacing: 0.16em; color: var(--cyan); }
@@ -103,7 +105,7 @@
 .desk-card { --c: var(--cut-s); --fill: rgb(var(--c-ink-2) / 0.6); --tex: none; display: flex; flex-direction: column; justify-content: flex-start; align-items: stretch; padding: 0.85rem 1rem 0.95rem; text-align: left; transition: transform var(--t-snap) var(--e-snap); }
 .desk-card b { display: block; font-size: var(--fs-m); margin-bottom: 0.25rem; }
 .desk-card b::after { content: '›'; margin-left: 0.5em; font-family: var(--font-display); color: var(--cyan); }
-.desk-card span { display: block; font-size: var(--fs-s); line-height: 1.65; color: var(--muted); }
+.desk-card span { display: block; font-size: var(--fs-s); line-height: 1.65; color: var(--muted); text-wrap: balance; }
 .desk-card:hover:not(:disabled) { --edge: var(--cyan); transform: translateY(-1px); }
 .desk-card:hover:not(:disabled) b { color: var(--cyan); }
 .desk-card:disabled { opacity: 0.5; cursor: default; }
