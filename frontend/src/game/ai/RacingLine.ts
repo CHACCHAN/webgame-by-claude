@@ -1,6 +1,12 @@
 import { DS, Track } from '../track/Track';
 import { clamp } from '../util/math';
 
+/** a vehicle whose cornering and braking change with its speed (a fighter: lift, drag): m/s² at a speed, on ground of a grip */
+export interface SpeedEnvelope {
+  lat(v: number, grip: number): number;
+  brake(v: number, grip: number): number;
+}
+
 /**
  * A minimum-curvature racing line computed by iteratively relaxing lateral
  * offsets ("elastic band"), plus a grip-limited target speed profile.
@@ -64,7 +70,7 @@ export class RacingLine {
    * Target speed (m/s) per sample for a given cornering grip (m/s²),
    * braking decel and acceleration capability.
    */
-  speedProfile(latAccel: number, brakeDecel: number, accel: number, vmax: number): Float32Array {
+  speedProfile(latAccel: number, brakeDecel: number, accel: number, vmax: number, envelope?: SpeedEnvelope): Float32Array {
     const n = this.track.count;
     const v = new Float32Array(n);
     for (let i = 0; i < n; i++) {
@@ -72,9 +78,23 @@ export class RacingLine {
       let k = 0;
       for (let j = Math.max(0, i - 3); j <= Math.min(n - 1, i + 3); j++) k = Math.max(k, Math.abs(this.curvature[j]));
       // (the zone's own grip: a dry lake gives less than the runway before it)
-      v[i] = Math.min(vmax, Math.sqrt((latAccel * this.track.grip[i]) / Math.max(k, 1e-4)));
+      const g = this.track.grip[i];
+      if (!envelope) v[i] = Math.min(vmax, Math.sqrt((latAccel * g) / Math.max(k, 1e-4)));
+      else {
+        // what the vehicle holds changes with its speed: the highest speed whose bend it still holds
+        let lo = 0, hi = vmax;
+        if (hi * hi * k > envelope.lat(hi, g)) {
+          for (let it = 0; it < 22; it++) {
+            const mid = (lo + hi) / 2;
+            if (mid * mid * k > envelope.lat(mid, g)) hi = mid;
+            else lo = mid;
+          }
+          hi = lo;
+        }
+        v[i] = hi;
+      }
     }
-    for (let i = n - 2; i >= 0; i--) v[i] = Math.min(v[i], Math.sqrt(v[i + 1] * v[i + 1] + 2 * brakeDecel * this.track.grip[i] * DS));
+    for (let i = n - 2; i >= 0; i--) v[i] = Math.min(v[i], Math.sqrt(v[i + 1] * v[i + 1] + 2 * (envelope ? envelope.brake(v[i + 1], this.track.grip[i]) : brakeDecel * this.track.grip[i]) * DS));
     for (let i = 1; i < n; i++) v[i] = Math.min(v[i], Math.sqrt(v[i - 1] * v[i - 1] + 2 * accel * DS));
     return v;
   }

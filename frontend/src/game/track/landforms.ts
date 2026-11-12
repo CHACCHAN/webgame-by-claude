@@ -337,7 +337,7 @@ export const MOJAVE: Landform = {
     { x: ED.at(-7500, -3000)[0], z: ED.at(-7500, -3000)[1], rx: 2400, rz: 1200, angle: 0.2, density: 0.35, downtown: 0.1 },
   ],
   cityGlowDir: [-0.75, 0, 0.66],
-  cityGlow: 0.3,
+  cityGlow: 0.12,
   // the moon over the lake, ahead of the runway
   moonDir: [0.62, 0.5, -0.6],
   // the sun comes up over the lake: low, the land is level and throws no shade over the road

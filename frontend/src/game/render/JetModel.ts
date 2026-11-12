@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { MeshBasicNodeMaterial } from 'three/webgpu';
 import { abs, clamp as clampNode, dot, mix, normalView, positionViewDirection, pow, sin, uniform, uv, vec3, vec4 } from 'three/tsl';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { CarSpec } from '../vehicle/carSpecs';
 import { adoptMaterials, createCarMaterials, modelAnchors, type CarMaterials, type CarRig } from './CarModel';
 import { clamp, damp } from '../util/math';
@@ -208,21 +209,169 @@ export function buildJet(spec: CarSpec, opts: { bodyColor?: string; procedural?:
   return { root, body, wheels: standIns, materials: mats, headlightTargets: [target], anchors, fromModel: !!tpl, jet: rig };
 }
 
-/** A stand-in fighter (until our model is in place): fuselage, intakes, wings, twin fins, tailplanes, canopy, gear, nozzles. */
+// ------------------------------------------------------------------------------------------------ the stand-in
+// Until our own models are in place the fighters are drawn from their published dimensions: a lofted fuselage,
+// intakes and engine nacelles, wings, fins and tailplanes as tapered panels, canopy, nozzles and gear. Stations are
+// metres aft of the nose tip (`d`), heights above the ground with the gear down.
+
+interface Section { d: number; y: number; w: number; h: number; e?: number; x?: number }
+
+/** A body lofted through elliptic (e = 2) to boxy (e ≥ 4) sections; both ends are closed. */
+function loft(zNose: number, sections: Section[], seg = 18): THREE.BufferGeometry {
+  const pos: number[] = [], idx: number[] = [];
+  const ring = (s: Section) => {
+    const e = 2 / (s.e ?? 2);
+    for (let k = 0; k < seg; k++) {
+      const a = (k / seg) * Math.PI * 2, c = Math.cos(a), sn = Math.sin(a);
+      pos.push((s.x ?? 0) + s.w * Math.sign(c) * Math.pow(Math.abs(c), e), s.y + s.h * Math.sign(sn) * Math.pow(Math.abs(sn), e), zNose - s.d);
+    }
+  };
+  sections.forEach(ring);
+  for (let i = 0; i + 1 < sections.length; i++) for (let k = 0; k < seg; k++) {
+    const a = i * seg + k, b = i * seg + ((k + 1) % seg), c = a + seg, d2 = b + seg;
+    idx.push(a, c, b, b, c, d2);
+  }
+  const cap = (i: number, flip: boolean) => {
+    const s = sections[i], centre = pos.length / 3;
+    pos.push(s.x ?? 0, s.y, zNose - s.d);
+    for (let k = 0; k < seg; k++) {
+      const a = i * seg + k, b = i * seg + ((k + 1) % seg);
+      if (flip) idx.push(centre, a, b);
+      else idx.push(centre, b, a);
+    }
+  };
+  cap(0, true);
+  cap(sections.length - 1, false);
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setIndex(idx);
+  g.computeVertexNormals();
+  return g;
+}
+
+interface Station { u: number; le: number; te: number; t: number; v?: number }
+
+/**
+ * A wing, fin or tailplane: a tapered panel between two stations (u = out along the span, le / te = the leading and
+ * trailing edge as metres aft of the nose, t = thickness, v = rise), thickest at a third of the chord. `frame` maps
+ * (u, v) to the model's (x, y): a wing's u is x, a fin's is y.
+ */
+function panel(zNose: number, root: Station, tip: Station, frame: (u: number, v: number) => [number, number], flip: boolean): THREE.BufferGeometry {
+  const pts: number[] = [];
+  for (const s of [root, tip]) {
+    const mid = s.le + (s.te - s.le) * 0.33, v = s.v ?? 0;
+    for (const [d, dv] of [[s.le, 0], [mid, s.t / 2], [s.te, 0], [mid, -s.t / 2]] as const) {
+      const [x, y] = frame(s.u, v + dv);
+      pts.push(x, y, zNose - d);
+    }
+  }
+  // quads: over the top (front, rear), under the bottom, the tip and root ends
+  const quads = [[0, 1, 5, 4], [1, 2, 6, 5], [2, 3, 7, 6], [3, 0, 4, 7], [4, 5, 6, 7], [3, 2, 1, 0]];
+  const pos: number[] = [];
+  for (const q of quads) for (const k of flip ? [0, 2, 1, 0, 3, 2] : [0, 1, 2, 0, 2, 3]) pos.push(pts[q[k] * 3], pts[q[k] * 3 + 1], pts[q[k] * 3 + 2]);
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.computeVertexNormals();
+  return g;
+}
+
+interface Airframe {
+  /** nose tip ahead of the root (m), height of the fuselage's axis */
+  zNose: number;
+  axis: number;
+  fuselage: Section[];
+  /** a darker radome over the first metres */
+  radome: number;
+  /** the canopy: from / to (m aft of the nose), half width, height over the axis */
+  canopy: { from: number; to: number; w: number; top: number };
+  /** intake and engine nacelle of one side (mirrored), and the nozzle's exit radius */
+  nacelle: Section[];
+  nozzle: { x: number; y: number; d: number; radius: number; length: number };
+  /** wing panels of one side (root → tip), each mirrored */
+  wings: [Station, Station][];
+  wingY: number;
+  fin: { x: number; base: number; cant: number; root: Station; tip: Station };
+  stab: { x: number; y: number; root: Station; tip: Station };
+  canard?: { x: number; y: number; root: Station; tip: Station };
+  /** tail booms beside the nozzles (one side; the Su-47's are of unequal length) */
+  booms: { x: number; y: number; from: number; to: [number, number]; w: number; h: number }[];
+  /** light leading edges (the Su-47's white ones): strips along the wing's leading edge */
+  edges: boolean;
+}
+
+function airframe(spec: CarSpec): Airframe {
+  const L = spec.jet!.figures.length, half = spec.jet!.figures.span / 2;
+  if (spec.id === 'su47') {
+    // 22.6 m long, 16.7 m span, 6.4 m high: the nose gear 5.6 m aft of the nose
+    const zNose = 5.6 + spec.wheelbase / 2, axis = 2.35;
+    return {
+      zNose, axis, radome: 2.6,
+      fuselage: [
+        { d: 0, y: axis - 0.15, w: 0.03, h: 0.03 }, { d: 1.0, y: axis - 0.1, w: 0.36, h: 0.36 }, { d: 2.8, y: axis, w: 0.7, h: 0.72 },
+        { d: 5.0, y: axis + 0.05, w: 0.86, h: 0.95 }, { d: 7.6, y: axis + 0.1, w: 1.0, h: 1.0, e: 2.6 }, { d: 10.5, y: axis + 0.2, w: 1.5, h: 0.7, e: 3 },
+        { d: 15.0, y: axis + 0.25, w: 1.7, h: 0.55, e: 3 }, { d: 19.2, y: axis + 0.25, w: 1.2, h: 0.32, e: 3 }, { d: 21.0, y: axis + 0.25, w: 0.5, h: 0.14, e: 3 },
+      ],
+      canopy: { from: 3.5, to: 7.4, w: 0.52, top: 1.55 },
+      nacelle: [
+        { d: 8.6, x: 1.3, y: axis - 0.62, w: 0.6, h: 0.5, e: 6 }, { d: 10.6, x: 1.3, y: axis - 0.6, w: 0.68, h: 0.62, e: 5 }, { d: 14.0, x: 1.3, y: axis - 0.45, w: 0.72, h: 0.72, e: 2.6 },
+        { d: 18.4, x: 1.3, y: axis - 0.3, w: 0.7, h: 0.7 }, { d: 19.4, x: 1.3, y: axis - 0.3, w: 0.62, h: 0.62 },
+      ],
+      nozzle: { x: 1.3, y: axis - 0.3, d: 19.3, radius: 0.5, length: 1.3 },
+      // a short swept-back inner panel, then the wing swept forward to the tip
+      wings: [
+        [{ u: 1.2, le: 8.7, te: 16.2, t: 0.3 }, { u: 2.9, le: 10.9, te: 16.0, t: 0.34 }],
+        [{ u: 2.9, le: 10.9, te: 16.0, t: 0.34 }, { u: half, le: 8.9, te: 10.5, t: 0.08, v: 0.12 }],
+      ],
+      wingY: axis + 0.2,
+      fin: { x: 2.0, base: axis + 0.35, cant: 0.12, root: { u: 0, le: 15.6, te: 19.6, t: 0.2 }, tip: { u: 6.4 - (axis + 0.35), le: 18.4, te: 19.9, t: 0.06 } },
+      stab: { x: 2.1, y: axis + 0.15, root: { u: 0, le: 18.0, te: 21.0, t: 0.14 }, tip: { u: 1.9, le: 20.1, te: 21.3, t: 0.05 } },
+      canard: { x: 1.25, y: axis + 0.46, root: { u: 0, le: 6.6, te: 9.0, t: 0.12 }, tip: { u: 2.5, le: 8.7, te: 9.5, t: 0.04 } },
+      booms: [{ x: 2.1, y: axis + 0.15, from: 16.5, to: [L, L - 1.5], w: 0.24, h: 0.2 }],
+      edges: true,
+    };
+  }
+  // the Eagle: 19.43 m long, 13.05 m span, 5.63 m high: the nose gear 5.0 m aft of the nose
+  const zNose = 5.0 + spec.wheelbase / 2, axis = 2.1;
+  return {
+    zNose, axis, radome: 2.2,
+    fuselage: [
+      { d: 0, y: axis - 0.12, w: 0.03, h: 0.03 }, { d: 0.9, y: axis - 0.08, w: 0.34, h: 0.34 }, { d: 2.3, y: axis, w: 0.6, h: 0.62 },
+      { d: 4.2, y: axis + 0.05, w: 0.74, h: 0.9 }, { d: 6.4, y: axis + 0.12, w: 0.85, h: 1.02, e: 2.6 }, { d: 9.5, y: axis + 0.22, w: 1.25, h: 0.82, e: 3 },
+      { d: 14.0, y: axis + 0.22, w: 1.45, h: 0.66, e: 3 }, { d: 17.6, y: axis + 0.15, w: 1.5, h: 0.5, e: 3 }, { d: 18.3, y: axis + 0.12, w: 1.45, h: 0.3, e: 3 },
+    ],
+    canopy: { from: 3.0, to: 6.9, w: 0.5, top: 1.72 },
+    // the intakes' lips rake forward at the top; the trunks run back into the engine bays
+    nacelle: [
+      { d: 5.6, x: 1.32, y: axis + 0.1, w: 0.5, h: 0.56, e: 7 }, { d: 6.4, x: 1.32, y: axis - 0.08, w: 0.52, h: 0.74, e: 7 }, { d: 10.5, x: 1.3, y: axis - 0.12, w: 0.56, h: 0.72, e: 5 },
+      { d: 14.5, x: 1.0, y: axis - 0.12, w: 0.66, h: 0.66, e: 2.6 }, { d: 17.3, x: 0.86, y: axis - 0.1, w: 0.64, h: 0.64 }, { d: 17.9, x: 0.86, y: axis - 0.1, w: 0.58, h: 0.58 },
+    ],
+    nozzle: { x: 0.86, y: axis - 0.1, d: 17.8, radius: 0.48, length: 1.25 },
+    // 45° at the leading edge, a straight trailing edge, the tip cut off at an angle
+    wings: [
+      [{ u: 1.75, le: 7.3, te: 13.7, t: 0.34 }, { u: half - 0.7, le: 11.4, te: 13.95, t: 0.1, v: -0.08 }],
+      [{ u: half - 0.7, le: 11.4, te: 13.95, t: 0.1, v: -0.08 }, { u: half, le: 12.6, te: 13.9, t: 0.05, v: -0.09 }],
+    ],
+    wingY: axis + 0.62,
+    fin: { x: 1.6, base: axis + 0.5, cant: 0, root: { u: 0, le: 13.5, te: 17.7, t: 0.18 }, tip: { u: 5.63 - (axis + 0.5), le: 16.0, te: 17.5, t: 0.06 } },
+    stab: { x: 1.65, y: axis + 0.05, root: { u: 0, le: 15.1, te: 18.7, t: 0.14 }, tip: { u: 2.65, le: 18.2, te: L, t: 0.05 } },
+    booms: [{ x: 1.62, y: axis + 0.22, from: 13.6, to: [18.9, 18.9], w: 0.2, h: 0.3 }],
+    edges: false,
+  };
+}
+
+/** A stand-in fighter: fuselage, intakes, wings, twin fins, tailplanes, canopy, gear, nozzles (see the contract above). */
 function proceduralJet(spec: CarSpec, mats: CarMaterials) {
   const j = spec.jet!;
+  const A = airframe(spec);
   const root = new THREE.Group();
   const body = new THREE.Group();
   body.name = 'body';
   root.add(body);
-  const L = j.figures.length;
-  const span = j.figures.span;
-  const forward = spec.id === 'su47';
-  const belly = (spec.clearance ?? 1) + 0.2;
-  const yAxis = belly + 0.9;
-  const camo2 = new THREE.MeshStandardMaterial({ color: j.camo[1], roughness: 0.6 });
-  const metal = new THREE.MeshStandardMaterial({ color: '#7a7570', metalness: 1, roughness: 0.4 });
-  const add = (parent: THREE.Object3D, geo: THREE.BufferGeometry, m: THREE.Material, x: number, y: number, z: number, name?: string) => {
+  const camo2 = new THREE.MeshStandardMaterial({ color: j.camo[1], roughness: 0.62, metalness: 0.1 });
+  const metal = new THREE.MeshStandardMaterial({ color: '#57534f', metalness: 0.9, roughness: 0.45, side: THREE.DoubleSide });
+  const dark = new THREE.MeshStandardMaterial({ color: '#0c0d0f', roughness: 0.9 });
+  const edge = new THREE.MeshStandardMaterial({ color: '#d4d4cc', roughness: 0.6 });
+  const add = (parent: THREE.Object3D, geo: THREE.BufferGeometry, m: THREE.Material, x = 0, y = 0, z = 0, name?: string) => {
     const mesh = new THREE.Mesh(geo, m);
     mesh.position.set(x, y, z);
     mesh.castShadow = true;
@@ -230,105 +379,156 @@ function proceduralJet(spec: CarSpec, mats: CarMaterials) {
     parent.add(mesh);
     return mesh;
   };
-  const tail = -L / 2 + spec.wheelbase * 0.0;
-  // fuselage and nose cone (the root sits midway between the nose wheel and the mains)
-  const zMid = -spec.comForward * 0.2;
-  add(body, new THREE.CylinderGeometry(0.95, 1.1, L * 0.62, 18).rotateX(Math.PI / 2), mats.paint, 0, yAxis, zMid - L * 0.05);
-  add(body, new THREE.ConeGeometry(0.95, L * 0.22, 18).rotateX(Math.PI / 2), mats.paint, 0, yAxis, zMid + L * 0.36);
-  // intakes and the engine bay
-  for (const s of [1, -1]) add(body, new THREE.BoxGeometry(1.0, 1.3, L * 0.45), mats.paint, s * 1.35, yAxis - 0.1, zMid - L * 0.08);
-  // the canopy
-  add(body, new THREE.SphereGeometry(0.62, 16, 10, 0, Math.PI * 2, 0, Math.PI / 2).scale(1, 0.9, 3.0), mats.glass, 0, yAxis + 0.75, zMid + L * 0.2);
-  // wings: a flat planform (the Su-47's swept forward)
-  const wing = new THREE.Shape();
-  const root0 = L * 0.28, tipChord = 1.4, half = span / 2;
-  const sweep = forward ? -2.2 : 4.4;
-  wing.moveTo(0, root0 / 2);
-  wing.lineTo(half, root0 / 2 - sweep - (forward ? 0 : 0));
-  wing.lineTo(half, root0 / 2 - sweep - tipChord);
-  wing.lineTo(0, -root0 / 2);
-  wing.closePath();
-  const wingGeo = new THREE.ExtrudeGeometry(wing, { depth: 0.12, bevelEnabled: false }).rotateX(Math.PI / 2);
+  const z = (d: number) => A.zNose - d;
+
+  // fuselage; the radome is the same shape again, a hair larger, in the second tone
+  add(body, loft(A.zNose, A.fuselage), mats.paint);
+  const nose = A.fuselage.filter((s) => s.d <= A.radome + 0.01).map((s) => ({ ...s, w: s.w * 1.012, h: s.h * 1.012 }));
+  const at = (d: number): Section => {
+    const i = Math.max(1, A.fuselage.findIndex((s) => s.d >= d)), a = A.fuselage[i - 1], b = A.fuselage[i], k = (d - a.d) / (b.d - a.d);
+    return { d, y: a.y + (b.y - a.y) * k, w: (a.w + (b.w - a.w) * k) * 1.012, h: (a.h + (b.h - a.h) * k) * 1.012 };
+  };
+  if (nose[nose.length - 1].d < A.radome - 0.01) nose.push(at(A.radome));
+  add(body, loft(A.zNose, nose), camo2);
+  // the canopy: a long bubble, its frame the fuselage under it
+  const c = A.canopy, len = c.to - c.from;
+  add(body, new THREE.SphereGeometry(1, 18, 10, 0, Math.PI * 2, 0, Math.PI / 2).scale(c.w, c.top - 0.82, len / 2), mats.glass, 0, A.axis + 0.8, z((c.from + c.to) / 2 - len * 0.04));
+  // intakes and nacelles, the intake's mouth dark
   for (const s of [1, -1]) {
-    const w = add(body, wingGeo, mats.paint, 0, yAxis + 0.05, zMid - L * 0.12);
-    w.scale.x = s;
-  }
-  add(body, new THREE.BoxGeometry(span * 0.3, 0.13, 2.2), camo2, span * 0.18, yAxis + 0.12, zMid - L * 0.14);
-  // twin fins
-  for (const s of [1, -1]) {
-    const fin = new THREE.Shape();
-    fin.moveTo(0, 0);
-    fin.lineTo(3.4, 0);
-    fin.lineTo(1.6, 3.1);
-    fin.lineTo(0.6, 3.1);
-    fin.closePath();
-    const g = new THREE.ExtrudeGeometry(fin, { depth: 0.1, bevelEnabled: false }).rotateY(-Math.PI / 2);
-    const mesh = add(body, g, mats.paint, s * 1.3, yAxis + 0.4, tail + 1.2);
-    mesh.rotation.z = s * 0.15;
-  }
-  // tailplanes (stabilators), canards on the Su-47
-  for (const [s, name] of [[1, 'stab_l'], [-1, 'stab_r']] as const) {
-    const pivot = new THREE.Group();
-    pivot.name = name;
-    pivot.position.set(s * 2.0, yAxis, tail + 1.6);
-    body.add(pivot);
-    add(pivot, new THREE.BoxGeometry(3.2, 0.08, 2.4), mats.paint, s * 1.5, 0, -0.6);
-    if (forward) {
-      const c = new THREE.Group();
-      c.name = s > 0 ? 'canard_l' : 'canard_r';
-      c.position.set(s * 1.6, yAxis + 0.3, zMid + L * 0.18);
-      body.add(c);
-      add(c, new THREE.BoxGeometry(2.2, 0.06, 1.4), mats.paint, s * 1.0, 0, 0);
+    const side = A.nacelle.map((q) => ({ ...q, x: (q.x ?? 0) * s }));
+    add(body, loft(A.zNose, side), mats.paint);
+    const lip = side[0];
+    add(body, new THREE.BoxGeometry(lip.w * 1.7, lip.h * 1.7, 0.06), dark, lip.x, lip.y, z(lip.d) + 0.02);
+    for (const b of A.booms) {
+      const to = b.to[s > 0 ? 0 : 1];
+      add(body, new THREE.BoxGeometry(b.w * 2, b.h * 2, to - b.from), mats.paint, b.x * s, b.y, z((b.from + to) / 2));
     }
   }
-  // nozzles
-  for (const [s, name] of [[1, 'nozzle_l'], [-1, 'nozzle_r']] as const) {
-    add(body, new THREE.CylinderGeometry(0.55, 0.62, 1.4, 16, 1, true).rotateX(Math.PI / 2), metal, s * 0.75, yAxis - 0.1, tail + 0.6, name);
+  // wings (and their light leading edges), fins
+  for (const s of [1, -1]) {
+    const wing = (u: number, v: number): [number, number] => [u * s, A.wingY + v];
+    for (const [a, b] of A.wings) {
+      add(body, panel(A.zNose, a, b, wing, s > 0), mats.paint);
+      if (A.edges) add(body, panel(A.zNose, { ...a, te: a.le + 0.28, t: a.t * 0.5, le: a.le - 0.03 }, { ...b, te: b.le + 0.2, t: b.t * 0.5, le: b.le - 0.03 }, (u, v) => [u * s, A.wingY + v + 0.012], s > 0), edge);
+    }
+    const f = A.fin;
+    const fin = (u: number, v: number): [number, number] => [(f.x + u * Math.sin(f.cant)) * s + v * s, f.base + u * Math.cos(f.cant)];
+    add(body, panel(A.zNose, f.root, f.tip, fin, s < 0), mats.paint);
+    // the fin's cap in the second tone
+    const k = 0.86, cap: Station = { u: f.tip.u * k, le: f.root.le + (f.tip.le - f.root.le) * k, te: f.root.te + (f.tip.te - f.root.te) * k, t: f.root.t + (f.tip.t - f.root.t) * k + 0.02 };
+    add(body, panel(A.zNose, cap, { ...f.tip, t: f.tip.t + 0.02 }, fin, s < 0), A.edges ? edge : camo2);
   }
-  // lamps: wing tips, tail, the taxi lamp on the nose gear
-  const lamp = (name: string, color: string, x: number, y: number, z: number) => {
+  // tailplanes (all-moving) and canards: each on a pivot at a third of its root chord
+  const moving = (name: string, def: NonNullable<Airframe['canard']>, s: number) => {
+    const pivotD = def.root.le + (def.root.te - def.root.le) * 0.4;
+    const pivot = new THREE.Group();
+    pivot.name = name;
+    pivot.position.set(def.x * s, def.y, z(pivotD));
+    body.add(pivot);
+    const g = panel(A.zNose, def.root, def.tip, (u, v) => [u * s, v], s > 0).translate(0, 0, -z(pivotD));
+    add(pivot, g, mats.paint);
+  };
+  for (const s of [1, -1]) {
+    moving(s > 0 ? 'stab_l' : 'stab_r', A.stab, s);
+    if (A.canard) moving(s > 0 ? 'canard_l' : 'canard_r', A.canard, s);
+  }
+  // nozzles: the petals narrowing to the exit, dark inside (`nozzle_*`: the rig hangs the plume on its aft end)
+  const n = A.nozzle;
+  for (const [s, name] of [[1, 'nozzle_l'], [-1, 'nozzle_r']] as const) {
+    add(body, new THREE.CylinderGeometry(n.radius, n.radius * 1.28, n.length, 18, 1, true).rotateX(-Math.PI / 2), metal, n.x * s, n.y, z(n.d + n.length / 2), name);
+    add(body, new THREE.CircleGeometry(n.radius * 1.2, 18), dark, n.x * s, n.y, z(n.d + 0.15)).rotation.y = Math.PI;
+  }
+  // lamps: wing tips, the fins' tops, the beacon on the spine
+  const lamp = (name: string, color: string, x: number, y: number, d: number, r = 0.09) => {
     const m = new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0 });
     m.name = name;
-    add(body, new THREE.SphereGeometry(0.09, 8, 6), m, x, y, z);
+    add(body, new THREE.SphereGeometry(r, 8, 6), m, x, y, z(d));
   };
-  lamp('navlight_red', '#ff2a1a', half, yAxis + 0.05, zMid - L * 0.12 - (forward ? -2.2 : 4.4) * 0.9);
-  lamp('navlight_green', '#2aff5a', -half, yAxis + 0.05, zMid - L * 0.12 - (forward ? -2.2 : 4.4) * 0.9);
-  lamp('navlight_white', '#ffffff', 0, yAxis + 0.2, tail);
-  lamp('beacon', '#ff3020', 0, yAxis + 1.0, zMid);
-  // the gear: nose leg (steering), two main legs
+  const tip = A.wings[A.wings.length - 1][1];
+  lamp('navlight_red', '#ff2a1a', tip.u, A.wingY + (tip.v ?? 0), tip.le + 0.3);
+  lamp('navlight_green', '#2aff5a', -tip.u, A.wingY + (tip.v ?? 0), tip.le + 0.3);
+  lamp('navlight_white', '#ffffff', A.fin.x + A.fin.tip.u * Math.sin(A.fin.cant), A.fin.base + A.fin.tip.u * Math.cos(A.fin.cant), A.fin.tip.te);
+  lamp('beacon', '#ff3020', 0, A.axis + 1.0, (A.canopy.to + A.fin.root.le) / 2, 0.11);
+
+  // the gear: nose leg (steering; the Su-47's has two wheels), two main legs. Each hangs from its hinge under the belly
   const r = spec.wheelRadius, rn = spec.frontWheelRadius ?? r;
-  const leg = (name: string, spinName: string, x: number, z: number, radius: number, steer: boolean) => {
+  const leg = (name: string, spinName: string, x: number, zAt: number, hinge: number, radius: number, steer: boolean) => {
     const g = new THREE.Group();
     g.name = name;
-    g.position.set(x, belly, z);
+    g.position.set(x, hinge, zAt);
     body.add(g);
     let parent: THREE.Object3D = g;
     if (steer) {
-      const s = new THREE.Group();
-      s.name = 'steer_nose';
-      g.add(s);
-      parent = s;
+      const st = new THREE.Group();
+      st.name = 'steer_nose';
+      g.add(st);
+      parent = st;
     }
-    add(parent, new THREE.CylinderGeometry(0.09, 0.09, belly - radius, 8), mats.chrome, 0, -(belly - radius) / 2, 0);
+    add(parent, new THREE.CylinderGeometry(0.075, 0.095, hinge - radius, 10), mats.chrome, 0, -(hinge - radius) / 2, 0);
+    // the drag brace and the door hanging beside the leg
+    add(parent, new THREE.CylinderGeometry(0.04, 0.04, (hinge - radius) * 0.8, 6).rotateX(0.5), mats.chrome, 0, -(hinge - radius) * 0.42, -0.24);
+    add(parent, new THREE.BoxGeometry(0.03, (hinge - radius) * 0.62, 0.7), mats.paint, (x >= 0 ? 1 : -1) * (steer ? 0.3 : 0.34), -(hinge - radius) * 0.34, 0);
     const spin = new THREE.Group();
     spin.name = spinName;
-    spin.position.set(0, radius - belly, 0);
+    spin.position.set(0, radius - hinge, 0);
     parent.add(spin);
-    spin.add(new THREE.Mesh(new THREE.CylinderGeometry(radius, radius, radius * 0.6, 16).rotateZ(Math.PI / 2), mats.tire));
-    spin.add(new THREE.Mesh(new THREE.CylinderGeometry(radius * 0.6, radius * 0.6, radius * 0.62, 12).rotateZ(Math.PI / 2), mats.rim));
+    const twin = steer && (spec.frontTrack ?? 0) > 0.45 ? (spec.frontTrack ?? 0) / 2 : 0;
+    for (const dx of twin ? [-twin, twin] : [0]) {
+      const tyre = new THREE.Mesh(new THREE.CylinderGeometry(radius, radius, radius * 0.56, 18).rotateZ(Math.PI / 2), mats.tire);
+      const hub = new THREE.Mesh(new THREE.CylinderGeometry(radius * 0.55, radius * 0.55, radius * 0.58, 12).rotateZ(Math.PI / 2), mats.rim);
+      tyre.position.x = hub.position.x = dx;
+      tyre.castShadow = true;
+      spin.add(tyre, hub);
+    }
     if (steer) {
       const m = new THREE.MeshStandardMaterial({ color: '#fffbe8' });
       m.name = 'taxilight';
-      add(parent, new THREE.SphereGeometry(0.1, 8, 6), m, 0, -0.35, 0.2);
+      add(parent, new THREE.SphereGeometry(0.11, 10, 8), m, 0, -(hinge - radius) * 0.45, 0.16);
     }
   };
-  leg('gear_nose', 'spin_nose', 0, spec.wheelbase / 2, rn, true);
-  leg('gear_l', 'spin_l', spec.track / 2, -spec.wheelbase / 2, r, false);
-  leg('gear_r', 'spin_r', -spec.track / 2, -spec.wheelbase / 2, r, false);
+  const belly = A.axis - 0.7;
+  leg('gear_nose', 'spin_nose', 0, spec.wheelbase / 2, belly, rn, true);
+  leg('gear_l', 'spin_l', spec.track / 2, -spec.wheelbase / 2, belly, r, false);
+  leg('gear_r', 'spin_r', -spec.track / 2, -spec.wheelbase / 2, belly, r, false);
   return root;
 }
 
-/** Aircraft standing on an apron (scenery: no rig, no lights), or null when there is nothing to stand there. */
-export function parkedJets(_spots: { position: THREE.Vector3; heading: number; id: string }[]): THREE.Object3D | null {
-  return null;
+/**
+ * Aircraft standing on an apron (scenery: no rig, no lights, one mesh for all of them): the stand-in shapes in
+ * their first livery's colours, as vertex colours.
+ */
+export function parkedJets(spots: { position: THREE.Vector3; heading: number; id: string }[], specOf: (id: string) => CarSpec | undefined): THREE.Object3D | null {
+  const parts: THREE.BufferGeometry[] = [];
+  const cache = new Map<string, THREE.BufferGeometry>();
+  for (const spot of spots) {
+    const spec = specOf(spot.id);
+    if (!spec?.jet) continue;
+    let flat = cache.get(spot.id);
+    if (!flat) {
+      const model = proceduralJet(spec, createCarMaterials(spec));
+      model.updateMatrixWorld(true);
+      const list: THREE.BufferGeometry[] = [];
+      model.traverse((o) => {
+        const m = o as THREE.Mesh;
+        if (!m.isMesh) return;
+        const mat = m.material as THREE.MeshStandardMaterial;
+        // (lamps and the taxi light are too small to matter from the course)
+        if (/^(navlight_|beacon|taxilight)/.test(mat.name)) return;
+        const g = (m.geometry.index ? m.geometry.toNonIndexed() : m.geometry.clone()).applyMatrix4(m.matrixWorld);
+        for (const name of Object.keys(g.attributes)) if (name !== 'position' && name !== 'normal') g.deleteAttribute(name);
+        const count = g.attributes.position.count, col = new Float32Array(count * 3);
+        const tone = mat.color.clone();
+        for (let i = 0; i < count; i++) col.set([tone.r, tone.g, tone.b], i * 3);
+        g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+        list.push(g);
+      });
+      flat = mergeGeometries(list)!;
+      cache.set(spot.id, flat);
+    }
+    parts.push(flat.clone().rotateY(spot.heading).translate(spot.position.x, spot.position.y, spot.position.z));
+  }
+  if (!parts.length) return null;
+  const mesh = new THREE.Mesh(mergeGeometries(parts)!, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.6, metalness: 0.1 }));
+  mesh.name = 'parked-aircraft';
+  return mesh;
 }

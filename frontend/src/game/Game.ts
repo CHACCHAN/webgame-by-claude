@@ -37,7 +37,7 @@ import type { GameRenderer } from './render/RenderHost';
 import { onlineGrid } from './net/grid';
 import { LobbyLineup } from './net/LobbyLineup';
 import { LINEUP_VIEW, type LineupEntry } from './net/lineup';
-import { BIKE_CAMERA, CAR_CAMERA, ChaseCamera, TRAIN_CAMERA } from './camera/ChaseCamera';
+import { BIKE_CAMERA, CAR_CAMERA, ChaseCamera, JET_CAMERA, TRAIN_CAMERA } from './camera/ChaseCamera';
 import { hasExhaust, traitsOf } from './vehicle/kinds';
 import { InputManager } from './input/Input';
 import { TireSmoke, SkidMarks } from './fx/TireEffects';
@@ -953,7 +953,7 @@ export class Game {
     const train = !!CAR_SPECS[cfg.carId].train;
     const t = CAR_SPECS[cfg.carId].train;
     // the cab view sits just behind the nose of the leading car
-    this.chase.profile = t ? { ...TRAIN_CAMERA, front: { ...TRAIN_CAMERA.front, ahead: trainNose(t) - 0.35 } } : CAR_SPECS[cfg.carId].bike ? BIKE_CAMERA : CAR_CAMERA;
+    this.chase.profile = t ? { ...TRAIN_CAMERA, front: { ...TRAIN_CAMERA.front, ahead: trainNose(t) - 0.35 } } : CAR_SPECS[cfg.carId].bike ? BIKE_CAMERA : CAR_SPECS[cfg.carId].jet ? JET_CAMERA : CAR_CAMERA;
     if (train !== this.cameraForTrain) this.chase.mode = train ? 'bumper' : 'chase';
     this.cameraForTrain = train;
     if (cfg.online) {

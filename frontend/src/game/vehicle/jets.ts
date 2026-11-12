@@ -253,5 +253,36 @@ export function jetForLivery(spec: CarSpec, color?: string): CarSpec {
   return { ...spec, mass: l.mass, brakeForce: Math.round(l.mass * 9.81 * 0.5) };
 }
 
+/**
+ * Thrust of all engines (N) at the field: the static figure by the spool (0 = idle … 1 = military power) and the
+ * afterburner (0…1), less with the thinner air (σ^0.75) and changing with the Mach number as an afterburning
+ * low-bypass turbofan's does (estimated lapse).
+ */
+export function jetThrust(e: JetInfo['engines'], spool: number, afterburner: number, mach: number) {
+  const lapse = Math.pow(EDWARDS_AIR.density / 1.225, 0.75);
+  const dry = (e.idle + (e.dry - e.idle) * spool) * (1 - 0.15 * mach + 0.3 * mach * mach);
+  const reheat = (e.ab - e.dry) * afterburner * (1 + 0.6 * mach * mach);
+  return e.count * (dry + reheat) * lapse;
+}
+
+/**
+ * What a fighter on the ground can do at a speed (m/s), for whoever has to plan ahead (the AI's speed profile):
+ * the share of its weight still on the tyres, the sideways acceleration it can hold (tyres with a friction `mu`
+ * on what the wing leaves them, plus the side force of a skid of a few degrees, which is all there is near the
+ * top) and the deceleration with the brakes on and the speed brake out (drag, and the main wheels' brakes as far
+ * as their tyres hold). The same formulas as `VehicleSim.jetAero`.
+ */
+export function jetEnvelope(spec: CarSpec) {
+  const w = spec.jet!.wing, weight = spec.mass * 9.81, rho = EDWARDS_AIR.density;
+  const q = (v: number) => 0.5 * rho * v * v;
+  const load = (v: number) => 1 - Math.min(q(v) * w.area * w.cl0, weight * 0.97) / weight;
+  const mains = 0.5 - spec.comForward / spec.wheelbase;
+  return {
+    load,
+    lat: (v: number, mu: number) => mu * 9.81 * load(v) + (0.6 * 0.12 * q(v) * w.area) / spec.mass,
+    brake: (v: number, mu: number) => (q(v) * (w.area * (w.cd0 + w.cdGear) + w.speedBrake)) / spec.mass + Math.min(spec.brakeForce / weight, mu * mains * load(v)) * 9.81,
+  };
+}
+
 /** Is this vehicle allowed on this course? (the fighters only at Edwards) */
 export const allowedOn = (spec: Pick<CarSpec, 'jet'>, courseId: string) => !spec.jet || spec.jet.courses.includes(courseId);

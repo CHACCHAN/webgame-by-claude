@@ -85,7 +85,7 @@ export function desertMaterial(marks: LakeMarks, far: boolean): MeshStandardNode
     const seen = F(smoothstep(280, 110, dist));
     const open = F(float(1).sub(graded));
     const bush = F(has.mul(smoothstep(size, size.mul(0.55), d)).mul(open).mul(seen));
-    desert = V3(mix(desert, vec3(0.045, 0.055, 0.03), bush.mul(0.9)));
+    desert = V3(mix(desert, vec3(0.085, 0.095, 0.06), bush.mul(0.8)));
     desert = V3(desert.mul(mix(float(1), float(0.88), open.mul(float(1).sub(seen)))));
     desert = V3(mix(desert, vec3(0.3, 0.245, 0.17).mul(n2.mul(0.16).add(0.92)), graded.mul(0.75)));
   } else desert = V3(desert.mul(0.88));
@@ -99,12 +99,12 @@ export function desertMaterial(marks: LakeMarks, far: boolean): MeshStandardNode
   if (!far) {
     // the clay's cracks: polygons a hand or two across in plates of a few metres; each plate a shade of its own.
     // A crack is finer than a pixel a few car lengths away: it thins out with the distance instead of flickering
-    const fine = clayCells(at.mul(2.6) as Vec2), plates = clayCells(at.mul(0.23).add(3.7) as Vec2);
+    const fine = clayCells(at.mul(3.4) as Vec2), plates = clayCells(at.mul(0.23).add(3.7) as Vec2);
     const fineSeen = F(smoothstep(34, 5, dist)), plateSeen = F(smoothstep(170, 30, dist));
     const w = F(dist.mul(0.004).add(0.012));
-    const crack = F(smoothstep(w.mul(2.6).add(0.03), w.mul(2.6), fine.edge).mul(fineSeen).mul(0.36)
-      .add(smoothstep(w.mul(0.23).add(0.012), w.mul(0.23), plates.edge).mul(plateSeen).mul(0.3)));
-    playa = V3(playa.mul(plates.cell.sub(0.5).mul(0.07).mul(plateSeen).add(1)).mul(fine.cell.sub(0.5).mul(0.05).mul(fineSeen).add(1)));
+    const crack = F(smoothstep(w.mul(3.4).add(0.03), w.mul(3.4), fine.edge).mul(fineSeen).mul(0.2)
+      .add(smoothstep(w.mul(0.23).add(0.008), w.mul(0.23), plates.edge).mul(plateSeen).mul(0.1)));
+    playa = V3(playa.mul(plates.cell.sub(0.5).mul(0.05).mul(plateSeen).add(1)).mul(fine.cell.sub(0.5).mul(0.035).mul(fineSeen).add(1)));
     playa = V3(playa.mul(float(1).sub(clamp(crack, 0, 0.5))));
     for (const r of marks.runways) {
       const u = F(P.x.sub(r.x).mul(r.dx).add(P.z.sub(r.z).mul(r.dz)));

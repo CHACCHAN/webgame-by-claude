@@ -1,4 +1,5 @@
 import type { CarId, CarSpec } from './carSpecs';
+import { EDWARDS_AIR, jetThrust } from './jets';
 import data from './vehicleStats.json';
 
 /**
@@ -37,6 +38,8 @@ export function peakPowerKw(spec: CarSpec) {
  * acceleration: its figures are the three cars' real mass and the bogie's power scaled up to it.
  */
 export function specFigures(spec: CarSpec): Pick<VehicleStats, 'massKg' | 'powerKw'> {
+  // a fighter has no shaft: the power its thrust does at Mach 1 on the field, in full afterburner
+  if (spec.jet) return { massKg: spec.mass, powerKw: Math.round((jetThrust(spec.jet.engines, 1, 1, 1) * EDWARDS_AIR.sound) / 1000) };
   const kw = peakPowerKw(spec).kw;
   if (spec.train) {
     const massKg = spec.train.mass * 1000;

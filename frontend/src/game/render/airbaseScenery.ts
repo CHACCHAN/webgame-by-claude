@@ -13,6 +13,7 @@ import { addSlab, addStrip, PAVE_APRON, PAVE_RUNWAY, PAVE_TAXI, pavementGeometry
 import { shadeScene, type ShadeCaster } from './farShade';
 import { makeGlowTexture } from './textures';
 import { parkedJets } from './JetModel';
+import { CAR_SPECS, type CarId } from '../vehicle/carSpecs';
 import type { Float, Vec3 } from './tslNoise';
 
 /*
@@ -168,7 +169,8 @@ export function buildAirbaseScenery(track: Track, terrain: TerrainData, quality:
     const a = fld.apron.a0 + 82 + k * 125;
     const tone = 0.36 + r() * 0.07;
     put(solid, new THREE.BoxGeometry(HD, HH, HW), new THREE.Color(tone * 1.08, tone, tone * 0.9), a, hangarB, HH / 2);
-    put(solid, new THREE.CylinderGeometry(HD / 2, HD / 2, HW, 20, 1).rotateX(Math.PI / 2).scale(1, 0.26, 1), '#4a4d52', a, hangarB, HH);
+    // (the roof stands a little proud of the gables: flush with them the two flickered)
+    put(solid, new THREE.CylinderGeometry(HD / 2 + 0.4, HD / 2 + 0.4, HW + 1.2, 20, 1).rotateX(Math.PI / 2).scale(1, 0.26, 1), '#4a4d52', a, hangarB, HH);
     // two stand open with the lights on, the others are shut
     const open = k === 1 || k === 4;
     put(open ? lit : solid, new THREE.BoxGeometry(0.5, HH * 0.8, HW * 0.86), open ? '#ffffff' : '#33363a', a, hangarB - HD / 2 - 0.1, HH * 0.4);
@@ -201,7 +203,7 @@ export function buildAirbaseScenery(track: Track, terrain: TerrainData, quality:
   // the research centre's hangars on the lake's shore, north of the runway's end, by the compass rose
   for (const [a, b, w] of [[4330, 1080, 110], [4345, 1235, 86], [4250, 1150, 60]] as const) {
     put(solid, new THREE.BoxGeometry(70, 22, w), '#74736d', a, b, 11);
-    put(solid, new THREE.CylinderGeometry(35, 35, w, 18, 1).rotateX(Math.PI / 2).scale(1, 0.22, 1), '#4e5157', a, b, 22);
+    put(solid, new THREE.CylinderGeometry(35.4, 35.4, w + 1.2, 18, 1).rotateX(Math.PI / 2).scale(1, 0.22, 1), '#4e5157', a, b, 22);
     casters.push({ x: place(a, b).x, z: place(a, b).z, r: w / 2, top: place(a, b).y + 28 });
     lights.push({ ...place(a, b, 31), color: RED, size: 3, anim: 0 });
   }
@@ -260,6 +262,7 @@ export function buildAirbaseScenery(track: Track, terrain: TerrainData, quality:
       const p = place(fld.apron.a0 + 33 + k * 66, lane + 78, 0);
       return { position: p, heading: HEADING - Math.PI / 2, id: (['f15c', 'f15c', 'f15j', 'su47'] as const)[k % 4] };
     }),
+    (id) => CAR_SPECS[id as CarId],
   );
   if (parked) {
     parked.traverse((o) => {
@@ -272,7 +275,7 @@ export function buildAirbaseScenery(track: Track, terrain: TerrainData, quality:
   // ---------------------------------------------------------------- meshes
   const wallMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.82, metalness: 0.05 });
   wallMat.name = 'airbase-buildings';
-  const litMat = new THREE.MeshStandardMaterial({ color: '#15130f', emissive: '#ffd6a0', emissiveIntensity: 2.4, roughness: 0.6 });
+  const litMat = new THREE.MeshStandardMaterial({ color: '#15130f', emissive: '#ffd6a0', emissiveIntensity: 1.0, roughness: 0.6 });
   const glassMat = new THREE.MeshStandardMaterial({ color: '#0a1114', emissive: '#8fd0b8', emissiveIntensity: 0.5, roughness: 0.15, metalness: 0.4 });
   nightEmissive.push(litMat, glassMat);
   for (const [list, m, name] of [[solid, wallMat, 'buildings'], [lit, litMat, 'lit'], [glass, glassMat, 'tower-glass']] as const) {
@@ -332,7 +335,7 @@ function fieldLights(list: Light[]) {
   mat.positionNode = aPos;
   // sized in pixels of a 1080-line screen, whatever the distance and the drawing resolution (as the towns' lights)
   mat.sizeAttenuation = false;
-  mat.scaleNode = clampNode(aSize.mul(230).div(max(dist, 1)), 1.5, aSize.mul(4.5)).div(1080).mul(2).div(projY);
+  mat.scaleNode = clampNode(aSize.mul(260).div(max(dist, 1)), 2.1, aSize.mul(4.5)).div(1080).mul(2).div(projY);
   const fade = exp(dist.mul(-0.00012));
   mat.colorNode = aCol.mul(on).mul(texture(makeGlowTexture(), uv()).r).mul(uniforms.uIntensity).mul(fade.mul(0.8).add(0.2));
   const object = new THREE.Sprite(mat as unknown as THREE.SpriteMaterial);

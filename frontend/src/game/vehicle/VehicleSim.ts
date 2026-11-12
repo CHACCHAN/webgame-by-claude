@@ -3,7 +3,7 @@ import { clamp, damp, lerp, smoothstep } from '../util/math';
 import { type CarSpec, torqueAt } from './carSpecs';
 import { TRACTION_RISE } from './vvvf';
 import { bikeLimits } from './bikes';
-import { EDWARDS_AIR } from './jets';
+import { EDWARDS_AIR, jetThrust } from './jets';
 import { GROUP_CAR, GROUP_GROUND, GROUP_PROXY, GROUP_WALL, PhysicsWorld, RAPIER, groups } from './PhysicsWorld';
 
 export interface VehicleInput {
@@ -160,16 +160,21 @@ export class VehicleSim {
         .setRotation({ x: q.x, y: q.y, z: q.z, w: q.w })
         .setCcdEnabled(true)
         .setLinearDamping(spec.damping ?? 0.02)
-        .setAngularDamping(0.6)
+        // (a fighter turns on a nose wheel that carries an eighth of its weight: the damping that steadies a car
+        // took half of that wheel's turning moment; the air's own yaw damping is in `jetAero`)
+        .setAngularDamping(spec.jet ? 0.12 : 0.6)
         .setCanSleep(false),
     );
     const m = spec.mass;
     // a bike's light, narrow box rolled and pitched over at the first kick from the road (200 km/h through a
     // crest): it sits on four times the pitch and roll inertia (the yaw, its quick turning, unchanged)
     const steady = spec.bike ? 4 : 1;
+    // a fighter's mass sits around its middle (engines, fuel, wing box), not along its 19 m: about 0.42 of the
+    // slab's pitch and yaw inertia (the Eagle's are ≈ 224,000 and 255,000 kg·m²: from memory, an estimate)
+    const slender = spec.jet ? 0.42 : 1;
     const inertia = {
-      x: (m / 12) * (height * height + length * length) * 0.9 * steady,
-      y: (m / 12) * (width * width + length * length) * 0.95,
+      x: (m / 12) * (height * height + length * length) * 0.9 * steady * slender,
+      y: (m / 12) * (width * width + length * length) * 0.95 * slender,
       z: (m / 12) * (width * width + height * height) * 1.2 * steady,
     };
     const comY = spec.comHeight - this.rideHeight;
@@ -404,6 +409,16 @@ export class VehicleSim {
       const mu = Math.min(spec.gripFront, spec.gripRear) * this.gripScale;
       maxSteer = Math.min(maxSteer, Math.atan((spec.wheelbase * mu * 9.81 * 1.1) / (planarSpeed * planarSpeed)) + 0.06);
     }
+    // A fighter's nose wheel: full lock (45°) only at a walk, the take-off range (15°) from a jog on, and never more
+    // than the angle whose turn the tyres can hold with what the wing leaves on them: above that the rudder steers
+    // (`jetAero`), the nose wheel only follows.
+    if (spec.jet) {
+      maxSteer = ((spec.maxSteerDeg * Math.PI) / 180) * lerp(1, 0.33, smoothstep(3, 12, planarSpeed));
+      const mu = Math.min(spec.gripFront, spec.gripRear) * this.gripScale * (1 - this.liftShare);
+      // (plus the slip the nose tyre needs over the main tyres' to give its best: without it a taxi turn settled
+      // at 0.5 g on tyres good for 0.7; less of it the faster, where the rudder does the turning)
+      if (planarSpeed > 3) maxSteer = Math.min(maxSteer, Math.atan((spec.wheelbase * mu * 9.81 * 1.1) / (planarSpeed * planarSpeed)) + lerp(0.07, 0.015, smoothstep(20, 60, planarSpeed)));
+    }
     // counter-steering during a slide may use the full lock
     // (sliding with the tail out to the left means steering right is counter-steer)
     const isCounter = this.steerSmoothed * this.slipAngle > 0;
@@ -529,6 +544,17 @@ export class VehicleSim {
     const handbrake = inp.handbrake;
     // a bike's load moves between its wheels with the real centre of mass (the sim's is kept low, so it never tips):
     // under power the rear tyre carries it all at the wheelie limit, under braking the front at the stoppie limit
+    // A nose wheel turned further than its tyre's best slip angle only scrubs (it carries an eighth of the weight:
+    // past the peak the aircraft ploughs straight on with the wheel across). The steering stops there, whatever
+    // the stick asks: where the nose wheel is heading (its slip and angle of the last step) ± the peak.
+    if (spec.jet && planarSpeed > 3) {
+      const nose = this.wheels.find((w) => w.front && w.grounded);
+      if (nose) {
+        const course = nose.slipAngle - nose.steer;
+        steerAngle = clamp(steerAngle, -course - 0.15, -course + 0.15);
+      }
+    }
+
     this.longAcc = damp(this.longAcc, (fwdSpeed - this.lastFwd) / dt, 12, dt);
     this.lastFwd = fwdSpeed;
     // (each tyre keeps a quarter of its static load: with none the rear lost all side grip under braking and the bike
@@ -709,11 +735,7 @@ export class VehicleSim {
     this.afterburner += clamp(wantAb - this.afterburner, -dt / 0.3, dt / 1.2);
     // the sound and the gauge: N2 from 65 % at idle to 100 % at military power (a touch more in reheat)
     this.rpm = (65 + 35 * this.spool + 2 * this.afterburner) * 100;
-    const m = this.speed / EDWARDS_AIR.sound;
-    const lapse = Math.pow(EDWARDS_AIR.density / 1.225, 0.75);
-    const dry = lerp(e.idle, e.dry, this.spool) * (1 - 0.15 * m + 0.3 * m * m);
-    const reheat = (e.ab - e.dry) * this.afterburner * (1 + 0.6 * m * m);
-    this.thrust = e.count * (dry + reheat) * lapse;
+    this.thrust = jetThrust(e, this.spool, this.afterburner, this.speed / EDWARDS_AIR.sound);
     if (!hold) this.body.applyImpulse(_imp.copy(this.forward).multiplyScalar(this.thrust * dt), true);
   }
 
