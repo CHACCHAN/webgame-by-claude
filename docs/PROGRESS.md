@@ -2042,3 +2042,5 @@ falls with the speed (`fx/Exhaust.ts` `exhaustSeen`: half at 22 km/h, none from 
 a plume. Verified: 700 pictures of Kirifuri's start at dawn next to the same frames before
 (`~/.local/opt/wt/far/drive2/exhaust-before-after.jpg`). The tyres' smoke in a slide is untouched (it is meant
 to be seen). The films still show the balls until they are recorded again.
+- Deployed 11-12 as v2.2.0 (bundle `index-CofCe0oY.js`): the same bundle at the local and the public address,
+  `/api/content` says 2.2.0, leaderboard 200 at both.
