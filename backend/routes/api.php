@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\DeskController;
 use App\Http\Controllers\Api\LeaderboardController;
 use App\Http\Controllers\Api\MetaController;
 use App\Http\Controllers\Api\PlayerController;
@@ -32,6 +33,11 @@ Route::middleware('throttle:ai')->group(function () {
     Route::post('/ai/taunt', [RivalAiController::class, 'taunt']);
     Route::post('/ai/decide', [RivalAiController::class, 'decide']);
 });
+
+// the desk (About → AI窓口): a chat with a model behind the server (503 when there is none) and a plain report form;
+// the reports have their own limit per address inside (DeskController::keep), the form a coarse one against floods
+Route::post('/desk/chat', [DeskController::class, 'chat'])->middleware('throttle:desk');
+Route::post('/desk/report', [DeskController::class, 'report'])->middleware('throttle:60,1');
 
 Route::middleware(AuthenticatePlayer::class)->group(function () {
     Route::get('/players/me', [PlayerController::class, 'show']);
