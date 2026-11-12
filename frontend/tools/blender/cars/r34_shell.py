@@ -101,8 +101,13 @@ S13 = ([-1.53, -1.30, -1.05, -0.70, -0.585, -0.45, 0.80], [0.5, 0.06, 0.0, 1.0, 
 TRUNK_X = [0.828, 0.785, 0.722, 0.655, 0.592, 0.300, 0.0]
 TRUNK_DROP = [0.075, 0.042, 0.026, 0.017, 0.011, 0.003, 0.0]
 HOOD_X0 = [0.826, 0.785, 0.765, 0.740, 0.705, 0.340, 0.0]     # at the cowl: matches the windscreen's corners
-HOOD_X1 = [0.832, 0.792, 0.735, 0.650, 0.520, 0.270, 0.0]     # further forward
-HOOD_DROP = [0.062, 0.044, 0.034, 0.026, 0.018, 0.005, 0.0]
+HOOD_X1 = [0.832, 0.792, 0.735, 0.650, 0.350, 0.285, 0.0]     # further forward: c15 comes in beside c16 = the crease
+HOOD_DROP = [0.062, 0.044, 0.034, 0.026, 0.018, 0.005, 0.0]   # at the cowl: one soft crown
+# further forward the bonnet's middle stands up as a flat table between two creases that run from the grille's upper
+# corners back towards the windscreen (head-on r29, front 3/4 r07): c16 stays level with the centre line, c15 right
+# beside it lies 2.8 cm lower, and the wings' tops rise again from there
+HOOD_DROP1 = [0.062, 0.044, 0.037, 0.032, 0.028, 0.0, 0.0]
+HOOD_FLAT = [0.55, 0.55, 0.55, 0.45, 0.20, 0.0, 0.0]         # how much of the drop the nose takes away again
 
 
 def _lerp(a, b, t):
@@ -164,8 +169,9 @@ def _top_at(zz):
         return [c11, c12, c13, c14, c15, c16, (0.0, yc)]
     k = float(np.clip((zz - 0.95) / 0.5, 0, 1))
     k = k * k * (3 - 2 * k)
-    flat = 1.0 - 0.55 * float(np.clip((zz - 1.2) / 0.8, 0, 1))      # the bonnet flattens towards the nose
-    pts = [(HOOD_X0[i] + (HOOD_X1[i] - HOOD_X0[i]) * k, yc - HOOD_DROP[i] * flat) for i in range(7)]
+    fl = float(np.clip((zz - 1.2) / 0.8, 0, 1))                      # the bonnet flattens towards the nose
+    pts = [(HOOD_X0[i] + (HOOD_X1[i] - HOOD_X0[i]) * k,
+            yc - (HOOD_DROP[i] + (HOOD_DROP1[i] - HOOD_DROP[i]) * k) * (1.0 - HOOD_FLAT[i] * fl)) for i in range(7)]
     lift = 0.022 - 0.010 * float(np.clip((zz - 1.2) / 0.8, 0, 1))
     pts[0] = (pts[0][0], max(pts[0][1], float(Y_CREASE(zz)) + lift))
     return pts
@@ -178,10 +184,11 @@ def top_columns(z):
 
 
 def flare_at(zz):
-    """the GT-R's blistered wings: out by ~3.5 cm front and rear, stepping out right behind / ahead of the doors"""
+    """the GT-R's blistered wings, out by ~3.5 cm front and rear. The front wing steps out at the door's leading
+    edge (the vent's step, r07); the rear one swells out of the door over a forearm's length (r11: no step there)"""
     ramp = lambda t: float(np.clip(t, 0.0, 1.0)) ** 2 * (3 - 2 * float(np.clip(t, 0.0, 1.0)))
     front = 0.030 * ramp((zz - 0.745) / 0.05) * (1 - 0.35 * ramp((zz - 1.75) / 0.25))
-    rear = 0.034 * ramp((-0.635 - zz) / 0.05) * (1 - 0.45 * ramp((-1.70 - zz) / 0.30))
+    rear = 0.036 * ramp((-0.56 - zz) / 0.42) * (1 - 0.45 * ramp((-1.70 - zz) / 0.30))
     return front + rear
 
 
@@ -234,7 +241,7 @@ def _transform(base, top=None, hi=None, lo=None, bot=None, plan=None):
       hi   (c8..c10):  dict(sx=, y0=, y1=, z=)
       lo   (c4..c7):   dict(sx=, y0=, y1=, z=)
       bot  (c0..c3):   dict(y=, z=, sx=)
-      plan: (depth, half width): the face recedes by depth·(x/hw)² towards the corners
+      plan: (depth, half width[, power = 2]): the face recedes by depth·(x/hw)^power towards the corners
     """
     row = base.copy()
     if top:
@@ -263,10 +270,11 @@ def _transform(base, top=None, hi=None, lo=None, bot=None, plan=None):
             row[c, 1] = bot['y'] + (base[c, 1] - base[0, 1])
             row[c, 2] = bot['z']
     if plan:
-        depth, hw = plan
+        depth, hw = plan[:2]
+        power = plan[2] if len(plan) > 2 else 2
         sign = 1.0 if row[17, 2] > 0 else -1.0
         for c in range(NCOL):
-            row[c, 2] -= sign * depth * (row[c, 0] / hw) ** 2
+            row[c, 2] -= sign * depth * (abs(row[c, 0]) / hw) ** power
     return row
 
 
@@ -322,16 +330,23 @@ def nose_z(x, y):
     return float(_NOSE(y)) - 0.028 * t ** 2 - 0.066 * t ** 6
 
 
+TAIL_Z, TAIL_SWEEP, TAIL_HW, TAIL_POW = -2.235, 0.10, 0.79, 2.6
+
+
 def lamp_face_z(x, y):
-    """the tail-lamp panel: vertical, receding a little towards its corners"""
-    return -2.122 + 0.032 * (x / 0.84) ** 2
+    """the tail-lamp panel: vertical, a hand's width ahead of the bumper's back all the way across (the bumper's top
+    is a narrow ledge under the lamps on the rear 3/4 photo r11, not a shelf), turning forward round the corners:
+    11° at the inner lamps, 15° at the outer ones (TAIL_YAW in r34_fit)"""
+    return TAIL_Z + TAIL_SWEEP * (abs(x) / TAIL_HW) ** TAIL_POW
 
 
 def front_rows():
     b = mid_row(2.0)
     rows = []
     # the bonnet dips between the lamps down to its leading edge over the grille (BONNET_EDGE)
-    rows.append(_transform(b, top=dict(z=2.10, yx=lambda x: 0.752 + 0.024 * _sstep((abs(x) - 0.30) / 0.50)),
+    # (the bonnet's raised middle runs out into the leading edge)
+    rows.append(_transform(b, top=dict(z=2.10, yx=lambda x: 0.752 + 0.024 * _sstep((abs(x) - 0.30) / 0.50)
+                                       + 0.008 * (1 - _sstep((abs(x) - 0.26) / 0.12))),
                            hi=dict(sx=0.997, z=2.09), lo=dict(sx=0.997, z=2.10), bot=dict(y=0.152, z=2.10),
                            plan=(0.015, 0.86)))
     rows.append(_transform(b, top=dict(z=2.165, sx=0.99, yx=lambda x: 0.716 + 0.055 * _sstep((abs(x) - 0.36) / 0.46)),
@@ -351,10 +366,14 @@ def front_rows():
 def rear_rows():
     b = mid_row(-2.0)
     rows = []
-    rows.append(_transform(b, top=dict(y=1.003, z=-2.065), hi=dict(sx=0.993, z=-2.05), lo=dict(sx=0.996, z=-2.05),
-                           bot=dict(y=0.176, z=-2.06), plan=(0.015, 0.86)))
-    rows.append(_transform(b, top=dict(y=0.999, z=-2.112, sx=0.99), hi=dict(sx=0.985, y0=0.70, y1=0.90, z=-2.09),
-                           lo=dict(sx=0.98, y0=0.30, y1=0.62, z=-2.08), bot=dict(y=0.20, z=-2.10), plan=(0.035, 0.86)))
+    # two rows carry the deck and the sides back to the panel's edge, in the panel's own plan
+    rows.append(_transform(b, top=dict(y=1.004, z=TAIL_Z + 0.115), hi=dict(sx=0.993, z=TAIL_Z + 0.130),
+                           lo=dict(sx=0.996, z=TAIL_Z + 0.130), bot=dict(y=0.176, z=TAIL_Z + 0.125),
+                           plan=(0.055, TAIL_HW, TAIL_POW)))
+    rows.append(_transform(b, top=dict(y=0.999, z=TAIL_Z + 0.012, sx=0.99),
+                           hi=dict(sx=0.985, y0=0.70, y1=0.90, z=TAIL_Z + 0.022),
+                           lo=dict(sx=0.98, y0=0.30, y1=0.62, z=TAIL_Z + 0.030), bot=dict(y=0.20, z=TAIL_Z + 0.020),
+                           plan=(TAIL_SWEEP, TAIL_HW, TAIL_POW)))
     centre = 0.46
     for k in (1.0, 0.95, 0.72, 0.46, 0.22):
         rows.append(face_ring(0.81, 0.30, 0.978, 0.05, 0.014, lamp_face_z, centre=centre, k=k))

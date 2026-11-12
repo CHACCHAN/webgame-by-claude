@@ -64,6 +64,18 @@ SWATCHES = {
     'cal_blue': ('#1a3fa0', 0.38, 0.15),
     'cal_bolt': ('#8f9296', 0.40, 1.0),
     'pad': ('#1c1b1a', 0.9, 0.1),
+    # cabin (seen through the glass: the tones are apart enough to read as dash, seats and lining in the shade)
+    'c_dash': ('#141517', 0.82, 0.0),        # dash top, door tops: soft black
+    'c_plastic': ('#232427', 0.60, 0.0),     # consoles, shrouds, seat frames
+    'c_carpet': ('#0f0f10', 1.00, 0.0),
+    'c_cloth': ('#2b2c31', 0.96, 0.0),       # seat cloth
+    'c_cloth2': ('#44464d', 0.96, 0.0),      # the seats' middle panels
+    'c_leather': ('#0e0e0f', 0.48, 0.0),     # wheel rim, gaiter, black leather seats
+    'c_red': ('#7c1512', 0.80, 0.0),         # a sports seat's panels
+    'c_tan': ('#7b5a3c', 0.70, 0.0),
+    'c_lining': ('#5a5c60', 0.98, 0.0),      # headliner, pillars
+    'c_metal': ('#9a9da1', 0.38, 0.9),       # spokes, lever, headrest posts
+    'c_dial': ('#c9cbcd', 0.55, 0.0),        # the dials' rings, as much as shows from outside
 }
 
 
@@ -1013,3 +1025,206 @@ def underbody(mesh, y0, zf, zr, track_f, track_r, r_tyre, tip, layout='FR', axle
         mesh.box('u_zinc', x0 + 0.04, x1 - 0.04, yt - 0.006, yt + 0.02, z - 0.02, z + 0.02, bevel=0.005, segments=1)
     for x in (x0 + 0.10, x1 - 0.10):                          # the straps
         mesh.box('u_black', x - 0.014, x + 0.014, yt - 0.004, y0 + 0.03, z0 - 0.006, z1 + 0.006)
+
+
+# ---------------------------------------------------------------------------------------------------- cabin
+#
+# What a car's cabin is furnished with (game frame). The glass shows it from outside only, so the parts are the
+# ones that make a silhouette through a window: seat backs with their bolsters and headrests, the wheel with its
+# spokes, the binnacle's hood on the dash, lever and mirror. Upholstery is `pillow`s: boxes blown round.
+
+
+def pillow(mesh, mat, size, at=(0.0, 0.0, 0.0), fn=None, place=None, cuts=5, n=4.0):
+    """
+    a pad of `size` (across x, up, along z) centred at `at`, rounded like upholstery (a superellipsoid, exponent n).
+    fn(u, v, w, p) → p moves a point (u, v, w = -1..1 across / up / along, p in the pad's own frame, before `at`);
+    place(p) → the game frame (a seat back's recline). cuts: rows per side.
+    """
+    bm = bmesh.new()
+    bmesh.ops.create_cube(bm, size=1.0)
+    bmesh.ops.subdivide_edges(bm, edges=list(bm.edges), cuts=cuts, use_grid_fill=True)
+    for v in bm.verts:
+        u, vv, w = 2 * v.co.x, 2 * v.co.z, -2 * v.co.y
+        d = (abs(u) ** n + abs(vv) ** n + abs(w) ** n) ** (1.0 / n)
+        u, vv, w = u / d, vv / d, w / d
+        q = (u * size[0] / 2, vv * size[1] / 2, w * size[2] / 2)
+        if fn:
+            q = fn(u, vv, w, q)
+        q = (q[0] + at[0], q[1] + at[1], q[2] + at[2])
+        if place:
+            q = place(q)
+        v.co = K.B(*q)
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    mesh.merge(bm, mat, smooth=True)
+    bm.free()
+
+
+def _recline(origin, deg):
+    """place(): a frame leaning back by deg about x through `origin` (its y axis runs up the seat back)"""
+    c, s = math.cos(math.radians(deg)), math.sin(math.radians(deg))
+    ox, oy, oz = origin
+    return lambda p: (ox + p[0], oy + p[1] * c + p[2] * s, oz - p[1] * s + p[2] * c)
+
+
+def _sm(a, b, x):
+    t = min(1.0, max(0.0, (x - a) / (b - a)))
+    return t * t * (3 - 2 * t)
+
+
+def seat(mesh, x, y, z, width=0.50, length=0.50, h=0.22, back=0.60, recline=20.0, headrest='posts', bolster=1.0,
+         cloth='c_cloth', insert='c_cloth2', frame='c_plastic'):
+    """
+    a front seat: (x, y, z) = the middle of the cushion's rear edge on the floor; the cushion's top is h above the
+    floor, the back `back` tall, leaning by `recline` degrees. headrest: 'posts' (a pad on two posts), 'bucket' (the
+    back runs up into the head rest in one piece, belt slots under it), None. bolster scales the side bolsters.
+    """
+    hw = width / 2
+    mesh.box(frame, x - hw + 0.035, x + hw - 0.035, y, y + h - 0.085, z + 0.05, z + length - 0.07, bevel=0.012, segments=1)
+
+    def cushion(u, v, w, p):
+        up = max(v, 0.0)
+        side = _sm(0.50, 0.92, abs(u))
+        return (p[0], p[1] + up * (bolster * 0.034 * side + 0.016 * max(w, 0.0)) - 0.012 * up * _sm(0.2, 1.0, -w),
+                p[2])
+    pillow(mesh, cloth, (width, 0.13, length), (x, y + h - 0.065, z + length / 2), cushion)
+    pillow(mesh, insert, (width * 0.50, 0.026, length * 0.72), (x, y + h - 0.004, z + length * 0.52), cuts=3)
+    place = _recline((x, y + h - 0.045, z + 0.045), recline)
+    tall = back + (0.20 if headrest == 'bucket' else 0.0)
+
+    def backrest(u, v, w, p):
+        t = (v + 1) / 2 * tall / back                      # 0 at the hinge, 1 at the shoulders
+        narrow = 1.0 - 0.10 * _sm(0.35, 1.0, t) - (0.36 * _sm(1.02, 1.16, t) if headrest == 'bucket' else 0.0)
+        wing = bolster * (0.050 * (1 - _sm(0.35, 0.80, t)) + 0.030 * _sm(0.55, 0.90, t) * (1 - _sm(0.98, 1.08, t)))
+        front = (w + 1) / 2
+        return (p[0] * narrow, p[1], p[2] + front * wing * _sm(0.50, 0.95, abs(u)) - 0.012 * _sm(0.75, 1.0, t))
+    pillow(mesh, cloth, (width * 0.97, tall, 0.115), (0.0, tall / 2, 0.0), backrest, place, cuts=6)
+    pillow(mesh, insert, (width * 0.48, back * 0.60, 0.024), (0.0, back * 0.43, 0.052), None, place, cuts=3)
+    if headrest == 'posts':
+        pillow(mesh, cloth, (0.255, 0.165, 0.105), (0.0, back + 0.115, 0.004), None, place, cuts=3)
+        for sx in (-0.062, 0.062):
+            tube(mesh, 'c_metal', [place((sx, back - 0.03, 0.0)), place((sx, back + 0.06, 0.0))], 0.006, seg=6, cap=False)
+    elif headrest == 'bucket':
+        # the belt slots under the head rest: two dark pads let into the back
+        for sx in (-0.085, 0.085):
+            pillow(mesh, 'c_leather', (0.075, 0.034, 0.03), (sx * (width / 0.50), back * 0.985, 0.047), None, place, cuts=2)
+        pillow(mesh, insert, (0.15, 0.12, 0.024), (0.0, back + 0.105, 0.040), None, place, cuts=3)
+
+
+def bench(mesh, x0, x1, y, z, length=0.44, h=0.21, back=0.50, recline=24.0, places=2, headrests=False,
+          cloth='c_cloth', insert='c_cloth2'):
+    """the rear seat across x0..x1: (y, z) = the floor under the cushion's rear edge"""
+    xc, width = (x0 + x1) / 2, x1 - x0
+    pw = width / places
+
+    def cushion(u, v, w, p):
+        up = max(v, 0.0)
+        return (p[0], p[1] + up * 0.014 * max(w, 0.0), p[2])
+    pillow(mesh, cloth, (width, 0.13, length), (xc, y + h - 0.065, z + length / 2), cushion, cuts=6)
+    place = _recline((xc, y + h - 0.045, z + 0.04), recline)
+    pillow(mesh, cloth, (width, back, 0.11), (0.0, back / 2, 0.0), None, place, cuts=6)
+    for k in range(places):
+        px = -width / 2 + pw * (k + 0.5)
+        pillow(mesh, insert, (pw * 0.62, 0.026, length * 0.70), (xc + px, y + h - 0.004, z + length * 0.52), cuts=3)
+        pillow(mesh, insert, (pw * 0.60, back * 0.62, 0.024), (px, back * 0.46, 0.050), None, place, cuts=3)
+        if headrests:
+            pillow(mesh, cloth, (0.23, 0.14, 0.095), (px, back + 0.085, 0.0), None, place, cuts=3)
+
+
+def steering_wheel(mesh, centre, tilt=24.0, R=0.185, r=0.0165, spokes=(0.0, 104.0, -104.0), column=0.30,
+                   rim='c_leather', spoke='c_metal', hub='c_plastic', stalks=True):
+    """the wheel, facing the driver (-z) and tilted back by `tilt` degrees; spokes: angles from 6 o'clock"""
+    c = Vector(centre)
+    t = math.radians(tilt)
+    d = Vector((0.0, math.sin(t), -math.cos(t)))            # the column's axis, towards the driver
+    u = Vector((1.0, 0.0, 0.0))
+    w = d.cross(u)                                          # down the wheel's face
+    m = K.Mesh('steering')
+    prof = [(r * math.cos(math.radians(90 - 30 * k)), R + r * math.sin(math.radians(90 - 30 * k))) for k in range(13)]
+    m.lathe(prof, 36, mats=rim)
+    for a in spokes:
+        sp = K.Mesh('spoke')
+        # a flat bar, wide at the hub, waisted towards the rim, dished towards the hub
+        sp.box(spoke, -0.014, -0.002, -0.5, 0.5, 0.040, R - r * 0.4, bevel=0.003, segments=1)
+        sp.warp(lambda p: (p[0] - 0.012 * (1 - (p[2] - 0.04) / (R - 0.04)) ** 2,
+                           p[1] * (0.058 - 0.030 * _sm(0.04, R * 0.8, p[2])), p[2]))
+        ca, sa = math.cos(math.radians(a)), math.sin(math.radians(a))
+        sp.warp(lambda p: (p[0], p[1] * ca - p[2] * sa, p[1] * sa + p[2] * ca))
+        m.merge(sp)
+    m.lathe([(-0.045, 0.060), (0.004, 0.060), (0.018, 0.052), (0.026, 0.034), (0.029, 0.001)], 20, mats=hub)
+    m.lathe([(-column, 0.046), (-0.070, 0.044), (-0.045, 0.036)], 12, mats=hub)
+    m.warp(lambda p: tuple(c + d * p[0] + u * p[1] + w * p[2]))
+    mesh.merge(m)
+    if stalks:
+        for sx in (-1, 1):
+            a = c - d * 0.085 + u * (sx * 0.04)
+            b = c - d * 0.075 + u * (sx * 0.165) + w * 0.012
+            tube(mesh, hub, [tuple(a), tuple(b)], [0.008, 0.006], seg=6)
+
+
+def binnacle(mesh, x, y, z, width=0.36, height=0.085, depth=0.20, dials=((-0.085, 0.052), (0.085, 0.052)),
+             hood='c_dash', face='c_leather', figure='c_dial', drop=0.0):
+    """the instruments' hood on the dash: (x, y, z) = the middle of its foot on the driver's side (the dials' face is
+    there, looking back at the driver); the hood runs `depth` forward and down to the dash, which falls by `drop`
+    over that length. dials: (x, radius)"""
+    n = 14
+    rows = []
+    for f, sc in ((-0.14, 1.0), (0.0, 1.0), (0.35, 0.92), (0.75, 0.62), (1.0, 0.12)):
+        row = []
+        for i in range(n + 1):
+            a = math.pi * i / n
+            row.append((x - math.cos(a) * width / 2 * (0.9 + 0.1 * sc),
+                        y - drop * max(f, 0.0) + math.sin(a) ** 0.8 * height * sc, z + depth * f))
+        rows.append(row)
+    for j in range(len(rows) - 1):
+        for i in range(n):
+            q = [rows[j][i], rows[j][i + 1], rows[j + 1][i + 1], rows[j + 1][i]]
+            mesh.face(q, hood, out=(q[0][0] - x, 1.0, 0.0))
+    # the lip's underside and the face behind it, leaning back like the wheel
+    face_row = [(px, y + (py - y) * 0.86, z + 0.03 + (py - y) * 0.35) for px, py, _ in rows[1]]
+    for i in range(n):
+        q = [rows[0][i], rows[0][i + 1], face_row[i + 1], face_row[i]]
+        mesh.face(q, hood, out=(x - q[0][0], -1.0, 0.0))
+    mesh.face(face_row, face, smooth=False, out=(0, 0.3, -1))
+    for dx, rad in dials:
+        cy = y + height * 0.40
+        cz = z + 0.03 + height * 0.40 * 0.35 - 0.004
+        ring = [[(x + dx + rr * math.cos(2 * math.pi * i / 20), cy + rr * math.sin(2 * math.pi * i / 20) * 0.94,
+                  cz + rr * math.sin(2 * math.pi * i / 20) * 0.33) for rr in (rad, rad * 0.80)] for i in range(20)]
+        for i in range(20):
+            a, b = ring[i], ring[(i + 1) % 20]
+            mesh.face([a[0], b[0], b[1], a[1]], figure, smooth=False, out=(0, 0.3, -1))
+        mesh.face([p[1] for p in ring], face, smooth=False, out=(0, 0.3, -1))
+
+
+def gear_lever(mesh, x, y, z, height=0.19, knob='c_metal'):
+    """gaiter, lever and knob standing on the console at (x, y, z)"""
+    mesh.cylinder('c_leather', (x, y + 0.035, z), 0.050, 0.07, axis='y', segments=10, radius2=0.014)
+    tube(mesh, 'c_metal', [(x, y + 0.06, z), (x, y + height - 0.02, z - 0.012)], 0.007, seg=6, cap=False)
+    ellipsoid(mesh, knob, (x, y + height, z - 0.014), (0.024, 0.028, 0.024), seg=10, rings=6)
+
+
+def hand_brake(mesh, x, y, z, length=0.24):
+    tube(mesh, 'c_leather', [(x, y, z), (x, y + 0.03, z + length * 0.55), (x, y + 0.055, z + length)],
+         [0.014, 0.017, 0.016], seg=8)
+    ellipsoid(mesh, 'c_metal', (x, y + 0.057, z + length + 0.012), (0.012, 0.012, 0.012), seg=8, rings=4)
+
+
+def inside_mirror(mesh, y, z, x=0.0, width=0.23):
+    """the rear-view mirror hanging at the windscreen's top: (y, z) = its middle"""
+    pillow(mesh, 'c_plastic', (width, 0.062, 0.030), (x, y, z), cuts=3)
+    tube(mesh, 'c_plastic', [(x, y + 0.02, z + 0.01), (x, y + 0.075, z + 0.055)], 0.009, seg=6)
+
+
+def arm_rest(mesh, x, y, z0, z1, side, mat='c_plastic'):
+    """a door's arm rest with its pull: on the door card at x (side: +1 left door; the rest stands in from it)"""
+    xi = x - side * 0.035
+    pillow(mesh, mat, (0.075, 0.060, z1 - z0), (xi, y, (z0 + z1) / 2), cuts=3)
+    tube(mesh, 'c_metal', [(xi - side * 0.025, y + 0.035, z1 - 0.10), (xi - side * 0.040, y + 0.075, z1 - 0.07),
+                           (xi - side * 0.025, y + 0.105, z1 - 0.04)], 0.007, seg=6)
+
+
+def shelf_speakers(mesh, y, z, xs=(-0.42, 0.42), r=0.075):
+    """the speakers' grilles on the parcel shelf"""
+    for x in xs:
+        mesh.cylinder('c_plastic', (x, y + 0.004, z), r, 0.010, axis='y', segments=18)
+        mesh.cylinder('c_leather', (x, y + 0.010, z), r * 0.80, 0.006, axis='y', segments=18)

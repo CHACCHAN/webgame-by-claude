@@ -493,65 +493,47 @@ def shut_lines(m, shell):
 
 
 def cabin(m):
-    """dash, seats, steering wheel (right-hand drive: the driver sits at −x), door cards, headliner, floor, the
-    bulkhead behind the seats"""
-    # dash: a wedge under the windscreen
-    dash = [[(-0.70, 0.60, 0.45), (0.70, 0.60, 0.45), (0.70, 0.80, 0.42), (-0.70, 0.80, 0.42)],
-            [(-0.70, 0.60, 0.10), (0.70, 0.60, 0.10), (0.70, 0.84, 0.14), (-0.70, 0.84, 0.14)]]
-    loft(m, dash, 'interior', smooth=False)
-    # instrument binnacle
-    box(m, (-0.37, 0.85, 0.15), (0.30, 0.06, 0.12), 'interior')
-    # steering wheel: a ring in a plane leaning back, centre (−0.37, 0.80, 0.02)
-    c = np.array((-0.37, 0.79, 0.0))
-    tilt = math.radians(25)
-    n = 20
-    R, r = 0.18, 0.016
-    ex = np.array((1.0, 0, 0))
-    ey = np.array((0, math.cos(tilt), math.sin(tilt)))
-    en = np.cross(ex, ey)
-    rings = []
-    for i in range(n):
-        a = 2 * math.pi * i / n
-        cen = c + R * (math.cos(a) * ex + math.sin(a) * ey)
-        rad = math.cos(a) * ex + math.sin(a) * ey
-        rings.append([tuple(cen + r * (math.cos(b) * rad + math.sin(b) * en)) for b in
-                      (2 * math.pi * k / 6 for k in range(6))])
-    for i in range(n):
-        a, b = rings[i], rings[(i + 1) % n]
-        cen = c + R * (math.cos(2 * math.pi * (i + 0.5) / n) * ex + math.sin(2 * math.pi * (i + 0.5) / n) * ey)
-        for k in range(6):
-            k2 = (k + 1) % 6
-            q = [a[k], a[k2], b[k2], b[k]]
-            mid = np.mean(q, axis=0)
-            m.face(q, 'interior', out=tuple(mid - cen))
-    box(m, tuple(c - en * 0.03), (0.09, 0.07, 0.06), 'interior')
-    # column
-    loft(m, [[tuple(c - en * 0.05 + d) for d in ((-0.025, -0.025, 0), (0.025, -0.025, 0), (0.025, 0.025, 0),
-                                                   (-0.025, 0.025, 0))],
-             [tuple(c - en * 0.30 + d) for d in ((-0.03, -0.03, 0), (0.03, -0.03, 0), (0.03, 0.03, 0),
-                                                  (-0.03, 0.03, 0))]], 'interior', smooth=False)
-    # seats: cushion + raked back with side bolsters
+    """the cabin's fixed parts: dash, door cards, tunnel, floor, the bulkhead and the luggage deck behind the two
+    seats, the headliner (furniture: `furnish`)"""
+    # dash: a wedge under the windscreen, from door to door
+    dash = [[(-0.75, 0.60, 0.45), (0.75, 0.60, 0.45), (0.75, 0.80, 0.42), (-0.75, 0.80, 0.42)],
+            [(-0.75, 0.60, 0.10), (0.75, 0.60, 0.10), (0.75, 0.84, 0.14), (-0.75, 0.84, 0.14)]]
+    loft(m, dash, 'c_dash', smooth=False)
     for s in (1, -1):
-        x = s * 0.37
-        box(m, (x, 0.33, -0.48), (0.48, 0.12, 0.50), 'interior')
-        back = [[(x - 0.24, 0.36, -0.76), (x + 0.24, 0.36, -0.76), (x + 0.24, 0.36, -0.86), (x - 0.24, 0.36, -0.86)],
-                [(x - 0.22, 0.86, -0.90), (x + 0.22, 0.86, -0.90), (x + 0.22, 0.86, -0.98), (x - 0.22, 0.86, -0.98)]]
-        loft(m, back, 'interior', smooth=False)
-        box(m, (x, 0.92, -0.93), (0.24, 0.11, 0.08), 'interior')
-        # door card
-        q = [(s * 0.76, 0.32, 0.35), (s * 0.76, 0.32, -0.74), (s * 0.74, 0.84, -0.80), (s * 0.74, 0.84, 0.38)]
+        # door card, and the sill's step under it
+        q = [(s * 0.76, 0.24, 0.42), (s * 0.76, 0.24, -1.05), (s * 0.74, 0.84, -1.05), (s * 0.74, 0.84, 0.42)]
         m.face(q, 'interior', smooth=False, out=(-s, 0, 0))
     # tunnel and console
-    box(m, (0.0, 0.36, -0.15), (0.24, 0.20, 0.95), 'interior')
+    box(m, (0.0, 0.36, -0.15), (0.24, 0.20, 0.95), 'c_plastic')
     # floor, bulkhead and luggage deck behind the seats, headliner
-    m.face([(-0.78, 0.24, 0.42), (0.78, 0.24, 0.42), (0.78, 0.24, -1.05), (-0.78, 0.24, -1.05)], 'interior',
+    m.face([(-0.78, 0.24, 0.42), (0.78, 0.24, 0.42), (0.78, 0.24, -1.05), (-0.78, 0.24, -1.05)], 'c_carpet',
            smooth=False, out=(0, 1, 0))
-    m.face([(-0.76, 0.24, -1.05), (0.76, 0.24, -1.05), (0.70, 0.62, -1.08), (-0.70, 0.62, -1.08)], 'interior',
+    m.face([(-0.78, 0.24, 0.42), (0.78, 0.24, 0.42), (0.78, 0.62, 0.45), (-0.78, 0.62, 0.45)], 'c_carpet',
+           smooth=False, out=(0, 0, -1))
+    m.face([(-0.76, 0.24, -1.05), (0.76, 0.24, -1.05), (0.70, 0.62, -1.08), (-0.70, 0.62, -1.08)], 'c_carpet',
            smooth=False, out=(0, 0, 1))
-    m.face([(-0.70, 0.62, -1.08), (0.70, 0.62, -1.08), (0.66, 0.66, -1.80), (-0.66, 0.66, -1.80)], 'interior',
+    m.face([(-0.70, 0.62, -1.08), (0.70, 0.62, -1.08), (0.66, 0.66, -1.80), (-0.66, 0.66, -1.80)], 'c_carpet',
            smooth=False, out=(0, 1, 0))
-    m.face([(-0.55, 1.10, 0.02), (0.55, 1.10, 0.02), (0.55, 1.14, -0.80), (-0.55, 1.14, -0.80)], 'interior',
+    m.face([(-0.55, 1.10, 0.02), (0.55, 1.10, 0.02), (0.55, 1.14, -0.80), (-0.55, 1.14, -0.80)], 'c_lining',
            smooth=False, out=(0, -1, 0))
+
+
+def furnish(mesh):
+    """the furniture, from car_common (a hayate_kit Mesh): two deep buckets in black leather with red middles, the
+    three-spoke wheel on the right (the driver sits at −x), the instruments' hood with its big middle dial, lever,
+    hand brake, mirror, the doors' arm rests"""
+    import car_common as CC
+    for x in (-0.37, 0.37):
+        CC.seat(mesh, x, 0.24, -0.74, width=0.48, length=0.50, h=0.15, back=0.52, recline=20.0, headrest='bucket',
+                bolster=1.3, cloth='c_leather', insert='c_red')
+    CC.steering_wheel(mesh, (-0.37, 0.76, -0.01), tilt=25.0, R=0.178, spoke='c_leather')
+    CC.binnacle(mesh, -0.37, 0.838, 0.13, width=0.40, height=0.075, depth=0.20, drop=0.028,
+                dials=((-0.125, 0.040), (0.0, 0.056), (0.125, 0.040)))
+    CC.gear_lever(mesh, 0.0, 0.46, -0.10, knob='c_leather')
+    CC.hand_brake(mesh, 0.06, 0.46, -0.55)
+    CC.inside_mirror(mesh, 1.045, 0.10)
+    for s in (1, -1):
+        CC.arm_rest(mesh, s * 0.745, 0.58, -0.60, -0.05, s)
 
 
 # ---------------------------------------------------------------- exhaust
@@ -683,8 +665,15 @@ def build(body, shell, mats, counts):
     shut_lines(m, shell)
     counts['details'] = m.tris()
     m.build(body, mats, weld=1e-6)
+    import car_common as CC
+    import hayate_kit as HK
+    for n in ('c_dash', 'c_plastic', 'c_carpet', 'c_lining'):
+        CC.material_for(mats, n)
     c = Mesh('cabin')
     cabin(c)
-    counts['cabin'] = c.tris()
+    fur = HK.Mesh('furniture')
+    furnish(fur)
+    counts['cabin'] = c.tris() + fur.tris()
     c.build(body, mats, weld=1e-6)
+    CC.build(fur, body, mats)
     exhaust(mats, body, counts)

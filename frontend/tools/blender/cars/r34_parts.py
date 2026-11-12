@@ -87,6 +87,7 @@ def polyline(pts, step=0.04):
 # ---------------------------------------------------------------- wing
 
 WING_X = 0.775
+WING_DZ = -0.085        # the wing stands over the lid's rear edge (SH.TAIL_Z)
 STAY_X = 0.47
 
 
@@ -109,7 +110,7 @@ def wing(part, deck_y):
     for x in xs:
         t = abs(x) / WING_X
         chord = 0.25 - 0.03 * max(0.0, (t - 0.85) / 0.15) ** 2
-        le_z = -1.86 - 0.012 * t * t
+        le_z = -1.86 + WING_DZ - 0.012 * t * t
         y0 = 1.152 - 0.018 * max(0.0, (t - 0.80) / 0.20) ** 1.5
         sec = []
         for c, yo in foil:
@@ -123,7 +124,7 @@ def wing(part, deck_y):
     for x in fx:
         sec = []
         for c, yo in airfoil(8):
-            sec.append((x, 1.194 + yo * 0.075 + 0.045 * c, -2.06 - c * 0.075))
+            sec.append((x, 1.194 + yo * 0.075 + 0.045 * c, -2.06 + WING_DZ - c * 0.075))
         fsecs.append(sec)
     loft(part, fsecs, 'trim', smooth=True)
     # rounded pods closing the plane's tips
@@ -137,15 +138,15 @@ def wing(part, deck_y):
             for j in range(16):
                 b = 2 * math.pi * j / 16
                 sec.append((x, 1.17 + 0.03 * r * math.sin(b) + 0.012 * math.cos(b),
-                            -1.99 + 0.14 * r * math.cos(b)))
+                            -1.99 + WING_DZ + 0.14 * r * math.cos(b)))
             pod.append(sec)
         loft(part, pod, 'paint', smooth=True)
     # stays: tapered blades from the lid to the plane
     for s in (1, -1):
         x = s * STAY_X
         secs = []
-        for y, zc, ch, w in ((deck_y(x, -1.98) - 0.01, -1.99, 0.17, 0.034), (1.05, -1.975, 0.13, 0.028),
-                             (1.155, -1.965, 0.10, 0.024)):
+        for y, zc, ch, w in ((deck_y(x, -1.98 + WING_DZ) - 0.01, -1.99 + WING_DZ, 0.17, 0.034),
+                             (1.05, -1.975 + WING_DZ, 0.13, 0.028), (1.155, -1.965 + WING_DZ, 0.10, 0.024)):
             sec = []
             for j in range(10):
                 a = 2 * math.pi * j / 10
@@ -316,6 +317,33 @@ def door_line(part, surf):
                 quad(part, q, 'paint', (s, 0.0, 0.0))
 
 
+def arch_lips(part, surf):
+    """the wheel arches' rolled lips: a low bead round each opening, standing on the wing's own surface, and the
+    flange turned in behind it (the cut-out alone left a paper edge and an arch that read as a hole in a flat side)"""
+    prof = [(0.034, 0.0006), (0.024, 0.0026), (0.013, 0.0066), (0.004, 0.0074)]   # (beyond the opening, proud)
+    for (zc, yc, r) in (SH.ARCH_F, SH.ARCH_R):
+        for s in (1, -1):
+            rows = []
+            for a in np.radians(np.linspace(-22, 202, 113)):
+                ca, sa = math.cos(a), math.sin(a)
+                at = lambda rad, x: np.array((x, yc + rad * sa, zc + rad * ca))
+                row = [surf.onto(zc + (r + d) * ca, yc + (r + d) * sa, 'x', s, lift) for d, lift in prof]
+                # not across a vent or a seam: the lip lies on one sheet
+                if any(p is None for p in row) or max(p[0] * s for p in row) - min(p[0] * s for p in row) > 0.016:
+                    rows.append(None)
+                    continue
+                x = row[-1][0]
+                row += [at(r - 0.003, x - s * 0.0015), at(r - 0.004, x - s * 0.010), at(r - 0.002, x - s * 0.036)]
+                rows.append((row, (0.0, -sa, -ca)))
+            for A, Bn in zip(rows[:-1], rows[1:]):
+                if A is None or Bn is None:
+                    continue
+                (ra, inward), (rb, _) = A, Bn
+                for k in range(len(ra) - 1):
+                    q = [ra[k], rb[k], rb[k + 1], ra[k + 1]]
+                    quad(part, q, 'paint', (s, 0.0, 0.0) if k < len(prof) else inward, smooth=k != len(prof) - 1)
+
+
 def shut_lines(part, surf, glass_surf):
     w = 0.0045
     for s in (1, -1):
@@ -331,7 +359,7 @@ def shut_lines(part, surf, glass_surf):
     strip(part, surf, [(x, float(SH.BONNET_EDGE(abs(x))) - 0.004) for x in xs], 'z', 1, w, 'trim')
     # boot lid: sides on the deck, rear edge between the inner lamps
     for s in (1, -1):
-        strip(part, surf, polyline([(s * 0.64, -1.53), (s * 0.645, -2.0)]), 'y', 1, w, 'trim')
+        strip(part, surf, polyline([(s * 0.64, -1.53), (s * 0.645, -2.0), (s * 0.64, -2.14)]), 'y', 1, w, 'trim')
         strip(part, surf, polyline([(s * 0.62, 0.985), (s * 0.55, 0.974), (s * 0.47, 0.950), (s * 0.39, 0.918),
                                     (s * 0.375, 0.87), (s * 0.375, 0.672)]), 'z', -1, w, 'trim')
     strip(part, surf, polyline([(0.375, 0.672), (-0.375, 0.672)]), 'z', -1, w, 'trim')
@@ -368,9 +396,10 @@ def lining(part, grid, classify):
         for j, j1 in zip(cols[:-1], cols[1:]):
             if all(classify(a, b) == 'glass' for a in range(i, i1) for b in range(j, j1)):
                 continue
-            # keep clear of the wheel arches: low on the sides only between the arches (door cards)
+            # keep clear of the wheel arches: down to the sill only between the arches (the door cards: with glass
+            # one can see through, a door without its card shows the paint's own back)
             zq = 0.5 * (zs[i] + zs[i1])
-            if j < (14 if -0.95 < zq < 0.90 else 18):
+            if j < (6 if -0.95 < zq < 0.80 else 18):
                 continue
             for sg in (1, -1):
                 q = []
@@ -381,58 +410,51 @@ def lining(part, grid, classify):
                     nd = np.linalg.norm(d)
                     q.append(p + d / max(nd, 1e-6) * 0.025)
                 c = np.mean(q, axis=0)
-                quad(part, q, 'interior', np.array((0.0, 0.72, c[2])) - c, smooth=True)
+                # grey lining over the belt (roof, pillars), dark door cards under it
+                quad(part, q, 'c_lining' if c[1] > 0.97 else 'interior', np.array((0.0, 0.72, c[2])) - c, smooth=True)
 
 
 def interior(part):
     # floor and bulkheads
-    part.box('interior', -0.70, 0.70, 0.20, 0.25, -0.95, 0.80)
-    part.box('interior', -0.52, 0.52, 0.20, 0.25, -1.40, -0.95)
+    part.box('c_carpet', -0.815, 0.815, 0.20, 0.25, -0.95, 0.80)
+    part.box('c_carpet', -0.52, 0.52, 0.20, 0.25, -1.40, -0.95)
     for sx in (-1, 1):                                                   # rear wheel tubs
         part.box('interior', min(sx * 0.52, sx * 0.60), max(sx * 0.52, sx * 0.60), 0.25, 0.62, -1.40, -0.95)
-    part.box('interior', -0.72, 0.72, 0.25, 0.62, 0.70, 0.80)            # foot well wall / firewall
+    part.box('interior', -0.815, 0.815, 0.25, 0.62, 0.70, 0.80)          # foot well wall / firewall
+    for sx in (-1, 1):
+        # the rear quarters' trim, from the wheel tubs up to the lining under the quarter windows, and the wall
+        # between the door card and the dash's end
+        quad(part, [(sx * 0.60, 0.62, -0.95), (sx * 0.60, 0.62, -1.40), (sx * 0.822, 0.895, -1.40),
+                    (sx * 0.822, 0.895, -0.95)], 'interior', (-sx, 1.0, 0.0))
+        quad(part, [(sx * 0.60, 0.25, -0.95), (sx * 0.83, 0.25, -0.95), (sx * 0.822, 0.895, -0.95),
+                    (sx * 0.60, 0.62, -0.95)], 'interior', (0.0, 0.0, 1.0))
+        quad(part, [(sx * 0.815, 0.25, 0.80), (sx * 0.815, 0.25, 0.70), (sx * 0.83, 0.90, 0.70),
+                    (sx * 0.83, 0.90, 0.80)], 'interior', (-sx, 0.0, 0.0))
     part.box('interior', -0.52, 0.52, 0.25, 0.95, -1.40, -1.30)          # behind the rear seat
-    part.box('interior', -0.66, 0.66, 0.95, 0.975, -1.52, -1.02)         # parcel shelf
+    part.box('c_plastic', -0.66, 0.66, 0.95, 0.975, -1.52, -1.24)        # parcel shelf, from the seat back's top
     # dash: a deep slab under the windscreen with the binnacle on the right (driver)
-    part.box('interior', -0.74, 0.74, 0.62, 0.86, 0.46, 0.84, bevel=0.03)
-    part.box('interior', -0.52, -0.22, 0.86, 0.93, 0.48, 0.66, bevel=0.025)
+    part.box('c_dash', -0.805, 0.805, 0.62, 0.86, 0.46, 0.84, bevel=0.03)
     part.box('trim', -0.11, 0.11, 0.62, 0.82, 0.40, 0.47)                # centre stack
-    part.box('interior', -0.11, 0.11, 0.25, 0.48, -0.55, 0.45, bevel=0.02)   # console
-    # steering wheel (right-hand drive: driver at -x)
-    sw = (-0.37, 0.86, 0.38)
-    tilt = math.radians(22)
-    bm = bmesh.new()
-    segs, ts = 24, 8
-    R, r = 0.18, 0.016
-    vs = []
-    for i in range(segs):
-        a = 2 * math.pi * i / segs
-        ring = []
-        for j in range(ts):
-            b = 2 * math.pi * j / ts
-            rr = R + r * math.cos(b)
-            ring.append(bm.verts.new((rr * math.cos(a), rr * math.sin(a), r * math.sin(b))))
-        vs.append(ring)
-    for i in range(segs):
-        for j in range(ts):
-            bm.faces.new([vs[i][j], vs[(i + 1) % segs][j], vs[(i + 1) % segs][(j + 1) % ts], vs[i][(j + 1) % ts]])
-    bmesh.ops.create_cone(bm, cap_ends=True, segments=12, radius1=0.05, radius2=0.05, depth=0.05)
-    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
-    # torus lies in its local xy plane; face it to the driver: rotate about x by 90 - tilt
-    m = Matrix.Translation(K.B(*sw)) @ Matrix.Rotation(math.radians(90) - tilt, 4, 'X')
-    bmesh.ops.transform(bm, matrix=m, verts=bm.verts)
-    part.merge(bm, 'trim', smooth=True)
-    part.cylinder('trim', (-0.37, 0.80, 0.52), 0.03, 0.30, axis='z', segments=10)
-    # front buckets
+    part.box('c_plastic', -0.11, 0.11, 0.25, 0.48, -0.55, 0.45, bevel=0.02)   # console
+
+
+def furnish(mesh):
+    """the furniture, from car_common (a hayate_kit Mesh): high-backed front buckets in grey cloth, the rear bench
+    for two, the three-spoke wheel on the right, the instruments' hood, lever, hand brake, mirror, the doors' arm
+    rests and the shelf's speakers"""
+    import car_common as CC
     for x in (-0.37, 0.37):
-        rbox(part, 'interior', (x, 0.33, -0.08), (0.50, 0.10, 0.50), 0.0, 0.03)
-        rbox(part, 'interior', (x, 0.70, -0.40), (0.52, 0.66, 0.11), math.radians(-14), 0.035)
-        for b in (-1, 1):
-            rbox(part, 'interior', (x + b * 0.23, 0.62, -0.38), (0.07, 0.42, 0.14), math.radians(-14), 0.025)
-        rbox(part, 'interior', (x, 1.09, -0.48), (0.26, 0.14, 0.10), math.radians(-14), 0.03)
-    # rear bench (two places)
-    rbox(part, 'interior', (0.0, 0.34, -0.80), (1.02, 0.12, 0.40), 0.0, 0.03)
-    rbox(part, 'interior', (0.0, 0.66, -1.16), (1.02, 0.56, 0.12), math.radians(-22), 0.03)
+        CC.seat(mesh, x, 0.25, -0.34, width=0.50, length=0.50, h=0.15, back=0.60, recline=16.0, headrest='bucket',
+                bolster=1.25)
+    CC.bench(mesh, -0.51, 0.51, 0.25, -1.02, length=0.42, h=0.15, back=0.62, recline=22.0)
+    CC.steering_wheel(mesh, (-0.37, 0.80, 0.37), tilt=22.0, R=0.180)
+    CC.binnacle(mesh, -0.37, 0.850, 0.47, width=0.38, height=0.078, depth=0.20)
+    CC.gear_lever(mesh, 0.0, 0.48, 0.14)
+    CC.hand_brake(mesh, 0.055, 0.48, -0.38)
+    CC.inside_mirror(mesh, 1.250, 0.215)
+    for s in (1, -1):
+        CC.arm_rest(mesh, s * 0.795, 0.60, -0.30, 0.22, s)
+    CC.shelf_speakers(mesh, 0.975, -1.38)
 
 
 # ---------------------------------------------------------------- assembly
@@ -453,13 +475,21 @@ def build(mats, parent, shell, bumper, glass, grid, classify):
     if glass is not None:
         frames(d, glass)
     handles(d, surf)
+    arch_lips(d, Surfaces(shell, bumper))
     door_line(d, surf)
     shut_lines(d, surf, both)
     out.append(('details', d.build(mats, merge_dist=0)))
+    import car_common as CC
+    import hayate_kit as HK
+    for n in ('c_lining', 'c_carpet', 'c_plastic', 'c_dash'):
+        CC.material_for(mats, n)
     cab = K.Part('interior')
     lining(cab, grid, classify)
     interior(cab)
     out.append(('interior', cab.build(mats, merge_dist=0)))
+    fur = HK.Mesh('furniture')
+    furnish(fur)
+    out.append(('interior', CC.build(fur, parent, mats)))
     for _, o in out:
         o.parent = parent
     return out
