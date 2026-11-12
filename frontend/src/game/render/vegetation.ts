@@ -78,6 +78,13 @@ const windBefore = (uniform(0).setGroup(renderGroup) as N).onFrameUpdate(() => {
 });
 const windPower = uniform(0.6).setGroup(renderGroup);
 const wet = uniform(0).setGroup(renderGroup);
+/**
+ * 0 by day … 1 at night. By night foliage is seen darker and with less of its colour, whatever lights it (the moon,
+ * a lamp, headlights): lit like by day, a bright-leaved crown in a car's headlights stood by the motorway like a
+ * green lamp.
+ */
+const night = uniform(0).setGroup(renderGroup);
+const byNight = (c: N): N => (mix(c, vec3((c as N).dot(vec3(0.3, 0.55, 0.15))), (night as N).mul(0.5)) as N).mul(mix(1, 0.6, night));
 const WIND = new THREE.Vector2(0.86, 0.51);
 
 /** once a frame: the game's clock (wind) and the camera */
@@ -140,8 +147,9 @@ export function vegetationLights(key: THREE.DirectionalLight, sky: THREE.Light) 
   farLights = [key, sky];
 }
 
-export function vegetationWeather(rain: number) {
+export function vegetationWeather(rain: number, dark = 0) {
   wet.value = rain;
+  night.value = dark;
   windPower.value = 0.55 + 0.8 * rain;
 }
 
@@ -560,11 +568,13 @@ function plantMaterial(normals: boolean, span: Span, second = false, sway = true
   const leaf: N = texN.a;
   const hue: N = mix(vec3(0.8, 0.9, 0.74), vec3(1.14, 1.06, 0.9), I.tint).mul(kin.tint);
   const ao: N = veg.r;
-  const albedo: N = tex.rgb
-    .mul(mix(vec3(1), hue, leaf.mul(0.75).add(0.25)))
-    .mul(ao.mul(0.6).add(0.4))
-    .mul(mix(1, 0.68, wet))
-    .mul(shade);
+  const albedo: N = byNight(
+    tex.rgb
+      .mul(mix(vec3(1), hue, leaf.mul(0.75).add(0.25)))
+      .mul(ao.mul(0.6).add(0.4))
+      .mul(mix(1, 0.68, wet))
+      .mul(shade),
+  );
   mat.colorNode = vec4(albedo, 1);
   // (wet leaves shine, but not as mirrors: at 0.3 a forest in the rain glittered white under the moon)
   mat.roughnessNode = mix(mix(0.92, 0.72, leaf), 0.46, wet.mul(0.85).mul(float(1).sub(far)));
@@ -592,7 +602,7 @@ function firstMaterial(span: Span, sway = true) {
   mat.positionNode = position(sway);
   mat.maskNode = mask;
   const hue: N = mix(vec3(0.8, 0.9, 0.74), vec3(1.14, 1.06, 0.9), I.tint).mul(kin.tint);
-  mat.colorNode = vec4(tex.rgb.mul(hue).mul(veg.r.mul(0.6).add(0.4)).mul(mix(1, 0.68, wet)).mul(shade).mul(skyLight), 1);
+  mat.colorNode = vec4(byNight(tex.rgb.mul(hue).mul(veg.r.mul(0.6).add(0.4)).mul(mix(1, 0.68, wet)).mul(shade)).mul(skyLight), 1);
   return mat;
 }
 
@@ -707,7 +717,7 @@ function impostorMaterial(normals: boolean, span: Span, pass: 'first' | 'second'
   // were bright dots on the darker ground, a grain over the whole mountain at dawn)
   // (from where the impostors begin, so that the last mesh level hands over at the same brightness)
   const canopy: N = mix(1, 0.45, smoothstep(S.x, S.x.add(350), I.dist));
-  const albedo: N = tex.rgb.mul(mix(vec3(1), hue, 0.85)).mul(mix(1, 0.68, wet)).mul(varying(I.shade(true).mul(canopy)));
+  const albedo: N = byNight(tex.rgb.mul(mix(vec3(1), hue, 0.85)).mul(mix(1, 0.68, wet)).mul(varying(I.shade(true).mul(canopy))));
   if (pass === 'first') {
     const first = new MeshBasicNodeMaterial();
     first.positionNode = position;

@@ -617,7 +617,7 @@ export class Game {
     this.dryMaterials.terrain ??= terrain.roughness;
     terrain.roughness = lerp(this.dryMaterials.terrain, 0.62, wet);
     this.rain.setIntensity(wet);
-    vegetationWeather(wet);
+    vegetationWeather(wet, lamps);
     this.weatherGrip = lerp(1, WET_GRIP, wet);
     this.audio?.setRain(wet);
     this.lobby?.setLamps(lamps > 0.5 ? 1 : 0.5);
