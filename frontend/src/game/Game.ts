@@ -26,7 +26,7 @@ import { loadProps } from './render/props';
 import { loadRoadsideModels } from './render/roadsideModels';
 import { wetness } from './render/weather';
 import { findCorners, type Corner, type CornerKind } from './track/corners';
-import { RemoteRacers, SLOT_COLORS, type Peer } from './net/RemoteRacers';
+import { paintFor, RemoteRacers, type Peer } from './net/RemoteRacers';
 import { NetLink, type LocalState } from './net/NetLink';
 import type { GameRenderer } from './render/RenderHost';
 import { onlineGrid } from './net/grid';
@@ -861,7 +861,7 @@ export class Game {
   }
 
   /**
-   * The online waiting room: every member's vehicle on the start grid in its seat's colour (net/LobbyLineup.ts), in
+   * The online waiting room: every member's vehicle on the start grid in its paint (net/LobbyLineup.ts), in
    * place of the garage's single car, under the garage's camera (the slow swing, drag, wheel) and key light. Call it
    * again with every change of the room: a seat's model is swapped when its new one is ready. Anything else the game
    * is asked to show (`showGarage`, a race, the attract run, another course) takes the line-up away.
@@ -936,8 +936,9 @@ export class Game {
     const lane = spot ? spot.lateral : cfg.mode === 'rival' ? 2.0 : 0;
     this.player = this.createRacer(cfg.carId, gridS, lane, {
       headlights: true,
-      // the colour picked in the car select (it used to be ignored); online: the slot colour tells players apart
-      color: cfg.online ? SLOT_COLORS[cfg.online.slot % SLOT_COLORS.length] : cfg.color,
+      // the colour picked in the car select; online the member's paint as the room has it, the seat's colour without
+      // one (the seat's colour stays their mark in the tags and the HUD)
+      color: cfg.online ? paintFor(cfg.carId, cfg.color, cfg.online.slot) : cfg.color,
     });
     // a train: the high chase, and its first race starts in the cab view
     const train = !!CAR_SPECS[cfg.carId].train;

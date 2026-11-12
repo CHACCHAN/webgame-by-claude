@@ -143,6 +143,8 @@ export interface RoomMember {
   id: number;
   name: string;
   car_id: CarId;
+  /** the paint they picked for it (#rrggbb; null or missing: none, the seat's colour) */
+  color?: string | null;
   slot: number;
   /** their game has loaded the room's course (reported by the game itself) */
   loaded: boolean;
@@ -304,13 +306,14 @@ export const api = {
   },
 
   rooms: {
-    create: (p: StoredPlayer, trackId: string, timeOfDay: TimeOfDay, carId: CarId) =>
-      request<RoomState>('/rooms', { method: 'POST', body: JSON.stringify({ track_id: trackId, time_of_day: timeOfDay, car_id: carId }) }, p.token),
+    create: (p: StoredPlayer, trackId: string, timeOfDay: TimeOfDay, carId: CarId, color: string | null) =>
+      request<RoomState>('/rooms', { method: 'POST', body: JSON.stringify({ track_id: trackId, time_of_day: timeOfDay, car_id: carId, color }) }, p.token),
     get: (p: StoredPlayer, code: string) => request<RoomState>(`/rooms/${encodeURIComponent(code)}`, {}, p.token),
-    join: (p: StoredPlayer, code: string, carId: CarId) =>
-      request<RoomState>(`/rooms/${encodeURIComponent(code)}/join`, { method: 'POST', body: JSON.stringify({ car_id: carId }) }, p.token),
-    setCar: (p: StoredPlayer, code: string, carId: CarId) =>
-      request<RoomState>(`/rooms/${encodeURIComponent(code)}/me`, { method: 'PATCH', body: JSON.stringify({ car_id: carId }) }, p.token),
+    join: (p: StoredPlayer, code: string, carId: CarId, color: string | null) =>
+      request<RoomState>(`/rooms/${encodeURIComponent(code)}/join`, { method: 'POST', body: JSON.stringify({ car_id: carId, color }) }, p.token),
+    /** the vehicle and its paint (another paint alone keeps the 準備完了; another vehicle takes it back) */
+    setCar: (p: StoredPlayer, code: string, carId: CarId, color: string | null) =>
+      request<RoomState>(`/rooms/${encodeURIComponent(code)}/me`, { method: 'PATCH', body: JSON.stringify({ car_id: carId, color }) }, p.token),
     setLoaded: (p: StoredPlayer, code: string) =>
       request<RoomState>(`/rooms/${encodeURIComponent(code)}/me`, { method: 'PATCH', body: JSON.stringify({ loaded: true }) }, p.token),
     setReady: (p: StoredPlayer, code: string, ready: boolean) =>
