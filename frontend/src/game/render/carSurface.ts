@@ -9,24 +9,24 @@ import { wetness } from './weather';
 type N = any; // eslint-disable-line @typescript-eslint/no-explicit-any
 
 /**
- * What a car's glossy surfaces mirror: the surroundings as a car on a road has them, worked out per pixel.
+ * What a car's glossy surfaces mirror, worked out per pixel, in the world's own coordinates.
  *
  * The game's one reflection environment (`Environment.buildEnvMap`: the sky and a ring of warm lights, blurred into
- * a PMREM) knows nothing near the car, and by night it is nearly black: paint was a flat colour with one soft
- * highlight, glass a dark sheet with orange smears. A cube map drawn around the car would show what stands there,
- * but it is a second drawing of the scene (every draw call again, every shader built again for another target, the
- * shadow maps drawn again), a face a frame behind the car at speed, and one car's view for all of them. What a clear
- * coat shows of a road is little and regular, so it is put together here instead, for the mirror direction of each
- * pixel, in the world's own coordinates:
- *  - the sky as the dome draws it (gradient, the glow round sun or moon, the town's glow, the cloud cover), sharp;
- *  - the road under the car: a plane through the car's wheels (`onCarsGround`), lit by the sky, the sun or moon and
- *    the street lamps around the place the mirror ray comes down on; far off, the land in the haze;
- *  - the street lamps themselves, in the clear coat: the lamps nearest the camera (`lampsAround`, as far as
- *    `NEAR_REACH`: the lamp field's own cells end at 42 m, and it is the lamps far ahead that a roof and a rear
- *    window show from behind, at a flat angle and so at their brightest) as the small bright disc with a glow
- *    round it that a lamp is in a mirror, as large as the lamp is seen from there, and as much larger and fainter
- *    as the coat is rough. A point light's highlight in a coat this smooth is one pixel that flickers; the disc
- *    slides over bonnet, roof and glass as the car drives under the lamps.
+ * a PMREM) knows nothing near the car. A cube map drawn around the car would show what stands there, but it is a
+ * second drawing of the scene (every draw call again, every shader built again for another target, the shadow maps
+ * drawn again), a face a frame behind the car at speed, and one car's view for all of them. So:
+ *  - the street lamps near the camera (`lampsAround`, as far as `NEAR_REACH`: the lamp field's own cells end at
+ *    42 m, and it is the lamps far ahead that a roof and a rear window show from behind, at a flat angle and so at
+ *    their brightest) are drawn into every clear coat and pane as the small bright disc with a glow round it that a
+ *    lamp is in a mirror, as large as the lamp is seen from there, and as much larger and fainter as the coat is
+ *    rough. A point light's highlight in a coat this smooth is one pixel that flickers (the lamp field gives these
+ *    materials none, `lampFieldNode.ts`); the disc slides over bonnet, roof and glass as the car drives under the
+ *    lamps. Paint keeps the environment map for everything else.
+ *  - glass mirrors the surroundings as a car on a road has them: the sky as the dome draws it (gradient, the glow
+ *    round sun or moon, the town's glow, the cloud cover), sharp; the road under the car, a plane through the car's
+ *    wheels (`onCarsGround`), lit by the sky, the sun or moon and the street lamps around the place the mirror ray
+ *    comes down on; far off, the land in the haze. (The environment map's ring of warm lights lay on the panes as
+ *    orange smears.)
  * The diffuse light of the surroundings still comes from the game's environment map.
  *
  * It is the `envNode` of the materials made here, one node for all of them: what differs per car comes from the
@@ -197,7 +197,36 @@ class SurroundingsNode extends TempNode {
     const level: N = context.getTextureLevel?.(this);
     const coat = level === clearcoatRoughness;
     if (!context.getUV || (!coat && level !== roughness)) return this.blurred(builder);
+    // Paint: the game's environment map as before, and in the coat the street lamps as what they are in a mirror.
+    // (The whole mirror image below was tried on paint too, 11-12/13: by day it turned the black lower body tan,
+    // the sky's bright horizon at full strength where the map has its dark ground and the blur of a rough layer;
+    // by night the difference in the paint did not show. Glass is where it shows.)
+    if (builder.material.userData.carGlass !== true) {
+      if (!coat) return this.blurred(builder);
+      return this.blurred(builder).add(this.lampImages(context.getUV(this, builder), level));
+    }
     return this.mirrored(context.getUV(this, builder), level, coat);
+  }
+
+  /** the street lamps near the camera as a mirror shows them from the pixel, in the direction `D` (world), blurred by `rough` */
+  private lampImages(D: N, rough: N): N {
+    const P: N = positionWorld;
+    const blur: N = rough.mul(rough).mul(2);
+    const spread: N = blur.mul(blur).toVar();
+    const col: N = vec3(0).toVar();
+    for (let k = 0; k < NEAR; k++) {
+      const lamp: N = this.at.element(k);
+      const to: N = lamp.xyz.sub(P).toVar();
+      const d2: N = to.dot(to).toVar();
+      // the angle between the mirror direction and the lamp, squared
+      const off: N = max(float(1).sub(dot(D, to).div(d2.sqrt())), 0).mul(2).toVar();
+      // a disc of the size the lamp's face has from here (as an angle, squared), widened by the coat's blur, which
+      // spreads the same light thinner; and the glow round it likewise
+      const face: N = float(LAMP_FACE * LAMP_FACE).div(d2).add(spread).toVar(), glow: N = float(LAMP_GLOW * LAMP_GLOW).div(d2).add(spread).toVar();
+      const image: N = exp(off.div(face).negate()).div(face.mul(Math.PI / LAMP_IMAGE)).add(exp(off.div(glow).negate()).div(glow.mul(Math.PI / LAMP_GLOW_IMAGE)));
+      col.addAssign(this.lampLight.mul(this.tint.element(k).rgb).mul(image.mul(lamp.w).div(d2)));
+    }
+    return col;
   }
 
   /** what is seen from the pixel in the direction `D` (world), blurred as a surface of roughness `rough` does */
@@ -236,23 +265,9 @@ class SurroundingsNode extends TempNode {
     const edge: N = blur.add(0.012);
     col.assign(mix(col, ground, smoothstep(edge.negate(), edge, dip)));
 
-    // ---- the lamps themselves: only a coat is smooth enough to show them (the paint under it has the lamp field's
+    // ---- the lamps themselves: only a coat is smooth enough to show them (the pane under it has the lamp field's
     // own highlight)
-    if (coat) {
-      const spread: N = blur.mul(blur);
-      for (let k = 0; k < NEAR; k++) {
-        const lamp: N = this.at.element(k);
-        const to: N = lamp.xyz.sub(P).toVar();
-        const d2: N = to.dot(to).toVar();
-        // the angle between the mirror direction and the lamp, squared
-        const off: N = max(float(1).sub(dot(D, to).div(d2.sqrt())), 0).mul(2).toVar();
-        // a disc of the size the lamp's face has from here (as an angle, squared), widened by the coat's blur, which
-        // spreads the same light thinner; and the glow round it likewise
-        const face: N = float(LAMP_FACE * LAMP_FACE).div(d2).add(spread).toVar(), glow: N = float(LAMP_GLOW * LAMP_GLOW).div(d2).add(spread).toVar();
-        const image: N = exp(off.div(face).negate()).div(face.mul(Math.PI / LAMP_IMAGE)).add(exp(off.div(glow).negate()).div(glow.mul(Math.PI / LAMP_GLOW_IMAGE)));
-        col.addAssign(this.lampLight.mul(this.tint.element(k).rgb).mul(image.mul(lamp.w).div(d2)));
-      }
-    }
+    if (coat) col.addAssign(this.lampImages(D, rough));
     return col;
   }
 }
@@ -306,5 +321,7 @@ export function glassMaterial(params: THREE.MeshPhysicalMaterialParameters): THR
   // what the pane mirrors does not come through it: Fresnel's share, from a twenty-fifth head-on to all of it
   const facing: N = (normalView as N).dot(positionViewDirection).clamp();
   mat.opacityNode = mix(materialOpacity, float(1), pow(facing.oneMinus(), 5).mul(0.96).add(0.04));
+  // (the whole mirror image of the surroundings, not only the lamps: `SurroundingsNode.setup`)
+  mat.userData.carGlass = true;
   return mirroring(mat) as unknown as THREE.MeshPhysicalMaterial;
 }

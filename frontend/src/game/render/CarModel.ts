@@ -144,7 +144,9 @@ export function createCarMaterials(spec: CarSpec, bodyColor = spec.colors.body):
       clearcoat: 1,
       clearcoatRoughness: 0.02,
       envMapIntensity: 1.6,
-      opacity: 0.88,
+      // (head-on the cabin shows through as in a photograph of the car; towards a flat angle the pane mirrors more
+      // and lets less through, `glassMaterial`)
+      opacity: 0.62,
     }),
     trim: new THREE.MeshStandardMaterial({ color: '#0d0e10', metalness: 0.2, roughness: 0.6 }),
     chrome: new THREE.MeshStandardMaterial({ color: '#d8dade', metalness: 1, roughness: 0.12 }),
