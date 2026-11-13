@@ -69,6 +69,17 @@ def tail_lamp():
         c.paint(np.clip(1 - r, 0, 1) * 0.75 * (1 - top), _srgb('#c8161e'))
         r = np.sqrt(((U - cu) / ((u1 - u0) * 0.5)) ** 2 + ((V - 0.82) / 0.16) ** 2)
         c.paint(np.clip(1 - r, 0, 1) * 0.35 * top, _srgb('#cc5058'))
+    # depth (2026-11): each cell is a bowl behind its lens: dark towards its walls, the bulb's hot spot in the middle,
+    # the lens's gloss as a pale band under its top edge (the game lights the lamp through this same picture)
+    for u0, u1 in ((0.0, 0.447), (0.447, 0.693), (0.693, 1.0)):
+        for v0, v1 in ((0.0, 0.65), (0.65, 1.0)):
+            cu, cv = (u0 + u1) / 2, (v0 + v1) / 2
+            d = np.maximum(np.abs(U - cu) / ((u1 - u0) / 2), np.abs(V - cv) / ((v1 - v0) / 2))
+            inside = (d < 1.0)
+            c.paint(np.clip((d - 0.55) / 0.45, 0, 1) ** 1.5 * 0.62 * inside, _srgb('#2a0306'))
+            r = np.sqrt(((U - cu) / ((u1 - u0) * 0.16)) ** 2 + ((V - cv) / ((v1 - v0) * 0.22)) ** 2)
+            c.paint(np.clip(1 - r, 0, 1) ** 2 * 0.55, _srgb('#ff5a4a'))
+            c.paint(c.box(u0 + 0.03, u1 - 0.03, v1 - 0.11, v1 - 0.06, soft=0.02) * 0.16, _srgb('#ffb0a8'))
     # the lens prisms: a fine grid (darker lines), slightly lit edges
     fu = np.mod(U * 96, 1.0)
     fv = np.mod(V * 18, 1.0)

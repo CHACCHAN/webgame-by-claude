@@ -23,7 +23,7 @@ MATS = {
     'headlight': ('#e8e8e2', 1.0, 0.2),
     'taillight': ('#8a0a0a', 0.0, 0.18),
     'tire': ('#1a1a1a', 0.0, 0.85),
-    'rim': ('#c4c6c8', 1.0, 0.34),
+    'rim': ('#c4c6c8', 0.75, 0.30),     # painted alloy: part diffuse, a pure mirror metal is black at night
     'brake': ('#5c5d60', 1.0, 0.45),
     'popup_lens': ('#dcdcd6', 0.8, 0.15),
     'interior': ('#1e1e20', 0.0, 0.8),
@@ -90,9 +90,38 @@ def fold_pods(root):
 def cut(shell):
     LAMPS.cut(shell)
     DETAILS.cut(shell)
+    # the floor is undersealed, not body colour
+    from shiden_surf import G
+    idx = shell.mesh.slot('trim')
+    for f in shell.bm.faces:
+        c, n = G(f.calc_center_median()), G(f.normal)
+        if n[1] < -0.9 and c[1] < 0.27 and abs(c[2]) < 1.75:
+            f.material_index = idx
 
 
 def build(root, body, shell, mats, counts):
     WHEELS.build(root, mats, counts)
     LAMPS.build(body, shell, mats, counts)
     DETAILS.build(body, shell, mats, counts)
+
+
+def finish(root, body, mats, counts):
+    """after the body's last deformation: the underside, then the plain materials go into two painted atlases and
+    every corner gets its share of the sky (car_common)"""
+    import car_common as CC
+    import hayate_kit as K
+    import shiden_shape as SH
+    ub = K.Mesh('underbody')
+    tip = DETAILS.EXHAUST_TIP
+    # a front-mid rotary: the engine sits behind the front axle; one silencer across the tail, twin pipes on the right
+    CC.underbody(ub, 0.16, SH.ZF, SH.ZR, SH.TRACK, SH.TRACK, SH.TYRE_R, tip=tip, layout='FR', axle='irs', twin=True,
+                 twin_gap=DETAILS.EXHAUST_GAP, silencer='across', silencer_y=0.245, engine=(-0.34, 0.02))
+    counts['underbody'] = ub.tris()
+    CC.build(ub, body, mats)
+    trim = CC.Atlas('trim')
+    rim = CC.Atlas('rim', size=512, fill=(MATS['rim'][0], MATS['rim'][2], MATS['rim'][1]))
+    rim.region('disc', CC.disc_image(), 0.38, 0.85)
+    made = CC.consolidate(root, trim, rim)
+    tyres = [o for o in root.children_recursive
+             if o.type == 'MESH' and any(m and m.name == 'tire' for m in o.data.materials)]
+    CC.bake_ao(root, made + tyres)

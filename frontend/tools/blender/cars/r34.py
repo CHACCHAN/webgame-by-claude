@@ -68,6 +68,29 @@ def lamp_report(root):
     return res
 
 
+def finish(root, body, mats):
+    """after the body's last deformation (car_common): the underside (a front engine driving all four wheels, the
+    rear on arms, one silencer along the left of the tail), the floor undersealed, the plain materials into two
+    painted atlases, every corner's share of the sky. The grille's mesh picture repeats, so it stays a material; so does the plate (car_common)."""
+    import car_common as CC
+    import hayate_kit as HK
+    import r34_fit as FIT
+    CC.underseal([o for o in body.children_recursive if o.type == 'MESH'], mats)
+    ub = HK.Mesh('underbody')
+    x, y, z = FIT.EXHAUST
+    CC.underbody(ub, 0.155, WH.WHEELBASE / 2, -WH.WHEELBASE / 2, WH.TRACK_F, WH.TRACK_R, WH.R_TYRE, tip=(x, y, z + 0.30),
+                 layout='AWD', axle='irs')
+    print('TRIS underbody', ub.tris())
+    CC.build(ub, body, mats)
+    trim = CC.Atlas('trim')
+    rim = CC.Atlas('rim', size=512, fill=('#8a8c8f', 0.32, 0.85))
+    rim.region('disc', CC.disc_image(), 0.38, 0.85)
+    made = CC.consolidate(root, trim, rim, own=('tire', 'plate', 'grille'))
+    tyres = [o for o in root.children_recursive
+             if o.type == 'MESH' and any(m and m.name == 'tire' for m in o.data.materials)]
+    CC.bake_ao(root, made + tyres)
+
+
 def build(o=None):
     """the whole car into the (cleared) scene. o: {'paint': '#rrggbb' (None: the default), 'ffd': True (the fitted
     field, fitdata/r34/ffd.json) | False | an r34_ffd.Lattice}. Returns (root, materials, lamp report)"""
@@ -95,6 +118,8 @@ def build(o=None):
         # the fitted displacement field (fitdata/r34/ffd.json, from the photo silhouettes) on every body mesh
         L = FFD.apply_to_body(body, None if o.get('ffd', True) is True else o['ffd'])
         print('FFD', 'none' if L is None else 'applied')
+    bpy.context.view_layer.update()
+    finish(root, body, mats)
     bpy.context.view_layer.update()
     return root, mats, lamp_report(root)
 

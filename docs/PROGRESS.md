@@ -2210,4 +2210,41 @@ to be seen). The films still show the balls until they are recorded again.
 - Not verified: Safari / Firefox, a real phone (the overlay uses `:has()`); a controller; Authentik members in a
   room; vehicle replacement beyond the backend test. Known: on a phone the notice covers the room's top row for
   its 8 s.
+- **Deployed 11-12 as v2.5.0** (bundle `index-DYST8WTI.js`, local = public; leaderboard API 200; `/api/content`
+  says 2.5.0; `PATCH /api/rooms/…` without a pass answers 401; no errors in the app's log after the start).
+- With agents at the end of 11-12 (the usage limit stopped them a fifth time, resumed):
+  - **Edwards + the three fighters**: built on `worktree-agent-af9a3b6158beebe1a`, hidden behind a release switch
+    (`game/release.ts` + `config/game.php`), stand-in models. Sent back before the merge: main v2.5.0 merged in,
+    ONE server mechanism for "a vehicle a course does not offer" (the agent's `Support/Vehicles` and the online
+    work's `Room::vehiclesOn` are two), two browsers online with fighters, the upscaler and hitches at take-off.
+    It also changes shared render code (`ambientOcclusion.ts`: depth taken at texel middles; bands across open
+    ground, on main's courses too): to be looked at on every course before the merge. Whether Edwards is released
+    with the stand-in models is the owner's to say (asked 11-12).
+  - **Cars re-modelled, first three** (hayate, shiden, r34; `worktree-agent-a51f8b2d623db0a5a`; sheets in
+    `~/.local/opt/wt/models-cars/sheets/`, sent to the owner): tyres, brakes, undersides, baked shade, draw calls
+    44 → 26; the gain in the picture is small. Next there: the r34's body, the big surfaces of the other two, then
+    the remaining five. Not merged: the owner's yes is needed.
+  - **How cars are drawn** (`~/.local/opt/wt/CARLOOK_BRIEF.md`): lamp highlights on glossy surfaces, a reflection
+    of the surroundings in the paint, glass with a cabin behind it: where the gap to the photos now is.
+  - Not started: the tanks' cannon (after the Edwards merge: the same vehicle code).
 
+
+## v2.5.1 (11-13): hayate, shiden and r34 re-modelled (round one); other models do the work
+
+- **The owner (11-13)**: yes to the three cars' sheets; and from now on Fable 5.2 conducts and other models work
+  (Claude models through the Agent tool, four models through Mistral Vibe CLI), with the worry that the 3D
+  modelling gets less precise.
+- **In**: the cars branch at `919062f` (the state of the sheets): tyres, brake discs, calipers, undersides, baked
+  shade, the shared kit `tools/blender/cars/car_common.py`; draw calls 44 -> 26 / 45 -> 26 / 36 -> 22, GLBs
+  284 -> 513 / 328 -> 539 / 560 -> 803 kB; new thumbnails. No code of the game changed.
+- Verified on the merged tree: tsc; vitest 245; build; `gpu-errors` 0 / 0 (WebGPU, WebGL 2; hayate, r34, shiden
+  through the garage, twice); `paint-drawn.cjs hayate shiden r34` all drawn (WebGPU); the race and rival pictures
+  looked at (camera with the car).
+- Not verified: `paint-drawn` on WebGL 2; phones; the course select's films still show the old hayate (wheels,
+  antenna, wiper differ slightly): recorded again with the car-look change.
+- **Who does what (my division, 11-13)**: modelling stays on Fable (high) behind a measured gate (silhouette, real
+  dimensions, lamp anchors); Edwards' last checks + release commit and the car look on Opus (high); Vibe models
+  for second reviews only. Of the Vibe models only gemini-4-hydrogen answered (the other three: usage limit /
+  quota upstream); a headless `vibe` from a background shell did not start (waits for the system keyring): the
+  second review of the Edwards backend has not happened yet. The agents were stopped once more by a usage limit
+  and resumed after the owner's login.

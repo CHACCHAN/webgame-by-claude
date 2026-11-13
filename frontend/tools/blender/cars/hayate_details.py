@@ -338,8 +338,8 @@ def stripe(mesh, bvh):
 
 def gaps(mesh, bvh):
     """shut lines: doors, hood, pop-up lids, hatch, fuel lid (right side only: see fuel_lid)"""
-    def line(pts, d=None):
-        K.lay_strip(mesh, bvh, pts, GAP_W, 'trim', lift=GAP_LIFT, direction=d)
+    def line(pts, d=None, lift=GAP_LIFT):
+        K.lay_strip(mesh, bvh, pts, GAP_W, 'trim', lift=lift, direction=d)
     # door: front edge (just behind the front arch, leaning with the A-pillar foot), rear edge, bottom along the sill
     zf_top, zf_bot = BD.Z_COWL + 0.005, BD.ZF - BD.ARCH_R - 0.045
     door_front = [(0.9, K.lerp(0.905, 0.26, k / 16), K.lerp(zf_top, zf_bot, (k / 16) ** 2 * 0.0 + k / 16 * 0.0) + K.lerp(zf_top - zf_top, 0, 0))
@@ -356,8 +356,9 @@ def gaps(mesh, bvh):
     lid = BD.lid_grid()
     rear = [p for p in (lid[j][-1] for j in range(len(lid)))]
     inner = [lid[-1][i] for i in range(len(lid[0]))]
-    line([(p[0], p[1] + 0.01, p[2] - 0.002) for p in rear])
-    line([(p[0] - 0.002, p[1] + 0.01, p[2]) for p in inner])
+    # (the folded lids stand a hair proud of the hull the lines are laid on: lifted clear, or they show as dashes)
+    line([(p[0], p[1] + 0.01, p[2] - 0.002) for p in rear], lift=0.0042)
+    line([(p[0] - 0.002, p[1] + 0.01, p[2]) for p in inner], lift=0.0042)
     # hood's rear edge at the cowl (under the windscreen base, mostly covered by the cowl panel)
     # hatch: across the tail just above the lamp band, and up beside the hatch glass
     yh = BD.Y_BAND + 0.004
@@ -485,9 +486,12 @@ def cowl_and_wipers(mesh, bvh):
         mesh.box('trim', x - 0.012, x + 0.012, y - 0.004, y + 0.012, z - 0.012, z + 0.012, bevel=0.004, segments=1)
 
 
+EXHAUST = (0.44, 0.255)     # the tailpipe's x and y
+
+
 def exhaust(mesh):
     """single tailpipe under the rear bumper, left side (as on the photos of RHD cars); the mesh name has 'exhaust'"""
-    x, y = 0.44, 0.255
+    x, y = EXHAUST
     z0, z1 = BD.Z_RBUMP - 0.035, BD.Z_RBUMP + 0.35
     prof = [(z1, 0.022), (z0 + 0.03, 0.024), (z0, 0.0275), (z0 - 0.002, 0.024), (z0 + 0.04, 0.020)]
     m = K.Mesh('pipe')
@@ -561,7 +565,7 @@ def badges(mesh, bvh):
     y = 0.706
     h = K.hit(bvh, (0.0, y, -3.0), (0, 0, 1))
     z = (h[0].z if h else BD.Z_TAIL) - 0.007
-    letters(mesh, 'TOYOTA', (0.0, y, z), 0.030, (-1, 0, 0), (0, 0, -1), mat='rim', spacing=1.15)
+    letters(mesh, 'TOYOTA', (0.0, y, z), 0.030, (-1, 0, 0), (0, 0, -1), mat='badge', spacing=1.15)
     # badges in a painted silver (the rim's material reads as the real satin chrome; polished chrome mirrors the
     # ground and goes dark), the big ones in the heavy weight like the real logos
     for text, x, yy, hgt, sp, fnt in (('TRUENO', -0.495, 0.792, 0.027, 1.12, FONT_BLACK),
@@ -570,13 +574,13 @@ def badges(mesh, bvh):
         p, n = _on_hatch(bvh, x, yy, 0.0005)
         U = Vector((-1, 0, 0))
         U = (U - n * U.dot(n)).normalized()
-        letters(mesh, text, tuple(p), hgt, tuple(U), tuple(n), mat='rim', spacing=sp, depth=0.0015, font=fnt)
+        letters(mesh, text, tuple(p), hgt, tuple(U), tuple(n), mat='badge', spacing=sp, depth=0.0015, font=fnt)
     # TRUENO on a black plaque in the middle of the bumper grille (r04, n44: ~0.18 m wide)
     fpath, _ = BD.bumper_paths()
     zf = fpath[0][1] - 0.012
     yb = 0.531
     mesh.box('trim', -0.105, 0.105, yb - 0.02, yb + 0.02, zf - 0.02, zf + 0.004, bevel=0.002, segments=1)
-    letters(mesh, 'TRUENO', (0.0, yb, zf + 0.0045), 0.026, (1, 0, 0), (0, 0, 1), mat='rim', spacing=1.12, depth=0.0015,
+    letters(mesh, 'TRUENO', (0.0, yb, zf + 0.0045), 0.026, (1, 0, 0), (0, 0, 1), mat='badge', spacing=1.12, depth=0.0015,
             font=FONT_BLACK)
     # the hatch lock: a chrome ring with a dark core
     p, n = _on_hatch(bvh, 0.0, 0.866)

@@ -1,7 +1,7 @@
 """
 The AE86 GT-APEX (late) wheel: 14 x 5.5J alloy with eight flat spokes tapering towards the polished lip and
 triangular openings between them, a black centre with four lug nuts; 185/60R14 tyre (outer radius scaled to the
-game's wheelRadius 0.30), ventilated disc and a single-piston caliper.
+game's wheelRadius 0.30), ventilated disc and a single-piston caliper (tyre and brakes: car_common).
 
 Built for the LEFT wheels (outer face +x) round the wheel centre (local origin); the right wheels are mirrored.
 Measured on Commons "1986 Toyota Sprinter Trueno 3-door GT APEX.jpg" (Toyota museum car, stock wheels).
@@ -11,6 +11,7 @@ import math
 from mathutils import Matrix, Vector
 
 import hayate_kit as K
+import car_common as CC
 
 R_OUT = 0.30            # tyre outer radius
 R_RIM = 0.1778          # 14 in bead seat
@@ -20,23 +21,6 @@ RIM_W = 0.140           # 5.5 in
 FACE_X = 0.050          # the spoke face at the hub (offset outward from the tyre centre plane)
 N_SPOKES = 8
 SEG = 48                # around the tyre
-
-
-def tyre(mesh):
-    """lathe of the tyre section, inner bead → tread → outer bead; UV: u = around, v = across the profile"""
-    h = TYRE_W / 2
-    # (x, r): inner bead, sidewall, shoulder, tread with three grooves, mirrored
-    half = [(-0.072, R_RIM + 0.006), (-0.084, 0.205), (-0.092, 0.235), (-0.091, 0.262), (-0.084, 0.284), (-0.072, 0.296),
-            (-0.060, R_OUT), (-0.044, R_OUT), (-0.042, R_OUT - 0.007), (-0.034, R_OUT - 0.007), (-0.032, R_OUT), (-0.008, R_OUT),
-            (-0.006, R_OUT - 0.007)]
-    prof = half + [(-x, r) for x, r in reversed(half)]
-    n = len(prof)
-    # v along the profile by arc length
-    L = [0.0]
-    for a, b in zip(prof[:-1], prof[1:]):
-        L.append(L[-1] + math.dist(a, b))
-    vs = [l / L[-1] for l in L]
-    mesh.lathe(prof, SEG, mats='tire', uv=lambda k, u: (u * 6.0, vs[k]))
 
 
 def rim(mesh):
@@ -51,8 +35,13 @@ def rim(mesh):
     r_hub, r_in, r_out, r_face = 0.058, 0.084, 0.168, R_RIM + 0.002
 
     def face_x(r):
-        # a flat face, barely proud at the hub: proud at the hub, falling towards the lip
-        return FACE_X + 0.003 * (1 - (r - r_hub) / (r_face - r_hub))
+        # the face is a shallow cone: a centimetre proud at the hub, falling towards the lip (r03: the lip's shadow
+        # lies on the spokes' ends)
+        return FACE_X + 0.010 * (1 - (r - r_hub) / (r_face - r_hub))
+
+    # each spoke is crowned: its edges and the ring round the openings lie lower than its middle, so the face
+    # catches the light in bands and not as one flat disc
+    CROWN = (0.0, -0.0012, -0.0048, -0.0048, -0.0048, -0.0048, -0.0048, -0.0012, 0.0)
 
     sector = 2 * math.pi / N_SPOKES
 
@@ -77,7 +66,8 @@ def rim(mesh):
                 angs.append(K.lerp(a0 + hw, ob, q / 4))
             angs += [ob, a0 + sector - hw * 0.5, a0 + sector]
             x = face_x(r)
-            rows.append([(x, r * math.cos(a), r * math.sin(a)) for a in angs])
+            k_crown = K.smoothstep(r_in - 0.006, r_in + 0.012, r)
+            rows.append([(x + CROWN[q] * k_crown, r * math.cos(a), r * math.sin(a)) for q, a in enumerate(angs)])
 
         def mat(i, j):
             r0, r1 = radii[j], radii[j + 1]
@@ -112,32 +102,18 @@ def rim(mesh):
     mesh.lathe(cap, 16, mats='chrome')
 
 
-def disc(mesh, front=True):
-    """ventilated disc (front 241 mm, rear 258 mm solid... both shown vented) and the hat"""
-    rd = 0.122 if front else 0.129
-    t = 0.020 if front else 0.010
-    x0 = -0.020
-    prof = [(x0 - t, 0.075), (x0 - t, rd), (x0, rd), (x0, 0.075), (x0 + 0.030, 0.070), (x0 + 0.030, 0.0)]
-    mesh.lathe(prof, 40, mats='disc')
-
-
-def caliper(mesh, front=True):
-    """a single-piston floating caliper astride the disc's edge, behind the axle and a little above it"""
-    rd = 0.122 if front else 0.129
-    m = K.Mesh('cal')
-    m.box('brake', -0.068, 0.010, rd - 0.045, rd + 0.016, -0.036, 0.036, bevel=0.010, segments=2)
-    m.box('brake', -0.074, -0.040, rd - 0.030, rd + 0.004, -0.050, 0.050, bevel=0.008, segments=1)
-    a = math.radians(-62)            # from straight up towards the rear
-    m.warp(lambda p: K.rot_x(p, a))
-    mesh.merge(m)
-
-
-def wheel_meshes(front=True):
-    """(spinning parts, caliper) as Meshes for a left wheel"""
+def wheel_meshes(front=True, side=1):
+    """(spinning parts, caliper, the tyre's layout for its texture) as Meshes for the wheel on `side` (1 = left)"""
     spin = K.Mesh('spin')
-    tyre(spin)
+    info = CC.tyre(spin, R_OUT, R_RIM, TYRE_W, RIM_W, grooves=3)
     rim(spin)
-    disc(spin, front)
+    # ventilated front discs (241 mm; shown a little larger, as the old model had them), solid rear ones
+    rd = 0.122 if front else 0.129
+    CC.brake_disc(spin, rd, -0.020, thick=0.020 if front else 0.011, r_hat=0.072, hat=0.030, vented=front)
     cal = K.Mesh('caliper')
-    caliper(cal, front)
-    return spin, cal
+    CC.caliper(cal, rd, -0.020, thick=0.020 if front else 0.011, kind='floating', angle=-62.0, colour='cal_iron')
+    if side < 0:
+        # the turning parts turned half round (the tyre's lettering stays readable), the caliper mirrored (it stays
+        # behind the axle)
+        spin, cal = CC.turned(spin), cal.mirrored()
+    return spin, cal, info

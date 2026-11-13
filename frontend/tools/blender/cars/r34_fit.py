@@ -552,10 +552,13 @@ def diffuser(part):
         part.box('trim', x - 0.004, x + 0.004, 0.17, 0.236, zf(x) + 0.01, -1.95)
 
 
+EXHAUST = (0.52, 0.272, -2.29)          # the tailpipe's mouth: in the recess under the bumper's lower edge (r37)
+
+
 def exhaust(mats, parent):
     """the stock single tailpipe, car's left, under the bumper"""
     part = K.Part('exhaust')
-    x, y, z = 0.52, 0.272, -2.29          # in the recess under the bumper's lower edge (r37)
+    x, y, z = EXHAUST
     prof = [(0.040, 0.30), (0.046, 0.06), (0.054, 0.02), (0.057, 0.003), (0.057, 0.0), (0.052, -0.002),
             (0.049, 0.0), (0.047, 0.08)]
     part.lathe(prof, 'chrome', (x, y, z), axis='z', segments=24, flip=True)
