@@ -2228,3 +2228,23 @@ to be seen). The films still show the balls until they are recorded again.
     of the surroundings in the paint, glass with a cabin behind it: where the gap to the photos now is.
   - Not started: the tanks' cannon (after the Edwards merge: the same vehicle code).
 
+
+## v2.5.1 (11-13): hayate, shiden and r34 re-modelled (round one); other models do the work
+
+- **The owner (11-13)**: yes to the three cars' sheets; and from now on Fable 5.2 conducts and other models work
+  (Claude models through the Agent tool, four models through Mistral Vibe CLI), with the worry that the 3D
+  modelling gets less precise.
+- **In**: the cars branch at `919062f` (the state of the sheets): tyres, brake discs, calipers, undersides, baked
+  shade, the shared kit `tools/blender/cars/car_common.py`; draw calls 44 -> 26 / 45 -> 26 / 36 -> 22, GLBs
+  284 -> 513 / 328 -> 539 / 560 -> 803 kB; new thumbnails. No code of the game changed.
+- Verified on the merged tree: tsc; vitest 245; build; `gpu-errors` 0 / 0 (WebGPU, WebGL 2; hayate, r34, shiden
+  through the garage, twice); `paint-drawn.cjs hayate shiden r34` all drawn (WebGPU); the race and rival pictures
+  looked at (camera with the car).
+- Not verified: `paint-drawn` on WebGL 2; phones; the course select's films still show the old hayate (wheels,
+  antenna, wiper differ slightly): recorded again with the car-look change.
+- **Who does what (my division, 11-13)**: modelling stays on Fable (high) behind a measured gate (silhouette, real
+  dimensions, lamp anchors); Edwards' last checks + release commit and the car look on Opus (high); Vibe models
+  for second reviews only. Of the Vibe models only gemini-4-hydrogen answered (the other three: usage limit /
+  quota upstream); a headless `vibe` from a background shell did not start (waits for the system keyring): the
+  second review of the Edwards backend has not happened yet. The agents were stopped once more by a usage limit
+  and resumed after the owner's login.

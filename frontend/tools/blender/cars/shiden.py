@@ -78,6 +78,7 @@ def build_car(night=False):
     shell = BODY.build(body, mats, counts, cuts=PARTS.cut)
     PARTS.build(root, body, shell, mats, counts)
     FFD.apply(body)
+    PARTS.finish(root, body, mats, counts)
     return root, mats, counts
 
 

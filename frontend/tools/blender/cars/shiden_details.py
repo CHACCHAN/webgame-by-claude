@@ -557,13 +557,18 @@ def cabin(m):
 # ---------------------------------------------------------------- exhaust
 
 
+EXHAUST_X = -0.517          # the middle of the twin tips
+EXHAUST_GAP = 0.039        # each tip's distance from it
+EXHAUST_Y = 0.290
+EXHAUST_Z = SH.rear_face_z(EXHAUST_X, EXHAUST_Y) - 0.025            # the tips' mouths
+EXHAUST_TIP = (EXHAUST_X, EXHAUST_Y, EXHAUST_Z + 0.30)                # where the tips start (car_common.underbody)
+
+
 def exhaust(mats, body, counts):
     """twin round tips under the bumper's right-hand side (photo s14: 75 mm across, outboard under the reflector)"""
     m = Mesh('exhaust_tip')
-    for x in (-0.478, -0.556):
-        y = 0.290
-        z1 = SH.rear_face_z(-0.517, y) - 0.025
-        tube_z(m, (x, y), 0.037, z1 + 0.30, z1, 'chrome', n=16)
+    for x in (EXHAUST_X + EXHAUST_GAP, EXHAUST_X - EXHAUST_GAP):
+        tube_z(m, (x, EXHAUST_Y), 0.037, EXHAUST_Z + 0.30, EXHAUST_Z, 'chrome', n=16)
     counts['exhaust'] = m.tris()
     m.build(body, mats, weld=1e-6)
 
@@ -676,8 +681,6 @@ def build(body, shell, mats, counts):
     wipers(m, shell)
     handles(m, shell)
     shut_lines(m, shell)
-    # muffler under the rear
-    box(m, (-0.18, 0.27, -1.78), (0.62, 0.12, 0.30), 'trim')
     counts['details'] = m.tris()
     m.build(body, mats, weld=1e-6)
     c = Mesh('cabin')
