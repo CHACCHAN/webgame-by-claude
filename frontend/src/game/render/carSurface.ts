@@ -314,13 +314,25 @@ class GlassMaterial extends MeshPhysicalNodeMaterial {
   }
 }
 
+let pane: N = null;
+/**
+ * What the pane mirrors does not come through it: Fresnel's share, from a twenty-fifth head-on to all of it. One node
+ * for every pane (it reads the material's own opacity): a node is part of the shader's key by its id, and a node
+ * per material had every car's glass built anew as it came into the scene.
+ */
+function paneOpacity(): N {
+  if (!pane) {
+    const facing: N = (normalView as N).dot(positionViewDirection).clamp();
+    pane = mix(materialOpacity, float(1), pow(facing.oneMinus(), 5).mul(0.96).add(0.04));
+  }
+  return pane;
+}
+
 export function glassMaterial(params: THREE.MeshPhysicalMaterialParameters): THREE.MeshPhysicalMaterial {
   const mat = new GlassMaterial(params as never);
   mat.transparent = true;
   mat.premultipliedAlpha = true;
-  // what the pane mirrors does not come through it: Fresnel's share, from a twenty-fifth head-on to all of it
-  const facing: N = (normalView as N).dot(positionViewDirection).clamp();
-  mat.opacityNode = mix(materialOpacity, float(1), pow(facing.oneMinus(), 5).mul(0.96).add(0.04));
+  mat.opacityNode = paneOpacity();
   // (the whole mirror image of the surroundings, not only the lamps: `SurroundingsNode.setup`)
   mat.userData.carGlass = true;
   return mirroring(mat) as unknown as THREE.MeshPhysicalMaterial;
