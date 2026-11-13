@@ -82,6 +82,8 @@ class RunController extends Controller
 
     public function ghost(Run $run): JsonResponse
     {
+        // (a course not open yet, or a vehicle that does not run there: as if there were no such run)
+        abort_unless(config('game.tracks.'.$run->track_id) && Vehicles::allowedOn($run->car_id, $run->track_id), 404, 'Unknown run.');
         $ghost = $run->ghost;
         if (! $ghost) {
             return response()->json(['message' => 'This run has no ghost recording.'], 404);

@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Player;
+use App\Models\Run;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -175,16 +176,10 @@ class GameApiTest extends TestCase
         $this->assertSame([28_000], array_column($this->getJson('/api/tracks/autobahn/leaderboard?car_id=roach')->json('entries'), 'time_ms'));
     }
 
-    /** Edwards and its fighters as they are once released (config/game.php `release`). */
-    private function releaseEdwards(): void
-    {
-        config(['game.release.edwards' => true, 'game.tracks' => config('game.catalog.tracks'), 'game.cars' => config('game.catalog.cars')]);
-    }
-
     public function test_edwards_and_the_fighters_are_in_the_catalogue_but_closed_until_released(): void
     {
+        $this->edwards(false);
         $token = $this->register();
-        $this->assertFalse(config('game.release.edwards'));
         $this->assertArrayHasKey('edwards', config('game.catalog.tracks'));
         $this->assertSame(['edwards'], config('game.catalog.cars.f15j.courses'));
         $this->assertArrayNotHasKey('edwards', config('game.tracks'));
@@ -197,7 +192,7 @@ class GameApiTest extends TestCase
 
     public function test_once_released_the_fighters_run_at_edwards_and_nowhere_else(): void
     {
-        $this->releaseEdwards();
+        $this->edwards(true);
         $token = $this->register();
         $this->getJson('/api/content')->assertOk()->assertJsonPath('tracks.4.id', 'edwards')->assertJsonCount(21, 'cars');
 
@@ -211,5 +206,52 @@ class GameApiTest extends TestCase
         $this->withToken($token)->postJson('/api/runs', $this->runPayload(120_000, ['car_id' => 'su47']))
             ->assertUnprocessable()->assertJsonValidationErrors('car_id');
         $this->assertSame([188_000], array_column($this->getJson('/api/tracks/edwards/leaderboard?car_id=f15j')->json('entries'), 'time_ms'));
+    }
+
+    /** A stored run (as an old one, or the seeded bots' on a course not open yet), with a ghost. */
+    private function storedRun(Player $player, string $trackId, string $carId, int $timeMs): Run
+    {
+        $run = Run::create([
+            'player_id' => $player->id, 'track_id' => $trackId, 'car_id' => $carId, 'mode' => 'time_attack',
+            'time_ms' => $timeMs, 'sector_ms' => [1, 2, 3, $timeMs], 'client_version' => 'test',
+        ]);
+        $run->ghost()->create(['format' => 'v1', 'interval_ms' => 100, 'frame_count' => 1, 'data' => 'AAAA']);
+
+        return $run;
+    }
+
+    public function test_a_course_not_open_yet_shows_none_of_its_runs(): void
+    {
+        $token = $this->register();
+        $player = Player::where('name', 'Driver')->firstOrFail();
+        $there = $this->storedRun($player, 'edwards', 'r34', 230_000);
+        $this->storedRun($player, 'oboro-downhill', 'hayate', 90_000);
+
+        $this->edwards(false);
+        $this->getJson("/api/runs/{$there->id}/ghost")->assertNotFound();
+        $me = $this->withToken($token)->getJson('/api/players/me')->assertOk();
+        $this->assertSame(['oboro-downhill'], array_column($me->json('bests'), 'track_id'));
+        $this->assertSame(['oboro-downhill'], array_column($me->json('best_runs'), 'track_id'));
+
+        $this->edwards(true);
+        $this->getJson("/api/runs/{$there->id}/ghost")->assertOk()->assertJsonPath('track_id', 'edwards');
+        $this->assertContains('edwards', array_column($this->withToken($token)->getJson('/api/players/me')->json('bests'), 'track_id'));
+    }
+
+    public function test_a_vehicle_off_its_course_has_no_list_and_no_run_there(): void
+    {
+        $this->edwards(true);
+        $token = $this->register();
+        $player = Player::where('name', 'Driver')->firstOrFail();
+        // (a fighter's run on a pass cannot be sent: one stored all the same is shown nowhere)
+        $off = $this->storedRun($player, 'oboro-downhill', 'f15j', 80_000);
+        $this->storedRun($player, 'oboro-downhill', 'hayate', 90_000);
+
+        $this->getJson('/api/tracks/oboro-downhill/leaderboard?car_id=f15j')->assertUnprocessable()->assertJsonValidationErrors('car_id');
+        $this->assertSame([90_000], array_column($this->getJson('/api/tracks/oboro-downhill/leaderboard')->json('entries'), 'time_ms'));
+        $this->getJson("/api/runs/{$off->id}/ghost")->assertNotFound();
+        $me = $this->withToken($token)->getJson('/api/players/me')->assertOk();
+        $this->assertSame(['hayate'], array_column($me->json('bests'), 'car_id'));
+        $this->assertSame(['hayate'], array_column($me->json('best_runs'), 'car_id'));
     }
 }
