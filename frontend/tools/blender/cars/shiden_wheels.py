@@ -10,6 +10,8 @@ import math
 import bpy
 import numpy as np
 
+import car_common as CC
+import hayate_kit as K
 import shiden_shape as SH
 from shiden_surf import B, Mesh
 
@@ -180,22 +182,33 @@ def caliper(mesh, s, front):
 
 
 def build(root, mats, counts):
+    """tyre, disc and caliper come from the shared kit (car_common: a profiled tyre with its own texture set, a
+    scored disc, a four-pot caliper in front and a floating one behind); the rim is this car's own"""
+    made = []
+    info = None
     for name, s, z in (('fl', 1, SH.ZF), ('fr', -1, SH.ZF), ('rl', 1, SH.ZR), ('rr', -1, SH.ZR)):
+        front = name[0] == 'f'
         piv = _empty(f'wheel_{name}', root, (s * SH.TRACK / 2, SH.TYRE_R, z))
         spin = _empty(f'spin_{name}', piv, (0, 0, 0))
-        m = Mesh(f'tyre_{name}')
-        tyre(m, s)
-        counts[f'tyre_{name}'] = m.tris()
-        m.build(spin, mats, weld=1e-6)
+        t = K.Mesh(f'tyre_{name}')
+        # the tyre starts on top of the rim's flange (R_LIP), which stays in sight as the polished ring
+        info = CC.tyre(t, R_OUT, R_LIP + 0.004, W_TYRE, 0.200, grooves=4)
+        rd = 0.157 if front else 0.147                      # 314 mm / 294 mm discs behind the 17-inch wheels
+        thick = 0.026 if front else 0.018
+        CC.brake_disc(t, rd, 0.022, thick=thick, r_hat=0.082, hat=0.028, vented=True)
+        c = K.Mesh(f'caliper_{name}')
+        CC.caliper(c, rd, 0.022, thick=thick, kind='4pot' if front else 'floating', angle=-75.0 if front else -105.0,
+                   colour='cal_iron')
+        if s < 0:
+            t, c = CC.turned(t), c.mirrored()
+        counts[f'tyre_{name}'] = t.tris()
+        counts[f'caliper_{name}'] = c.tris()
+        made.append((t, spin))
+        made.append((c, piv))
         m = Mesh(f'rim_{name}')
         rim(m, s)
         counts[f'rim_{name}'] = m.tris()
         m.build(spin, mats, weld=1e-6)
-        m = Mesh(f'disc_{name}')
-        disc(m, s)
-        counts[f'disc_{name}'] = m.tris()
-        m.build(spin, mats, weld=1e-6)
-        m = Mesh(f'caliper_{name}')
-        caliper(m, s, name[0] == 'f')
-        counts[f'caliper_{name}'] = m.tris()
-        m.build(piv, mats, weld=1e-6)
+    mats['tire'] = CC.tyre_material(info, 'NOCTURNE', '235/45R17 93W')
+    for mesh, parent in made:
+        CC.build(mesh, parent, mats)
