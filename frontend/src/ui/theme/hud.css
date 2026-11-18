@@ -259,6 +259,8 @@
 .tc-pedal.fire { --edge: rgb(var(--c-amber) / 0.6); }
 /* (on a phone the gun's figures stand over its mark: under it they ran into the two buttons) */
 .touch .gun-hud:not(.scope) .gun-read { translate: -50% -4.2rem; }
+/* (and in the sight they stand in its upper part: the speed and the gear are drawn over its lower rim) */
+.touch .gun-hud.scope .gun-read { bottom: auto; top: calc(50% - 31vmin); }
 .tc-pedal.fire.on { --edge: var(--amber); --fill: rgb(var(--c-amber) / 0.36); }
 
 /* ------------------------------------------------------------- touch screens: the cluster between the steering pad

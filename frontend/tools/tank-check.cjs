@@ -7,7 +7,7 @@
 //   node tools/tank-check.cjs <outDir>          exit code 1 when anything was reported or a step did not happen
 // Env: URL (http://localhost:4173/), QUERY (e.g. ?webgl=1), TANK (type10), TIMES (night,dawn), COURSE,
 // SET (JSON merged into the stored settings), PHONE=1 (844×390 with touch: the touch layout's picture and whether
-// its parts overlap, instead of the above), CHROME, PW_MODULE.
+// its parts overlap, instead of the above), SOFT=1 (the software renderer), CHROME, PW_MODULE.
 // Serve with `API_PROXY=http://127.0.0.1:9 npx vite preview`; /api is also aborted in the browser.
 const { chromium } = require(process.env.PW_MODULE || 'playwright');
 const fs = require('fs');
@@ -22,7 +22,8 @@ const TANKS = ['type10', 'type16', 'leopard2a5', 'm1a2', 't14'];
   const browser = await chromium.launch({
     executablePath: process.env.CHROME || '/usr/bin/google-chrome',
     headless: true,
-    args: ['--ignore-gpu-blocklist', '--use-angle=vulkan', '--enable-features=Vulkan'],
+    // (SOFT=1: the software renderer, for the logic and the layout alone; use SET='{"quality":"low"}')
+    args: process.env.SOFT ? ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] : ['--ignore-gpu-blocklist', '--use-angle=vulkan', '--enable-features=Vulkan'],
   });
   const ctx = await browser.newContext(PHONE ? { viewport: { width: 844, height: 390 }, hasTouch: true, isMobile: true } : { viewport: { width: 1280, height: 720 } });
   await ctx.route('**/api/**', (r) => r.abort());
@@ -77,7 +78,7 @@ const TANKS = ['type10', 'type16', 'leopard2a5', 'm1a2', 't14'];
       },
       [TANK, time],
     );
-    await page.waitForFunction(() => window.__game.phase === 'racing', null, { timeout: 60000 });
+    await page.waitForFunction(() => window.__game.phase === 'racing', null, { timeout: process.env.SOFT ? 400000 : 60000 });
   };
   /**
    * Lays the sight on the rival through the touch path until the gun is on it (true) or `ms` are over. `fire`: the
@@ -140,6 +141,19 @@ const TANKS = ['type10', 'type16', 'leopard2a5', 'm1a2', 't14'];
     const g1 = await guns();
     want(g1.hud.scope, 'a tap on 照準 takes the sight up');
     await shot('phone-scope');
+    // in the sight the gun's figures keep clear of the speed, the rival's panel and the buttons
+    const inSight = await page.evaluate(() =>
+      ['.gun-read', '.hud-br', '.hud-tc', '.tc-gun', '.tc-pedals', '.tc-top'].map((s) => {
+        const r = document.querySelector(s)?.getBoundingClientRect();
+        return r && r.width ? { s, l: r.left, t: r.top, r: r.right, b: r.bottom } : null;
+      }),
+    );
+    const read = inSight[0];
+    want(!!read, "the gun's figures are shown in the sight");
+    for (const b of inSight.slice(1).filter(Boolean)) {
+      const over = read && Math.min(read.r, b.r) - Math.max(read.l, b.l) > 2 && Math.min(read.b, b.b) - Math.max(read.t, b.t) > 2;
+      want(!over, `in the sight .gun-read and ${b.s} do not overlap`);
+    }
     await page.locator('.tc-pedal.sight').tap();
     await page.waitForTimeout(400);
     want(!(await guns()).hud.scope, 'another tap puts it down');
