@@ -1,9 +1,11 @@
 /**
  * What is built but not shown to players yet. Each entry is switched on here, in the code, at its release; until
- * then a build can be made with it for checks (`VITE_EDWARDS=1 npm run build`, `EDWARDS=1 npx tsx tools/…`,
- * `EDWARDS=1 npx vitest run`): never by anything a player can set.
+ * then a build can be made with it for checks (`VITE_TANKS=1 npm run build`, `TANKS=1 npx tsx tools/…`,
+ * `TANKS=1 npx vitest run`): never by anything a player can set. The server has the same switch
+ * (backend/config/game.php `$release`; a vitest compares the two).
  *
- * `edwards`: the Edwards AFB course and the three fighters that run only there. `tanks`: the tanks (no cannon yet).
+ * `edwards`: the Edwards AFB course and the three fighters that run only there (open since 11-13).
+ * `tanks`: the tanks (no cannon yet).
  */
 const asked = (name: string): boolean => {
   const vite = (import.meta as { env?: Record<string, string | undefined> }).env;
@@ -12,6 +14,6 @@ const asked = (name: string): boolean => {
 };
 
 export const RELEASED = {
-  edwards: false || asked('EDWARDS'),
+  edwards: true,
   tanks: false || asked('TANKS'),
 };

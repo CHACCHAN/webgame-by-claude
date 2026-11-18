@@ -239,7 +239,9 @@ test('course select switches to another mountain and its own rivals', async ({ p
   await waitForTitle(page);
   await page.keyboard.press('Enter');
   await page.locator('.menu-list li', { hasText: 'RIVAL BATTLE' }).click();
-  await expect(page.locator('.crs-row')).toHaveCount(4);
+  // the three passes, the motorway and, last, Edwards AFB
+  await expect(page.locator('.crs-row')).toHaveCount(5);
+  await expect(page.locator('.crs-row').last()).toContainText('EDWARDS AFB');
   await page.keyboard.press('ArrowRight');
   await expect(page.locator('.crs-row.active')).toContainText('KIRIFURI LAKESIDE');
   await page.keyboard.press('Enter');

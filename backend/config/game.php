@@ -12,7 +12,7 @@
 | catalogue stays readable as `catalog` (tests).
 */
 $release = [
-    'edwards' => false,
+    'edwards' => true,
 ];
 $open = fn (array $list): array => array_filter($list, fn (array $e): bool => ! isset($e['release']) || $release[$e['release']]);
 

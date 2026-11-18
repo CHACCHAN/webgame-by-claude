@@ -32,7 +32,7 @@ describe('the release switch', () => {
   it('is the same on both sides: the client\'s lists and the server\'s', () => {
     const client = readFileSync(new URL('../release.ts', import.meta.url), 'utf8');
     const server = readFileSync(new URL('../../../../backend/config/game.php', import.meta.url), 'utf8');
-    const c = /edwards: (true|false) \|\|/.exec(client), s = /'edwards' => (true|false)/.exec(server);
+    const c = /edwards: (true|false)\b/.exec(client), s = /'edwards' => (true|false)/.exec(server);
     expect(c && s).toBeTruthy();
     expect(c![1]).toBe(s![1]);
   });
