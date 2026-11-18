@@ -76,6 +76,9 @@ def materials(paint=PAINT):
         m.add('headlight', '#dfe3e8', roughness=0.12, metallic=0.1)
         m.add('taillight', '#4a0b0d', roughness=0.2)
         m.add('tire', '#202022', roughness=0.92)
+    import car_common as CC
+    for name in ('c_dash', 'c_plastic', 'c_carpet'):        # the cabin's swatches (car_common)
+        CC.material_for(m.mats, name)
     return m
 
 
@@ -100,6 +103,40 @@ def lamp_report(root):
         res[(k, side)] = c
         print('LAMP', k, side, 'centre', c, 'size', [round(b - a, 3) for a, b in zip(lo, hi)])
     return res
+
+
+def narrow(body, width):
+    """scale the body across the car to `width` over everything but the mirrors; returns the factor"""
+    obs = [o for o in body.children_recursive if o.type == 'MESH']
+    half = max(abs(v.co.x) for o in obs if o.name != 'mirrors' for v in o.data.vertices)
+    k = width / (2 * half)
+    for o in obs:
+        for v in o.data.vertices:
+            v.co.x *= k
+        o.data.update()
+    print('NARROW', round(2 * half, 4), '->', width, 'x', round(k, 4))
+    return k
+
+
+def finish(root, body, mats, P):
+    """car_common: what hangs under the floor pan (the battery case a centimetre under it, ribbed across; a drive
+    unit, shafts and arms at each axle), the plain materials into two painted atlases, every corner's share of the
+    sky. The tyre keeps its own picture."""
+    import car_common as CC
+    import hayate_kit as HK
+    ub = HK.Mesh('underbody')
+    CC.underbody(ub, P['y_rk'] + 0.005, CS.WB / 2, -CS.WB / 2, P['track'], P['track'], P['hub_y'], tip=(0.5, 0.3, -2.5),
+                 layout='EV')
+    n = ub.tris()
+    CC.build(ub, body, mats)
+    trim = CC.Atlas('trim')
+    rim = CC.Atlas('rim', size=512, fill=('#8a8c8f', 0.32, 0.85))
+    rim.region('disc', CC.disc_image(), 0.38, 0.85)
+    made = CC.consolidate(root, trim, rim, own=('tire', 'plate'))
+    tyres = [o for o in root.children_recursive
+             if o.type == 'MESH' and any(mm and mm.name == 'tire' for mm in o.data.materials)]
+    CC.bake_ao(root, made + tyres)
+    return n
 
 
 def build(o=None):
@@ -143,9 +180,22 @@ def build(o=None):
         PT.cabin(cab, P, S)
         tris['interior'] = cab.tris()
         cab.build(body, m.mats, sharp=40.0)
+        import car_common as CC
+        import hayate_kit as HK
+        fur = HK.Mesh('furniture')
+        PT.furnish(fur)
+        tris['furniture'] = fur.tris()
+        CC.build(fur, body, m.mats)
+    # The catalogue's width (2,027 mm, mirrors folded in) is the truck over its arch cladding. The fit had put the
+    # stainless there and the cladding 20 mm further out a side (2,068 mm). Narrowed to the catalogue, body and
+    # track alike, every photo's outline fits better (mean IoU 0.9387 -> 0.9454, the gate's dimtest.py); the
+    # catalogue's height does not (0.9342: the photographed trucks stand lower on their air springs), so that stays.
+    kx = narrow(body, CS.WIDTH)
+    P = dict(P, track=P['track'] * kx)
     pivots, wt = WH.build(root, m.mats, P)
     for k, v in wt.items():
         tris['wheel_' + k] = v
+    tris['underbody'] = finish(root, body, m.mats, P)
     for k, v in tris.items():
         print('TRIS', k, v)
     print('TRIS total', sum(tris.values()))

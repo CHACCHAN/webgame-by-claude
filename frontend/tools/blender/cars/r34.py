@@ -70,7 +70,8 @@ def lamp_report(root):
 
 def finish(root, body, mats):
     """after the body's last deformation (car_common): the underside (a front engine driving all four wheels, the
-    rear on arms, one silencer along the left of the tail), the floor undersealed, the plain materials into two
+    rear on arms, the rear silencer across the car behind the axle with its tip on the left, the tank ahead of
+    the axle), the floor undersealed, the plain materials into two
     painted atlases, every corner's share of the sky. The grille's mesh picture repeats, so it stays a material; so does the plate (car_common)."""
     import car_common as CC
     import hayate_kit as HK
@@ -79,7 +80,7 @@ def finish(root, body, mats):
     ub = HK.Mesh('underbody')
     x, y, z = FIT.EXHAUST
     CC.underbody(ub, 0.155, WH.WHEELBASE / 2, -WH.WHEELBASE / 2, WH.TRACK_F, WH.TRACK_R, WH.R_TYRE, tip=(x, y, z + 0.30),
-                 layout='AWD', axle='irs')
+                 layout='AWD', axle='irs', silencer='across')
     print('TRIS underbody', ub.tris())
     CC.build(ub, body, mats)
     trim = CC.Atlas('trim')

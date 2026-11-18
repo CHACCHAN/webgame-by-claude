@@ -638,81 +638,37 @@ def shut_lines(part, mats, bvh):
 
 # ------------------------------------------------------------------ interior (RHD)
 def interior(part, mats):
-    it, tr = mats['interior'], mats['trim']
+    """the cabin's tub: floor, door cards, the luggage deck, the dash's slab and the tunnel's console; what stands in
+    it comes from the shared kit (furnish)"""
+    it, dash, pl, carpet = mats['interior'], mats['c_dash'], mats['c_plastic'], mats['c_carpet']
     # floor, door cards below the lining, the luggage deck and its back wall
-    part.face([(-0.78, 0.21, -1.0), (0.78, 0.21, -1.0), (0.78, 0.21, 0.70), (-0.78, 0.21, 0.70)], it, smooth=False, out=(0, 1, 0))
+    part.face([(-0.78, 0.21, -1.0), (0.78, 0.21, -1.0), (0.78, 0.21, 0.70), (-0.78, 0.21, 0.70)], carpet, smooth=False, out=(0, 1, 0))
     for s in (1, -1):
         part.face([(0.80 * s, 0.21, -0.95), (0.80 * s, 0.21, 0.62), (0.80 * s, 0.55, 0.62), (0.80 * s, 0.55, -0.95)], it,
                   smooth=False, out=(-s, 0, 0))
-    part.face([(-0.70, 0.66, -1.98), (0.70, 0.66, -1.98), (0.70, 0.66, -1.0), (-0.70, 0.66, -1.0)], it, smooth=False, out=(0, 1, 0))
+    part.face([(-0.70, 0.66, -1.98), (0.70, 0.66, -1.98), (0.70, 0.66, -1.0), (-0.70, 0.66, -1.0)], carpet, smooth=False, out=(0, 1, 0))
     part.face([(-0.70, 0.66, -1.0), (0.70, 0.66, -1.0), (0.70, 0.21, -1.0), (-0.70, 0.21, -1.0)], it, smooth=False, out=(0, 0, 1))
     part.face([(-0.55, 0.42, -1.95), (0.55, 0.42, -1.95), (0.55, 0.78, -1.95), (-0.55, 0.78, -1.95)], it, smooth=False, out=(0, 0, 1))
-    # dash: a rounded slab under the windscreen, the meter hood on the right (driver), centre stack
-    part.box(it, (0.0, 0.765, 0.43), (1.30, 0.15, 0.32), bevel=0.05, seg=2)
-    part.box(it, (-0.37, 0.86, 0.30), (0.40, 0.07, 0.18), bevel=0.03, seg=2)
-    part.box(tr, (-0.37, 0.82, 0.215), (0.30, 0.07, 0.012))
-    part.box(it, (0.0, 0.52, 0.30), (0.26, 0.42, 0.32), bevel=0.03, seg=1)
-    part.box(it, (0.0, 0.33, -0.15), (0.22, 0.24, 0.62), bevel=0.03, seg=1)
-    part.cylinder(tr, (0.0, 0.50, -0.05), 0.012, 0.12, axis='y', seg=8)
-    part.cylinder(tr, (0.0, 0.57, -0.05), 0.022, 0.03, axis='y', seg=10)
-    # steering wheel (right), tilted toward the driver
-    sw = K.Part('sw')
-    rot = Matrix.Rotation(math.radians(-22), 4, 'X')
-    bm = bmesh.new()
-    bmesh.ops.create_circle(bm, cap_ends=False, radius=0.185, segments=24)
-    ring = [v.co.copy() for v in bm.verts]
-    bm.free()
-    tube = []
-    for k in range(25):
-        a = 2 * math.pi * k / 24
-        cc = Vector((0, 0.185 * math.sin(a), 0.185 * math.cos(a)))
-        rr = []
-        for j in range(6):
-            b = 2 * math.pi * j / 6
-            rad = Vector((0, math.sin(a), math.cos(a)))
-            rr.append(cc + rad * 0.016 * math.cos(b) + Vector((0.016 * math.sin(b), 0, 0)))
-        tube.append(rr)
-    centre = Vector((-0.37, 0.86, 0.16))
-    rows = []
-    for rr in tube:
-        rows.append([tuple(centre + _tilt(p)) for p in rr])
-    sw.grid(rows, tr, closed=True)
-    for a in (math.radians(90), math.radians(270), math.radians(180)):
-        p0 = centre + _tilt(Vector((0, 0.0, 0.0)))
-        p1 = centre + _tilt(Vector((0, 0.18 * math.sin(a), 0.18 * math.cos(a))))
-        d = p1 - p0
-        sw.box(tr, (p0 + p1) / 2, (0.05, 0.016, d.length), rot=_rot_z_along(d))
-    sw.cylinder(tr, tuple(centre + _tilt(Vector((0.0, 0, 0)))), 0.05, 0.05, axis='x', seg=12)
-    bmesh.ops.recalc_face_normals(sw.bm, faces=sw.bm.faces)
-    part.absorb(sw)
-    part.cylinder(tr, tuple(centre + Vector((0, -0.03, 0.12))), 0.03, 0.22, axis='z', seg=8)
-    # seats: shell buckets with bolsters and head rests; small rear seats
+    # dash: a rounded slab under the windscreen, the centre stack, the tunnel's console
+    part.box(dash, (0.0, 0.765, 0.43), (1.30, 0.15, 0.32), bevel=0.05, seg=2)
+    part.box(pl, (0.0, 0.52, 0.30), (0.26, 0.42, 0.32), bevel=0.03, seg=1)
+    part.box(pl, (0.0, 0.33, -0.15), (0.22, 0.24, 0.62), bevel=0.03, seg=1)
+
+
+def furnish(mesh):
+    """car_common's furniture in the tub (right-hand drive): two sport seats with the head rest in one piece, the
+    two small rear seats against the deck's wall, wheel, the instruments' hood on the slab, lever and hand brake on
+    the console, the mirror at the windscreen's top"""
+    import car_common as CC
     for x in (-0.37, 0.37):
-        part.box(it, (x, 0.33, -0.25), (0.48, 0.12, 0.50), bevel=0.04, seg=2)
-        for bx in (-0.21, 0.21):
-            part.box(it, (x + bx, 0.40, -0.25), (0.07, 0.08, 0.46), bevel=0.03, seg=1)
-        back = Matrix.Rotation(math.radians(-16), 3, 'X')
-        part.box(it, (x, 0.66, -0.56), (0.48, 0.58, 0.12), bevel=0.04, seg=2, rot=back)
-        for bx in (-0.22, 0.22):
-            part.box(it, (x + bx, 0.62, -0.53), (0.07, 0.42, 0.16), bevel=0.03, seg=1, rot=back)
-        part.box(it, (x, 1.03, -0.66), (0.26, 0.16, 0.10), bevel=0.04, seg=2, rot=back)
-        part.box(it, (x * 0.95, 0.40, -1.00), (0.44, 0.10, 0.36), bevel=0.04, seg=1)
-        part.box(it, (x * 0.95, 0.62, -1.20), (0.44, 0.44, 0.10), bevel=0.04, seg=1,
-                 rot=Matrix.Rotation(math.radians(-30), 3, 'X'))
-
-
-def _tilt(p):
-    # the wheel's plane faces the driver (−z), leaning back at the top
-    v = Vector((p.z, p.y, p.x))          # ring in the x-y plane
-    return Matrix.Rotation(math.radians(24), 3, 'X') @ v
-
-
-def _rot_z_along(d):
-    z = d.normalized()
-    up = Vector((0, 0, 1)) if abs(z.z) < 0.9 else Vector((1, 0, 0))
-    x = up.cross(z).normalized()
-    y = z.cross(x)
-    return Matrix((x, y, z)).transposed()
+        CC.seat(mesh, x, 0.21, -0.50, width=0.50, length=0.50, h=0.18, back=0.55, recline=19.0, headrest='bucket',
+                bolster=1.3)
+    CC.bench(mesh, -0.62, 0.62, 0.21, -1.0, length=0.34, h=0.24, back=0.40, recline=26.0, places=2)
+    CC.steering_wheel(mesh, (-0.37, 0.86, 0.16), tilt=24.0, R=0.185)
+    CC.binnacle(mesh, -0.37, 0.838, 0.26, width=0.40, height=0.075, depth=0.20)
+    CC.gear_lever(mesh, 0.0, 0.45, -0.03)
+    CC.hand_brake(mesh, 0.055, 0.45, -0.40)
+    CC.inside_mirror(mesh, 1.085, 0.05)
 
 
 def build(body, mats, bvh, bvh_cut, count):
@@ -764,6 +720,12 @@ def build(body, mats, bvh, bvh_cut, count):
     shut_lines(det, mats, bvh_cut)
     inter = K.Part('interior')
     interior(inter, mats)
+    import car_common as CC
+    import hayate_kit as HK
+    fur = HK.Mesh('furniture')
+    furnish(fur)
+    count['furniture'] = fur.tris()
+    CC.build(fur, body, mats.mats)
     ex = exhaust(mats)
     for p in (det, red_all, inter, ex):
         count[p.name] = p.tris()

@@ -123,26 +123,37 @@ def caliper(part, front):
 
 
 def build(root, mats):
-    """four pivots with spin children; returns their names and triangle counts"""
-    count = {}
-    pivots = {}
+    """four pivots with spin children; returns their names and triangle counts. Tyre, disc and caliper come from the
+    shared kit (car_common: a profiled 225/45R17 with its own texture set, vented discs, gold four-pot calipers: behind
+    the axle in front, ahead of it at the rear, as before); the rim is this car's own"""
+    import car_common as CC
+    import hayate_kit as HK
+    count, pivots, made, info = {}, {}, [], None
     for name, x, z, front in (('fl', TRACK_F / 2, SH.FRONT_AXLE, True), ('fr', -TRACK_F / 2, SH.FRONT_AXLE, True),
                               ('rl', TRACK_R / 2, SH.REAR_AXLE, False), ('rr', -TRACK_R / 2, SH.REAR_AXLE, False)):
         pivot = K.empty(f'wheel_{name}', (x, R_TYRE, z), parent=root)
         spin = K.empty(f'spin_{name}', (0, 0, 0), parent=pivot)
-        roll = K.Part(f'wheel_{name}_roll')
-        tyre(roll)
+        roll = K.Part(f'wheel_{name}_rim')
         rim(roll)
-        disc(roll, front)
-        cal = K.Part(f'wheel_{name}_caliper')
-        caliper(cal, front)
+        t = HK.Mesh(f'tyre_{name}')
+        # the bead sits inside the rim's lip (its crest at r 0.226 stays proud of the sidewall)
+        info = CC.tyre(t, R_TYRE, R_RIM - 0.008, 0.225, 0.188, grooves=4)
+        rd = 0.163 if front else 0.150
+        thick = 0.028 if front else 0.020
+        CC.brake_disc(t, rd, 0.004, thick=thick, r_hat=0.082, hat=0.036, vented=True)
+        c = HK.Mesh(f'caliper_{name}')
+        CC.caliper(c, rd, 0.004, thick=thick, kind='4pot', angle=-60.0 if front else 60.0, colour='cal_gold')
         if x < 0:
-            for p in (roll, cal):
-                _mirror_x(p)
-        count[name] = roll.tris() + cal.tris()
+            _mirror_x(roll)
+            t, c = CC.turned(t), c.mirrored()
+        count[name] = roll.tris() + t.tris() + c.tris()
         roll.build(spin, mats, sharp=35.0)
-        cal.build(pivot, mats, sharp=35.0)
+        made.append((t, spin))
+        made.append((c, pivot))
         pivots[name] = pivot
+    mats['tire'] = CC.tyre_material(info, 'NOCTURNE', '225/45R17 91W')
+    for mesh, parent in made:
+        CC.build(mesh, parent, mats)
     return pivots, count
 
 

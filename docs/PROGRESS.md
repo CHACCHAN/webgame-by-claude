@@ -2313,3 +2313,19 @@ to be seen). The films still show the balls until they are recorded again.
   the look and goes to the owner as sheets first; CLAUDE.md's paragraph on `carSurface.ts` describes the intent,
   not v2.6.1's picture, until then.
 - Still to see by the owner: raijin, supra (sheets sent 11-18) and one more fix of the r34's underside (`6478a8f`).
+
+## v2.6.3 (11-18): raijin, supra, s15 and cybertruck, round two; the r34's underside
+
+- **The owner (11-18)**: plainly positive fixes go in without asking first (memory `positive-fixes-no-ask`); I look
+  at the sheet and the gate myself and report afterwards.
+- **In**: the cars branch at `c28d2cb` (agent on Fable, high; gate: nothing worse on all four). raijin: arch lips
+  thinner, width 1760 -> 1749 (1740), the lips' saw-toothed inner edge mended; supra and s15: shape untouched,
+  tyres, brakes, cabin, underside; cybertruck: width 2068 -> 2027 (catalogue), every outline better
+  (0.9398 -> 0.9467), cabin, battery case; r34: silencer across the car, tank ahead of the axle. Draw calls
+  about 40 -> 22 a car.
+- Verified by me on the merged tree: tsc; vitest 264; build; `gpu-errors` 0 / 0 (WebGPU, WebGL 2) with the four
+  through the garage; `paint-drawn.cjs raijin supra s15 cybertruck` 20 of 20 drawn (WebGPU); the s15's and the
+  cybertruck's sheets and a garage sheet of the four looked at (cabins show through the glass).
+- Not verified: the raijin's and supra's own sheets only reduced; `paint-drawn` on WebGL 2 (the agent ran it for
+  raijin, supra, r34); phones; vehicle thumbnails of the four are the agent's.
+- Left with the agent: u9 (no GLB in the game yet).

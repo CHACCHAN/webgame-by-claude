@@ -34,7 +34,6 @@ def materials():
     m.add('chrome', '#d8dade', metallic=1.0, roughness=0.08)
     m.add('headlight', '#dfe6ee', metallic=0.4, roughness=0.1, image=_img('headlamp.png'), emissive='#fff4e0')
     m.add('taillight', '#4a0505', roughness=0.25, image=_img('taillamp.png'), emissive='#ff1a10')
-    m.add('tire', '#151515', roughness=0.92, image=_img('tyre.png'))
     m.add('rim', '#b8bbc0', metallic=1.0, roughness=0.26)
     m.add('brake', '#2a2b2e', metallic=0.3, roughness=0.5)
     m.add('under', '#121314', roughness=0.9)
@@ -48,6 +47,9 @@ def materials():
     m.add('housing', '#62666c', metallic=0.5, roughness=0.32)
     # helper (never exported): faces to delete after a cut
     m.cut = bpy.data.materials.new('_cut')
+    import car_common as CC
+    for name in ('c_dash', 'c_plastic', 'c_carpet'):        # the cabin's swatches (car_common)
+        CC.material_for(m.mats, name)
     return m
 
 
@@ -613,6 +615,7 @@ def build_all(root, mats, ffd=True):
         FF.apply_to_body(body, None if ffd is True else ffd)
     DT.build_wing(body, mats, shell, count)
     wheels(root, mats, count)
+    finish(root, body, mats, count)
     return count
 
 
@@ -651,35 +654,6 @@ def _lathe(part, prof, mat, seg=SEG, uv_v=None, u_rep=1.0, cap=False):
                 quv = [uvs[k][j], uvs[k][j + 1], uvs[k + 1][j + 1], uvs[k + 1][j]]
                 for loop, uv in zip(f.loops, quv):
                     loop[part.uv].uv = uv
-
-
-def tyre(part, mats, w):
-    h = w / 2
-    r0, R = RIM_R + 0.004, TYRE_R
-    # inner bead → inner sidewall → tread (three grooves) → outer sidewall → outer bead
-    prof = [(-h + 0.012, r0), (-h - 0.002, r0 + 0.03), (-h - 0.006, r0 + 0.07), (-h - 0.002, R - 0.022),
-            (-h + 0.012, R - 0.004), (-h + 0.03, R)]
-    g = [-0.25 * w, 0.0, 0.25 * w]
-    for gx in g:
-        prof += [(gx - 0.007, R), (gx - 0.006, R - 0.007), (gx + 0.006, R - 0.007), (gx + 0.007, R)]
-    prof += [(h - 0.03, R), (h - 0.012, R - 0.004), (h + 0.002, R - 0.022), (h + 0.006, r0 + 0.07), (h + 0.002, r0 + 0.03),
-             (h - 0.012, r0)]
-    # v: arc-length fraction (texture rows: sidewall 0-0.3, tread 0.36-0.64, sidewall 0.7-1)
-    L = [0.0]
-    for i in range(1, len(prof)):
-        L.append(L[-1] + math.dist(prof[i], prof[i - 1]))
-    side = L[5]
-    vv = []
-    for i, l in enumerate(L):
-        if l <= side:
-            v = 0.3 * l / side
-        elif l >= L[-1] - side:
-            v = 0.7 + 0.3 * (l - (L[-1] - side)) / side
-        else:
-            v = 0.3 + 0.4 * (l - side) / (L[-1] - 2 * side)
-        vv.append(v)
-    _lathe(part, prof, mats['tire'], uv_v=vv, u_rep=12.0)
-    fix_out(part)
 
 
 def fix_out(part):
@@ -761,50 +735,59 @@ def _orient(part, out):
             f.normal_flip()
 
 
-def brake(part_spin, part_cal, mats, w, front):
-    xo = w / 2 + 0.012
-    xd = xo - 0.125
-    # rotor ring and hat
-    _lathe(part_spin, [(xd - 0.015, 0.16), (xd + 0.015, 0.16)], mats['disc'], seg=36)
-    ring = K.Part('ring')
-    _lathe(ring, [(xd + 0.015, 0.16), (xd + 0.015, 0.09), (xd + 0.045, 0.085), (xd + 0.045, 0.0)], mats['disc'], seg=36)
-    _orient(ring, Vector((1, 0, 0)))
-    part_spin.merge(_bm(ring), mats['disc'])
-    # caliper behind the axle (4-pot front, 2-pot rear), straddling the rotor's edge
-    ang0, ang1 = (math.radians(100), math.radians(160)) if front else (math.radians(105), math.radians(150))
-    cal = K.Part('cal')
-    rows = []
-    n = 6
-    for k in range(n + 1):
-        a = ang0 + (ang1 - ang0) * k / n
-        sec = [(xd - 0.045, 0.115), (xd + 0.045, 0.115), (xd + 0.05, 0.150), (xd + 0.045, 0.178), (xd - 0.045, 0.178),
-               (xd - 0.05, 0.150)]
-        rows.append([(x, r * math.sin(a), r * math.cos(a)) for x, r in sec])
-    cal.grid(rows, mats['brake'], closed=True, smooth=False)
-    for row in (rows[0], rows[-1]):
-        cal.face(row, mats['brake'], smooth=False)
-    bmesh.ops.recalc_face_normals(cal.bm, faces=cal.bm.faces)
-    part_cal.merge(_bm(cal), mats['brake'])
-
-
 def wheels(root, mats, count):
-    total = 0
+    """four pivots with spin children. Tyre, disc and caliper come from the shared kit (car_common: profiled tyres
+    with their own texture set, Ø323 vented discs, black fixed calipers behind the axle as before); the five-spoke
+    rim is this car's own"""
+    import car_common as CC
+    import hayate_kit as HK
+    total, made, info = 0, [], None
     for key, z, track, axle in (('fl', BD.AXLE, BD.TRACK_F, 'f'), ('fr', BD.AXLE, BD.TRACK_F, 'f'),
                                 ('rl', -BD.AXLE, BD.TRACK_R, 'r'), ('rr', -BD.AXLE, BD.TRACK_R, 'r')):
         s = 1 if key[1] == 'l' else -1
         pivot = K.empty(f'wheel_{key}', root, loc=(s * track / 2, BD.WHEEL_Y, z))
         spin = K.empty(f'spin_{key}', pivot)
-        ps = K.Part(f'wheel_{key}_spin')
-        tyre(ps, mats, TYRE_W[axle])
+        ps = K.Part(f'wheel_{key}_rim')
         rim(ps, mats, RIM_W[axle])
-        pc = K.Part(f'caliper_{key}')
-        brake(ps, pc, mats, RIM_W[axle], axle == 'f')
+        t = HK.Mesh(f'tyre_{key}')
+        # the bead lies under the rim's lip (its crest at RIM_R + 0.019 stays proud of the sidewall's foot)
+        got = CC.tyre(t, TYRE_R, RIM_R + 0.002, TYRE_W[axle], RIM_W[axle] - 0.006, grooves=4)
+        info = info or got
+        x_face = RIM_W[axle] / 2 + 0.012 - 0.125 + 0.015          # the old rotor's outer face
+        thick = 0.030 if axle == 'f' else 0.018
+        CC.brake_disc(t, 0.1615, x_face, thick=thick, r_hat=0.086, hat=0.030, vented=True)
+        c = HK.Mesh(f'caliper_{key}')
+        CC.caliper(c, 0.1615, x_face, thick=thick, kind='4pot', angle=-40.0, colour='cal_black')
         if s < 0:
-            for p in (ps, pc):
-                bmesh.ops.scale(p.bm, vec=(-1, 1, 1), verts=p.bm.verts)
-                for f in p.bm.faces:
-                    f.normal_flip()
-        total += ps.tris() + pc.tris()
+            bmesh.ops.scale(ps.bm, vec=(-1, 1, 1), verts=ps.bm.verts)
+            for f in ps.bm.faces:
+                f.normal_flip()
+            t, c = CC.turned(t), c.mirrored()
+        total += ps.tris() + t.tris() + c.tris()
         ps.build(spin)
-        pc.build(pivot)
+        made += [(t, spin), (c, pivot)]
+    mats.mats['tire'] = CC.tyre_material(info, 'NOCTURNE', '235/45ZR17 94W')
+    for mesh, parent in made:
+        CC.build(mesh, parent, mats.mats)
     count['wheels'] = total
+
+
+def finish(root, body, mats, count):
+    """after the body's last deformation (car_common): the underside (a front engine driving the rear wheels on
+    arms, the big silencer across the car behind the axle, its tailpipe on the left; the tank ahead of the axle), the plain materials and the small lamps' picture into two
+    painted atlases, every corner's share of the sky"""
+    import car_common as CC
+    import hayate_kit as HK
+    CC.underseal([o for o in body.children_recursive if o.type == 'MESH'], mats.mats)
+    ub = HK.Mesh('underbody')
+    CC.underbody(ub, 0.232, BD.AXLE, -BD.AXLE, BD.TRACK_F, BD.TRACK_R, BD.WHEEL_Y, tip=(0.52, 0.255, -2.02),
+                 layout='FR', axle='irs', silencer='across')
+    count['underbody'] = ub.tris()
+    CC.build(ub, body, mats.mats)
+    trim = CC.Atlas('trim')
+    rim_atlas = CC.Atlas('rim', size=512, fill=('#8a8c8f', 0.32, 0.85))
+    rim_atlas.region('disc', CC.disc_image(), 0.38, 0.85)
+    made = CC.consolidate(root, trim, rim_atlas, own=('tire', 'plate'))
+    tyres = [o for o in root.children_recursive
+             if o.type == 'MESH' and any(mm and mm.name == 'tire' for mm in o.data.materials)]
+    CC.bake_ao(root, made + tyres)

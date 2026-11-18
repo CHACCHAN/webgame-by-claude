@@ -94,12 +94,14 @@ def materials(paint):
     m.add('taillight', '#ffffff', roughness=0.25, image=image('taillight.png'))
     m.add('interior', '#2a2b2e', roughness=0.85)
     m.add('headlight', '#ffffff', roughness=0.25, metallic=0.5, image=image('headlight.png'))   # black housing, chrome bowls
-    m.add('tire', '#151515', roughness=0.92)
     m.add('rim', '#c3c6cb', metallic=1.0, roughness=0.34)   # light-silver alloy
     m.add('brake', '#55575b', roughness=0.55, metallic=1.0)   # bare cast-iron calipers
     m.add('disc', '#7b7c80', metallic=1.0, roughness=0.40)
     m.add('plate', '#ffffff', roughness=0.4, image=image('plate.png'))
     m.add('reflector', '#9a0c0a', roughness=0.25)
+    import car_common as CC
+    for name in ('c_dash', 'c_plastic', 'c_carpet'):        # the cabin's swatches (car_common)
+        CC.material_for(m.mats, name)
     return m
 
 
@@ -211,6 +213,27 @@ def reshade(shell):
     me.normals_split_custom_set(cn)
 
 
+def finish(root, body, mats, count):
+    """after the body's last deformation (car_common): the underside (a front engine driving the rear wheels on arms,
+    the silencer across the car behind the axle with its two tips on the left, the tank ahead of the axle), the plain
+    materials into two painted atlases, every corner's share of the sky"""
+    import car_common as CC
+    import hayate_kit as HK
+    CC.underseal([o for o in body.children_recursive if o.type == 'MESH'], mats)
+    ub = HK.Mesh('underbody')
+    CC.underbody(ub, 0.20, BD.AXLE_F, BD.AXLE_R, BD.TRACK_F, BD.TRACK_R, BD.TYRE_R, tip=(0.405, 0.275, -2.10),
+                 layout='FR', axle='irs', twin=True, twin_gap=0.043, silencer='across')
+    count['underbody'] = ub.tris()
+    CC.build(ub, body, mats)
+    trim = CC.Atlas('trim')
+    rim = CC.Atlas('rim', size=512, fill=('#8a8c8f', 0.32, 0.85))
+    rim.region('disc', CC.disc_image(), 0.38, 0.85)
+    made = CC.consolidate(root, trim, rim, own=('tire', 'plate'))
+    tyres = [o for o in root.children_recursive
+             if o.type == 'MESH' and any(mm and mm.name == 'tire' for mm in o.data.materials)]
+    CC.bake_ao(root, made + tyres)
+
+
 def build(o):
     t0 = time.time()
     m = materials(o['paint'])
@@ -269,6 +292,12 @@ def build(o):
         v.co.y -= 0.40
     count['interior'] = cab.tris()
     cab.build(body, m.mats)
+    import car_common as CC
+    import hayate_kit as HK
+    fur = HK.Mesh('furniture')
+    PT.furnish(fur)
+    count['furniture'] = fur.tris()
+    CC.build(fur, body, m.mats)
     PT.wheels(root, m.mats, count)
     if o.get('ffd', True) is not False:
         # the fitted displacement field (fitdata/s15/ffd.json, from the photo silhouettes) on every body mesh
@@ -276,6 +305,7 @@ def build(o):
         if L is not None:
             reshade(shell)
             print('FFD', L.seg.tolist(), 'max', round(float(abs(L.c).max()), 4))
+    finish(root, body, m.mats, count)
     for k, v in count.items():
         print(f'TRIS {k} {v}')
     print('TRIS total', sum(count.values()))
