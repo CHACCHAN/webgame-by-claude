@@ -307,7 +307,7 @@ export class RenderHost {
       this.holding = hold;
       this.aim();
       try {
-        await Promise.all((hold ? this.lanes(what) : [what]).map((part) => this.forPass(() => this.renderer.compileAsync(part, this.camera, this.scene))));
+        await Promise.all(this.seeAll(hold ? what : null, () => (hold ? this.lanes(what) : [what]).map((part) => this.forPass(() => this.renderer.compileAsync(part, this.camera, this.scene)))));
         // three.js draws no shadow map while it compiles. A map first met in a compile therefore gets its depth
         // texture from a material's binding, as an ordinary texture, and the first drawing into the map replaces it
         // by a new one on the GPU. What three.js then takes for unchanged (a plain material on a thing that stands
@@ -375,6 +375,29 @@ export class RenderHost {
     };
     walk(what);
     return lanes.filter(Boolean);
+  }
+
+  /**
+   * Runs `start` (the start of compiles) with every object under `what` taken as in view. A compile leaves out what
+   * lies outside the camera's frustum, and behind the loading screen the camera is wherever it was (after a change
+   * of course: at the course that was left): what it did not see was built in the frame that first showed it, on
+   * the main thread (the title's run 0.6 s at ~7 s, a race's first frame 0.9 s after a change of course, measured
+   * 11-18). The frustum is read only while a compile starts (`compileAsync` sorts its objects before it first waits).
+   */
+  private seeAll<T>(what: THREE.Object3D | null, start: () => T): T {
+    if (!what) return start();
+    const culled: THREE.Object3D[] = [];
+    what.traverseVisible((o) => {
+      if (o.frustumCulled) {
+        o.frustumCulled = false;
+        culled.push(o);
+      }
+    });
+    try {
+      return start();
+    } finally {
+      for (const o of culled) o.frustumCulled = true;
+    }
   }
 
   /** the renderer's target and outputs as the scene pass has them when it draws */

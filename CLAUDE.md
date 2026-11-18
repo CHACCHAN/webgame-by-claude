@@ -107,6 +107,12 @@ pending. `docs/PLAN.md` holds the design.
   on a three.js update check that no material is built again by the frame after a compile), every shadow marked
   `needsUpdate` after it (a compile draws no shadow map; a map first drawn later leaves bind groups with a destroyed
   depth texture), and one drawn frame waited for. Never put a frame between a world entering the scene and its compile.
+  `compileAsync` leaves out what is outside the camera's view: a loading compile (`precompile(true)`) takes every
+  visible object as in view (`RenderHost.seeAll`; v2.6.8: before it, whatever the loading camera did not see was
+  built in the frame that first showed it, 0.3–1.4 s). Parts that only some times of day show are put into the
+  scene for that compile by `EnvironmentRig.holdParts`: a new part like that goes there. What the title shows
+  first is made inside `buildWorld`'s `ready`, before the compile. The surface photos are bitmaps decoded off the
+  main thread with `flipY` off (medium and up): a texture made from them must keep `flipY` false.
   What costs main-thread time in this renderer (each found with a CPU profile, 34 → 133 fps):
   a shader is built per `InstancedMesh` (never one per chunk: `render/instancing.ts`, `ChunkedLods` = two meshes for
   all trees, instance data as geometry attributes); `alphaTest` on anything that throws a shadow (use `cutout()`, a

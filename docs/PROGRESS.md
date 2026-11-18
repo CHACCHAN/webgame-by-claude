@@ -2426,3 +2426,33 @@ to be seen). The films still show the balls until they are recorded again.
 - Running since the afternoon (agents, nothing merged): the fighters' own models (F-15s, Su-47; Fable), the tanks'
   cannon behind the release switch (Fable), load time and the first dawn's hitch (Opus).
 
+## v2.6.8 (11-18): loading compiles see the whole scene; no more stand-still at "the first dawn"
+
+- **In**: the load-time branch at `efa05ff` (agent on Opus, high; three commits A, B, A2).
+- **What the "first dawn" hitch was** (the agent's finding, with a control run): three.js' `compileAsync` leaves out
+  whatever is outside the camera's view, and behind the loading screen the camera is wherever it last was (after a
+  change of course: at the course that was left). So the loading compile built only what that camera happened to
+  see; the rest was built in the frame that first showed it: nine props and roadside pieces ~7 s into the title's
+  run (0.3–0.6 s; the hitch probe changed to dawn at about that moment, hence the name), and 35 shaders in the
+  first frame of a race after a change of course (0.9–1.4 s).
+- **A** `RenderHost.seeAll`: while a loading compile starts, every visible object counts as in view;
+  `EnvironmentRig.holdParts`: the sea of clouds and the city's lights are in the scene for that compile whatever
+  the time of day. **B** `surfaceTextures.ts`: the photo layers are decoded off the main thread
+  (`createImageBitmap`, flipped there, `flipY` off; falls back to the image element). **A2**: the title's car is
+  made inside `buildWorld` before the compile (the title appears 0.15–0.9 s later, its first frame no longer
+  stands 0.5 s).
+- Agent's figures (GPU, paired, the machine busy; counts hold under load, seconds are noisy): a race's first frame
+  after a change of course 914–1418 → 245–308 ms (35 → 18 shaders: cars and shadow maps remain); texture upload
+  657 → 140 ms under the profiler; the course's compile 1.0 → 1.8 s (behind the loading screen, accepted). Title
+  on a quiet machine before: 7.3 s cold (the old 10–12 s did not reproduce); no clean total after.
+- Verified by me on the merged tree: tsc; vitest 264; build; `gpu-errors` 0 / 0; the agent's `todprobe.cjs`
+  (rain, dawn, night, dawn at load 14): no frame over 40 ms at any step, 0 shaders built at dawn; E2E on the
+  isolated stack on this tree: 19 of 19 passed (41 min).
+- From the agent's report, not repeated by me: `backend-fallback` 5 of 5, `builds2` (fewer per garage step, none
+  twice), pictures before | after on oboro and tenrou at three times of day and with the upscaler (grain and wind
+  only), gpu-errors with the upscaler.
+- Not verified: Edwards and the autobahn by picture; phones' memory (B keeps ~90 MB of decoded pixels at high,
+  ~25 MB at medium); real network download times.
+- Left by the agent, with estimates: the scenery's build is one 2.0–2.4 s main-thread task (workers could save
+  1–2 s: a large change); the remaining 250–300 ms at a race start (shadow-map shaders, the rival's car).
+
