@@ -15,9 +15,9 @@ import numpy as np
 
 import su47_shape as SH
 
-BLACK = '#24262b'
+BLACK = '#2d3037'
 BLACK_ROUGH = 0.40
-RADOME = '#2c2e32'
+RADOME = '#34363b'
 WHITE = '#d9dad4'
 METAL = '#5a554f'
 PIT = '#4f6f7a'
