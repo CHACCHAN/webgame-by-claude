@@ -277,8 +277,8 @@ pending. `docs/PLAN.md` holds the design.
   The host's changes (v2.5, owner 11-12): `PATCH /api/rooms/{code}` (host only, `waiting` only; `track_id` /
   `time_of_day`), and `POST …/rematch` takes the same two (the results' コースを変えて走る). `Room::change`: another
   course takes everyone's `loaded` and `ready` back and replaces a vehicle the course does not offer
-  (`Room::vehiclesOn`: `game.cars.<id>.courses`, the server's side of `vehiclesFor`; none set yet: **a
-  course-bound vehicle must get its list there**), other conditions take the readies only. Every game follows the
+  (`App\Support\Vehicles`: `game.cars.<id>.courses`, the server's side of `vehiclesFor`; the fighters have
+  theirs: **a course-bound vehicle must get its list there**), other conditions take the readies only. Every game follows the
   room (`store/online.ts` `followRoom` ← every `applyRoom`): `loadRoomCourse` builds the course behind the loading
   screen (again if the room moved on meanwhile), then the line-up, the conditions, and `reportLoaded` with the
   course's id (the server drops a report for a course the room has left). Never start a load for the room
@@ -607,17 +607,25 @@ pending. `docs/PLAN.md` holds the design.
   Measured on the four old courses against v2.5.1 (night, dawn, 8 viewpoints): band amplitude 4.6–6.8 % → 0.9–1.2 %,
   pictures 1.6–3.3 % brighter on average (flat ground no longer occludes itself), contact shadows under the cars
   and at walls and rails kept. Keep sample points at texel middles in any pass that reads the depth at its own places.
-- Car paint, black trim and glass are made in `render/carSurface.ts` (v2.6.1); at quality low (`surfaceDetail` 0) they
-  keep the plain environment map. Paint and trim (`paintMaterial`): the environment map plus the 8 street lamps
-  nearest the camera (`lampsAround`, each frame in `Game.update`, ≤ 180 m) as discs in the clear coat; a material
-  marked `userData.lampImage` gets no coat highlight from the lamp field. Glass (`glassMaterial`,
-  `userData.carGlass`): mirrors a worked-out picture of the surroundings (the sky as the dome draws it, the road as
-  a plane through the wheels, the lamps' pools), premultiplied, `CarSpec.glassOpacity` see-through head-on
-  (default 0.62; 0.88 where nothing presentable is under the glass: the shiden until its cabin is in, the
+- Car paint, black trim and glass are made in `render/carSurface.ts` (v2.6.1, working as meant since v2.6.5); at
+  quality low (`surfaceDetail` 0) they keep the plain environment map. Paint and trim (`paintMaterial`): the
+  environment map plus the 8 street lamps nearest the camera (`lampsAround`, each frame in `Game.update`, ≤ 180 m)
+  as streaks along the vehicle's length in the clear coat (`lampStreaks`; `lampStreak` = widths, `gain`, `cap`,
+  live on `game.lampStreak` for a probe: gain 2 / cap 2, the owner chose weaker than the first 8 / 15, which blazed
+  a wet roof orange under the bloom); a material marked `userData.lampImage` gets no coat highlight from the lamp
+  field. Glass (`glassMaterial`, `userData.carGlass`): mirrors a worked-out picture of the surroundings (the sky as
+  the dome draws it, the road as a plane through the wheels, the lamps' pools), premultiplied,
+  `CarSpec.glassOpacity` see-through head-on (default 0.62; 0.88 where nothing presentable is under the glass: the
   fighters), fully mirrored at flat angles. **A car's cabin shows through its glass: a model's interior must be
   presentable.** `KeyLight` / `BeamLight` (`coatGlint.ts`) draw the sun's, moon's and headlights' coat highlights.
-  A node made per material breaks shader sharing (three.js keys a shader by each node's id): share one node, as
-  `paneOpacity` does (a glass shader was built for every car coming into the scene).
+  Two traps found there (v2.6.1 shipped a glass that mirrored only the sky gradient and a coat without any lamp,
+  and no check saw it): **statements built in a node's `setup()` (`assign`, `addAssign`, loops) are dropped
+  silently, because `setup()` has no statement stack: put them inside a `Fn`**; and one env node answers three.js'
+  three contexts (irradiance, radiance, coat) with whatever the first built, so base and coat are two child nodes
+  handed out by `SurroundingsNode.context()`. **A visual effect goes in only with a picture against the effect
+  switched off, on the same frame** (and when a strength is a uniform, with it at 0 and at 100×: the pictures must
+  differ). A node made per material breaks shader sharing (three.js keys a shader by each node's id): share one
+  node, as `paneOpacity` does (a glass shader was built for every car coming into the scene).
 - Race timing/splits/AI run per physics step (`Game.raceStep`, `driveAI`); keep frame-time logic out of timing.
 - Tyre grip = course surface (`CourseInfo.surface.grip`) × weather (`WET_GRIP` in rain): `Game.roadGrip` → `VehicleSim.gripScale`
   (before `AIDriver.calibrate`). Headless tools take the course's grip. Changing a grip: re-check medals with the sim

@@ -2343,3 +2343,29 @@ to be seen). The films still show the balls until they are recorded again.
 - Not verified: `paint-drawn` on WebGL 2 by me (the agent ran it); phones; the films (old cars in them).
 - The cars agent is finished. Open with the owner: the lamps' streaks on the body (car-look branch `f7529bf`,
   sheets sent; it also holds the fix of v2.6.1's mirror).
+
+## v2.6.5 (11-18): the lamps' streaks in the clear coat, weak; the cars' mirror works as it was meant to
+
+- **In**: the car-look branch at `f7529bf` (agent on Opus, high): street lamps as streaks along the car in every
+  clear coat, and the fix of v2.6.1's two faults (statements built in `setup()` dropped: the glass mirrored only the
+  sky gradient and no coat had a lamp in it; one env node for three contexts). The owner saw its sheets and chose
+  "weaker" of three (as it is / weaker / the fix only).
+- **Strength, set by me**: the branch's gain 8 / cap 15 → gain 2 / cap 2. Gain alone did little (4 / 15 and even
+  1.5 / 15 still lit a wet roof's edge orange: where the lobe's middle meets a lamp the value is far over the cap's
+  range, so the cap is what the eye sees). Compared on the same frames (off, 8/15, 4/15, 3/4, 2/2 at 80 and
+  160 km/h, night; rain under a lamp from the front): 2 / 2 keeps a thin warm line on pillar and roof edge, a warm
+  roof edge at 160 without the white blaze. Sheets `~/.local/opt/wt/carlook/g4/{al80,al160,rain-de,rain-sweep}.jpg`.
+- Verified by me on the merged tree: tsc; vitest 264; build; `gpu-errors` 0 / 0 (WebGPU, WebGL 2) on the final
+  build; pictures against the effect switched off on the same frames (they differ: the effect is in the shader);
+  race pictures hayate / r34 at night, rain and dawn looked at.
+- From the agent's report, not repeated by me: no cost over ±0.1 ms at 1080p (paired `perf-pass`), shaders built
+  per step as on main (`builds2`), hitches as main, flicker with the upscaler 0.117 against 0.122, `paint-drawn`
+  both backends (all measured at 8 / 15; gain and cap are uniforms, the shader is the same).
+- Not verified: phones; the upscaler's pictures at the new strength; other cars than hayate / r34 by picture;
+  E2E. The glass mirrors more than in v2.6.1–2.6.4 (ground, town glow, clouds): by day it differs little
+  (agent's sheets), I looked at night, rain and dawn only.
+- Seen and left: `look.cjs` with two ids in one page drew the second car (r34) sunk beside the road and no car in
+  the chase view; alone the r34 is right. Taken as the probe's way of starting a second race by hand (the `gpu-errors`
+  paths, which change cars through the garage, are clean); not looked into further.
+- Next: the course-select films again (cars' models and look have changed since they were recorded).
+

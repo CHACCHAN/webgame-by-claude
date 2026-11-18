@@ -24,7 +24,7 @@ import { keyShadowNode } from './render/keyShadow';
 import { LAMP_BEAM, LAMP_CANDELA } from './render/lampField';
 import { registerLampField } from './render/lampFieldNode';
 import { LightRig } from './render/LightRig';
-import { lampsAround, mirrorLamps, showSurroundings } from './render/carSurface';
+import { lampStreak, lampsAround, mirrorLamps, showSurroundings } from './render/carSurface';
 import { registerRigLights } from './render/coatGlint';
 import { ensureVehicleModels, onModelWait, preloadVehicleModels, vehicleModelReady } from './render/vehicleModels';
 import { loadTrafficModels } from './render/trafficModels';
@@ -198,6 +198,8 @@ const NET_ACC_TAU = 0.06;
 
 export class Game {
   readonly root = new THREE.Group();
+  /** how the street lamps' highlights in the cars' clear coats are drawn (render/carSurface.ts; uniforms: probes may try values) */
+  readonly lampStreak = lampStreak;
   track!: Track;
   terrain!: TerrainData;
   physics!: PhysicsWorld;
