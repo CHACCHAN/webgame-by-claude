@@ -21,6 +21,7 @@ shadow map. So what is not swapped is gathered here:
 Frame: the game's car frame (x = the car's left, y up, z forward; hayate_kit.B turns it into Blender's). The mesh kit
 is hayate_kit (the first car's; nothing in it is about that car).
 """
+import json
 import math
 import re
 
@@ -64,6 +65,7 @@ SWATCHES = {
     'cal_blue': ('#1a3fa0', 0.38, 0.15),
     'cal_bolt': ('#8f9296', 0.40, 1.0),
     'pad': ('#1c1b1a', 0.9, 0.1),
+    'lamp_window': ('#d4d8dc', 0.22, 0.35),  # a plate lamp's clear window (not a lamp lens of the car's own names)
     # cabin (seen through the glass: the tones are apart enough to read as dash, seats and lining in the shade)
     'c_dash': ('#141517', 0.82, 0.0),        # dash top, door tops: soft black
     'c_plastic': ('#232427', 0.60, 0.0),     # consoles, shrouds, seat frames
@@ -328,6 +330,10 @@ class Atlas:
             # roleOf): above a luminance of 0.08 a material with a metalness map counts as bright metal
             print(f'CC atlas {self.name}: mean luminance {0.2126 * lin[0] + 0.7152 * lin[1] + 0.0722 * lin[2]:.3f}')
             self._material = m
+        # which swatch was which material of the car's script (glTF extras): the precision gate tells the lenses
+        # and the parts inside an atlas apart by it; the game does not read it
+        self._material['swatches'] = json.dumps({'size': self.n, 'cell': self.cell / self.n, 'where': {
+            k: [v[0]] + [round(x, 5) for x in v[1:]] for k, v in self.where.items()}}, separators=(',', ':'))
         return self._material
 
 
@@ -482,7 +488,7 @@ def _occluders(objects, skip=('glass',), ground=None):
         base = len(verts)
         verts.extend(M @ v.co for v in me.vertices)
         for p in me.polygons:
-            if names and names[p.material_index] in skip:
+            if p.material_index < len(names) and names[p.material_index] in skip:      # (a mesh with fewer slots than indices)
                 continue
             polys.append([base + i for i in p.vertices])
     if ground is not None:

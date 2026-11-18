@@ -532,7 +532,9 @@ def arch_parts(liner, lip, bvh):
         poly = [(0.50, *arch_point(a, front=front)) for a in angs]
         liner.face(poly, 'interior', out=(1, 0, 0), smooth=False)
         # lip: a flared moulding round the opening, on the body surface
-        prof = [(-0.006, 0.012), (0.010, 0.022), (0.034, 0.018), (0.050, 0.0)]     # (radial out, proud of the body)
+        # (radial out, proud of the body). 11 mm proud at most: with 22 the car was 1,646 mm wide over the lips,
+        # the catalogue's 1,625 is the widest fixed point (the side mouldings: 1,623 here)
+        prof = [(-0.006, 0.006), (0.010, 0.011), (0.034, 0.009), (0.050, 0.0)]
         lip_rows = []
         for dr, dx in prof:
             row = []
