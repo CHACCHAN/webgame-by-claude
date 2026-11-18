@@ -223,8 +223,6 @@ const CARS: Record<RoadCarId, CarSpec> = {
     // our own model (tools/blender/cars/shiden*.py, fitted to photos): pop-up lamps modelled raised (popup_l/_r), the
     // beams start at their lenses; the tailpipe anchor comes from its mesh
     model: { title: 'RX-7（FD3S 後期 Type RS）', author: 'TOUGE NOCTURNE', url: '', license: '自作', own: true },
-    // (its cabin is still blocks: dark glass until the model has a real one)
-    glassOpacity: 0.88,
   },
   supra: {
     id: 'supra',

@@ -2294,3 +2294,22 @@ to be seen). The films still show the balls until they are recorded again.
 - Not verified: the cost on a quiet machine (the agent's 4K estimate +0.46 ms inside the noise); traffic copies;
   E2E (no UI change); phones.
 - Waiting for the owner: the sheets of round two of hayate, shiden, r34 (cars branch `32b8970`, gate: nothing worse).
+
+## v2.6.2 (11-18): hayate, shiden and r34, round two (the owner's ok on the sheets)
+
+- **In**: the cars branch at `32b8970` (agent on Fable, high): measured against the references with a gate
+  (`~/.local/opt/wt/models-cars/tools/gate/gate.sh`: outlines from the fits' cameras, published dimensions, lamp
+  anchors, traced lenses; all three: nothing worse). hayate: front bumper's face 46 mm lower, width 1646 -> 1625
+  (catalogue 1625), lenses 0.226 -> 0.389, the aerial a stub; shiden: a cabin; r34: tail panel, wing, lips set by
+  measurement, width 1795 -> 1786 (1785). Cabins in all three; the shiden's glass exception (0.88) is gone.
+- Verified by me on the merged tree: tsc; vitest 264; build; `gpu-errors` 0 / 0 (WebGPU, WebGL 2);
+  `paint-drawn.cjs shiden hayate r34` all drawn (WebGPU); garage and race pictures of the three looked at (the
+  shiden's seats and wheel show through its glass).
+- Not verified: phones; the course films still show the first hayate (to record again once the car look's
+  step two is decided).
+- **Correction to v2.6.1** (found by the car-look agent, 11-18): the glass mirror was only the sky's gradient and
+  the paint coat's lamp images were never drawn: `SurroundingsNode` built its statements where three.js drops
+  them, and one shared node answered three contexts. What players got is the see-through glass. The fix changes
+  the look and goes to the owner as sheets first; CLAUDE.md's paragraph on `carSurface.ts` describes the intent,
+  not v2.6.1's picture, until then.
+- Still to see by the owner: raijin, supra (sheets sent 11-18) and one more fix of the r34's underside (`6478a8f`).

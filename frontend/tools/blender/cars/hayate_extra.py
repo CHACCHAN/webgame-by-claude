@@ -40,7 +40,8 @@ def sym(mesh, bvh):
     if h is not None:
         zf = h[0].z
         mesh.box('trim', 0.186, 0.238, 0.556, 0.632, zf - 0.030, zf + 0.012, bevel=0.006, segments=1)
-        mesh.box('reverse', 0.181, 0.187, 0.570, 0.618, zf - 0.024, zf + 0.004)     # its clear window, towards the plate
+        # its clear window, towards the plate (a swatch of its own: `reverse` is the tail lamps' lens for the gate)
+        mesh.box('lamp_window', 0.181, 0.187, 0.570, 0.618, zf - 0.024, zf + 0.004)
 
 
 def asym(mesh, bvh):
@@ -64,9 +65,10 @@ def asym(mesh, bvh):
                 blade.append(tuple(q[0]))
         if len(blade) > 2:
             CC.tube(mesh, 'trim', blade, 0.0045, seg=4)
-    # ---- the antenna at the roof's rear edge (r08), leaning back
+    # ---- the aerial's foot at the roof's rear edge (r08): a black stub two fingers high, no rod (the gate, 11-13:
+    # the 13 cm rod of the first pass stood out of every outline, and r08 shows only the stub)
     a = _down(bvh, 0.0, BD.Z_CTOP + 0.045, 0.0)
     if a is not None:
         p, n = a
-        mesh.cylinder('trim', tuple(p + Vector((0, 0.006, 0))), 0.012, 0.012, axis='y', segments=8, radius2=0.007)
-        CC.tube(mesh, 'trim', [tuple(p + Vector((0, 0.01, 0))), tuple(p + Vector((0, 0.105, -0.075)))], [0.0035, 0.0022], seg=5)
+        mesh.cylinder('trim', tuple(p + Vector((0, 0.006, 0))), 0.012, 0.012, axis='y', segments=8, radius2=0.008)
+        mesh.cylinder('trim', tuple(p + Vector((0, 0.019, -0.003))), 0.006, 0.016, axis='y', segments=8, radius2=0.005)

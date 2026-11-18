@@ -187,8 +187,8 @@ def build_all(body, root, M, count, ffd=True):
     cab = K.Mesh('cabin')
     IN.build_halves(cab)
     cab.mirror_x()
-    IN.steering(cab)
-    o = cab.build(body, M, sharp_deg=40)
+    IN.furnish(cab)
+    o = CC.build(cab, body, M, sharp_deg=40)
     count['cabin'] = tris_of(o)
     ex = K.Mesh('exhaust')
     DT.exhaust(ex)
@@ -199,6 +199,8 @@ def build_all(body, root, M, count, ffd=True):
     FF.deform_body(body, parts['popups'], BD.front_drop)
     if ffd is not False:
         parts['ffd'] = FF.apply_to_body(body, parts['popups'], None if ffd is True else ffd)
+        if parts['ffd'] is not None:
+            _bumper_height(body)
 
     # under the floor (after the fitted field: it hangs from the floor as it is), and the parts added in 2026-11
     ub = K.Mesh('underbody')
@@ -228,6 +230,56 @@ def build_all(body, root, M, count, ffd=True):
     tyres = [o for o in root.children_recursive if o.type == 'MESH' and any(m and m.name == 'tire' for m in o.data.materials)]
     CC.bake_ao(root, made + tyres)
     return parts
+
+
+# how far the front bumper's face stood too high after the fit (m): see _bumper_height
+FACE_DROP = 0.046
+
+
+def _bumper_height(body):
+    """
+    The front bumper's face goes down FACE_DROP after the fit; its lower edge stays.
+    The fitted field is held by the outlines only, and the bar, the lamps and the plate are on no outline (black on
+    black, under the bonnet's lip): after the fit the bar's top stood at 0.642 m in the middle. Measured 2026-11-13
+    with the precision gate (tools/gate/facetest.py: the face moved as one piece against the lamps traced on r03 and
+    n06, the two late cars; the plate on r03 and n24 says the same): the lenses fit best 4-5 cm lower (IoU on n06
+    0.14 -> 0.45 / 0.46, on r03 0.10 -> 0.25 / 0.27, the outlines a little better too; worse again from 6.5 cm).
+    The bumper's lower edge IS on the outlines (r03, n24: the apron against the floor) and is right where the field
+    put it: taken down with the face it hung 3 cm under the photos' edge (n24 p95 1.65 -> 1.91 %). So the face and
+    what is mounted on it go down, the lip at the bottom stays, and the apron between them is that much shorter.
+    """
+    import numpy as np
+    bump = next(o for o in body.children_recursive if o.name == 'bumpers')
+    G = FF._world_game(bump)
+    front = G[:, 2] > 1.2
+    top = float(G[front][:, 1].max())
+    # the lower edge by x (the corners rise): the lowest point of the bumper in 5 cm columns
+    cols = np.clip((np.abs(G[front, 0]) / 0.05).astype(int), 0, 19)
+    floor = np.full(20, np.inf)
+    np.minimum.at(floor, cols, G[front, 1])
+    floor[~np.isfinite(floor)] = floor[np.isfinite(floor)].min()
+    above = G[front, 1] - floor[cols]
+    t = np.clip((above - 0.03) / 0.16, 0.0, 1.0)             # the lip (3 cm) stays; whole step from 19 cm above the edge
+    w = t * t * (3 - 2 * t)
+    G[front, 1] -= FACE_DROP * w
+    FF._set_world_game(bump, G)
+    # what is mounted on the bumper's face (lamps and bezels round to 45 degrees of the corner: z >= 1.99, the grille's
+    # back wall 2.005, the plate, the letters) goes with it as it is, not what is on the wings' corners behind it (the
+    # corner lamps: z <= 1.974)
+    lip = float(floor.min()) + 0.03
+    moved = []
+    for name in ('details', 'front_lamps'):
+        o = next((c for c in body.children_recursive if c.name == name), None)
+        if o is None:
+            continue
+        G = FF._world_game(o)
+        on = (G[:, 2] > BD.Z_NOSE + 0.014) & (G[:, 1] < top + 0.01) & (G[:, 1] > lip)
+        if on.any():
+            moved.append(float(G[on, 1].min()))
+        G[on, 1] -= FACE_DROP
+        FF._set_world_game(o, G)
+    print(f'BUMPER the face {FACE_DROP * 1000:.0f} mm down (top was {top:.3f} m; lower edge {floor.min():.3f} m kept; '
+          f'what is mounted on it started at {min(moved, default=0):.3f} m)')
 
 
 def _split_material(src, mat, dst):

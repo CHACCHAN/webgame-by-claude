@@ -464,7 +464,7 @@ def front_fittings(part, surf):
 # (x, y, lens radius): the red lenses traced on the tail-on (r37) and rear 3/4 photos (r38, r11), ellipses fitted
 # (tools/lamptrace.py) and carried back onto the body (lampback.py); the outer lamps sit higher than the inner ones
 TAIL_LAMPS = [(0.690, 0.832, 0.102), (0.485, 0.806, 0.078)]
-TAIL_YAW = [math.radians(12.0), math.radians(8.0)]       # turned outwards (round lenses seen narrower than tall)
+TAIL_YAW = [math.radians(15.0), math.radians(10.0)]       # turned outwards (round lenses seen narrower than tall)
 PLATE_R = [(-0.19, 0.315), (0.19, 0.315), (0.19, 0.515), (-0.19, 0.515)]
 
 
