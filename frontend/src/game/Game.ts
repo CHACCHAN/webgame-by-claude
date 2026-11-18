@@ -39,9 +39,12 @@ import type { GameRenderer } from './render/RenderHost';
 import { footprint, onlineGrid } from './net/grid';
 import { LobbyLineup } from './net/LobbyLineup';
 import { LINEUP_VIEW, type LineupEntry } from './net/lineup';
-import { BIKE_CAMERA, CAR_CAMERA, ChaseCamera, JET_CAMERA, TRAIN_CAMERA } from './camera/ChaseCamera';
+import { BIKE_CAMERA, CAR_CAMERA, ChaseCamera, JET_CAMERA, TANK_CAMERA, TRAIN_CAMERA } from './camera/ChaseCamera';
 import { hasExhaust, traitsOf } from './vehicle/kinds';
-import { InputManager } from './input/Input';
+import { InputManager, emptyHands } from './input/Input';
+import { GunFx } from './fx/GunFx';
+import { Gunnery, type GunneryHost } from './weapons/Gunnery';
+import { dirOf, dropAt, gunPose, sightEye, type GunInput } from './weapons/gun';
 import { TireSmoke, SkidMarks } from './fx/TireEffects';
 import { ExhaustFX, newExhaustState, type ExhaustState } from './fx/Exhaust';
 import { Rain } from './fx/Rain';
@@ -154,6 +157,29 @@ export interface HudState {
   corner: { dir: 1 | -1; kind: CornerKind; dist: number; seq: number } | null;
   /** online battle standings, leader first */
   online: { id: number; name: string; slot: number; me: boolean; s: number; finMs: number | null; lost: boolean }[] | null;
+  /** a tank's gun (null in anything else) */
+  gun: GunHud | null;
+}
+
+/**
+ * A tank's gun as the HUD shows it: `loaded` 0…1 (1 = a round is in; `reload` s to go), `ammo` rounds left;
+ * `scope`: the gunner's sight is in use, at `zoom`×; `range` (m) the fire control works with (`lased`: the laser's,
+ * else the battle-sight range); `off`: how far the gun is from where it is being laid (rad); `bearing`: the turret
+ * off the hull (rad, + = left). `sight` / `mark`: where the line of sight ends and where the round would be at that
+ * range, on the screen (0…1 from the top left; `on`: in the picture).
+ */
+export interface GunHud {
+  loaded: number;
+  reload: number;
+  ammo: number;
+  scope: boolean;
+  zoom: number;
+  range: number;
+  lased: boolean;
+  off: number;
+  bearing: number;
+  sight: { x: number; y: number; on: boolean };
+  mark: { x: number; y: number; on: boolean };
 }
 
 type Listener = (e: GameEvent) => void;
@@ -234,7 +260,7 @@ export class Game {
   hud: HudState = {
     speedKmh: 0, rpm: 0, redline: 8000, gear: 1, raceTime: 0, countdown: 0, splits: [], lastSplitDelta: null, lastSplitIndex: -1,
     progress: 0, rivalProgress: null, rivalLine: null, ghostProgress: null, position: 1, gapMeters: 0, wrongWay: false, driftCombo: 0, driftScore: 0,
-    boost: 0, turbo: false, jet: false, afterburner: 0, sectorFlashT: 0, corner: null, online: null,
+    boost: 0, turbo: false, jet: false, afterburner: 0, sectorFlashT: 0, corner: null, online: null, gun: null,
   };
 
   private listeners = new Set<Listener>();
@@ -322,6 +348,26 @@ export class Game {
   /** HUD pace notes + warning beeps before tight bends */
   cornerGuide = true;
   corners: Corner[] = [];
+  /**
+   * The guns of a race with a tank in it (weapons/Gunnery.ts: the player's gun, the shells in the air, what a hit
+   * does); null in every other race.
+   */
+  gunnery: Gunnery | null = null;
+  /** flash, smoke, tracers, bursts: made with the first such race (a build without tanks never has them) */
+  private gunFx: GunFx | null = null;
+  private gunHands = emptyHands();
+  /** what the hands asked since the last physics step */
+  private gunIn: GunInput = { dYaw: 0, dPitch: 0, stabilised: false, recentre: false };
+  private gunFire = false;
+  private gunScope = false;
+  /** the sight's higher magnification is swung in */
+  private gunZoomHigh = false;
+  /** gun and sight before the last physics step: drawn between the two, as the vehicle is */
+  private gunPrev = { yaw: 0, pitch: 0, sYaw: 0, sPitch: 0, wYaw: 0, wPitch: 0 };
+  /** the gun as drawn this frame: the gunner's eye, the line of sight, the bore */
+  private gunDraw = { eye: new THREE.Vector3(), line: new THREE.Vector3(), trunnion: new THREE.Vector3(), muzzle: new THREE.Vector3(), dir: new THREE.Vector3() };
+  private gunSight = { eye: new THREE.Vector3(), dir: new THREE.Vector3(), up: new THREE.Vector3(), fov: 60 };
+  private gunAim = { yaw: 0, pitch: 0 };
   /** other players' cars in an online battle */
   remotes!: RemoteRacers;
   /** id of the local player in an online battle */
@@ -656,6 +702,7 @@ export class Game {
       m.emissiveIntensity = (m.userData.baseIntensity as number) * lamps;
     }
     this.smoke.setColor(tod === 'dawn' ? '#d9d4cf' : tod === 'rain' ? '#9aa6b4' : '#7d8794');
+    this.gunFx?.setColor(this.gunSmoke());
     this.exhaust.setColor(tod === 'dawn' ? '#c4c1bd' : tod === 'rain' ? '#9aa3ad' : '#a3a0a6');
     // wet roads: glossy, darker asphalt and slicker terrain; less tyre grip
     const wet = this.env.preset.rain;
@@ -743,6 +790,17 @@ export class Game {
   private clearRace() {
     this.asked++;
     this.departEye = null;
+    this.gunnery?.clear();
+    this.gunnery = null;
+    this.net.onEvent = null;
+    this.input.gunMode = false;
+    this.gunScope = this.gunFire = false;
+    this.hud.gun = null;
+    this.chase?.leaveSight();
+    if (this.gunFx) {
+      this.gunFx.clear();
+      this.gunFx.group.visible = false;
+    }
     this.remotes?.clear();
     this.hud.online = null;
     this.removeRacer(this.player);
@@ -976,7 +1034,7 @@ export class Game {
     const train = !!CAR_SPECS[cfg.carId].train;
     const t = CAR_SPECS[cfg.carId].train;
     // the cab view sits just behind the nose of the leading car
-    this.chase.profile = t ? { ...TRAIN_CAMERA, front: { ...TRAIN_CAMERA.front, ahead: trainNose(t) - 0.35 } } : CAR_SPECS[cfg.carId].bike ? BIKE_CAMERA : CAR_SPECS[cfg.carId].jet ? JET_CAMERA : CAR_CAMERA;
+    this.chase.profile = t ? { ...TRAIN_CAMERA, front: { ...TRAIN_CAMERA.front, ahead: trainNose(t) - 0.35 } } : CAR_SPECS[cfg.carId].bike ? BIKE_CAMERA : CAR_SPECS[cfg.carId].jet ? JET_CAMERA : CAR_SPECS[cfg.carId].tank ? TANK_CAMERA : CAR_CAMERA;
     if (train !== this.cameraForTrain) this.chase.mode = train ? 'bumper' : 'chase';
     this.cameraForTrain = train;
     if (cfg.online) {
@@ -1012,6 +1070,7 @@ export class Game {
       });
       this.rivalSays('before');
     }
+    this.setUpGuns(cfg);
     if (cfg.ghost && (cfg.mode === 'ghost' || this.showGhost)) {
       const spec = CAR_SPECS[cfg.ghost.carId];
       const visual = new CarVisual(spec, { headlights: false, shadows: false, ghost: true, rideHeight: 0.16 + spec.size.height / 2 });
@@ -1053,6 +1112,182 @@ export class Game {
 
   restart() {
     if (this.config) this.startRace(this.config);
+  }
+
+  // ------------------------------------------------------------- guns
+  private gunSmoke() {
+    return this.timeOfDay === 'dawn' ? '#cfc9c2' : this.timeOfDay === 'rain' ? '#8f99a5' : '#767e89';
+  }
+
+  /**
+   * The guns of a race (weapons/Gunnery.ts): there only when somebody in it drives a tank. What a shell can hit:
+   * the rival's vehicle and the other members' stand-ins; ghosts have no body. A hit puts the vehicle hit back on
+   * the road, as its R key would; nothing is scored.
+   */
+  private setUpGuns(cfg: RaceConfig) {
+    const mine = !!CAR_SPECS[cfg.carId].tank;
+    const theirs = cfg.online?.peers.some((p) => CAR_SPECS[p.carId].tank) ?? false;
+    this.input.gunMode = mine;
+    if (!this.player || (!mine && !theirs)) return;
+    const g = (this.gunnery = new Gunnery(this.physics, this.terrain.heightAt, this.gunHost));
+    g.player(this.player.sim, cfg.online ? this.onlineSelfId : 0);
+    if (this.rival) g.rival(this.rival.sim.collider);
+    if (cfg.online) {
+      for (const p of cfg.online.peers) g.peer(p.id, CAR_SPECS[p.carId], this.remotes.proxyOf(p.id));
+      this.net.onEvent = (from, data) => this.gunEvent(from, data);
+    }
+    if (!this.gunFx) {
+      this.gunFx = new GunFx();
+      this.root.add(this.gunFx.group);
+    }
+    this.gunFx.setColor(this.gunSmoke());
+    this.gunFx.group.visible = true;
+    const c = g.control;
+    this.gunIn.dYaw = this.gunIn.dPitch = 0;
+    this.gunIn.stabilised = this.gunIn.recentre = false;
+    Object.assign(this.gunPrev, { yaw: 0, pitch: 0, sYaw: 0, sPitch: 0, wYaw: c?.world.yaw ?? 0, wPitch: c?.world.pitch ?? 0 });
+    this.hud.gun = c
+      ? { loaded: 1, reload: 0, ammo: c.gun.ammo, scope: false, zoom: 1, range: c.range, lased: false, off: 0, bearing: 0, sight: { x: 0.5, y: 0.5, on: false }, mark: { x: 0.5, y: 0.5, on: false } }
+      : null;
+  }
+
+  private gunHost: GunneryHost = {
+    fired: (muzzle, dir, velocity, gun, firer, own) => {
+      this.gunFx?.shot(muzzle, dir, velocity, gun.calibre);
+      this.audio?.gunShot(gun.calibre, own ? 0 : muzzle.distanceTo(this.camera.position));
+      if (own) {
+        this.player?.visual.rig.tank?.fire();
+        this.contactShake = Math.max(this.contactShake, 0.9);
+      } else this.remotes.fireGun(firer);
+    },
+    struck: (point, target) => {
+      this.gunFx?.impact(point, target !== null);
+      this.audio?.shellImpact(point.distanceTo(this.camera.position), target !== null);
+    },
+    respawnRival: () => {
+      // (past the line it has parked: the race is over for it)
+      if (this.rival && !this.rival.finished && this.phase === 'racing') this.respawn(this.rival);
+    },
+    respawnSelf: () => {
+      if (this.player && !this.player.finished && this.phase === 'racing') this.respawn(this.player);
+    },
+    send: (data) => {
+      if (this.config?.online) this.net.sendEvent(data);
+    },
+  };
+
+  /** What another member says about its gun (a shot, a hit): `net/gunEvents.ts`; checked before anything follows. */
+  private gunEvent(from: number, data: number[]) {
+    const g = this.gunnery, pl = this.player;
+    if (!g || !pl || !this.config?.online) return;
+    g.receive(from, data, performance.now(), this.net.peer(from)?.clock.offset ?? 0, this.remotes.positionOf(from), {
+      id: this.onlineSelfId,
+      position: pl.sim.position,
+      speed: pl.sim.speed,
+      racing: this.phase === 'racing' && !pl.finished,
+    });
+  }
+
+  /** Per frame: what the player's hands ask of the gun, gathered for the physics steps. */
+  private gunFrame(dt: number) {
+    const c = this.gunnery?.control, pl = this.player;
+    if (!c || !pl) return;
+    const h = this.input.pollGun(dt, this.gunHands), i = this.gunIn;
+    if (pl.finished || (this.phase !== 'racing' && this.phase !== 'countdown')) {
+      // past the line: the eye off the sight, the turret to the front
+      this.gunScope = this.gunFire = i.stabilised = false;
+      i.dYaw = i.dPitch = 0;
+      i.recentre = true;
+      return;
+    }
+    if (h.zoom) this.gunZoomHigh = h.zoom > 0;
+    this.gunScope = i.stabilised = h.scope;
+    // (through the sight a movement of the hand is as much of the picture as without it)
+    const mag = h.scope ? c.info.zoom[this.gunZoomHigh ? 1 : 0] : 1;
+    i.dYaw -= h.dx / mag;
+    i.dPitch -= h.dy / mag;
+    i.recentre ||= h.recentre;
+    this.gunFire = this.phase === 'racing' && h.fire;
+  }
+
+  /** Per physics step, after the world's: the player's gun, then every shell in the air. */
+  private gunStep() {
+    const g = this.gunnery!, pl = this.player, c = g.control;
+    if (pl && c) {
+      const p = this.gunPrev;
+      p.yaw = c.gun.yaw;
+      p.pitch = c.gun.pitch;
+      p.sYaw = c.sight.yaw;
+      p.sPitch = c.sight.pitch;
+      p.wYaw = c.world.yaw;
+      p.wPitch = c.world.pitch;
+      g.step(PHYSICS_DT, pl.sim, this.gunIn, this.gunFire && !pl.finished, performance.now());
+      this.gunIn.dYaw = this.gunIn.dPitch = 0;
+      this.gunIn.recentre = false;
+    }
+    g.fly(PHYSICS_DT);
+  }
+
+  /**
+   * Per frame, before the camera: the player's turret and gun as drawn (between the last two physics steps, like
+   * the vehicle), the gunner's eye and the line of sight from that pose. Returns whether the sight is in use.
+   */
+  private gunVisual(alpha: number) {
+    const c = this.gunnery?.control, pl = this.player;
+    if (!c || !pl) return false;
+    const p = this.gunPrev, d = this.gunDraw, root = pl.visual.root, spec = pl.sim.spec, ride = pl.sim.rideHeight;
+    const yaw = p.yaw + wrapAngle(c.gun.yaw - p.yaw) * alpha, pitch = lerp(p.pitch, c.gun.pitch, alpha);
+    const sYaw = p.sYaw + wrapAngle(c.sight.yaw - p.sYaw) * alpha, sPitch = lerp(p.sPitch, c.sight.pitch, alpha);
+    const wYaw = p.wYaw + wrapAngle(c.world.yaw - p.wYaw) * alpha, wPitch = lerp(p.wPitch, c.world.pitch, alpha);
+    pl.visual.rig.tank?.setAim(yaw, pitch);
+    gunPose(spec, ride, root.position, root.quaternion, yaw, pitch, d);
+    sightEye(spec, ride, root.position, root.quaternion, yaw, d.eye);
+    const scope = this.gunScope;
+    // through the sight the line is the stabilised one (it does not turn with the hull between two steps)
+    if (scope) dirOf(wYaw, wPitch, d.line);
+    else dirOf(sYaw, sPitch, d.line).applyQuaternion(root.quaternion);
+    this.gunAim.yaw = sYaw;
+    this.gunAim.pitch = wPitch;
+    if (scope) {
+      const s = this.gunSight;
+      s.eye.copy(d.eye);
+      s.dir.copy(d.line);
+      s.up.set(0, 1, 0).applyQuaternion(root.quaternion);
+      const mag = c.info.zoom[this.gunZoomHigh ? 1 : 0];
+      s.fov = (2 * Math.atan(Math.tan((this.chase.fovBase * Math.PI) / 360) / mag) * 180) / Math.PI;
+    }
+    // (the sight's head looks past its own turret: the vehicle is not in its picture)
+    root.visible = !scope;
+    return scope;
+  }
+
+  /** Per frame, after the camera: the gun's figures and its two marks on the screen. */
+  private gunHud() {
+    const c = this.gunnery?.control, h = this.hud.gun;
+    if (!c || !h) return;
+    const d = this.gunDraw;
+    h.loaded = c.loaded;
+    h.reload = c.gun.reload;
+    h.ammo = c.gun.ammo;
+    h.scope = this.gunScope;
+    h.zoom = this.gunScope ? c.info.zoom[this.gunZoomHigh ? 1 : 0] : 1;
+    h.range = c.range;
+    h.lased = c.lased;
+    h.off = c.off;
+    h.bearing = c.gun.yaw;
+    this.camera.updateMatrixWorld();
+    const place = (o: { x: number; y: number; on: boolean }, v: THREE.Vector3) => {
+      v.project(this.camera);
+      o.on = v.z > -1 && v.z < 1 && Math.abs(v.x) < 1 && Math.abs(v.y) < 1;
+      o.x = v.x * 0.5 + 0.5;
+      o.y = 0.5 - v.y * 0.5;
+    };
+    // where the line of sight ends: at the range the fire control has, from the gunner's eye
+    place(h.sight, _v.copy(d.eye).addScaledVector(d.line, c.range));
+    // where the round would be at that range: along the bore, less its fall
+    _v.copy(d.muzzle).addScaledVector(d.dir, c.range);
+    _v.y -= dropAt(c.info, c.range);
+    place(h.mark, _v);
   }
 
   /** Battles have their own tracks; otherwise rain and dawn have theirs, night runs the course's. */
@@ -1145,6 +1380,7 @@ export class Game {
         this.player.input.handbrake = true;
       }
     }
+    if (this.gunnery) this.gunFrame(dt);
     // every car is held on the line until the green light
     for (const r of this.racers()) r.input.hold = phase === 'countdown';
 
@@ -1172,6 +1408,7 @@ export class Game {
         this.netVel.copy(v);
       }
       this.detectCarContact();
+      if (this.gunnery) this.gunStep();
       this.simTime += PHYSICS_DT;
       if (this.phase === 'racing' || this.phase === 'finished') this.raceStep();
       this.accumulator -= PHYSICS_DT;
@@ -1543,6 +1780,12 @@ export class Game {
     const d = pl.departure;
     if (d && d.stage !== 'roll') st.dep = d.stage === 'gone' ? 3 : d.gear > 0 ? 2 : 1;
     if (pl.finished) st.fin = Math.round(pl.finishTime * 1000);
+    // a tank's turret and gun: the others see it aim
+    const gun = this.gunnery?.control?.gun;
+    if (gun) {
+      st.tu = gun.yaw;
+      st.gp = gun.pitch;
+    }
     return st;
   }
 
@@ -1726,6 +1969,8 @@ export class Game {
       this.smoke.update(dt);
       this.exhaust.update(dt);
     }
+    const sighted = this.gunVisual(this.paused ? 1 : alpha);
+    if (!sighted) this.chase.leaveSight();
 
     // ---- camera
     if (this.phase === 'attract' && this.attractCar) this.cinematicCamera(dt, this.attractCar.visual.root, this.attractCar.proj.s);
@@ -1743,6 +1988,8 @@ export class Game {
         slipAngle: sim.slipAngle,
         impact: Math.max(sim.impact, this.contactShake),
         lean: this.player.visual.lean,
+        aim: this.gunnery?.control ? this.gunAim : undefined,
+        sight: sighted ? this.gunSight : null,
       });
     }
     // (the garage's clearing among the trees closes with any other view; its own statement: written into the
@@ -1751,6 +1998,10 @@ export class Game {
     if (this.spy) {
       this.camera.position.copy(this.spy.from);
       this.camera.lookAt(this.spy.at);
+    }
+    if (this.gunnery) {
+      this.gunHud();
+      if (!this.paused) this.gunFx?.update(dt, this.gunnery.shells.live, alpha, this.camera.position);
     }
 
     // ---- HUD + audio
@@ -1774,6 +2025,8 @@ export class Game {
         // a fighter leaving after the finish is heard going away, and not at all once it is gone
         const away = this.player.departure;
         if ('distance' in e) e.distance(away && away.stage !== 'roll' ? this.player.visual.root.position.distanceTo(this.camera.position) : 0);
+        // a tank's tracks are heard by its speed over the ground and squeal in a turn
+        if ('motion' in e) e.motion(sim.speed, sim.yawRate);
         if (away?.stage === 'gone') e.update(sim.rpm, 0, 0, 0, sim.spec.engine.redline);
         else e.update(sim.rpm, sim.spec.train ? sim.traction : sim.input.throttle, sim.boost, 1, sim.spec.engine.redline, sim.input.brake);
         let skid = 0;
@@ -1796,6 +2049,7 @@ export class Game {
       const e = this.audio.engine('attract', sim.spec);
       const d = sim.position.distanceTo(this.camera.position);
       if ('distance' in e) e.distance(d);
+      if ('motion' in e) e.motion(sim.speed, sim.yawRate);
       e.update(sim.rpm, sim.input.throttle, sim.boost, clamp(1 - d / 160, 0, 1) * 0.5, sim.spec.engine.redline);
     }
     // the rain as heard from the player's vehicle (its speed, a roof over it, what the drops land on); in the menus

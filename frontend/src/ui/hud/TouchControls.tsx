@@ -15,6 +15,12 @@ export function TouchControls() {
   const autoShift = useSettings((s) => s.autoShift);
   const carId = gameHolder.game?.currentConfig?.carId;
   const shift = !autoShift && !!carId && !singleRatio(CAR_SPECS[carId]);
+  // a tank: the right half of the screen aims its gun (a finger's drag), two buttons over the steering pad fire
+  // it and take the gunner's sight up or down (a switch: a held button would cost the thumb that steers)
+  const tank = !!carId && !!CAR_SPECS[carId].tank;
+  const [scope, setScope] = useState(false);
+  const [firing, setFiring] = useState(false);
+  const aimFingers = useRef(new Map<number, { x: number; y: number }>());
   const held = useRef<Held>({ left: false, right: false, gas: false, brake: false, side: false });
   const [lit, setLit] = useState<Held>(held.current);
   const steerFingers = useRef(new Map<number, number>());
@@ -31,8 +37,39 @@ export function TouchControls() {
     return () => {
       const input = gameHolder.game?.input;
       if (input) input.touch = { steer: 0, throttle: 0, brake: 0, handbrake: false, active: false };
+      if (input) input.touchGun = { dx: 0, dy: 0, scope: false, fire: false };
     };
   }, []);
+
+  const aim = (e: PointerEvent<HTMLDivElement>, up = false) => {
+    e.preventDefault();
+    const fingers = aimFingers.current;
+    if (up) {
+      fingers.delete(e.pointerId);
+      return;
+    }
+    const at = fingers.get(e.pointerId);
+    if (e.type === 'pointerdown') e.currentTarget.setPointerCapture(e.pointerId);
+    else if (at) {
+      const gun = gameHolder.game?.input.touchGun;
+      if (gun) {
+        gun.dx += e.clientX - at.x;
+        gun.dy += e.clientY - at.y;
+      }
+    }
+    if (at || e.type === 'pointerdown') fingers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  };
+  const fire = (on: boolean) => {
+    const gun = gameHolder.game?.input.touchGun;
+    if (gun) gun.fire = on;
+    setFiring(on);
+  };
+  const sight = () => {
+    const gun = gameHolder.game?.input.touchGun;
+    if (!gun) return;
+    gun.scope = !gun.scope;
+    setScope(gun.scope);
+  };
 
   // the steering pad: each finger on it steers to the side of the centre it is on
   const steer = (e: PointerEvent<HTMLDivElement>, up = false) => {
@@ -76,6 +113,29 @@ export function TouchControls() {
 
   return (
     <div className="touch-controls" onContextMenu={(e) => e.preventDefault()}>
+      {tank && (
+        <div
+          className="tc-aim"
+          onPointerDown={(e) => aim(e)}
+          onPointerMove={(e) => aimFingers.current.has(e.pointerId) && aim(e)}
+          onPointerUp={(e) => aim(e, true)}
+          onPointerCancel={(e) => aim(e, true)}
+        />
+      )}
+      {tank && (
+        <div className="tc-gun">
+          <div className={scope ? 'tc-pedal sight on' : 'tc-pedal sight'} onPointerDown={(e) => (e.preventDefault(), sight())}>照準</div>
+          <div
+            className={firing ? 'tc-pedal fire on' : 'tc-pedal fire'}
+            onPointerDown={(e) => (e.preventDefault(), e.currentTarget.setPointerCapture(e.pointerId), fire(true))}
+            onPointerUp={() => fire(false)}
+            onPointerCancel={() => fire(false)}
+            onLostPointerCapture={() => fire(false)}
+          >
+            射撃
+          </div>
+        </div>
+      )}
       <div className="tc-top">
         <button className="tc-btn" {...tap(() => press('KeyR'))} aria-label="back on the road">復帰</button>
         <button className="tc-btn" {...tap(() => press('KeyC'))} aria-label="camera">CAM</button>

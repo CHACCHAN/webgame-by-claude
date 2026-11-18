@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import type { CarSpec } from '../vehicle/carSpecs';
 import { adoptMaterials, createCarMaterials, modelAnchors, type CarMaterials, type CarRig } from './CarModel';
-import { clamp, damp, wrapAngle } from '../util/math';
+import { wrapAngle } from '../util/math';
 
 /**
  * The tanks: our own models (public/models/tanks/<id>.glb, tools/blender/tanks/<id>.py) or a procedural stand-in while
@@ -12,6 +12,15 @@ import { clamp, damp, wrapAngle } from '../util/math';
  * and idlers spinning about X with their side's track; the 16式's wheel pivots `wheel_<axle><l|r>` with `spin_*` children
  * (axles 1 and 2 steer). Track materials `track_l` / `track_r`: the texture scrolls along V with the distance each side
  * covers (`TankInfo.trackV`, metres per V unit).
+ *
+ * **The gun's places are the simulation's, not the model's**: the shell leaves from `TankInfo.dims` (the ring at
+ * `turretZ` / `ringY`, the trunnions `trunnion` above and `trunnionZ` ahead of the traverse axis, the muzzle
+ * `barrel` ahead of the trunnions: `weapons/gun.ts` `gunPose`), the gunner's eye is `dims.sight` (turret frame;
+ * default on the roof right of the gun). A model is built to those figures, or the figures are set from the model
+ * with it (the flash is drawn at the model's own muzzle, `TankRig.muzzle`: a model that disagrees shows its flash
+ * beside the shell's start). What the rig needs of a model, in short: `body`, `turret` (yaw about Y at the ring),
+ * `gun` (pitch about X at the trunnions, bore along +Z, its farthest +Z vertex = the muzzle); `setAim` turns the
+ * two (the local player's from its simulation, an online peer's from its packets), `fire()` runs the gun back.
  *
  * Everything moves by the root's motion (live sim, ghost, online peer alike): each track's speed is the root's forward
  * speed ± its yaw rate × half the gauge.
@@ -216,8 +225,6 @@ export function buildTank(spec: CarSpec, opts: { bodyColor?: string; procedural?
     },
   };
   rig.setAim(0, 0);
-  void clamp;
-  void damp;
   const body = new THREE.Group();
   return { root, body, wheels: standIns, materials: mats, headlightTargets: [], anchors, fromModel: !!tpl, tank: rig };
 }
@@ -332,12 +339,13 @@ function proceduralTank(spec: CarSpec, mats: CarMaterials) {
   box(turret, 0.35, 0.3, 0.4, mats.trim, tw * 0.25, th + 0.15, -tl * 0.05);
   const gun = new THREE.Group();
   gun.name = 'gun';
-  gun.position.set(0, d.trunnion, tl * 0.32);
+  gun.position.set(0, d.trunnion, d.trunnionZ);
   turret.add(gun);
   box(gun, 0.7, 0.5, 0.6, mats.paint, 0, 0, 0.1);
   const r0 = (t.gun.calibre / 1000) * 1.2;
-  const barrel = new THREE.Mesh(new THREE.CylinderGeometry(r0, r0 * 1.15, d.barrel, 14).rotateX(Math.PI / 2), mats.paint);
-  barrel.position.z = d.barrel / 2 + 0.3;
+  // (from the mantlet to the muzzle, `barrel` ahead of the trunnions)
+  const barrel = new THREE.Mesh(new THREE.CylinderGeometry(r0, r0 * 1.15, d.barrel - 0.3, 14).rotateX(Math.PI / 2), mats.paint);
+  barrel.position.z = (d.barrel + 0.3) / 2;
   barrel.castShadow = true;
   gun.add(barrel);
   const sleeve = new THREE.Mesh(new THREE.CylinderGeometry(r0 * 1.7, r0 * 1.7, 0.7, 14).rotateX(Math.PI / 2), mats.paint);

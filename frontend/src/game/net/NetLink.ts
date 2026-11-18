@@ -1,4 +1,5 @@
 import { decodeState, encodeState, SEQ_MOD, type NetState } from './codec';
+import { isGunEvent } from './gunEvents';
 import { PeerReceiver, type LagMode, type PeerNetStats } from './PeerReceiver';
 import { ImpairedTransport, type ImpairConfig, type NetTransport, type Timers } from './transport';
 
@@ -21,6 +22,11 @@ export class NetLink {
   sent = 0;
   /** packets that were not one of ours (another build, garbage) */
   rejected = 0;
+  /**
+   * What is not a car state but an event of the race (a tank's shot or hit, `gunEvents.ts`), from a member of the
+   * race: the game's to judge. Events travel on the same transport as the states, told apart by their first number.
+   */
+  onEvent: ((from: number, data: number[]) => void) | null = null;
   private inner: NetTransport | null = null;
   private transport: NetTransport | null = null;
   private impairment: ImpairConfig | null = null;
@@ -96,6 +102,13 @@ export class NetLink {
     return true;
   }
 
+  /** Sends an event of the race (an array of whole numbers, `gunEvents.ts`). False when there was nothing to send it on. */
+  sendEvent(data: number[]) {
+    if (!this.transport?.ready) return false;
+    this.transport.send(data);
+    return true;
+  }
+
   stats(): PeerNetStats[] {
     return [...this.peers.values()].map((p) => p.stats());
   }
@@ -103,6 +116,10 @@ export class NetLink {
   private receive(from: number, data: unknown) {
     const peer = from === this.selfId ? undefined : this.peers.get(from);
     if (!peer) return;
+    if (isGunEvent(data)) {
+      this.onEvent?.(from, data);
+      return;
+    }
     const st = decodeState(data);
     if (!st) {
       this.rejected++;

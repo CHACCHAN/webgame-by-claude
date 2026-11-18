@@ -108,6 +108,21 @@ export class RemoteRacers {
     for (const c of this.cars.values()) c.body.proxy?.ghost(until);
   }
 
+  /** A member's solid stand-in (null: none, or not in the race): what a shell can meet (weapons/Gunnery.ts). */
+  proxyOf(id: number): { body: RAPIER.RigidBody; collider: RAPIER.Collider } | null {
+    return this.cars.get(id)?.body.proxy ?? null;
+  }
+
+  /** Where a member's vehicle is drawn (null: not in the race). */
+  positionOf(id: number): THREE.Vector3 | null {
+    return this.cars.get(id)?.visual.root.position ?? null;
+  }
+
+  /** A member's gun went off: it runs back on its model. */
+  fireGun(id: number) {
+    this.cars.get(id)?.visual.rig.tank?.fire();
+  }
+
   colliders(): RAPIER.Collider[] {
     const out: RAPIER.Collider[] = [];
     for (const c of this.cars.values()) if (c.body.proxy) out.push(c.body.proxy.collider);
@@ -134,6 +149,8 @@ export class RemoteRacers {
         engines: jet ? enginesAt(_pose.rpm * car.visual.spec.engine.redline) : undefined,
       }, dt);
       car.visual.setBrakeLights(_pose.brake);
+      // (a tank's turret and gun as its packets have them: the others see it aim)
+      car.visual.rig.tank?.setAim(_pose.turret, _pose.gunPitch);
       if (jet) {
         // its take-off after the finish, as on its own screen: the gear goes up in the same time, and it is taken
         // off the scene once it is out of sight there (a new race finds it on its wheels again)

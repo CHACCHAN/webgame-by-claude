@@ -78,6 +78,41 @@
    "massKg": 320,
    "powerKw": 128.7
   },
+  "type10": {
+   "zeroTo100": null,
+   "topSpeed": 70.8,
+   "lateralG": 0.6,
+   "massKg": 44000,
+   "powerKw": 883
+  },
+  "type16": {
+   "zeroTo100": 69.87,
+   "topSpeed": 100,
+   "lateralG": 0.63,
+   "massKg": 26000,
+   "powerKw": 419.2
+  },
+  "leopard2a5": {
+   "zeroTo100": null,
+   "topSpeed": 68.1,
+   "lateralG": 0.59,
+   "massKg": 59700,
+   "powerKw": 1102.7
+  },
+  "m1a2": {
+   "zeroTo100": null,
+   "topSpeed": 67.7,
+   "lateralG": 0.6,
+   "massKg": 66800,
+   "powerKw": 1118.4
+  },
+  "t14": {
+   "zeroTo100": null,
+   "topSpeed": 80.1,
+   "lateralG": 0.61,
+   "massKg": 48000,
+   "powerKw": 1103.7
+  },
   "f15j": {
    "zeroTo100": 5.69,
    "topSpeed": 1254.5,

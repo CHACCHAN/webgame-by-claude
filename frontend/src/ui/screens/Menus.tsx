@@ -14,6 +14,7 @@ import { decodeGhost } from '../../game/race/Ghost';
 import { api, loadCarBests, loadLocalBest, loadRivalRecord } from '../../api/client';
 import { medalFor } from '../../game/race/medals';
 import { versionLabel } from '../../version';
+import { RELEASED } from '../../game/release';
 import { formatTime } from '../format';
 import { sfx } from '../sfx';
 import { COLORS } from './Cars';
@@ -573,6 +574,19 @@ export const CONTROL_ROWS: [string, string, string, string][] = [
   ['全画面表示の切り替え', 'F', '—', '左下 全画面'],
 ];
 
+/**
+ * a tank's rows: the gun's, and the driving as its pad has it (the triggers are the gun's). The gunner's sight is
+ * held on a mouse and a pad (the eye goes to it for a shot and comes back to the road) and switched on a phone
+ */
+export const TANK_ROWS: [string, string, string, string][] = [
+  ['砲の照準', 'マウス', '右スティック', '右半分をドラッグ'],
+  ['射撃', '左クリック', 'RT', '射撃'],
+  ['照準器', '右クリック（押す間）', 'LT（押す間）', '照準（切替）'],
+  ['照準器の倍率', 'ホイール', '十字キー← →', '—'],
+  ['砲塔を正面へ', '中クリック', '左スティック押し込み', '—'],
+  ['アクセル / ブレーキ（戦車）', 'W / S', '左スティック↑↓・A / X', 'アクセル / ブレーキ'],
+];
+
 const DRIFT_STEPS = [
   ['減速', 'コーナー手前でしっかり減速し、ステアを切り始める。'],
   ['きっかけ', 'サイドブレーキを一瞬引く／ブレーキを短く踏んで離しながら大きく切る／コーナー中にアクセルを一度戻して踏み直す。（アクセルを踏みっぱなしで曲がるだけなら滑らない）'],
@@ -600,6 +614,18 @@ export function ControlsScreen() {
             ))}
           </tbody>
         </table>
+        {RELEASED.tanks && (
+          <table className="controls-table">
+            <thead>
+              <tr><th>戦車</th><th>キーボード・マウス</th><th>ゲームパッド</th><th>スマホ</th></tr>
+            </thead>
+            <tbody className="stagger">
+              {TANK_ROWS.map(([a, k, p, t]) => (
+                <tr key={a}><td>{a}</td><td><kbd>{k}</kbd></td><td><kbd>{p}</kbd></td><td><kbd>{t}</kbd></td></tr>
+              ))}
+            </tbody>
+          </table>
+        )}
         <div className="drift-guide">
           <h3>ドリフトのコツ</h3>
           <ol>

@@ -209,6 +209,32 @@ class GameApiTest extends TestCase
         $this->assertSame([188_000], array_column($this->getJson('/api/tracks/edwards/leaderboard?car_id=f15j')->json('entries'), 'time_ms'));
     }
 
+    public function test_the_tanks_are_in_the_catalogue_but_closed_until_released(): void
+    {
+        $this->tanks(false);
+        $token = $this->register();
+        $this->assertArrayHasKey('type10', config('game.catalog.cars'));
+        $this->assertArrayNotHasKey('type10', config('game.cars'));
+        $this->assertNotContains('m1a2', array_column($this->getJson('/api/content')->json('cars'), 'id'));
+        $this->withToken($token)->postJson('/api/runs', $this->runPayload(200_000, ['car_id' => 'type10']))->assertUnprocessable();
+        $this->withToken($token)->postJson('/api/rooms', ['track_id' => 'oboro-downhill', 'car_id' => 't14'])->assertUnprocessable();
+    }
+
+    public function test_once_released_a_tanks_run_counts_like_any_vehicles_on_every_course(): void
+    {
+        $this->tanks(true);
+        $token = $this->register();
+        $ids = array_column($this->getJson('/api/content')->json('cars'), 'id');
+        foreach (['type10', 'type16', 'leopard2a5', 'm1a2', 't14'] as $tank) {
+            $this->assertContains($tank, $ids);
+        }
+        foreach (array_keys(config('game.tracks')) as $track) {
+            $this->withToken($token)->postJson('/api/runs', $this->runPayload(400_000, ['track_id' => $track, 'car_id' => 'type16']))->assertCreated();
+        }
+        $this->assertSame([400_000], array_column($this->getJson('/api/tracks/oboro-downhill/leaderboard?car_id=type16')->json('entries'), 'time_ms'));
+        $this->withToken($token)->postJson('/api/rooms', ['track_id' => 'oboro-downhill', 'car_id' => 'leopard2a5'])->assertCreated();
+    }
+
     /** A stored run (as an old one, or the seeded bots' on a course not open yet), with a ghost. */
     private function storedRun(Player $player, string $trackId, string $carId, int $timeMs): Run
     {

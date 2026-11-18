@@ -13,6 +13,16 @@ export interface CameraSubject {
   impact: number;
   /** a bike's lean (rad, + = left): the rider's view rolls with it, the chase view a little */
   lean?: number;
+  /**
+   * a tank: every view looks along its line of sight instead of along the hull: the sight's bearing off the hull's
+   * (rad, + = left) and its elevation above the horizon
+   */
+  aim?: { yaw: number; pitch: number };
+  /**
+   * a tank's gunner's sight in use: the camera IS the sight (its eye, its line, the turret's up, its field of view
+   * in degrees: the naked eye's divided by the magnification)
+   */
+  sight?: { eye: THREE.Vector3; dir: THREE.Vector3; up: THREE.Vector3; fov: number } | null;
 }
 
 /** Camera placement per vehicle: distances and heights of the chase views, the eye point of the bumper/cab view. */
@@ -48,6 +58,16 @@ export const JET_CAMERA: CameraProfile = {
   front: { ahead: 3.6, up: 1.5 },
 };
 
+/**
+ * a tank, 9–11 m over its gun and 3.2–3.8 m wide: the chase stands high enough to see the road over the turret
+ * (the views look where the sight does: `CameraSubject.aim`); the front view is the commander's, head out of the hatch
+ */
+export const TANK_CAMERA: CameraProfile = {
+  chase: { dist: 12.5, perKmh: 0.02, height: 5.4 },
+  near: { dist: 9, perKmh: 0.012, height: 4.3 },
+  front: { ahead: -0.2, up: 2.3 },
+};
+
 /** the most the chase camera trails its damped target (m): what ~500 km/h gives */
 const MAX_LAG = 10;
 const _fwd = new THREE.Vector3(), _desired = new THREE.Vector3(), _look = new THREE.Vector3(), _up = new THREE.Vector3();
@@ -68,11 +88,20 @@ export class ChaseCamera {
   private lookHeight = 1;
   fovBase = 60;
   profile = CAR_CAMERA;
+  private inSight = false;
 
   constructor(readonly camera: THREE.PerspectiveCamera, private groundAt: (x: number, z: number) => number) {}
 
   reset() {
     this.initialized = false;
+  }
+
+  /** The eye off a tank's sight (its lens is taken out of the camera): whoever moves the camera next finds it as it was. */
+  leaveSight() {
+    if (!this.inSight) return;
+    this.inSight = false;
+    this.camera.fov = this.fovBase;
+    this.camera.updateProjectionMatrix();
   }
 
   cycle() {
@@ -82,6 +111,28 @@ export class ChaseCamera {
 
   update(dt: number, s: CameraSubject) {
     const cam = this.camera;
+    if (s.sight) {
+      // the gunner's sight: nothing of a chase camera in it; the picture moves only as the gun and the hull do
+      cam.position.copy(s.sight.eye);
+      cam.up.copy(s.sight.up);
+      cam.lookAt(_look.copy(s.sight.eye).add(s.sight.dir));
+      cam.up.set(0, 1, 0);
+      if (Math.abs(cam.fov - s.sight.fov) > 0.01) {
+        // (a change of magnification is a lens swung in: quick, not a zoom)
+        cam.fov = this.inSight ? damp(cam.fov, s.sight.fov, 18, dt) : s.sight.fov;
+        cam.updateProjectionMatrix();
+      }
+      this.inSight = true;
+      this.initialized = false;
+      return;
+    }
+    if (this.inSight) {
+      // the eye off the sight: the driving view as it is, at once
+      this.inSight = false;
+      cam.fov = this.fovBase;
+      cam.updateProjectionMatrix();
+    }
+    const aimYaw = s.aim?.yaw ?? 0, aimPitch = s.aim?.pitch ?? 0;
     _fwd.set(0, 0, 1).applyQuaternion(s.quaternion);
     const carYaw = Math.atan2(_fwd.x, _fwd.z);
     const planar = Math.hypot(s.velocity.x, s.velocity.z);
@@ -108,7 +159,10 @@ export class ChaseCamera {
         _desired.addScaledVector(_left, front.height * Math.sin(lean)).addScaledVector(_up, -front.height * (1 - Math.cos(lean)));
       }
       this.pos.copy(_desired);
-      _look.copy(_desired).addScaledVector(_fwd, 20);
+      if (s.aim) {
+        const c = Math.cos(aimPitch) * 20;
+        _look.set(Math.sin(carYaw + aimYaw) * c, Math.sin(aimPitch) * 20, Math.cos(carYaw + aimYaw) * c).add(_desired);
+      } else _look.copy(_desired).addScaledVector(_fwd, 20);
       cam.position.copy(this.pos);
       cam.up.copy(_up).lerp(_worldUp, 0.6);
       // and the horizon tilts with the bike (most of its lean: a rider keeps the head a little more upright)
@@ -120,9 +174,10 @@ export class ChaseCamera {
       // the camera falls back with speed, up to 500 km/h (beyond, at the cockroach's Mach 1, it would be a speck)
       const dist = view.dist + Math.min(kmh, 500) * view.perKmh;
       const height = view.height;
-      const dir = new THREE.Vector3(Math.sin(this.yaw), 0, Math.cos(this.yaw));
-      _desired.copy(s.position).addScaledVector(dir, -dist);
-      _desired.y += height;
+      const dir = new THREE.Vector3(Math.sin(this.yaw + aimYaw), 0, Math.cos(this.yaw + aimYaw));
+      // (a sight raised or lowered: the camera swings the other way round the vehicle, half as far)
+      _desired.copy(s.position).addScaledVector(dir, -dist * Math.cos(aimPitch));
+      _desired.y += height - dist * Math.sin(aimPitch) * 0.5;
       if (!this.initialized) this.pos.copy(_desired);
       // stiffer horizontally, softer vertically for a floaty feel over crests
       this.pos.x = damp(this.pos.x, _desired.x, 14, dt);
@@ -140,8 +195,8 @@ export class ChaseCamera {
       if (this.pos.y < s.position.y + 0.6) this.pos.y = s.position.y + 0.6;
       cam.position.copy(this.pos);
       this.lookHeight = damp(this.lookHeight, this.mode === 'chase' ? 1.0 : 0.9, 4, dt);
-      _look.copy(s.position).addScaledVector(dir, 3 + kmh * 0.012);
-      _look.y += this.lookHeight;
+      _look.copy(s.position).addScaledVector(dir, 3 + kmh * 0.012 + (s.aim ? 30 : 0));
+      _look.y += this.lookHeight + (s.aim ? 33 * Math.tan(aimPitch) : 0);
       cam.lookAt(_look);
       if (lean) cam.rotateZ(lean * 0.12);
     }
