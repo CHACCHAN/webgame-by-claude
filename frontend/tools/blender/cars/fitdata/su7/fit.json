@@ -1,0 +1,58 @@
+{
+ "cams": "/home/dev/Desktop/service/internal/webgame-by-claude/frontend/tools/blender/cars/fitdata/su7/fit/cams.json",
+ "photos": {
+  "k13": {
+   "photo": "/home/dev/.local/opt/carfit/su7/ref/k13.jpg",
+   "band": 0.08,
+   "mask": "/home/dev/.local/opt/carfit/su7/masks/k13_w.png"
+  },
+  "k14": {
+   "photo": "/home/dev/.local/opt/carfit/su7/ref/k14.jpg",
+   "band": 0.08,
+   "mask": "/home/dev/.local/opt/carfit/su7/masks/k14_w.png"
+  },
+  "k12": {
+   "photo": "/home/dev/.local/opt/carfit/su7/ref/k12.jpg",
+   "band": 0.08,
+   "mask": "/home/dev/.local/opt/carfit/su7/masks/k12_w.png"
+  },
+  "k16": {
+   "photo": "/home/dev/.local/opt/carfit/su7/ref/k16.jpg",
+   "band": 0.08,
+   "mask": "/home/dev/.local/opt/carfit/su7/masks/k16_w.png"
+  },
+  "k21": {
+   "photo": "/home/dev/.local/opt/carfit/su7/ref/k21.jpg",
+   "band": 0.08,
+   "ignore": [
+    [
+     0,
+     430,
+     420,
+     853
+    ]
+   ],
+   "mask": "/home/dev/.local/opt/carfit/su7/masks/k21_w.png"
+  },
+  "k32": {
+   "photo": "/home/dev/.local/opt/carfit/su7/ref/k32.jpg",
+   "band": 0.08,
+   "mask": "/home/dev/.local/opt/carfit/su7/masks/k32_w.png"
+  },
+  "k68": {
+   "photo": "/home/dev/.local/opt/carfit/su7/ref/k68.jpg",
+   "band": 0.08,
+   "mask": "/home/dev/.local/opt/carfit/su7/masks/k68_w.png"
+  },
+  "k00": {
+   "photo": "/home/dev/.local/opt/carfit/su7/ref/k00.jpg",
+   "band": 0.08,
+   "mask": "/home/dev/.local/opt/carfit/su7/masks/k00_w.png"
+  }
+ },
+ "det": "/home/dev/Desktop/service/internal/webgame-by-claude/frontend/tools/blender/cars/fitdata/su7/det",
+ "hub_x": {
+  "f": 0.901,
+  "r": 0.893
+ }
+}

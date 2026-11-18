@@ -57,6 +57,13 @@
    "massKg": 2480,
    "powerKw": 2315.5
   },
+  "su7": {
+   "zeroTo100": 3.24,
+   "topSpeed": 265.2,
+   "lateralG": 1.22,
+   "massKg": 2205,
+   "powerKw": 499
+  },
   "nsr250r": {
    "zeroTo100": 5.91,
    "topSpeed": 186.1,

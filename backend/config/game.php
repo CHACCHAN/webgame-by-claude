@@ -74,6 +74,7 @@ $cars = [
     // electric: the Cybertruck (Cyberbeast) and the fastest production EV (frontend vehicle/carSpecs.ts)
     'cybertruck' => ['name' => 'CYBERTRUCK'],
     'u9' => ['name' => 'YANGWANG U9 Xtreme'],
+    'su7' => ['name' => 'XIAOMI SU7 Max'],
     // motorcycles (frontend vehicle/bikes.ts)
     'nsr250r' => ['name' => 'NSR250R'],
     'ninjah2' => ['name' => 'Ninja H2'],

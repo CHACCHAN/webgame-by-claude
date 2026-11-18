@@ -22,6 +22,9 @@ export const COLORS: Record<CarId, string[]> = {
   // bare stainless, then wraps
   cybertruck: ['#b9bdc0', '#232427', '#e6e6e4', '#4b5a3a', '#7d1d1d'],
   u9: ['#1b1d22', '#e8e9ea', '#1f5bd6', '#c9d400', '#8c1c22'],
+  // the nine launch colours (2024): Aqua Blue, Mineral Gray, Verdant Green, Radiant Purple, Basalt Gray, Meteor Blue,
+  // Lava Orange, Pearl White, Diamond Black (swatches judged from photos)
+  su7: ['#35b6cf', '#c9cbc4', '#8a9072', '#8c7f93', '#4a4d52', '#8fa5c4', '#e8521c', '#eeeeea', '#101114'],
   // motorcycles: one swatch per factory colour
   ...(Object.fromEntries(BIKE_ORDER.map((id) => [id, BIKE_SPECS[id].bike!.liveries.map((l) => l.swatch)])) as Record<BikeId, string[]>),
   // tanks: their own camouflage

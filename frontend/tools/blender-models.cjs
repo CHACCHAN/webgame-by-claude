@@ -30,7 +30,7 @@ const KINDS = {
     ids: ['e231', 'e235', 'keikyu1000', 'tobu30000', 'e5', 'l0'],
     variants: { e231: ['sobu', 'joban', 'tozai', 'kinkou'], e235: ['sobu', 'chuosobu'], tobu30000: ['isesaki'], e5: ['h5'] },
   },
-  cars: { dir: 'tools/blender/cars', out: 'public/models/cars', palette: false, textureSize: 1024, big: {}, ids: ['hayate', 'raijin', 'shiden', 'supra', 'r34', 's15', 'cybertruck', 'u9'] },
+  cars: { dir: 'tools/blender/cars', out: 'public/models/cars', palette: false, textureSize: 1024, big: {}, ids: ['hayate', 'raijin', 'shiden', 'supra', 'r34', 's15', 'cybertruck', 'u9', 'su7'] },
   // the motorcycles: nodes steer / spin_f / spin_r stay apart (render/BikeModel.ts turns and spins them)
   bikes: { dir: 'tools/blender/bikes', out: 'public/models/bikes', palette: false, textureSize: 1024, big: {}, ids: ['nsr250r', 'ninjah2', 'hayabusa'] },
   // (a prop's script bakes each of its textures at the size it should have, 2048 px at most: tools/blender/props/prop_bake.py)

@@ -91,6 +91,14 @@ const STYLES: Record<RoadCarId, BodyStyle> = {
     tumblehome: 0.72, softness: 0.7, cornerRound: 0.45, archGap: 0.04, flare: 0.06,
     wing: 'high', headlights: 'slim', twoTone: false,
   },
+  // a low coupé-saloon: a long roof running into a short deck
+  su7: {
+    front: 2.48, rear: -2.52, halfWidth: 0.98, bottom: 0.16, shoulder: 0.72,
+    noseTop: 0.66, cowlTop: 0.97, deckTop: 1.03, tailTop: 0.98, roof: 1.44,
+    windshieldBase: 1.2, roofFront: 0.2, roofRear: -0.9, rearGlassBase: -2.0,
+    tumblehome: 0.7, softness: 0.85, cornerRound: 0.5, archGap: 0.04, flare: 0.04,
+    wing: 'ducktail', headlights: 'slim', twoTone: false,
+  },
 };
 
 const smooth = (e0: number, e1: number, x: number) => {
