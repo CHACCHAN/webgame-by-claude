@@ -240,28 +240,32 @@ def vault_ribs(part, P, S):
 
 
 def underbody(part, P, S):
-    """what shows under the body from low views: the floor pan's battery case, axles and the arms"""
+    """the floor pan that closes the body from below; what hangs under it (battery case, drive units, shafts, arms)
+    comes from the shared kit (cybertruck.finish)"""
     part.box('under', -0.80, 0.80, P['y_rk'] - 0.02, P['y_rk'] + 0.06, -1.55, 1.55, bevel=0.03, segments=2)
-    for z in (CS.WB / 2, -CS.WB / 2):
-        part.cylinder('under', (0.0, P['hub_y'], z), 0.035, 2 * (P['track'] / 2 - 0.12), axis='x', segments=10)
-        for sx in (-1, 1):
-            part.box('under', sx * 0.35 - 0.04, sx * 0.35 + 0.04, P['hub_y'] - 0.06, P['hub_y'] + 0.02, z - 0.30, z + 0.30, bevel=0.01)
 
 
 def cabin(part, P, S):
-    """seats, dash, yoke and screen: dark shapes to be seen through the glass"""
+    """the cabin's tub: floor, dash, console, the screen, the cab's back wall; what stands in it comes from the
+    shared kit (furnish)"""
     m = 'interior'
-    part.box(m, -0.92, 0.92, 0.50, 0.56, -1.05, 1.75)                              # floor
-    part.box(m, -0.90, 0.90, 0.80, 1.10, 1.05, 1.75)                               # dash
-    part.box(m, -0.90, 0.90, 1.08, 1.13, 0.98, 1.30, bevel=0.01)                   # dash top
-    for sx in (-1, 1):
-        x = sx * 0.43
-        part.box(m, x - 0.27, x + 0.27, 0.56, 0.86, 0.05, 0.62, bevel=0.03, segments=4)  # cushion
-        part.box(m, x - 0.26, x + 0.26, 0.80, 1.42, -0.05, 0.12, bevel=0.03, segments=4)  # back
-        part.box(m, x - 0.13, x + 0.13, 1.40, 1.55, -0.04, 0.08, bevel=0.03, segments=4)  # head rest
-    part.box(m, -0.80, 0.80, 0.56, 0.84, -0.95, -0.40, bevel=0.03)                 # rear bench
-    part.box(m, -0.80, 0.80, 0.80, 1.40, -1.08, -0.92, bevel=0.03)
-    part.box(m, -0.12, 0.12, 0.56, 0.95, 0.20, 1.05, bevel=0.02)                   # console
-    part.box('trim', 0.33, 0.53, 1.06, 1.20, 0.88, 0.92, bevel=0.01)               # yoke (left-hand drive)
+    part.box('c_carpet', -0.92, 0.92, 0.50, 0.56, -1.05, 1.75)                     # floor
+    part.box('c_dash', -0.90, 0.90, 0.80, 1.10, 1.05, 1.75)                        # dash
+    part.box('c_dash', -0.90, 0.90, 1.08, 1.13, 0.98, 1.30, bevel=0.01)            # dash top
+    part.box('c_plastic', -0.12, 0.12, 0.56, 0.95, 0.20, 1.05, bevel=0.02)         # console
     part.box('trim', -0.22, 0.22, 1.12, 1.36, 0.98, 1.02, bevel=0.005)             # screen
     part.box(m, -0.95, 0.95, 0.56, 1.30, -1.12, -1.08)                              # cab back wall
+
+
+def furnish(mesh):
+    """car_common's furniture (left-hand drive): two front seats with the head rest in one piece, the rear bench
+    for three against the cab's back wall, the wheel, the mirror under the windscreen's top (the glass runs from
+    1.242 up at z 1.854 to 1.77 up at z 0.303). No instruments' hood, lever or hand brake: the truck has none"""
+    import car_common as CC
+    for x in (-0.43, 0.43):
+        CC.seat(mesh, x, 0.56, 0.05, width=0.54, length=0.56, h=0.30, back=0.60, recline=14.0, headrest='bucket',
+                bolster=0.8, cloth='c_leather', insert='c_plastic')
+    CC.bench(mesh, -0.80, 0.80, 0.56, -0.95, length=0.55, h=0.28, back=0.58, recline=10.0, places=3, headrests=True,
+             cloth='c_leather', insert='c_plastic')
+    CC.steering_wheel(mesh, (0.43, 1.13, 0.90), tilt=22.0, R=0.180, column=0.20)
+    CC.inside_mirror(mesh, 1.58, 0.60)

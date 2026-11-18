@@ -114,36 +114,13 @@ def _arm(part, a0, s):
     part.grid(rows, 'rim', flip=True, smooth=False)
 
 
-def disc(part, front):
-    r = 0.190 if front else 0.180
-    x0, x1 = -0.030, 0.000
-    prof = [(0.110, x1), (r, x1), (r, x0), (0.110, x0)]
-    _lathe(part, 'disc', prof, seg=48, flip=True)
-    part.cylinder('disc', (0.020, 0, 0), 0.105, 0.04, axis='x', segments=24)
-
-
-def caliper(part, front):
-    """caliper block over the disc's edge, behind the axle, at the top"""
-    r = 0.190 if front else 0.180
-    ang = math.radians(150 if front else 30)
-    w = 0.16 if front else 0.12
-    n = 6
-    seg = []
-    for k in range(n + 1):
-        a = ang + (k / n - 0.5) * w / r
-        ry, rz = math.sin(a), math.cos(a)
-        inner, outer = r - 0.045, r + 0.018
-        seg.append([(0.040, inner * ry, inner * rz), (0.040, outer * ry, outer * rz), (-0.065, outer * ry, outer * rz),
-                    (-0.065, inner * ry, inner * rz), (0.040, inner * ry, inner * rz)])
-    part.grid(seg, 'brake', flip=False)
-    for end in (0, n):
-        q = seg[end][:4]
-        part.face(q if end == 0 else list(reversed(q)), 'brake')
-
-
 def build(root, mats, P):
-    """four pivots with spin children; returns (pivots, triangle counts)"""
-    count, pivots = {}, {}
+    """four pivots with spin children; returns (pivots, triangle counts). The all-terrain tyre with its lugs and the
+    rim with its cover are this truck's own; discs and calipers come from the shared kit (car_common: vented discs,
+    a fixed four-pot caliper behind the axle in front, a floating one ahead of it at the rear, as before)"""
+    import car_common as CC
+    import hayate_kit as HK
+    count, pivots, made = {}, {}, []
     tf = P['track'] / 2
     for name, x, z, front in (('fl', tf, CS.WB / 2, True), ('fr', -tf, CS.WB / 2, True),
                               ('rl', tf, -CS.WB / 2, False), ('rr', -tf, -CS.WB / 2, False)):
@@ -153,16 +130,24 @@ def build(root, mats, P):
         tyre(roll)
         tread(roll)
         rim(roll)
-        disc(roll, front)
-        cal = K.Part(f'wheel_{name}_caliper')
-        caliper(cal, front)
+        r = 0.190 if front else 0.180
+        thick = 0.030 if front else 0.024
+        d = HK.Mesh(f'disc_{name}')
+        CC.brake_disc(d, r, 0.0, thick=thick, r_hat=0.105, hat=0.040, vented=True)
+        c = HK.Mesh(f'caliper_{name}')
+        if front:
+            CC.caliper(c, r, 0.0, thick=thick, kind='4pot', angle=-60.0, colour='cal_iron')
+        else:
+            CC.caliper(c, r, 0.0, thick=thick, kind='floating', angle=60.0, colour='cal_iron')
         if x < 0:
-            for p in (roll, cal):
-                _mirror_x(p)
-        count[name] = roll.tris() + cal.tris()
+            _mirror_x(roll)
+            d, c = CC.turned(d), c.mirrored()
+        count[name] = roll.tris() + d.tris() + c.tris()
         roll.build(spin, mats, sharp=35.0)
-        cal.build(pivot, mats, sharp=35.0)
+        made += [(d, spin), (c, pivot)]
         pivots[name] = pivot
+    for mesh, parent in made:
+        CC.build(mesh, parent, mats)
     return pivots, count
 
 
