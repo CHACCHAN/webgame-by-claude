@@ -127,7 +127,8 @@ def headlamp(w=512, h=256, k=3):
 
 
 def taillamp(w=2048, h=128, k=2):
-    half = [(-x, y) for x, y, _z in D.TL]                    # the rear frame's u = -x: the car's left at u < 0
+    za, r = D.TL_AXIS                                        # su7_details.Wrap: u = -r x bearing, the car's left at u < 0
+    half = [(-r * math.atan2(x, za - z), y) for x, y, z in D.TL]
     full = half + [(-u, v) for u, v in reversed(half)][1:-1]
     bx = Box(full, w * k, h * k)
     im = Image.new('RGB', (w * k, h * k), (40, 4, 6))

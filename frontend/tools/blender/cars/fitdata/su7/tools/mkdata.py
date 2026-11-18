@@ -64,12 +64,19 @@ def lamp_frame(row):
 
 
 HL_C, HL_D, HL_E1 = lamp_frame(HL)
-TL = centred(pts('k21', 'tl_R_toL'))
+# the tail band: across the rear from k21 (the car's right half, mirrored); its end on the flank from the side photo
+# k13 (from behind the flank lies along the line of sight: back-projected from k21 alone the tip came out 13 cm short)
+_rear = centred(pts('k21', 'tl_R_toL'))
+_tip = max(range(len(_rear)), key=lambda i: _rear[i][0])
+X_REAR = 0.76
+TL = ([p for p in _rear[:_tip] if p[0] < X_REAR] + [list(p) for p in pts('k13', 'tl_L')]
+      + [p for p in _rear[_tip + 1:] if p[0] < X_REAR])
+assert TL[5] == _rear[5], 'TL_KINK counts from the centre'  
 hood = centred(pts('k00', 'hood_L'))
 PATCH = [
     ('blade', 'side', 'trim', 0.003, 'LR', pts('k13', 'blade_L')),
     ('curtain', 'fq', 'grille', 0.003, 'LR', pts('k12', 'curtain_L')),
-    ('vent', 'rq', 'grille', 0.003, 'LR', pts('k21', 'vent_R_toL')),
+    ('vent', 'rq', 'grille', 0.003, 'LR', pts('k13', 'vent_L')),
     ('intake', 'front', 'grille', 0.003, 'C', centred(pts('k12', 'intake_L'))),
     ('valance', 'rear', 'trim', 0.003, 'C', centred(pts('k21', 'valance_R_toL'))),
     ('insert', 'rear', 'paint', 0.0055, 'LR', pts('k21', 'insert_R_toL')),
@@ -100,7 +107,7 @@ plate = pts('k21', 'plate')[0]
 
 old = open(P).read()
 doc = old[:old.index('"""', 3) + 3]
-fixed = old[old.index('# fixed'):] if '# fixed' in old else '# fixed\nHL_D = (0.45, 0.5, 0.74)\nTL_KINK = 5\nPLATE_F = (0.50, 0.010)\nPLATE_R = (0.43, 0.006)\nLETTER_H = 0.034\n'
+fixed = old[old.index('# fixed'):] if '# fixed' in old else '# fixed\nHL_D = (0.45, 0.5, 0.74)\nTL_AXIS = (-1.5, 1.0)\nTL_KINK = 5\nPLATE_F = (0.50, 0.010)\nPLATE_R = (0.43, 0.006)\nLETTER_H = 0.034\n'
 t3 = lambda v: '(%.4f, %.4f, %.4f)' % tuple(v)
 body = [doc, wrap('HL', HL), 'HL_C, HL_D, HL_E1 = %s, %s, %s' % (t3(HL_C), t3(HL_D), t3(HL_E1)),
         'HLU = ' + fmt(HLU), 'HLG = ' + fmt(HLG), 'HLS = [' + ', '.join(fmt(r) for r in HLS) + ']',

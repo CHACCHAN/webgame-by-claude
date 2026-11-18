@@ -71,6 +71,30 @@ class Frame:
         return p, n
 
 
+class Wrap:
+    """the tail band's frame: the band runs round the car's corners onto the flanks, so its points are laid out by
+    their bearing from a vertical axis through the car's middle line at z = za (u = -r x bearing: the car's left at
+    u < 0, as in the frame from behind) and their height (v); a point is put on the body by a level ray from outside
+    toward that axis, which meets the rear face and the flank alike at a fair angle"""
+    wrap = True
+
+    def __init__(self, za=D.TL_AXIS[0], r=D.TL_AXIS[1]):
+        self.za, self.r = za, r
+        self.d = Vector((0, 0, -1))
+
+    def uv(self, p):
+        return (-self.r * math.atan2(p[0], self.za - p[2]), p[1])
+
+    def hit(self, bvh, u, v, strict=False):
+        a = -u / self.r
+        d = Vector((math.sin(a), 0.0, -math.cos(a)))
+        o = Vector((0.0, v, self.za))
+        p, n = K.project(bvh, o, d, back=1.8)
+        if p is None:
+            return (None, None) if strict else (o + d, d.copy())
+        return p, n
+
+
 def resample_closed(poly, step):
     """points every ~step along a closed 2-D outline (its corners kept)"""
     out = []
@@ -161,6 +185,7 @@ def flat_patch(part, bvh, outline, fr, mat, lift=0.003, step=0.02, uvbox=None, h
         vmap.append(None if p is None else part.vert(p + n * lift))
         surf.append(p)
     idx = part.slot(mat)
+    made = []
     for t in keep:
         # no surface under a corner (off the body), or the corners on different surfaces (a ray past an edge)
         if any(vmap[i] is None for i in t) or max((surf[t[i]] - surf[t[i - 1]]).length for i in range(3)) > 6 * step:
@@ -171,11 +196,17 @@ def flat_patch(part, bvh, outline, fr, mat, lift=0.003, step=0.02, uvbox=None, h
             continue
         f.material_index = idx
         f.smooth = True
+        made.append((f, hits[t[0]][1] + hits[t[1]][1] + hits[t[2]][1]))
         for loop, i in zip(f.loops, t):
             q = vco[i]
             loop[part.uv].uv = (box[0] + (box[2] - box[0]) * (q.x - u0) / max(1e-9, u1 - u0),
                                 box[1] + (box[3] - box[1]) * (q.y - v0) / max(1e-9, v1 - v0))
     part.bm.normal_update()
+    if getattr(fr, 'wrap', False):          # round a corner there is no one outward direction: by the surface's own
+        for f, n in made:
+            if f.normal.dot(K.B(*n) - K.B(0, 0, 0)) < 0:
+                f.normal_flip()
+        return surf
     out = K.B(*fr.d) - K.B(0, 0, 0)
     for f in part.bm.faces:
         if f.material_index == idx and f.normal.dot(out) < 0:
@@ -393,8 +424,8 @@ def headlamps(part, mats, bvh):
 
 
 def taillamp(part, mats, bvh):
-    """the full-width band with its looped ends: one patch across the tail"""
-    fr = frame('rear')
+    """the full-width band with its looped ends: one patch across the tail and round its corners onto the flanks"""
+    fr = Wrap()
     half = [fr.uv(p) for p in D.TL]
     full = half + [(-u, v) for u, v in reversed(half)][1:-1]
     flat_patch(part, bvh, full, fr, mats['taillight'], lift=0.004, step=0.016, uvbox=(0, 0, 1, 1))

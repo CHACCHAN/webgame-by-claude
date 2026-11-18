@@ -3,7 +3,9 @@
 judged. What GrabCut cannot tell is left out: everything from just above the model's lowest line down (the shadow
 under the car and the tyres' feet look alike), each photo's boxes (IGN below: another car before this one, a raised
 spoiler, bystanders behind the outline) and whatever lies beyond the photo's edge. A check picture per photo
-(<out dir>/<n>_chk.jpg: mask outline green, ignored red) is written too."""
+(<out dir>/<n>_chk.jpg: mask outline green, ignored red) is written too. The car's ends in the two side photos
+are then judged by hand (endmask.py, which overrules the boxes of k13 and k14 here: under them the fit never saw
+where the car ends)."""
 import os
 import sys
 
