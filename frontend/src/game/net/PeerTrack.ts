@@ -15,10 +15,12 @@ export interface TrackPose {
   rpm: number;
   /** seconds past the newest packet (0: the moment lies between two packets) */
   ahead: number;
+  /** a fighter's take-off (`NetState.dep`): 0 = on its wheels */
+  depart: number;
 }
 
 export function newPose(): TrackPose {
-  return { position: new Vector3(), quaternion: new Quaternion(), velocity: new Vector3(), speed: 0, steer: 0, brake: false, throttle: 0, rpm: 0, ahead: 0 };
+  return { position: new Vector3(), quaternion: new Quaternion(), velocity: new Vector3(), speed: 0, steer: 0, brake: false, throttle: 0, rpm: 0, ahead: 0, depart: 0 };
 }
 
 interface Snap {
@@ -121,6 +123,7 @@ export class PeerTrack {
     out.brake = near.st.br === 1;
     out.throttle = near.st.th;
     out.rpm = near.st.rp;
+    out.depart = near.st.dep ?? 0;
     out.ahead = 0;
     return true;
   }
@@ -141,6 +144,7 @@ export class PeerTrack {
     out.brake = s.st.br === 1;
     out.throttle = s.st.th;
     out.rpm = s.st.rp;
+    out.depart = s.st.dep ?? 0;
     out.ahead = dt;
     return true;
   }

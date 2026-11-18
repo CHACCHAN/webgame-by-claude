@@ -5,7 +5,9 @@ namespace Tests\Feature;
 use App\Events\RoomUpdated;
 use App\Models\Player;
 use App\Models\Room;
+use App\Support\Vehicles;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Tests\TestCase;
 
@@ -435,10 +437,11 @@ class RoomTest extends TestCase
 
     public function test_a_vehicle_the_new_course_does_not_offer_is_replaced(): void
     {
-        // (no vehicle is bound to a course yet: the fighters will be, to their air base)
+        // (a motorcycle bound to two courses, as the fighters are to their air base)
         config(['game.cars.hayabusa.courses' => ['kirifuri-lakeside', 'autobahn']]);
-        $this->assertNotContains('hayabusa', Room::vehiclesOn('oboro-downhill'));
-        $this->assertSame(array_keys(config('game.cars')), Room::vehiclesOn('autobahn'));
+        $this->assertNotContains('hayabusa', Vehicles::on('oboro-downhill'));
+        $this->assertContains('hayabusa', Vehicles::on('autobahn'));
+        $this->assertSame('hayate', Vehicles::fallback('oboro-downhill'));
         [$code, $h, $b, $c] = $this->readyRoom();
 
         // a course that offers it: kept, with its paint
@@ -450,12 +453,14 @@ class RoomTest extends TestCase
             ->assertJsonPath('players.2.car_id', 'hayate')->assertJsonPath('players.2.color', null)
             ->assertJsonPath('players.1.car_id', 'hayate')->assertJsonPath('players.1.color', '#c8102e')
             ->assertJsonPath('players.0.car_id', 'raijin');
-        // and it cannot be entered there, nor joined or made a room with
+        // and it cannot be entered there, nor made a room with; who joins with it (by a code: the room's course is
+        // not known then) is seated as the change of course seats: the course's first vehicle, without the paint
         $this->patchJson("/api/rooms/{$code}/me", ['car_id' => 'hayabusa'], $c)
             ->assertStatus(422)->assertJsonPath('errors.car_id.0', 'GSX1300R 隼はこのコースでは走れません');
         [, $d] = $this->player('D');
-        $this->postJson("/api/rooms/{$code}/join", ['car_id' => 'hayabusa'], $d)->assertStatus(422);
-        $this->postJson("/api/rooms/{$code}/join", ['car_id' => 'ninjah2'], $d)->assertOk();
+        $this->postJson("/api/rooms/{$code}/join", ['car_id' => 'hayabusa', 'color' => '#101010'], $d)
+            ->assertOk()->assertJsonPath('players.3.car_id', 'hayate')->assertJsonPath('players.3.color', null);
+        $this->patchJson("/api/rooms/{$code}/me", ['car_id' => 'ninjah2'], $d)->assertOk();
         $this->postJson('/api/rooms', ['track_id' => 'tenrou-skyline', 'car_id' => 'hayabusa'], $d)->assertStatus(422);
         $this->postJson('/api/rooms', ['track_id' => 'autobahn', 'car_id' => 'hayabusa'], $d)->assertCreated();
     }
@@ -504,5 +509,114 @@ class RoomTest extends TestCase
         $this->postJson('/api/broadcasting/auth', ['socket_id' => '1234.5678', 'channel_name' => $channel], $other)->assertForbidden();
         $this->postJson('/api/broadcasting/auth', ['socket_id' => '1234.5678', 'channel_name' => 'private-admin'], $h)->assertForbidden();
         $this->postJson('/api/broadcasting/auth', ['socket_id' => '1234.5678', 'channel_name' => $channel])->assertUnauthorized();
+    }
+
+    public function test_a_fighter_is_taken_only_into_a_room_at_edwards(): void
+    {
+        $this->edwards(true);
+        [, $h] = $this->player('Host');
+        [, $b] = $this->player('Guest');
+
+        // a mountain pass: no room is made with a fighter and nobody changes to one; who joins with one (by a code:
+        // the course is not known then) is seated in a car, the paint gone
+        $this->postJson('/api/rooms', ['track_id' => 'kirifuri-lakeside', 'car_id' => 'f15j'], $h)
+            ->assertUnprocessable()->assertJsonValidationErrors('car_id');
+        $pass = $this->createRoom($h);
+        $this->postJson("/api/rooms/{$pass}/join", ['car_id' => 'su47', 'color' => '#3b4049'], $b)
+            ->assertOk()->assertJsonPath('players.1.car_id', 'hayate')->assertJsonPath('players.1.color', null);
+        $this->patchJson("/api/rooms/{$pass}/me", ['car_id' => 'supra'], $b)->assertOk();
+        $this->patchJson("/api/rooms/{$pass}/me", ['car_id' => 'f15c'], $b)->assertUnprocessable();
+        $this->getJson("/api/rooms/{$pass}", $h)->assertJsonPath('players.1.car_id', 'supra');
+
+        // Edwards: fighters and cars side by side
+        $code = $this->postJson('/api/rooms', ['track_id' => 'edwards', 'car_id' => 'f15j', 'color' => '#7f8890'], $h)->assertCreated()->json('code');
+        $this->postJson("/api/rooms/{$code}/join", ['car_id' => 'r34'], $b)->assertOk();
+        $this->patchJson("/api/rooms/{$code}/me", ['car_id' => 'su47'], $b)->assertOk()->assertJsonPath('players.1.car_id', 'su47');
+
+        // the host moves the room to another course: the fighters give way to the course's first vehicle (and
+        // their paint goes), everyone loads again
+        $this->patchJson("/api/rooms/{$code}/me", ['loaded' => true], $b)->assertOk();
+        $this->patchJson("/api/rooms/{$code}", ['track_id' => 'oboro-downhill'], $h)
+            ->assertOk()
+            ->assertJsonPath('players.0.car_id', 'hayate')->assertJsonPath('players.0.color', null)
+            ->assertJsonPath('players.1.car_id', 'hayate')
+            ->assertJsonPath('players.0.loaded', false)->assertJsonPath('players.1.loaded', false)->assertJsonPath('players.1.ready', false);
+        // and back to Edwards: nobody is put into a fighter, but it can be taken again; the next race from the
+        // results on a pass (`rematch` with a course) seats a fighter's pilot the same way
+        $this->patchJson("/api/rooms/{$code}", ['track_id' => 'edwards'], $h)->assertOk()->assertJsonPath('players.1.car_id', 'hayate');
+        $this->patchJson("/api/rooms/{$code}/me", ['car_id' => 'f15c'], $b)->assertOk();
+        $this->postJson("/api/rooms/{$code}/rematch", ['track_id' => 'tenrou-skyline'], $h)
+            ->assertOk()->assertJsonPath('track_id', 'tenrou-skyline')
+            ->assertJsonPath('players.1.car_id', 'hayate')->assertJsonPath('players.0.car_id', 'hayate');
+    }
+
+    public function test_before_its_release_no_room_takes_edwards_or_a_fighter(): void
+    {
+        $this->edwards(false);
+        [, $h] = $this->player('Host');
+        [, $b] = $this->player('Guest');
+        $this->postJson('/api/rooms', ['track_id' => 'edwards', 'car_id' => 'hayate'], $h)->assertUnprocessable()->assertJsonValidationErrors('track_id');
+        $this->postJson('/api/rooms', ['track_id' => 'oboro-downhill', 'car_id' => 'f15j'], $h)->assertUnprocessable()->assertJsonValidationErrors('car_id');
+        $code = $this->createRoom($h);
+        $this->postJson("/api/rooms/{$code}/join", ['car_id' => 'su47'], $b)->assertUnprocessable()->assertJsonValidationErrors('car_id');
+        $this->postJson("/api/rooms/{$code}/join", ['car_id' => 'supra'], $b)->assertOk();
+        $this->patchJson("/api/rooms/{$code}/me", ['car_id' => 'f15c'], $b)->assertUnprocessable()->assertJsonValidationErrors('car_id');
+        // the host's change of course, in the waiting room and from the results
+        $this->patchJson("/api/rooms/{$code}", ['track_id' => 'edwards'], $h)->assertUnprocessable()->assertJsonValidationErrors('track_id');
+        $this->postJson("/api/rooms/{$code}/rematch", ['track_id' => 'edwards'], $h)->assertUnprocessable()->assertJsonValidationErrors('track_id');
+        $room = $this->getJson("/api/rooms/{$code}", $h)->assertOk()->assertJsonPath('track_id', 'kirifuri-lakeside')->json();
+        $this->assertSame(['raijin', 'supra'], array_column($room['players'], 'car_id'));
+        // nothing the game is told names them either
+        $content = $this->getJson('/api/content')->assertOk()->json();
+        $this->assertNotContains('edwards', array_column($content['tracks'], 'id'));
+        $this->assertEmpty(array_intersect(['f15j', 'f15c', 'su47'], array_column($content['cars'], 'id')));
+    }
+
+    /** Moves the room to another course the moment a request has first read it (the host's change, in between). */
+    private function changedOnFirstRead(string $code, string $trackId): void
+    {
+        $done = false;
+        Event::listen('eloquent.retrieved: '.Room::class, function (Room $room) use (&$done, $code, $trackId) {
+            if ($done || $room->code !== $code) {
+                return;
+            }
+            $done = true;
+            DB::table('rooms')->where('code', $code)->update(['track_id' => $trackId]);
+            DB::table('room_players')->where('room_id', $room->id)->whereIn('car_id', ['f15j', 'f15c', 'su47'])->update(['car_id' => 'hayate']);
+        });
+    }
+
+    public function test_who_joins_while_the_host_changes_the_course_gets_a_vehicle_of_the_new_one(): void
+    {
+        $this->edwards(true);
+        [, $h] = $this->player('Host');
+        [, $b] = $this->player('Guest');
+        $code = $this->postJson('/api/rooms', ['track_id' => 'edwards', 'car_id' => 'r34'], $h)->assertCreated()->json('code');
+        $this->changedOnFirstRead($code, 'oboro-downhill');
+        $this->postJson("/api/rooms/{$code}/join", ['car_id' => 'f15j', 'color' => '#79828a'], $b)
+            ->assertOk()->assertJsonPath('track_id', 'oboro-downhill')
+            ->assertJsonPath('players.1.car_id', 'hayate')->assertJsonPath('players.1.color', null);
+    }
+
+    public function test_a_change_of_vehicle_is_checked_against_the_course_the_room_has_then(): void
+    {
+        $this->edwards(true);
+        [, $h] = $this->player('Host');
+        [, $b] = $this->player('Guest');
+        $code = $this->postJson('/api/rooms', ['track_id' => 'edwards', 'car_id' => 'r34'], $h)->assertCreated()->json('code');
+        $this->postJson("/api/rooms/{$code}/join", ['car_id' => 'supra'], $b)->assertOk();
+        $this->changedOnFirstRead($code, 'oboro-downhill');
+        $this->patchJson("/api/rooms/{$code}/me", ['car_id' => 'su47'], $b)->assertUnprocessable()->assertJsonValidationErrors('car_id');
+        $this->getJson("/api/rooms/{$code}", $h)->assertJsonPath('track_id', 'oboro-downhill')->assertJsonPath('players.1.car_id', 'supra');
+    }
+
+    public function test_a_race_on_a_course_that_is_closed_meanwhile_cannot_be_finished(): void
+    {
+        $this->edwards(true);
+        [, $h] = $this->player('Host');
+        $code = $this->postJson('/api/rooms', ['track_id' => 'edwards', 'car_id' => 'f15j'], $h)->assertCreated()->json('code');
+        DB::table('rooms')->where('code', $code)->update(['status' => 'racing', 'race_no' => 1]);
+        $this->edwards(false);
+        $this->postJson("/api/rooms/{$code}/finish", ['race_no' => 1, 'time_ms' => 200_000], $h)->assertStatus(409);
     }
 }

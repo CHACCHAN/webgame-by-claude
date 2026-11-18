@@ -1,5 +1,6 @@
 import { CAR_SPECS, type CarId, type RoadCarId } from '../vehicle/carSpecs';
-import { BIKE_MEDALS, COURSES, ROACH_MEDALS, TRAIN_MEDALS, type CourseId } from '../track/courses';
+import { BIKE_MEDALS, COURSES, JET_MEDALS, ROACH_MEDALS, TRAIN_MEDALS, type CourseId } from '../track/courses';
+import type { JetId } from '../vehicle/jets';
 import type { TrainId } from '../vehicle/trains';
 import type { BikeId } from '../vehicle/bikes';
 import { kindOf } from '../vehicle/kinds';
@@ -32,6 +33,9 @@ function medalsOf(course: CourseId, car: CarId) {
       return TRAIN_MEDALS[course][car as TrainId];
     case 'bike':
       return BIKE_MEDALS[course][car as BikeId];
+    case 'jet':
+      // (they run at Edwards only)
+      return JET_MEDALS[car as JetId];
     default:
       return COURSES[course].medals[car as RoadCarId];
   }

@@ -562,6 +562,51 @@ pending. `docs/PLAN.md` holds the design.
   The mountain side's retaining wall starts 0.95 m behind the barrier line (`roadside.ts` `WALL_FOOT`) and the
   ground rises from the line on: whatever is stood on the roadside by `TrackScenery` goes in front of that, on the
   terrain's height, not at a fixed distance on the road's height (the vending machines stood inside the wall).
+- Release switch (`frontend/src/game/release.ts` `RELEASED`, `backend/config/game.php` `$release`; a vitest compares
+  the two): content that is in the code but not open to players. Off, the course is left out of `COURSE_ORDER`, the
+  vehicles out of `VEHICLE_ORDER` / `vehiclesFor`, and the server's `tracks` / `cars` leave out every entry with
+  `'release' => '<name>'` (the whole list stays as `catalog` for tests). A check build with an entry on:
+  `VITE_<NAME>=1 npm run build`, `<NAME>=1 npx tsx tools/…`, `<NAME>=1 npx vitest run`. `edwards` is on since 11-13;
+  `tanks` is off. Backend tests set the switch themselves (`TestCase::edwards(bool)`), so they hold either way.
+- Which vehicle runs where: ONE rule on the server, `App\Support\Vehicles` (`on($track)`, `allowedOn`, `fallback` =
+  the course's first vehicle), read from `game.cars.<id>.courses` (none = everywhere); the game's side is
+  `vehiclesFor(courseId)` (`jet.courses`), a vitest compares the lists. Runs, the leaderboard (car filter: 422 for a
+  vehicle the course does not offer; such runs are left out), a run's ghost, `/players/me` bests, rooms (create,
+  join = seated in the fallback, a member's change = 422, the host's change of course replaces what the new course
+  does not offer) all ask there. Room checks that depend on the course are made on the room row under
+  `lockForUpdate` (the host can change the course in between). A course-bound vehicle needs its `courses` there.
+- Course style `'airbase'` (Edwards): `render/airbaseScenery.ts` (places in the airfield's frame: `a` m along 04R
+  from its threshold, `b` m to its left; hangars, tower, parked aircraft silhouettes, all procedural),
+  `airbasePavement.ts` (slabs and strips one hand above the ground, runway numbers / markings), `airbaseGround.ts`
+  (the desert and the playa: oiled lakebed runway lines and the compass rose are painted by the ground's material;
+  the wet film in rain). No roadside, no vegetation (`vegetationPlanting.ts` `airbase: []`). The road has no
+  barriers: `CourseDesign.verge` (open ground with less grip) and whoever reaches the edge of the width is put back
+  (`Game.trackRacer` `strayed`); `bed: 0` (the ground is the surface), `flat`, `zoneGrip.lakebed 0.8`,
+  `zoneRoll.lakebed 2`, `gridWidth 80` (the apron's start grid). Lights: the apron's and the finish's masts are lamps
+  of the lamp field; the airfield's own lights (edge, threshold, approach, taxiway, lanterns) are sprites that light
+  nothing; roofs and the tower's mast carry `render/beacons.ts` lights. Films: the course select's film is the
+  hayate at dawn (296 s, 7.2 MB).
+- Fighters (kind `jet`, `vehicle/jets.ts`: F-15J/DJ, F-15C/D, Su-47; `JET_ORDER`, only where `jet.courses` names the
+  course): real figures (static thrust, masses, rotation and lift-off speeds; `EDWARDS_AIR` for the field's air),
+  `VehicleSim.jetEngines` (spool lag, afterburner above 85 % throttle once at military power, Mach lapse),
+  `jetAero` (drag, lift lightening the tyres), nose-wheel steering fading with speed. A livery may change the mass
+  (the two-seaters: `jetForLivery`). Models: `render/JetModel.ts` (GLB contract in its header,
+  `public/models/jets/<id>.glb`; a procedural stand-in while there is none: what players see now), flames from the
+  nozzles, gear. Sound `audio/JetSound.ts` + worklet `jet.worklet.ts` (`tools/jet-wav.ts` renders it). HUD: N2 % /
+  AB in the gear box, Mach beside km/h from M 0.5. Camera `JET_CAMERA`; garage framing scale 3.8. Medals
+  `JET_MEDALS`. Check with `EDWARDS=1`-free tools now (`COURSE=edwards npx tsx tools/sim-run.ts f15j,f15c,su47 legend`).
+- Departure (`race/Departure.ts`): after the finish a fighter is taken over, lined up, in full afterburner rotates
+  at `JetInfo.vr`, lifts off at `lof`, gear up, climbs and is gone; from the nose coming up it is carried along a
+  kinematic path (`VehicleSim.carry`), not simulated. `Game.depart`, `departureCamera` (long lens; online the
+  aircraft below the results card). Results come at once, the take-off plays behind them. Online: `NetState.dep`
+  (2 bits), `TrackPose.depart`; a peer's proxy body is ghosted (not solid) during it, gear and flames from the
+  packet (`enginesAt(rpm)`), hidden once gone. `tools/net-replay.ts depart=1` checks it.
+- Ambient occlusion (`render/ambientOcclusion.ts`, 11-12): every point is taken at the middle of a depth texel
+  (`middle()`): a depth read between texels and put on another view ray stood up to a pixel over or under its
+  surface and gave even bands across open ground (4.5–8.5 % of the light, 18–34 rows apart, on every course).
+  Measured on the four old courses against v2.5.1 (night, dawn, 8 viewpoints): band amplitude 4.6–6.8 % → 0.9–1.2 %,
+  pictures 1.6–3.3 % brighter on average (flat ground no longer occludes itself), contact shadows under the cars
+  and at walls and rails kept. Keep sample points at texel middles in any pass that reads the depth at its own places.
 - Race timing/splits/AI run per physics step (`Game.raceStep`, `driveAI`); keep frame-time logic out of timing.
 - Tyre grip = course surface (`CourseInfo.surface.grip`) × weather (`WET_GRIP` in rain): `Game.roadGrip` → `VehicleSim.gripScale`
   (before `AIDriver.calibrate`). Headless tools take the course's grip. Changing a grip: re-check medals with the sim

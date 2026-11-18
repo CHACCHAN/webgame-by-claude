@@ -5,6 +5,7 @@ import { ROACH_SPEC, type CreatureInfo } from './roach';
 import { BIKE_ORDER, BIKE_SPECS, type BikeId, type BikeInfo } from './bikes';
 import { TANK_ORDER, TANK_SPECS, type TankId, type TankInfo } from './tanks';
 import { JET_ORDER, JET_SPECS, type JetId, type JetInfo } from './jets';
+import { RELEASED } from '../release';
 
 export type CarId = 'hayate' | 'raijin' | 'shiden' | 'supra' | 'r34' | 's15' | 'cybertruck' | 'u9' | BikeId | TankId | JetId | TrainId | 'roach';
 /** the real cars (AI, bots, medals per course, procedural fallback bodies) */
@@ -438,11 +439,10 @@ export const CAR_ORDER: CarId[] = ['hayate', 's15', 'shiden', 'supra', 'raijin',
 /** everything a player can drive: the cars, the motorcycles, the tanks, the fighters (Edwards only: `allowedOn`), the
  * trains, then the cockroach */
 /**
- * The tanks and fighters are unfinished (no gun, no Edwards course, not in the backend's list yet: docs/FABLE_PLAN.md
- * §1.2): kept out of every player-facing list until this is switched on.
+ * The tanks (no cannon yet) and the fighters with their course are kept out of every player-facing list until
+ * their switch is on (`release.ts`).
  */
-export const UNRELEASED_VEHICLES = false;
-export const VEHICLE_ORDER: CarId[] = [...CAR_ORDER, ...BIKE_ORDER, ...(UNRELEASED_VEHICLES ? [...TANK_ORDER, ...JET_ORDER] : []), ...TRAIN_ORDER, 'roach'];
+export const VEHICLE_ORDER: CarId[] = [...CAR_ORDER, ...BIKE_ORDER, ...(RELEASED.tanks ? TANK_ORDER : []), ...(RELEASED.edwards ? JET_ORDER : []), ...TRAIN_ORDER, 'roach'];
 
 /** what a player may drive on a course (the fighters only at Edwards) */
 export const vehiclesFor = (courseId: string): CarId[] => VEHICLE_ORDER.filter((id) => !CAR_SPECS[id].jet || CAR_SPECS[id].jet!.courses.includes(courseId));

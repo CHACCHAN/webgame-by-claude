@@ -148,6 +148,8 @@ export function planTerrain(track: Track, lf: Landform, opts: TerrainOptions = {
   const farCell = opts.farCell ?? lf.grid?.far ?? 24;
   // flat graded ground beyond the drivable edges (a motorway's median, opposite carriageway and verges)
   const formation = track.design.formation ?? { left: 0, right: 0 };
+  // how far the ground lies under the road's surface
+  const BED = track.design.bed ?? 0.45;
   const coarse = roadSamples(track, lf, 8);
   const baseHeight = (x: number, z: number) => lf.base(x, z);
 
@@ -250,10 +252,10 @@ export function planTerrain(track: Track, lf: Landform, opts: TerrainOptions = {
 
     // Interpolated road surface field, fading into the natural landform.
     const roadField = wSum > 0 ? hSum / wSum : base;
-    const influence = smoothstep(ROAD_INFLUENCE * 0.85, 120, dist);
+    const influence = smoothstep(ROAD_INFLUENCE * 0.85, 120, dist) * (lf.follow ?? 1);
     const noiseAtten = smoothstep(14, 90, dist);
     let h = lerp(base + detailHeight(lf, x, z) * noiseAtten, roadField, influence * 0.92);
-    h += fbm(x / 120 - 7.7, z / 120 + 3.3, 3) * 7 * noiseAtten * influence;
+    h += fbm(x / 120 - 7.7, z / 120 + 3.3, 3) * 7 * noiseAtten * influence * (lf.roadsideRelief ?? 1);
     h -= gorgeDepth(x, z, out.roadY) * influence;
     return h;
   }
@@ -264,7 +266,7 @@ export function planTerrain(track: Track, lf: Landform, opts: TerrainOptions = {
     const halfW = track.width[info.idx] / 2;
     const edge = halfW + 1.2 + (info.lat < 0 ? formation.left : formation.right);
     // banked corners drop the inner edge below the centreline: keep the bed under the lowest edge
-    const bed = info.roadY - 0.45 - Math.abs(track.bank[info.idx]) * edge;
+    const bed = info.roadY - BED - Math.abs(track.bank[info.idx]) * edge;
     const isBridge = track.zone[info.idx] === 'bridge';
     if (info.dist < edge) {
       if (isBridge) return Math.min(h, bed - 9);
@@ -378,7 +380,7 @@ export function planTerrain(track: Track, lf: Landform, opts: TerrainOptions = {
           const g = jj * nnx + ii;
           if (Math.abs(nearI[g] - k) < 40) continue;
           if (Math.hypot(nx0 + ii * nearCell - px, nz0 + jj * nearCell - pz) > reach) continue;
-          nearH[g] = Math.min(nearH[g], py - 0.45 - Math.abs(track.bank[k]) * reach);
+          nearH[g] = Math.min(nearH[g], py - BED - Math.abs(track.bank[k]) * reach);
         }
       }
     }

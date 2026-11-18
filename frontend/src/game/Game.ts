@@ -36,10 +36,10 @@ import { findCorners, type Corner, type CornerKind } from './track/corners';
 import { paintFor, RemoteRacers, type Peer } from './net/RemoteRacers';
 import { NetLink, type LocalState } from './net/NetLink';
 import type { GameRenderer } from './render/RenderHost';
-import { onlineGrid } from './net/grid';
+import { footprint, onlineGrid } from './net/grid';
 import { LobbyLineup } from './net/LobbyLineup';
 import { LINEUP_VIEW, type LineupEntry } from './net/lineup';
-import { BIKE_CAMERA, CAR_CAMERA, ChaseCamera, TRAIN_CAMERA } from './camera/ChaseCamera';
+import { BIKE_CAMERA, CAR_CAMERA, ChaseCamera, JET_CAMERA, TRAIN_CAMERA } from './camera/ChaseCamera';
 import { hasExhaust, traitsOf } from './vehicle/kinds';
 import { InputManager } from './input/Input';
 import { TireSmoke, SkidMarks } from './fx/TireEffects';
@@ -49,7 +49,9 @@ import { AudioEngine } from './audio/AudioEngine';
 import { coverShare, rainBodyOf } from './audio/rain';
 import { kindOf } from './vehicle/kinds';
 import { GhostPlayer, GhostRecorder, type GhostData } from './race/Ghost';
-import { clamp, damp, lerp, smoothstep } from './util/math';
+import { clamp, damp, lerp, smoothstep, wrapAngle } from './util/math';
+import { Departure } from './race/Departure';
+import { jetForLivery } from './vehicle/jets';
 import type { TrackProjection } from './track/Track';
 import { loadTrainModel, loadTrainVariants, trainModelReady, trainNose } from './render/TrainModel';
 import { specForLivery, trainLivery, trainModelKey, TRAIN_ORDER } from './vehicle/trains';
@@ -144,6 +146,9 @@ export interface HudState {
   driftScore: number;
   boost: number;
   turbo: boolean;
+  /** a fighter: the engine box shows its engines' speed (N2 %) and the afterburner (0…1) instead of a gear */
+  jet: boolean;
+  afterburner: number;
   sectorFlashT: number;
   /** pace note for the next tight bend; null when none is close */
   corner: { dir: 1 | -1; kind: CornerKind; dist: number; seq: number } | null;
@@ -175,6 +180,8 @@ interface Racer {
   finished: boolean;
   finishTime: number;
   exhaust: ExhaustState;
+  /** a fighter past the line: its take-off */
+  departure?: Departure;
 }
 
 const _v = new THREE.Vector3(), _w = new THREE.Vector3(), _q = new THREE.Quaternion(), _f = new THREE.Vector3();
@@ -225,7 +232,7 @@ export class Game {
   hud: HudState = {
     speedKmh: 0, rpm: 0, redline: 8000, gear: 1, raceTime: 0, countdown: 0, splits: [], lastSplitDelta: null, lastSplitIndex: -1,
     progress: 0, rivalProgress: null, rivalLine: null, ghostProgress: null, position: 1, gapMeters: 0, wrongWay: false, driftCombo: 0, driftScore: 0,
-    boost: 0, turbo: false, sectorFlashT: 0, corner: null, online: null,
+    boost: 0, turbo: false, jet: false, afterburner: 0, sectorFlashT: 0, corner: null, online: null,
   };
 
   private listeners = new Set<Listener>();
@@ -691,8 +698,8 @@ export class Game {
   }
 
   private createRacer(carId: CarId, s: number, lateral: number, opts: { ai?: AILevel; headlights: boolean; color?: string; rival?: boolean }): Racer {
-    // a train as fitted for its line (the livery picked: its inverter sound)
-    const spec = specForLivery(CAR_SPECS[carId], opts.color);
+    // a train as fitted for its line (the livery picked: its inverter sound), a fighter's two-seater with its own mass
+    const spec = jetForLivery(specForLivery(CAR_SPECS[carId], opts.color), opts.color);
     const p = this.track.pointAt(s, lateral);
     const sim = new VehicleSim(this.physics, spec, p, this.track.headingAt(s));
     sim.assist = this.assist;
@@ -733,6 +740,7 @@ export class Game {
 
   private clearRace() {
     this.asked++;
+    this.departEye = null;
     this.remotes?.clear();
     this.hud.online = null;
     this.removeRacer(this.player);
@@ -947,10 +955,15 @@ export class Game {
     this.clearRace();
     this.config = cfg;
     // online: everybody's place on the grid follows from the room alone, so every client agrees (net/grid.ts)
-    const grid = cfg.online ? onlineGrid([{ slot: cfg.online.slot, carId: cfg.carId }, ...cfg.online.peers], this.track.startS) : null;
+    const grid = cfg.online ? onlineGrid([{ slot: cfg.online.slot, carId: cfg.carId }, ...cfg.online.peers], this.track.startS, this.track.design.gridWidth) : null;
     const spot = grid?.get(cfg.online!.slot);
-    const gridS = spot ? spot.s : this.track.startS - 6;
-    const lane = spot ? spot.lateral : cfg.mode === 'rival' ? 2.0 : 0;
+    // alone or against a rival: side by side, as far apart as the two are wide (a fighter's wings are 13–17 m
+    // across), the longer nose a metre short of the line
+    const mine = footprint(CAR_SPECS[cfg.carId]);
+    const theirs = cfg.mode === 'rival' && cfg.rivalLevel ? footprint(CAR_SPECS[this.course.rivals[cfg.rivalLevel].car]) : null;
+    const apart = theirs ? Math.max(2, (mine.width + theirs.width) / 4 + 0.6) : 0;
+    const gridS = spot ? spot.s : this.track.startS - Math.max(6, mine.ahead + 1, (theirs?.ahead ?? 0) + 1);
+    const lane = spot ? spot.lateral : apart;
     this.player = this.createRacer(cfg.carId, gridS, lane, {
       headlights: true,
       // the colour picked in the car select; online the member's paint as the room has it, the seat's colour without
@@ -961,7 +974,7 @@ export class Game {
     const train = !!CAR_SPECS[cfg.carId].train;
     const t = CAR_SPECS[cfg.carId].train;
     // the cab view sits just behind the nose of the leading car
-    this.chase.profile = t ? { ...TRAIN_CAMERA, front: { ...TRAIN_CAMERA.front, ahead: trainNose(t) - 0.35 } } : CAR_SPECS[cfg.carId].bike ? BIKE_CAMERA : CAR_CAMERA;
+    this.chase.profile = t ? { ...TRAIN_CAMERA, front: { ...TRAIN_CAMERA.front, ahead: trainNose(t) - 0.35 } } : CAR_SPECS[cfg.carId].bike ? BIKE_CAMERA : CAR_SPECS[cfg.carId].jet ? JET_CAMERA : CAR_CAMERA;
     if (train !== this.cameraForTrain) this.chase.mode = train ? 'bumper' : 'chase';
     this.cameraForTrain = train;
     if (cfg.online) {
@@ -984,7 +997,7 @@ export class Game {
     this.player.sim.autoShift = this.autoShift;
     if (cfg.mode === 'rival' && cfg.rivalLevel) {
       const rival = this.course.rivals[cfg.rivalLevel];
-      this.rival = this.createRacer(rival.car, gridS, -2.0, { ai: cfg.rivalLevel, headlights: true, color: rival.color, rival: true });
+      this.rival = this.createRacer(rival.car, gridS, -apart, { ai: cfg.rivalLevel, headlights: true, color: rival.color, rival: true });
       this.rival.sim.powerScale = rival.power ?? 1;
       const ai = this.rival.ai;
       this.mind = new RivalMind({
@@ -1018,6 +1031,7 @@ export class Game {
     this.cornerIdx = 0;
     this.warnedCorner = -1;
     this.hud.turbo = CAR_SPECS[cfg.carId].engine.turbo;
+    this.hud.jet = !!CAR_SPECS[cfg.carId].jet;
     this.hud.redline = CAR_SPECS[cfg.carId].engine.redline;
     this.topSpeed = 0;
     this.chase.reset();
@@ -1229,7 +1243,8 @@ export class Game {
     const dt = PHYSICS_DT;
     const pl = this.player;
     if (pl && (phase === 'racing' || phase === 'finished')) {
-      if (pl.finished) this.autopilot(pl, dt);
+      if (pl.finished && pl.sim.spec.jet) this.depart(pl, dt);
+      else if (pl.finished) this.autopilot(pl, dt);
       else if (this.autoDrive) this.autoDriver(pl, dt);
     }
     for (const r of [this.rival, this.attractCar]) {
@@ -1241,6 +1256,10 @@ export class Game {
         continue;
       }
       if (pl && r === this.rival) r.ai.opponent = { s: pl.proj.s, lateral: pl.proj.lateral, speed: pl.sim.forwardSpeed };
+      if (r.finished && r.sim.spec.jet) {
+        this.depart(r, dt);
+        continue;
+      }
       if (r.finished && r.ai.pullOver === null) r.ai.pullOver = r.proj.lateral >= 0 ? 10 : -10;
       r.ai.update(r.sim, dt, r.input);
       if (r.finished) {
@@ -1259,6 +1278,44 @@ export class Game {
       r.ai.calibrate(r.sim);
     }
     r.ai.update(r.sim, dt, r.input);
+  }
+
+  /**
+   * A fighter past the line leaves by air (`race/Departure.ts`). The ground run is the simulation's own: the game
+   * holds it straight where it is (no swerve back to the middle at 800 km/h) in full afterburner; from the rotation
+   * speed on, once it runs straight, it is carried along the take-off, and taken off the scene when it is away.
+   */
+  private depart(r: Racer, dt: number) {
+    const d = (r.departure ??= new Departure(r.sim.spec));
+    const sim = r.sim;
+    if (d.stage === 'gone') return;
+    if (d.stage !== 'roll') {
+      d.step(dt);
+      sim.carry(d.position, d.quaternion, { spool: 1, afterburner: 1 });
+      return;
+    }
+    d.step(dt);
+    if (!r.ai) {
+      r.ai = new AIDriver(this.track, this.line, AI_PROFILES.rookie, 3);
+      r.ai.calibrate(sim);
+    }
+    if (r.ai.pullOver === null) r.ai.pullOver = r.proj.lateral;
+    r.ai.opponent = null;
+    r.ai.update(sim, dt, r.input);
+    r.input.throttle = 1;
+    r.input.brake = 0;
+    r.input.handbrake = false;
+    const heading = Math.atan2(sim.forward.x, sim.forward.z);
+    const straight = Math.abs(wrapAngle(heading - this.track.headingAt(r.proj.s))) < 0.035 && Math.abs(sim.yawRate) < 0.03 && Math.abs(sim.slipAngle) < 0.035;
+    // (the lake goes on past the end of the course: whoever is not straight by then goes as it is)
+    const room = this.track.length - 200 - r.proj.s;
+    if ((sim.forwardSpeed >= sim.spec.jet!.vr && straight && d.t > 0.8) || room < 0) {
+      d.rotate(sim.position, heading, sim.speed);
+      // (this step's travel at once: handed over where it stands, the body stood still for a step, its velocity
+      // read zero, and that went to the other players as a hit: they saw the aircraft stop for a packet and jump on)
+      d.step(dt);
+      sim.carry(d.position, d.quaternion, { spool: 1, afterburner: 1 });
+    }
   }
 
   private autopilot(r: Racer, dt: number) {
@@ -1301,13 +1358,23 @@ export class Game {
     const p = r.sim.position;
     r.proj = this.track.project(p.x, p.y, p.z, r.proj.index, r.proj);
     const onRoad = Math.abs(r.proj.lateral) < this.track.width[r.proj.index] / 2 + 1 && Math.abs(r.proj.height) < 3;
+    const design = this.track.design;
+    // what the tyres stand on: a zone's own ground (a dry lake's clay), the open ground beside a pavement
+    if (design.zoneGrip || design.verge) {
+      r.sim.gripScale = this.roadGrip * this.track.surfaceGrip(r.proj.index, r.proj.lateral, p.x, p.z);
+      r.sim.rollScale = this.track.surfaceRoll(r.proj.index, r.proj.lateral, p.x, p.z);
+    }
+    // a course without barriers: whoever reaches the edge of the ground it gives is put back on it
+    const strayed = !!design.verge && Math.abs(r.proj.lateral) > this.track.width[r.proj.index] / 2 - 2;
     if (onRoad && !r.sim.isFlipped && r.sim.speed > 2) r.lastSafe = { s: r.proj.s, t: this.time };
     // automatic recovery
     if (r.sim.isFlipped) r.flippedTime += dt;
     else r.flippedTime = 0;
     const lost = Math.abs(r.proj.height) > 12 || r.sim.position.y < -20;
+    // (an aircraft in the air is where it should be)
+    if (r.sim.carried) return;
     // (a finished rival parks on purpose: not stuck)
-    if (r.flippedTime > 2 || lost || (r.ai && r.ai.needsRespawn && r !== this.player && !r.finished)) this.respawn(r);
+    if (r.flippedTime > 2 || lost || strayed || (r.ai && r.ai.needsRespawn && r !== this.player && !r.finished)) this.respawn(r);
   }
 
   private respawn(r: Racer) {
@@ -1470,6 +1537,9 @@ export class Game {
       th: pl.sim.input.throttle,
       rp: clamp(pl.sim.rpm / pl.sim.spec.engine.redline, 0, 1),
     };
+    // a fighter's take-off after the finish: the others draw its gear by it, and cannot touch it any more
+    const d = pl.departure;
+    if (d && d.stage !== 'roll') st.dep = d.stage === 'gone' ? 3 : d.gear > 0 ? 2 : 1;
     if (pl.finished) st.fin = Math.round(pl.finishTime * 1000);
     return st;
   }
@@ -1623,6 +1693,11 @@ export class Game {
     const alpha = clamp(this.accumulator / PHYSICS_DT, 0, 1);
     for (const r of this.racers()) {
       r.visual.syncFromSim(r.sim, this.paused ? 1 : alpha, dt);
+      if (r.departure) {
+        r.visual.rig.jet?.setGear(r.departure.gear);
+        r.visual.rig.jet?.setPitch(r.departure.elevator);
+        r.visual.root.visible = r.departure.stage !== 'gone';
+      }
       if (!this.paused) {
         this.emitTyreFx(r, dt);
         this.emitExhaust(r, dt);
@@ -1654,6 +1729,7 @@ export class Game {
     if (this.phase === 'attract' && this.attractCar) this.cinematicCamera(dt, this.attractCar.visual.root, this.attractCar.proj.s);
     else if (this.phase === 'replay' && this.replay) this.updateReplay(dt);
     else if (this.phase === 'garage' && (this.garageCar || this.lobby)) this.garageCamera(dt);
+    else if (this.player?.departure && this.player.departure.stage !== 'roll') this.departureCamera(dt, this.player);
     else if (this.player) {
       const sim = this.player.sim;
       const v = this.player.visual.root;
@@ -1682,6 +1758,7 @@ export class Game {
       this.hud.rpm = sim.rpm;
       this.hud.gear = sim.gear;
       this.hud.boost = sim.boost;
+      this.hud.afterburner = sim.afterburner;
       // camera shake and contact bookkeeping must run with or without sound
       if (!this.paused) this.carContactFeedback(dt);
       if (this.audio && !this.paused) {
@@ -1692,7 +1769,11 @@ export class Game {
         if ('cornering' in e) e.cornering(sim.yawRate * sim.forwardSpeed);
         // a creature's wings are heard as far as they are out (thrown into the air)
         if ('flight' in e) e.flight(this.player.visual.flight);
-        e.update(sim.rpm, sim.spec.train ? sim.traction : sim.input.throttle, sim.boost, 1, sim.spec.engine.redline, sim.input.brake);
+        // a fighter leaving after the finish is heard going away, and not at all once it is gone
+        const away = this.player.departure;
+        if ('distance' in e) e.distance(away && away.stage !== 'roll' ? this.player.visual.root.position.distanceTo(this.camera.position) : 0);
+        if (away?.stage === 'gone') e.update(sim.rpm, 0, 0, 0, sim.spec.engine.redline);
+        else e.update(sim.rpm, sim.spec.train ? sim.traction : sim.input.throttle, sim.boost, 1, sim.spec.engine.redline, sim.input.brake);
         let skid = 0;
         for (const w of sim.wheels) if (w.grounded) skid = Math.max(skid, w.skid);
         this.audio.updateTyres(skid, sim.speed);
@@ -1701,7 +1782,10 @@ export class Game {
         if (this.rival) {
           const re = this.audio.engine('rival', this.rival.sim.spec);
           const d = this.rival.sim.position.distanceTo(this.camera.position);
-          re.update(this.rival.sim.rpm, this.rival.input.throttle, this.rival.sim.boost, clamp(1 - d / 140, 0, 1) * 0.8, this.rival.sim.spec.engine.redline);
+          // (a fighter's engines carry their own fall-off with the distance, far beyond a car's 140 m)
+          if ('distance' in re) re.distance(d);
+          if ('distance' in re) re.update(this.rival.sim.rpm, 0, 0, this.rival.departure?.stage === 'gone' ? 0 : 0.8, 0);
+          else re.update(this.rival.sim.rpm, this.rival.input.throttle, this.rival.sim.boost, clamp(1 - d / 140, 0, 1) * 0.8, this.rival.sim.spec.engine.redline);
           if ('flight' in re) re.flight(this.rival.visual.flight);
         }
       }
@@ -1709,6 +1793,7 @@ export class Game {
       const sim = this.attractCar.sim;
       const e = this.audio.engine('attract', sim.spec);
       const d = sim.position.distanceTo(this.camera.position);
+      if ('distance' in e) e.distance(d);
       e.update(sim.rpm, sim.input.throttle, sim.boost, clamp(1 - d / 160, 0, 1) * 0.5, sim.spec.engine.redline);
     }
     // the rain as heard from the player's vehicle (its speed, a roof over it, what the drops land on); in the menus
@@ -1819,6 +1904,37 @@ export class Game {
     });
     this.cinematicCamera(dt, rp.cars[0].visual.root, rp.proj.s);
   }
+
+  /**
+   * The take-off is watched from the lake: a camera standing beside the path where the aircraft leaves the ground,
+   * a man's height up, that turns with it and closes in as it climbs away (the chase camera would hang behind a
+   * tail going up at 30°, looking at the sky).
+   */
+  private departureCamera(dt: number, r: Racer) {
+    const d = r.departure!;
+    const cam = this.camera;
+    const at = r.visual.root.position;
+    if (!this.departEye) {
+      const f = r.sim.forward, ahead = clamp(d.speed * 3, 240, 800);
+      const eye = (this.departEye = new THREE.Vector3(at.x + f.x * ahead - f.z * 42, 0, at.z + f.z * ahead + f.x * 42));
+      eye.y = this.terrain.heightAt(eye.x, eye.z) + 1.8;
+      this.departAim.copy(at);
+    }
+    this.departAim.lerp(at, 1 - Math.exp(-dt * 30));
+    cam.position.copy(this.departEye);
+    cam.lookAt(this.departAim.x, this.departAim.y + 1.5, this.departAim.z);
+    // the results card stands in the middle of the screen: the aircraft climbs through the free upper part of the
+    // picture, a seventh of its height from the top (the card's title begins at three tenths). An online battle's
+    // results stand in the upper half (an eighth to under a half): there it climbs through the lower part, seven
+    // tenths down, the sky all around it
+    cam.rotateX(((this.config?.online ? 0.2 : -0.36) * cam.fov * Math.PI) / 180);
+    // a long lens as it goes away: the aircraft keeps about a fifth of the picture's width for the first 2.5 km
+    const fov = clamp((2 * Math.atan(20 / Math.max(cam.position.distanceTo(at), 1)) * 180) / Math.PI, 0.9, 58);
+    cam.fov = damp(cam.fov, fov, 3.5, dt);
+    cam.updateProjectionMatrix();
+  }
+  private departEye: THREE.Vector3 | null = null;
+  private departAim = new THREE.Vector3();
 
   get replayTime() {
     return this.replay?.t ?? 0;

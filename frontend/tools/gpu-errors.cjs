@@ -6,11 +6,14 @@
 //   node tools/gpu-errors.cjs            exit code 1 when anything was reported
 // Env: URL (http://localhost:4173/), QUERY (e.g. ?webgl=1), VEHICLES (comma list shown in the garage),
 // SET (JSON merged into the stored settings, e.g. '{"upscale":true,"upscaleMode":"quality"}'),
-// OUT (directory for three pictures: race, rival race, attract), CHROME, PW_MODULE.
+// OUT (directory for three pictures: race, rival race, attract), CHROME, PW_MODULE,
+// COURSE (the first course instead of the stored one; then a rival race is run there too, in the last vehicle against
+// the course's legend, e.g. `COURSE=edwards VEHICLES=hayate,f15j,su47,f15j`: fighters, and one as the rival).
 // Serve with `API_PROXY=http://127.0.0.1:9 npx vite preview`; /api is also aborted in the browser.
 const { chromium } = require(process.env.PW_MODULE || 'playwright');
 const VEHICLES = (process.env.VEHICLES || 'hayate,r34,hayate,e231,nsr250r,roach,hayate').split(',');
 const OUT = process.env.OUT;
+const COURSE = process.env.COURSE;
 
 (async () => {
   const browser = await chromium.launch({
@@ -31,7 +34,7 @@ const OUT = process.env.OUT;
     seen[t] = (seen[t] || 0) + 1;
   });
   page.on('pageerror', (e) => (seen[`${step}: PAGE ERROR ${e.message.slice(0, 200)}`] = 1));
-  const settings = { quality: 'high', timeOfDay: 'night', masterVolume: 0, ...JSON.parse(process.env.SET || '{}') };
+  const settings = { quality: 'high', timeOfDay: 'night', masterVolume: 0, ...(COURSE ? { courseId: COURSE } : {}), ...JSON.parse(process.env.SET || '{}') };
   await page.addInitScript((s) => localStorage.setItem('touge-settings', JSON.stringify({ state: s, version: 1 })), settings);
   await page.goto((process.env.URL || 'http://localhost:4173/') + (process.env.QUERY || ''));
   await page.waitForFunction(() => window.__game && window.__game.phase === 'attract', null, { timeout: 240000 });
@@ -58,7 +61,12 @@ const OUT = process.env.OUT;
   await run('rival race', () => window.__game.startRace({ mode: 'rival', carId: 'shiden', rivalLevel: 'legend' }), null, 9000);
   await followed();
   await shot('rival');
-  await run('first course again', () => window.__game.switchCourse('oboro-downhill'), null, 30000);
+  await run('first course again', (c) => window.__game.switchCourse(c), COURSE || 'oboro-downhill', 30000);
+  if (COURSE) {
+    await run('rival race (first course)', (c) => window.__game.startRace({ mode: 'rival', carId: c, rivalLevel: 'legend' }), last, 9000);
+    await followed();
+    await shot('rival-first');
+  }
   await run('attract', () => window.__game.startAttract(), null, 5000);
   await shot('attract');
   const lines = Object.entries(seen);

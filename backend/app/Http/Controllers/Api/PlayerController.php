@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Player;
 use App\Models\Run;
+use App\Support\Vehicles;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -31,12 +32,15 @@ class PlayerController extends Controller
         /** @var Player $player */
         $player = $request->attributes->get('player');
 
+        // (only what runs where it may: a course not open yet, or a vehicle that does not run there, is left out)
         $bests = Run::query()
             ->where('player_id', $player->id)
-            ->whereIn('car_id', array_keys(config('game.cars')))
+            ->whereIn('track_id', array_keys(config('game.tracks')))
             ->selectRaw('track_id, car_id, MIN(time_ms) AS best_ms, COUNT(*) AS runs')
             ->groupBy('track_id', 'car_id')
-            ->get();
+            ->get()
+            ->filter(fn (Run $best) => Vehicles::allowedOn($best->car_id, $best->track_id))
+            ->values();
 
         return response()->json([
             'id' => $player->id,
@@ -46,7 +50,7 @@ class PlayerController extends Controller
             // the best run per course, with its ghost if it has one (a member on a new machine fetches these)
             'best_runs' => collect(array_keys(config('game.tracks')))->map(fn (string $track) => Run::query()
                 ->where('player_id', $player->id)->where('track_id', $track)
-                ->whereIn('car_id', array_keys(config('game.cars')))
+                ->whereIn('car_id', Vehicles::on($track))
                 ->withExists('ghost')->orderBy('time_ms')->orderBy('id')->first())
                 ->filter()->map(fn (Run $run) => [
                     'run_id' => $run->id, 'track_id' => $run->track_id, 'car_id' => $run->car_id,

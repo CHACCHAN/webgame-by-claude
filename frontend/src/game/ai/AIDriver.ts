@@ -1,3 +1,4 @@
+import { jetEnvelope } from '../vehicle/jets';
 import { Vector3 } from 'three';
 import type { Track, TrackProjection } from '../track/Track';
 import { clamp, rng, wrapAngle } from '../util/math';
@@ -70,11 +71,30 @@ export class AIDriver {
     this.blocking = Math.max(this.blocking, seconds);
   }
 
+  private lastErr = 0;
+  private errRate = 0;
+  /** a fighter only: the sideways acceleration (m/s²) it plans with at a speed */
+  private jetHolds: ((v: number) => number) | null = null;
+
   /** Must be called once the car spec is known. */
   calibrate(vehicle: VehicleSim) {
     vehicle.gripDriver = true;
     vehicle.assist = 2;
     const grip = Math.min(vehicle.spec.gripFront, vehicle.spec.gripRear) * vehicle.gripScale * 9.81;
+    this.jetHolds = null;
+    if (vehicle.spec.jet) {
+      // a fighter: what its tyres hold falls as the wing takes the weight, and it stops by its drag more than by
+      // its brakes; the engines go on pushing for seconds after the throttle is closed (a margin on the braking)
+      const env = jetEnvelope(vehicle.spec), mu = grip / 9.81, p = this.profile;
+      this.jetHolds = (v) => env.lat(v, mu) * p.gripUse * 0.6;
+      this.speeds = this.line.speedProfile(0, 0, 50, this.track.design.aiTopSpeed ?? 62, {
+        // (the nose wheel, an eighth of the weight, gives up first: a held turn settles at 0.7 of what the tyres'
+        // friction says, `tools/jet-handling.ts`; the rest is the margin a driver keeps on a taxiway 23 m wide)
+        lat: (v, g) => env.lat(v, mu * g) * p.gripUse * 0.6,
+        brake: (v, g) => env.brake(v, mu * g) * p.brakeUse * 0.8,
+      });
+      return;
+    }
     // the speed limit is the course's (62 m/s ≈ 223 km/h on the mountain passes; the autobahn lets everything run flat out)
     this.speeds = this.line.speedProfile(grip * this.profile.gripUse, grip * this.profile.brakeUse, 50, this.track.design.aiTopSpeed ?? 62);
   }
@@ -116,10 +136,12 @@ export class AIDriver {
       } else this.avoid *= Math.exp(-dt * 0.8);
     }
 
-    const look = 7 + Math.max(speed, 0) * 0.42;
+    // (a fighter answers its rudder slowly: it aims further down the road)
+    const look = vehicle.spec.jet ? 14 + Math.max(speed, 0) * 1.1 : 7 + Math.max(speed, 0) * 0.42;
     const ts = s + look;
     const wobble = Math.sin(this.wobblePhase + s / 37) * this.profile.sloppiness;
-    const half = this.track.widthAt(ts) / 2 - 1.1;
+    // (a fighter's main wheels are 2.75 m apart and its wing tips 13 m: it keeps further from the pavement's edge)
+    const half = this.track.paveAt(ts) / 2 - (vehicle.spec.jet ? 3.5 : 1.1);
     const lat = clamp(this.pullOver ?? this.line.offsetAt(ts) + wobble + this.avoid, -half, half);
     this.track.pointAt(ts, lat, _target);
 
@@ -131,15 +153,36 @@ export class AIDriver {
     // positive error = target to the left; steer input + = right
     let steer = clamp((-err * 2.6) / Math.max(0.35, 1 - Math.max(speed, 0) / 80), -1, 1);
     steer -= vehicle.yawRate * 0.04;
+    // a fighter at speed is steered by its rudder: small, damped inputs (full rudder is a 14° skid)
+    if (vehicle.spec.jet) {
+      const lim = 1 - 0.5 * clamp((speed - 40) / 80, 0, 1);
+      // (damped by how fast the nose is coming round onto the aim, not by the turn rate itself, which a bend needs)
+      const rate = clamp(wrapAngle(err - this.lastErr) / Math.max(dt, 1e-3), -2, 2);
+      this.errRate += (rate - this.errRate) * (1 - Math.exp(-dt * 12));
+      this.lastErr = err;
+      steer = clamp(-err * 3 - this.errRate * 0.8, -lim, lim);
+    }
     out.steer = clamp(steer, -1, 1);
 
     // speed control
-    const idx = Math.min(this.speeds.length - 1, Math.max(0, Math.round(s + Math.max(speed, 0) * 0.35)));
+    // (a fighter's engines take seconds to run down: it looks that much further ahead)
+    const idx = Math.min(this.speeds.length - 1, Math.max(0, Math.round(s + Math.max(speed, 0) * (vehicle.spec.jet ? 1.6 : 0.35))));
     let target = Math.min(this.speeds[idx] * speedScale, speedCap);
+    // (and never faster than the place it is at allows: looking ahead only, it opened up in the middle of a bend)
+    if (vehicle.spec.jet) target = Math.min(target, this.speeds[Math.min(this.speeds.length - 1, Math.max(0, Math.round(s)))] * speedScale);
+    // (and never faster than it can turn onto the line it is aiming at: with a thrust near its weight it left a
+    // taxi turn at three times the speed before its nose had come round, and went off the far side)
+    // (only for a nose that is really off: a degree of wander at 800 km/h is not a turn to slow down for)
+    const off = Math.abs(err) - 0.07;
+    if (this.jetHolds && off > 0) target = Math.min(target, Math.sqrt(this.jetHolds(Math.max(speed, 0)) / ((2 * Math.sin(Math.min(off, 1.5))) / look)));
     // slow down if we're far off line or sliding a lot
     target *= 1 - clamp(Math.abs(vehicle.slipAngle) - 0.2, 0, 0.4);
     const diff = target - speed;
-    if (diff < -1.5) {
+    if (this.jetHolds && diff < -0.4) {
+      // (a fighter's idle thrust alone holds it above a taxi turn's speed: it brakes for a small excess too)
+      out.throttle = 0;
+      out.brake = clamp(-diff / 4, 0.1, 1);
+    } else if (diff < -1.5) {
       out.throttle = 0;
       out.brake = clamp(-diff / 6, 0.2, 1);
     } else {

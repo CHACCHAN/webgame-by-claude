@@ -37,11 +37,20 @@ export function ambientOcclusion(depth: TextureNode, camera: THREE.PerspectiveCa
   const { distance, point } = view, uHalf = view.half;
 
   const raw = Fn(() => {
-    const at = uv();
+    // Every point is taken where its depth was written: at the middle of a texel of the depth buffer. A depth read
+    // "at" a place between texels is the nearest texel's, and put on the view ray of the place asked for it stands
+    // up to a pixel's width over or under the surface it came from: on ground seen at a low angle the innermost
+    // taps (9 cm from the centre) then stood high enough over it to occlude, or not, by where they fell between
+    // two rows, and since the spiral grows evenly down the screen that came through as even bands across open
+    // ground (4.5 % of the light on a runway's concrete and a dry lake, 24 rows apart; faint on dark asphalt).
+    const size = vec2(depth.size(int(0)) as unknown as Node<'ivec2'>).toVar();
+    const texel = vec2(1).div(size).toVar();
+    const middle = (p: Node<'vec2'>) => p.mul(size).floor().add(0.5).mul(texel);
+    // (this pass' own pixels lie on the corners of the depth's texels at half size: a quarter texel settles which)
+    const at = middle(uv().add(texel.mul(0.25))).toVar();
     const d = distance(at).toVar();
     const P = point(at, d).toVar();
     // the surface's normal from the neighbours, on each axis the one nearer in depth (the other may be another surface)
-    const texel = vec2(1).div(vec2(depth.size(int(0)) as unknown as Node<'ivec2'>)).toVar();
     const along = (step: Node<'vec2'>) => {
       const a = distance(at.sub(step)).toVar(), b = distance(at.add(step)).toVar();
       return select(a.sub(d).abs().lessThan(b.sub(d).abs()), P.sub(point(at.sub(step), a)), point(at.add(step), b).sub(P));
@@ -57,7 +66,7 @@ export function ambientOcclusion(depth: TextureNode, camera: THREE.PerspectiveCa
     const next = mat2(Math.cos(TURN), Math.sin(TURN), -Math.sin(TURN), Math.cos(TURN));
     const closed = float(0).toVar();
     for (let i = 0; i < o.samples; i++) {
-      const q = at.add(dir.mul(span).mul((i + 0.5) / o.samples));
+      const q = middle(at.add(dir.mul(span).mul((i + 0.5) / o.samples))).toVar();
       const v = point(q, distance(q)).sub(P).toVar();
       const vv = dot(v, v).toVar();
       // how high the tap stands over the surface (as a cosine), fading out towards the radius

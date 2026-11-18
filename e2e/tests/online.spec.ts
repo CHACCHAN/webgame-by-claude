@@ -455,7 +455,7 @@ test('online room: the host changes the conditions and the course, every game fo
 
   // another course: both games build it behind the loading screen and come back to the room on it
   await host.page.keyboard.press('x');
-  await expect(host.page.locator('.crs-row')).toHaveCount(4);
+  await expect(host.page.locator('.crs-row')).toHaveCount(5);
   await host.page.locator('.crs-row', { hasText: '霧降湖' }).click();
   await expect(guest.page.locator('.room-notice')).toContainText('ホストがコースを「霧降湖」に変更しました', { timeout: 120_000 });
   for (const p of both) {

@@ -13,8 +13,8 @@ import type { CarSpec } from './carSpecs';
  */
 export type JetId = 'f15j' | 'f15c' | 'su47';
 
-/** the air at Edwards (field elevation 702 m, ISA): density (kg/m³) and the speed of sound (m/s) */
-export const EDWARDS_AIR = { density: 1.145, sound: 338.4 };
+/** the air at Edwards (field elevation 2,311 ft = 704 m, standard atmosphere): density (kg/m³) and the speed of sound (m/s) */
+export const EDWARDS_AIR = { density: 1.144, sound: 337.6 };
 
 export interface JetLivery {
   name: string;
@@ -44,6 +44,8 @@ export interface JetInfo {
   /** reference wing area (m²), span (m); coefficients at the ground attitude (lift, zero-lift drag, gear and doors,
    * speed brake area × its drag coefficient in m²) */
   wing: { area: number; span: number; cl0: number; cd0: number; cdGear: number; speedBrake: number };
+  /** the nose wheel's distance aft of the nose tip (m): where the aircraft's ends are from its origin (the grid) */
+  noseGear: number;
   /** rotation and lift-off speeds for the take-off after the finish (m/s) */
   vr: number;
   lof: number;
@@ -167,6 +169,7 @@ const JETS: JetDef[] = [
       // F100-IHI-220E: 23,450 lbf with afterburner, 14,590 lbf dry
       engines: { count: 2, name: 'F100-IHI-220E', idle: lbf(1200), dry: lbf(14590), ab: lbf(23450), spoolUp: 4, spoolDown: 3 },
       wing: F15_WING,
+      noseGear: 5.0,
       vr: 66,
       lof: 75,
       liveries: [
@@ -194,6 +197,7 @@ const JETS: JetDef[] = [
       // F100-PW-220: 23,770 lbf with afterburner, 14,590 lbf dry
       engines: { count: 2, name: 'F100-PW-220', idle: lbf(1200), dry: lbf(14590), ab: lbf(23770), spoolUp: 4, spoolDown: 3 },
       wing: F15_WING,
+      noseGear: 5.0,
       vr: 66,
       lof: 75,
       liveries: [
@@ -211,7 +215,7 @@ const JETS: JetDef[] = [
     id: 'su47',
     name: 'Su-47 ベールクト',
     tagline: '前進翼の試作戦闘機',
-    description: 'スホーイが1機だけ作った前進翼の実験機「01」。推力15トン級のD-30F6を2基積み、カナードと前進翼の独特な姿で地上を突っ走る。重いぶん、出足はイーグルに一歩譲る。',
+    description: 'スホーイが1機だけ作った前進翼の実験機「01」。推力15トン級のD-30F11を2基積み、カナードと前進翼の独特な姿で地上を突っ走る。イーグルより5トン重いが、推力はそれ以上に大きい。',
     mass: 25670,
     length: 22.6,
     wheelbase: 6.0,
@@ -227,16 +231,18 @@ const JETS: JetDef[] = [
     jet: {
       maker: 'Sukhoi',
       origin: 'ロシア（1997年初飛行）',
-      // D-30F6: 152 kN with afterburner, 83.4 kN dry (sources differ on the engine: D-30F6 / D-30F11)
-      engines: { count: 2, name: 'D-30F6', idle: 6000, dry: 83400, ab: 152000, spoolUp: 5, spoolDown: 3.5 },
-      wing: { area: 61.87, span: 16.7, cl0: 0.1, cd0: 0.02, cdGear: 0.016, speedBrake: 0 },
+      // D-30F11 (the MiG-31's D-30F6 adapted): 153 kN with afterburner, 93.1 kN dry; wing 56 m²; 25,670 kg at a
+      // normal take-off (Jane's All the World's Aircraft 2000–01; other sources give 61.87 m²)
+      engines: { count: 2, name: 'D-30F11', idle: 6000, dry: 93100, ab: 153000, spoolUp: 5, spoolDown: 3.5 },
+      wing: { area: 56, span: 16.7, cl0: 0.1, cd0: 0.02, cdGear: 0.016, speedBrake: 0 },
+      noseGear: 5.6,
       vr: 72,
       lof: 82,
       liveries: [{ name: '「01」試作機', swatch: '#3b4049', crew: 1 }],
       camo: ['#3b4049', '#2a2e35'],
       courses: ['edwards'],
-      figures: { engine: 'Aviadvigatel D-30F6 ×2', thrust: '152 kN ×2（A/B）', weight: '25.7 t（通常離陸）', maxSpeed: 'マッハ1.65', span: 16.7, length: 22.6 },
-      estimated: ['車輪配置', '空力係数', '推力の速度・高度変化', '空虚重量（諸説）'],
+      figures: { engine: 'Aviadvigatel D-30F11 ×2', thrust: '153 kN ×2（A/B）', weight: '25.7 t（通常離陸）', maxSpeed: 'マッハ2.21', span: 16.7, length: 22.6 },
+      estimated: ['車輪配置', '空力係数', '推力の速度・高度変化', '離陸速度'],
     },
     model: { title: 'Su-47 ベールクト', author: 'TOUGE NOCTURNE', url: '', license: '自作', own: true },
   },
@@ -250,6 +256,41 @@ export function jetForLivery(spec: CarSpec, color?: string): CarSpec {
   const l = spec.jet?.liveries.find((x) => x.swatch === color);
   if (!l?.mass || l.mass === spec.mass) return spec;
   return { ...spec, mass: l.mass, brakeForce: Math.round(l.mass * 9.81 * 0.5) };
+}
+
+/** The engine speed a fighter's instruments show (rpm), and the engines' state read back from it (a peer's packet). */
+export const jetRpm = (spool: number, afterburner: number) => (65 + 35 * spool + 2 * afterburner) * 100;
+export const enginesAt = (rpm: number) => ({ spool: Math.min(Math.max((rpm - 6500) / 3500, 0), 1), afterburner: Math.min(Math.max((rpm - 10000) / 200, 0), 1) });
+
+/**
+ * Thrust of all engines (N) at the field: the static figure by the spool (0 = idle … 1 = military power) and the
+ * afterburner (0…1), less with the thinner air (σ^0.75) and changing with the Mach number as an afterburning
+ * low-bypass turbofan's does (estimated lapse).
+ */
+export function jetThrust(e: JetInfo['engines'], spool: number, afterburner: number, mach: number) {
+  const lapse = Math.pow(EDWARDS_AIR.density / 1.225, 0.75);
+  const dry = (e.idle + (e.dry - e.idle) * spool) * (1 - 0.15 * mach + 0.3 * mach * mach);
+  const reheat = (e.ab - e.dry) * afterburner * (1 + 0.6 * mach * mach);
+  return e.count * (dry + reheat) * lapse;
+}
+
+/**
+ * What a fighter on the ground can do at a speed (m/s), for whoever has to plan ahead (the AI's speed profile):
+ * the share of its weight still on the tyres, the sideways acceleration it can hold (tyres with a friction `mu`
+ * on what the wing leaves them, plus the side force of a skid of a few degrees, which is all there is near the
+ * top) and the deceleration with the brakes on and the speed brake out (drag, and the main wheels' brakes as far
+ * as their tyres hold). The same formulas as `VehicleSim.jetAero`.
+ */
+export function jetEnvelope(spec: CarSpec) {
+  const w = spec.jet!.wing, weight = spec.mass * 9.81, rho = EDWARDS_AIR.density;
+  const q = (v: number) => 0.5 * rho * v * v;
+  const load = (v: number) => 1 - Math.min(q(v) * w.area * w.cl0, weight * 0.97) / weight;
+  const mains = 0.5 - spec.comForward / spec.wheelbase;
+  return {
+    load,
+    lat: (v: number, mu: number) => mu * 9.81 * load(v) + (0.6 * 0.12 * q(v) * w.area) / spec.mass,
+    brake: (v: number, mu: number) => (q(v) * (w.area * (w.cd0 + w.cdGear) + w.speedBrake)) / spec.mass + Math.min(spec.brakeForce / weight, mu * mains * load(v)) * 9.81,
+  };
 }
 
 /** Is this vehicle allowed on this course? (the fighters only at Edwards) */

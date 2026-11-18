@@ -26,6 +26,7 @@ import { Forest, vegetationFrame, type VegetationQuality } from './vegetation';
 import { shadeScene, type ShadeCaster, type ShadeField, type ShadeScene } from './farShade';
 import { cityWeight, COVER_SETS, loadedSpecies, plantCover, plantTrees, townWeight, TREE_SETS, UNDER_SETS, viewLimiter } from './vegetationPlanting';
 import { buildAutobahnScenery } from './autobahnScenery';
+import { buildAirbaseScenery } from './airbaseScenery';
 import { layBridges, layRoadside, layRocksheds, Roadside } from './roadside';
 
 export interface Lamp {
@@ -72,7 +73,7 @@ export interface SceneryQuality {
   vegetation?: VegetationQuality;
   /** 0 (default): the plain materials and shapes; 1–3: the layered ground, road and roadside (store/settings.ts) */
   surfaceDetail?: number;
-  /** 'autobahn': the motorway's own scenery (render/autobahnScenery.ts) instead of the mountain road's */
+  /** 'autobahn' / 'airbase': the motorway's or the airfield's own scenery (render/autobahnScenery.ts, airbaseScenery.ts) instead of the mountain road's */
   style?: CourseStyle;
   /** the course's name for the pass name board at the summit (Japanese, Latin letters) */
   board?: { name: string; roman: string };
@@ -81,6 +82,7 @@ export interface SceneryQuality {
 /** Builds every static mesh along and around the course. */
 export function buildScenery(track: Track, terrain: TerrainData, quality: SceneryQuality): SceneryResult {
   if (quality.style === 'autobahn') return buildAutobahnScenery(track, terrain, quality);
+  if (quality.style === 'airbase') return buildAirbaseScenery(track, terrain, quality);
   const group = new THREE.Group();
   group.name = 'scenery';
   const sides = classifySides(track, terrain);

@@ -56,12 +56,14 @@ export const SPECIES: Record<string, SpeciesDef> = {
 export const TREE_SETS: Record<CourseStyle, string[]> = {
   touge: ['sugi', 'hinoki', 'buna', 'akamatsu'],
   autobahn: ['fichte', 'buna', 'birke'],
+  // the desert floor and a dry lake: nothing grows where the course runs
+  airbase: [],
 };
 
 /** bushes and rocks beside the road (`buildClutter`), by the course's style */
-export const COVER_SETS: Record<CourseStyle, string[]> = { touge: ['yabu', 'sasa', 'iwa'], autobahn: ['yabu'] };
+export const COVER_SETS: Record<CourseStyle, string[]> = { touge: ['yabu', 'sasa', 'iwa'], autobahn: ['yabu'], airbase: [] };
 /** what grows on the ground near the road */
-export const UNDER_SETS: Record<CourseStyle, string[]> = { touge: ['kusa', 'susuki', 'shida', 'sasa'], autobahn: ['kusa', 'susuki'] };
+export const UNDER_SETS: Record<CourseStyle, string[]> = { touge: ['kusa', 'susuki', 'shida', 'sasa'], autobahn: ['kusa', 'susuki'], airbase: [] };
 
 /** the model files a course of this style needs (`undergrowth`: the quality has any) */
 export function vegetationFiles(style: CourseStyle, undergrowth = true) {

@@ -9,6 +9,8 @@ import { newExhaustState, type ExhaustState } from '../fx/Exhaust';
 import type { NetLink } from './NetLink';
 import { RemoteBody } from './RemoteBody';
 import { newPose } from './PeerTrack';
+import { GEAR_TIME } from '../race/Departure';
+import { enginesAt } from '../vehicle/jets';
 
 export type { NetState } from './codec';
 
@@ -37,6 +39,8 @@ interface RemoteCar {
   /** the car as its packets describe it (`body.rx`: clock, path, corrections) and its solid stand-in (`body.proxy`) */
   body: RemoteBody;
   wheelSpin: number;
+  /** a fighter's landing gear (0 = down … 1 = stowed), as its take-off has it */
+  gear: number;
   /** what the exhaust needs this frame: forward speed (m/s), throttle and rpm share */
   fx: { speed: number; th?: number; rp?: number };
   exhaust: ExhaustState & { speed: number };
@@ -82,7 +86,7 @@ export class RemoteRacers {
       this.root.add(visual.root);
       // a train's cars are placed by its rig, not by the root: without this they stay at the origin until the first state
       visual.refresh();
-      this.cars.set(peer.id, { peer, visual, tag, body: new RemoteBody(this.link.peer(peer.id), _scratch), wheelSpin: 0, fx: { speed: 0 }, exhaust: { ...newExhaustState(), speed: 0 } });
+      this.cars.set(peer.id, { peer, visual, tag, body: new RemoteBody(this.link.peer(peer.id), _scratch), wheelSpin: 0, gear: 0, fx: { speed: 0 }, exhaust: { ...newExhaustState(), speed: 0 } });
     }
   }
 
@@ -122,8 +126,22 @@ export class RemoteRacers {
       if (!car.body.frame(at, wallMs, _pose)) continue;
       car.fx = { speed: _pose.speed / this.timeScale, th: _pose.throttle, rp: _pose.rpm };
       car.wheelSpin += (_pose.speed / CAR_SPECS[car.peer.carId].wheelRadius) * (wallMs / 1000);
-      car.visual.syncFromPose({ position: _pose.position, quaternion: _pose.quaternion, steer: _pose.steer, wheelRotations: [car.wheelSpin, car.wheelSpin, car.wheelSpin, car.wheelSpin] }, dt);
+      const jet = car.visual.rig.jet;
+      car.visual.syncFromPose({
+        position: _pose.position, quaternion: _pose.quaternion, steer: _pose.steer,
+        wheelRotations: [car.wheelSpin, car.wheelSpin, car.wheelSpin, car.wheelSpin],
+        // (a fighter's flames: its engines as the packet's engine speed tells them)
+        engines: jet ? enginesAt(_pose.rpm * car.visual.spec.engine.redline) : undefined,
+      }, dt);
       car.visual.setBrakeLights(_pose.brake);
+      if (jet) {
+        // its take-off after the finish, as on its own screen: the gear goes up in the same time, and it is taken
+        // off the scene once it is out of sight there (a new race finds it on its wheels again)
+        car.gear = _pose.depart >= 2 ? Math.min(1, car.gear + (wallMs / 1000) / GEAR_TIME) : 0;
+        jet.setGear(car.gear);
+        jet.setPitch(_pose.depart === 1 ? 0.3 : _pose.depart ? 0.05 : 0);
+        car.visual.root.visible = _pose.depart < 3;
+      }
     }
   }
 

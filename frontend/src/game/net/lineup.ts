@@ -49,8 +49,8 @@ const FRONT_ROW = 5;
 export const focusOf = (span: RoadSpan) => span.s1 - (span.s1 - span.s0) * FOCUS;
 
 /** The start grid of the entries (`onlineGrid`) and the stretch of road it takes up, long vehicles by their cab end. */
-function gridSpan(entries: readonly LineupEntry[], startS: number): { spots: Map<number, GridSpot>; span: RoadSpan } {
-  const spots = onlineGrid(entries, startS);
+function gridSpan(entries: readonly LineupEntry[], startS: number, width?: number): { spots: Map<number, GridSpot>; span: RoadSpan } {
+  const spots = onlineGrid(entries, startS, width);
   const span = { s0: Infinity, s1: -Infinity, l0: Infinity, l1: -Infinity };
   for (const e of entries) {
     const g = spots.get(e.slot)!, f = footprint(CAR_SPECS[e.carId]);
@@ -83,10 +83,10 @@ export const cameraAhead = (scale: number) => VIEW_DISTANCE * scale * Math.sin(M
  * camera in front of it stands before the start line — as far as the road behind allows (`onlineGrid` keeps the
  * last row on it: a room full of trains stays further forward).
  */
-export function lineupPlan(entries: readonly LineupEntry[], startS: number): { spots: Map<number, GridSpot>; span: RoadSpan; scale: number } {
+export function lineupPlan(entries: readonly LineupEntry[], startS: number, width?: number): { spots: Map<number, GridSpot>; span: RoadSpan; scale: number } {
   if (!entries.length) return { spots: new Map(), span: { s0: startS - 22, s1: startS - 18, l0: -1, l1: 1 }, scale: 1 };
-  const grid = gridSpan(entries, startS);
+  const grid = gridSpan(entries, startS, width);
   const scale = viewScale(grid.span);
   const back = focusOf(grid.span) + cameraAhead(scale) - (startS - GATE_CLEAR);
-  return { ...(back > 0 ? gridSpan(entries, startS - back) : grid), scale };
+  return { ...(back > 0 ? gridSpan(entries, startS - back, width) : grid), scale };
 }
