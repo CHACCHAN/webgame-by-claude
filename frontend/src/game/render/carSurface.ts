@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { MeshPhysicalNodeMaterial, TempNode, type NodeBuilder } from 'three/webgpu';
-import { clamp, clearcoatRoughness, dot, exp, float, getDistanceAttenuation, materialOpacity, max, mix, normalView, normalize, pmremTexture, positionViewDirection, positionWorld, pow, renderGroup, roughness, smoothstep, uniform, uniformArray, vec3 } from 'three/tsl';
+import { Fn, cameraViewMatrix, clamp, context, clearcoatNormalView, clearcoatRoughness, cross, dot, exp, float, getDistanceAttenuation, materialOpacity, max, min, mix, normalView, normalize, pmremTexture, positionView, positionViewDirection, positionWorld, pow, renderGroup, roughness, smoothstep, uniform, uniformArray, vec3, vec4 } from 'three/tsl';
 import type { Preset } from './Environment';
 import { LAMP_DECAY, LAMP_LIGHT_DROP, LAMP_REACH, type FieldLamp, type LampField } from './lampField';
 import { lampPool } from './lampFieldNode';
@@ -17,11 +17,11 @@ type N = any; // eslint-disable-line @typescript-eslint/no-explicit-any
  * drawn again), a face a frame behind the car at speed, and one car's view for all of them. So:
  *  - the street lamps near the camera (`lampsAround`, as far as `NEAR_REACH`: the lamp field's own cells end at
  *    42 m, and it is the lamps far ahead that a roof and a rear window show from behind, at a flat angle and so at
- *    their brightest) are drawn into every clear coat and pane as the small bright disc with a glow round it that a
- *    lamp is in a mirror, as large as the lamp is seen from there, and as much larger and fainter as the coat is
- *    rough. A point light's highlight in a coat this smooth is one pixel that flickers (the lamp field gives these
- *    materials none, `lampFieldNode.ts`); the disc slides over bonnet, roof and glass as the car drives under the
- *    lamps. Paint keeps the environment map for everything else.
+ *    their brightest) are drawn into every clear coat as what a lamp is in a car's body: a streak along the vehicle's
+ *    length, as wide across as the coat and the lamp's face allow, with a glow round it (`lampStreaks`). It slides
+ *    over bonnet, roof and glass as the car drives under the lamps. A point light's highlight in a coat this smooth
+ *    is one pixel that flickers (the lamp field gives these materials none, `lampFieldNode.ts`). Paint keeps the
+ *    environment map for everything else.
  *  - glass mirrors the surroundings as a car on a road has them: the sky as the dome draws it (gradient, the glow
  *    round sun or moon, the town's glow, the cloud cover), sharp; the road under the car, a plane through the car's
  *    wheels (`onCarsGround`), lit by the sky, the sun or moon and the street lamps around the place the mirror ray
@@ -29,14 +29,12 @@ type N = any; // eslint-disable-line @typescript-eslint/no-explicit-any
  *    orange smears.)
  * The diffuse light of the surroundings still comes from the game's environment map.
  *
- * It is the `envNode` of the materials made here, one node for all of them: what differs per car comes from the
- * mesh through a per-object uniform, so every car's paint is one shader.
+ * It is the `envNode` of the materials made here, one node for all of them (and its two children, `SurroundingsNode`):
+ * what differs per car comes from the mesh through a per-object uniform, so every car's paint is one shader.
  */
 
-/** the luminous face of a street lamp as a mirror shows it: its radius (m) and the share of the lamp's light it carries */
-const LAMP_FACE = 0.3, LAMP_IMAGE = 0.5;
-/** the glow round it (the lamp's housing, the lit haze): radius (m) and share */
-const LAMP_GLOW = 1.5, LAMP_GLOW_IMAGE = 0.3;
+/** the luminous face of a street lamp, as a radius (m) */
+const LAMP_FACE = 0.3;
 /** lamps the mirror images know, and how far from the camera the furthest of them can be (m) */
 const NEAR = 8, NEAR_REACH = 180;
 /** asphalt: what it gives back of the light on it (albedo / π), dry and wet */
@@ -116,6 +114,31 @@ const groundPlane: N = (uniform(new THREE.Vector4(0, 1, 0, 1e4)) as N).onObjectU
   return plane.set(_n.x, _n.y, _n.z, -_n.dot(_o));
 });
 
+const NO_AXIS = new THREE.Vector3(0, 0, 1);
+const axes = new WeakMap<THREE.Object3D, THREE.Vector3>();
+/** the vehicle's length (+Z of its root, world), along which its panels curve least (`onCarsGround`) */
+const lengthAxis: N = (uniform(new THREE.Vector3(0, 0, 1)) as N).onObjectUpdate(({ object }: { object: THREE.Object3D | null }) => {
+  const root = object ? roots.get(object) : undefined;
+  if (!root) return NO_AXIS;
+  const e = root.matrixWorld.elements;
+  let axis = axes.get(root);
+  if (!axis) axes.set(root, (axis = new THREE.Vector3()));
+  return axis.set(e[8], e[9], e[10]).normalize();
+});
+
+/**
+ * How a street lamp's highlight in a clear coat is drawn (`SurroundingsNode.lampStreaks`), as uniforms so that a probe
+ * can try values on a running game: `along` / `across` the GGX widths (α) along the vehicle's length and across it
+ * (at least; the coat's own and the lamp's size come on top), `glow` the share of a second lobe `wide` times as wide,
+ * `gain` over the lamp's own light. Set by eye on strips of frames from the chase camera at night (11-18): at a gain of
+ * 1 a streak was a faint warm line on the roof's edge; 8 reads as the sliding line of night footage. (A streak
+ * spreads the lamp's image over far more of the panel than a mirror would, and the chase camera sees most of it at
+ * the edge of the lobe.) `cap`: where the lobe's middle meets a lamp (a flat roof at a flat angle, 160 km/h) eight
+ * times the light blazed the whole roof white and the bloom set it on fire; the streak comes up to `cap` softly and
+ * stays there (3 put out the thin line on the pillar as well, 15 keeps it and tames the roof).
+ */
+export const lampStreak = { along: 0.4, across: 0.02, glow: 0.35, wide: 4, gain: 8, cap: 15 };
+
 // ---- the lamps near the camera: where each fixture hangs + how much of it counts (it comes in from nothing at the
 // edge of the list), and its colour
 const nearAt = Array.from({ length: NEAR }, () => new THREE.Vector4(0, 1e4, 0, 0));
@@ -162,71 +185,127 @@ export function lampsAround(eye: THREE.Vector3) {
   }
 }
 
+/** what the three kinds of request share: the uniforms and the environment map's node */
+class Shared {
+  /** a lamp's light to all sides (colour × candela) and the strength of the pool under it, as the lamp field has them now */
+  readonly lampLight: N;
+  readonly beam: N;
+  readonly at: N = uniformArray(nearAt);
+  readonly tint: N = uniformArray(nearTint);
+  readonly pmrem = new WeakMap<THREE.Texture, N>();
+  readonly streak: { along: N; across: N; glow: N; wide: N; gain: N; cap: N };
+
+  constructor(lamps: LampField) {
+    const u = (k: keyof typeof lampStreak): N => (uniform(lampStreak[k]) as N).setGroup(renderGroup).onRenderUpdate(() => lampStreak[k]);
+    this.streak = { along: u('along'), across: u('across'), glow: u('glow'), wide: u('wide'), gain: u('gain'), cap: u('cap') };
+    const light = new THREE.Color();
+    this.lampLight = (uniform(light) as N).setGroup(renderGroup).onRenderUpdate(() => light.copy(lamps.color).multiplyScalar(lamps.intensity));
+    this.beam = (uniform(0) as N).setGroup(renderGroup).onRenderUpdate(() => lamps.beam);
+  }
+}
+
+/**
+ * three.js asks a material's environment three times, each in its own context: for the light on the surface
+ * (`getTextureLevel` 1), for the mirror image in the paint or pane (the roughness) and for the one in the coat (the
+ * coat's roughness). A node is set up once per material and what it set up is inherited by the isolated builds
+ * after it, so one node answering all three by its context answered the coat with whatever it had given the light
+ * on the surface (the coat's lamps never showed, 11-18). So the material's `envNode` is this node, the diffuse
+ * light; it hands the two mirror images to two nodes of their own as three.js puts them into their contexts
+ * (`context`). Each is one node for every material: a node is part of the shader's key by its id.
+ */
+type Kind = 'light' | 'base' | 'coat';
+
 class SurroundingsNode extends TempNode {
   static get type() {
     return 'CarSurroundingsNode';
   }
 
-  /** a lamp's light to all sides (colour × candela) and the strength of the pool under it, as the lamp field has them now */
-  private readonly lampLight: N;
-  private readonly beam: N;
-  private readonly at: N = uniformArray(nearAt);
-  private readonly tint: N = uniformArray(nearTint);
-  private readonly pmrem = new WeakMap<THREE.Texture, N>();
+  private readonly kids: { base: SurroundingsNode; coat: SurroundingsNode } | null;
 
-  constructor(lamps: LampField) {
+  constructor(
+    private readonly s: Shared,
+    private readonly kind: Kind = 'light',
+  ) {
     super('vec3');
-    const light = new THREE.Color();
-    this.lampLight = (uniform(light) as N).setGroup(renderGroup).onRenderUpdate(() => light.copy(lamps.color).multiplyScalar(lamps.intensity));
-    this.beam = (uniform(0) as N).setGroup(renderGroup).onRenderUpdate(() => lamps.beam);
+    this.kids = kind === 'light' ? { base: new SurroundingsNode(s, 'base'), coat: new SurroundingsNode(s, 'coat') } : null;
+  }
+
+  /** (three.js: `envNode.context(createRadianceContext(roughness | clearcoatRoughness, …))`) */
+  context(value: { getTextureLevel?: () => N }): N {
+    const level = this.kids ? value?.getTextureLevel?.() : null;
+    const node = level === clearcoatRoughness ? this.kids!.coat : level === roughness ? this.kids!.base : this;
+    return context(node, value as never);
   }
 
   /** the game's environment map: the diffuse light, and whatever asks in a way this node does not know */
   private blurred(builder: NodeBuilder): N {
     const env = (builder as unknown as { scene: THREE.Scene | null }).scene?.environment ?? null;
     if (!env) return vec3(0);
-    let node = this.pmrem.get(env);
-    if (!node) this.pmrem.set(env, (node = pmremTexture(env)));
+    let node = this.s.pmrem.get(env);
+    if (!node) this.s.pmrem.set(env, (node = pmremTexture(env)));
     return node;
   }
 
   override setup(builder: NodeBuilder): N {
-    // (three.js asks an environment three times: for the light on the surface, for the mirror image in the paint
-    // and for the one in the coat; `getTextureLevel` is the roughness it wants the image blurred by)
-    const context = builder.context as unknown as { getUV?: (n: unknown, b: NodeBuilder) => N; getTextureLevel?: (n: unknown) => N };
-    const level: N = context.getTextureLevel?.(this);
-    const coat = level === clearcoatRoughness;
-    if (!context.getUV || (!coat && level !== roughness)) return this.blurred(builder);
+    const ctx = builder.context as unknown as { getUV?: (n: unknown, b: NodeBuilder) => N; getTextureLevel?: (n: unknown) => N };
+    if (this.kind === 'light' || !ctx.getUV || !ctx.getTextureLevel) return this.blurred(builder);
+    const coat = this.kind === 'coat';
+    const level: N = coat ? clearcoatRoughness : roughness;
     // Paint: the game's environment map as before, and in the coat the street lamps as what they are in a mirror.
     // (The whole mirror image below was tried on paint too, 11-12/13: by day it turned the black lower body tan,
     // the sky's bright horizon at full strength where the map has its dark ground and the blur of a rough layer;
     // by night the difference in the paint did not show. Glass is where it shows.)
-    if (builder.material.userData.carGlass !== true) {
-      if (!coat) return this.blurred(builder);
-      return this.blurred(builder).add(this.lampImages(context.getUV(this, builder), level));
-    }
-    return this.mirrored(context.getUV(this, builder), level, coat);
+    // (inside a function: what the loops below add up is a list of statements, and a node's `setup` has no list of
+    // its own to put them in; without it the streaks were silently dropped, 11-18)
+    if (builder.material.userData.carGlass !== true) return coat ? this.blurred(builder).add(Fn(() => this.lampStreaks(level))()) : this.blurred(builder);
+    const uv: N = ctx.getUV(this, builder);
+    return Fn(() => this.mirrored(uv, level, coat))();
   }
 
-  /** the street lamps near the camera as a mirror shows them from the pixel, in the direction `D` (world), blurred by `rough` */
-  private lampImages(D: N, rough: N): N {
-    const P: N = positionWorld;
-    const blur: N = rough.mul(rough).mul(2);
-    const spread: N = blur.mul(blur).toVar();
+  /**
+   * The street lamps near the camera in a clear coat, as highlights stretched along the vehicle's length.
+   *
+   * A car's body is curved across far more than along (sides, roof, bonnet are nearly extruded shapes), so a small
+   * lamp shows in it as a streak along the length, not as a dot: night footage has them sliding over bonnet, roof and
+   * glass. The model's normals carry the curvature across; the curvature along is not in them, so it is put into the
+   * lobe instead: an anisotropic GGX, `lampStreak.along` wide along the length and as narrow across as the coat and
+   * the lamp's size allow (the lamp's face widens it as a sphere light does, by its radius over twice its distance),
+   * and a second, wider lobe for the glow round the lamp. A lamp's light reaches the panel by the inverse square; the
+   * coat's Fresnel is put on by three.js, as on any reflection of the surroundings.
+   */
+  private lampStreaks(rough: N): N {
+    const { along, across, glow, wide, gain, cap } = this.s.streak;
+    const N: N = clearcoatNormalView;
+    const V: N = positionViewDirection;
+    const NdotV: N = max(dot(N, V), 0.05).toVar();
+    const F: N = (cameraViewMatrix as N).mul(vec4(lengthAxis, 0)).xyz;
+    const T: N = normalize(F.sub(N.mul(dot(N, F))).add(vec3(1e-5, 0, 0))).toVar();
+    const B: N = cross(N, T).toVar();
+    const coat: N = rough.mul(rough);
     const col: N = vec3(0).toVar();
+    const lobe = (H: N, at: N, ab: N): N => {
+      const ht: N = dot(H, T).div(at), hb: N = dot(H, B).div(ab), hn: N = dot(H, N);
+      const q: N = ht.mul(ht).add(hb.mul(hb)).add(hn.mul(hn));
+      return float(1).div(at.mul(ab).mul(q).mul(q).mul(Math.PI));
+    };
     for (let k = 0; k < NEAR; k++) {
-      const lamp: N = this.at.element(k);
-      const to: N = lamp.xyz.sub(P).toVar();
-      const d2: N = to.dot(to).toVar();
-      // the angle between the mirror direction and the lamp, squared
-      const off: N = max(float(1).sub(dot(D, to).div(d2.sqrt())), 0).mul(2).toVar();
-      // a disc of the size the lamp's face has from here (as an angle, squared), widened by the coat's blur, which
-      // spreads the same light thinner; and the glow round it likewise
-      const face: N = float(LAMP_FACE * LAMP_FACE).div(d2).add(spread).toVar(), glow: N = float(LAMP_GLOW * LAMP_GLOW).div(d2).add(spread).toVar();
-      const image: N = exp(off.div(face).negate()).div(face.mul(Math.PI / LAMP_IMAGE)).add(exp(off.div(glow).negate()).div(glow.mul(Math.PI / LAMP_GLOW_IMAGE)));
-      col.addAssign(this.lampLight.mul(this.tint.element(k).rgb).mul(image.mul(lamp.w).div(d2)));
+      const lamp: N = this.s.at.element(k);
+      const to: N = (cameraViewMatrix as N).mul(vec4(lamp.xyz, 1)).xyz.sub(positionView).toVar();
+      const d2: N = dot(to, to).toVar();
+      const d: N = d2.sqrt();
+      const L: N = to.div(d);
+      const H: N = normalize(L.add(V)).toVar();
+      // across: the coat, the lamp's face as seen from here; along: the body's own lack of curvature
+      const ab: N = max(coat, across).add(float(LAMP_FACE).div(d.mul(2))).toVar();
+      const at: N = ab.add(along).toVar();
+      const D: N = lobe(H, at, ab).mul(float(1).sub(glow)).add(lobe(H, at.mul(wide), ab.mul(wide)).mul(glow));
+      // (a lamp below the panel's horizon gives nothing)
+      const facing: N = smoothstep(0, 0.08, dot(N, L));
+      const light: N = this.s.lampLight.mul(this.s.tint.element(k).rgb).mul(lamp.w.div(d2));
+      col.addAssign(light.mul(min(D.mul(facing).div(NdotV.mul(4)), 1e4)));
     }
-    return col;
+    // (gained, then up to `cap` softly: cap · (1 − e^(−x / cap)))
+    return exp(col.mul(gain).div(cap).negate()).oneMinus().mul(cap);
   }
 
   /** what is seen from the pixel in the direction `D` (world), blurred as a surface of roughness `rough` does */
@@ -252,13 +331,13 @@ class SurroundingsNode extends TempNode {
     const hit: N = P.add(D.mul(reach)).toVar();
     const light: N = vec3(sky.ground).toVar();
     for (let k = 0; k < NEAR; k++) {
-      const lamp: N = this.at.element(k), tint: N = this.tint.element(k).rgb.mul(lamp.w).toVar();
+      const lamp: N = this.s.at.element(k), tint: N = this.s.tint.element(k).rgb.mul(lamp.w).toVar();
       const up: N = lamp.xyz.sub(hit).toVar();
       const to: N = up.sub(vec3(0, LAMP_LIGHT_DROP, 0)).toVar();
       const far: N = to.length().toVar();
       const fade: N = getDistanceAttenuation({ lightDistance: far, cutoffDistance: float(LAMP_REACH), decayExponent: float(LAMP_DECAY) } as never);
-      light.addAssign(lampPool(up, vec3(0, 1, 0), tint).mul(this.beam));
-      light.addAssign(this.lampLight.mul(tint).mul(fade.mul(max(to.y, 0)).div(far)));
+      light.addAssign(lampPool(up, vec3(0, 1, 0), tint).mul(this.s.beam));
+      light.addAssign(this.s.lampLight.mul(tint).mul(fade.mul(max(to.y, 0)).div(far)));
     }
     const road: N = light.mul(mix(float(ROAD_DRY), float(ROAD_WET), wetness));
     const ground: N = mix(road, sky.land, smoothstep(40, 160, reach));
@@ -267,7 +346,7 @@ class SurroundingsNode extends TempNode {
 
     // ---- the lamps themselves: only a coat is smooth enough to show them (the pane under it has the lamp field's
     // own highlight)
-    if (coat) col.addAssign(this.lampImages(D, rough));
+    if (coat) col.addAssign(this.lampStreaks(rough));
     return col;
   }
 }
@@ -277,7 +356,7 @@ let around: { lamps: LampField; node: SurroundingsNode } | null = null;
 /** the one node all the materials share */
 function surroundings(): SurroundingsNode | null {
   if (!field) return null;
-  if (around?.lamps !== field) around = { lamps: field, node: new SurroundingsNode(field) };
+  if (around?.lamps !== field) around = { lamps: field, node: new SurroundingsNode(new Shared(field)) };
   return around.node;
 }
 
