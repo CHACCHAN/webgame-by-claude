@@ -1,6 +1,12 @@
 import { DS, Track } from '../track/Track';
 import { clamp } from '../util/math';
 
+/** a vehicle whose cornering and braking change with its speed (a fighter: lift, drag): m/s² at a speed, on ground of a grip */
+export interface SpeedEnvelope {
+  lat(v: number, grip: number): number;
+  brake(v: number, grip: number): number;
+}
+
 /**
  * A minimum-curvature racing line computed by iteratively relaxing lateral
  * offsets ("elastic band"), plus a grip-limited target speed profile.
@@ -28,7 +34,8 @@ export class RacingLine {
         const rx = track.right[i * 3], rz = track.right[i * 3 + 2];
         const rl = Math.hypot(rx, rz) || 1;
         const delta = ((mx - px[i]) * rx + (mz - pz[i]) * rz) / rl;
-        const lim = track.width[i] / 2 - margin;
+        // (inside the pavement: on an airfield the ground beside it can be driven on, but nobody races there)
+        const lim = track.pave[i] / 2 - margin;
         u[i] = clamp(u[i] + delta * 0.5, -lim, lim);
       }
     }
@@ -63,16 +70,31 @@ export class RacingLine {
    * Target speed (m/s) per sample for a given cornering grip (m/s²),
    * braking decel and acceleration capability.
    */
-  speedProfile(latAccel: number, brakeDecel: number, accel: number, vmax: number): Float32Array {
+  speedProfile(latAccel: number, brakeDecel: number, accel: number, vmax: number, envelope?: SpeedEnvelope): Float32Array {
     const n = this.track.count;
     const v = new Float32Array(n);
     for (let i = 0; i < n; i++) {
       // average curvature over a short window for robustness
       let k = 0;
       for (let j = Math.max(0, i - 3); j <= Math.min(n - 1, i + 3); j++) k = Math.max(k, Math.abs(this.curvature[j]));
-      v[i] = Math.min(vmax, Math.sqrt(latAccel / Math.max(k, 1e-4)));
+      // (the zone's own grip: a dry lake gives less than the runway before it)
+      const g = this.track.grip[i];
+      if (!envelope) v[i] = Math.min(vmax, Math.sqrt((latAccel * g) / Math.max(k, 1e-4)));
+      else {
+        // what the vehicle holds changes with its speed: the highest speed whose bend it still holds
+        let lo = 0, hi = vmax;
+        if (hi * hi * k > envelope.lat(hi, g)) {
+          for (let it = 0; it < 22; it++) {
+            const mid = (lo + hi) / 2;
+            if (mid * mid * k > envelope.lat(mid, g)) hi = mid;
+            else lo = mid;
+          }
+          hi = lo;
+        }
+        v[i] = hi;
+      }
     }
-    for (let i = n - 2; i >= 0; i--) v[i] = Math.min(v[i], Math.sqrt(v[i + 1] * v[i + 1] + 2 * brakeDecel * DS));
+    for (let i = n - 2; i >= 0; i--) v[i] = Math.min(v[i], Math.sqrt(v[i + 1] * v[i + 1] + 2 * (envelope ? envelope.brake(v[i + 1], this.track.grip[i]) : brakeDecel * this.track.grip[i]) * DS));
     for (let i = 1; i < n; i++) v[i] = Math.min(v[i], Math.sqrt(v[i - 1] * v[i - 1] + 2 * accel * DS));
     return v;
   }

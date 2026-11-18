@@ -198,7 +198,7 @@ function chunked(geo: THREE.BufferGeometry, mat: THREE.Material, items: { m: THR
  * A terrain grid (gridGeometry: PlaneGeometry order, nx × nz vertices) cut into tiles that share its vertex buffers,
  * so the renderer culls those behind the camera (normals, colours and lightmap uvs stay those of the whole grid).
  */
-function tiles(geo: THREE.BufferGeometry, nx: number, nz: number, tx: number, tz: number, mat: THREE.Material, name: string) {
+export function tiles(geo: THREE.BufferGeometry, nx: number, nz: number, tx: number, tz: number, mat: THREE.Material, name: string) {
   const group = new THREE.Group();
   group.name = name;
   const index = geo.index!.array;

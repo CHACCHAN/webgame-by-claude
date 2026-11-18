@@ -13,6 +13,10 @@ import vvvfWorkletUrl from './vvvf/vvvf.worklet.ts?worker&url';
 import { runningParams } from './running';
 import type { RunningProcessorOptions } from './running.worklet';
 import runningWorkletUrl from './running.worklet.ts?worker&url';
+import { JetSound } from './JetSound';
+import { JET_SOUND } from './jet';
+import type { JetProcessorOptions } from './jet.worklet';
+import jetWorkletUrl from './jet.worklet.ts?worker&url';
 import type { RainBody } from './rain';
 import type { RainProcessorOptions } from './rain.worklet';
 import rainWorkletUrl from './rain.worklet.ts?worker&url';
@@ -208,7 +212,7 @@ export class AudioEngine {
   private noise: AudioBuffer;
   private squeal: { src: AudioBufferSourceNode; gain: GainNode; filter: BiquadFilterNode };
   private wind: { gain: GainNode; filter: BiquadFilterNode };
-  private engines = new Map<string, (EngineSound | TrainSound | BugSound | EvSound) & { kind: string }>();
+  private engines = new Map<string, (EngineSound | TrainSound | BugSound | EvSound | JetSound) & { kind: string }>();
   private musicNodes: AudioNode[] = [];
 
   constructor(offline?: OfflineAudioContext) {
@@ -341,7 +345,7 @@ export class AudioEngine {
   }
 
   /** The running sound of a vehicle: a synthesised engine or electric drive, a train's traction equipment or a creature's legs. */
-  engine(id: string, spec: CarSpec): EngineSound | TrainSound | BugSound | EvSound {
+  engine(id: string, spec: CarSpec): EngineSound | TrainSound | BugSound | EvSound | JetSound {
     const e = this.engines.get(id);
     // (a train on another line may run another inverter: a sound of its own)
     const kind = spec.train?.vvvf ? `${spec.id}|${spec.train.vvvf.pattern}` : spec.id;
@@ -357,6 +361,7 @@ export class AudioEngine {
     if (kind === 'train') return this.trainSound(spec);
     if (kind === 'creature') return new BugSound(this.ctx, this.noise, this.sfx);
     if (spec.engine.electric) return new EvSound(this.ctx, this.noise, this.sfx);
+    if (spec.jet) return this.jetSound(spec);
     const e = spec.engine;
     return new EngineSound(this.ctx, e.cylinders, e.turbo, this.noise, this.sfx, { strokes: e.strokes, supercharger: e.supercharger });
   }
@@ -368,6 +373,26 @@ export class AudioEngine {
     const v = t.vvvf;
     if (v) this.loading.push(this.vvvfNode(v).then((n) => n && sound.setVvvf(n.node, n.ir, v, t.wheel)));
     this.loading.push(this.runningNode(t).then((node) => node && sound.setRunning(node)));
+    return sound;
+  }
+
+  private jetReady: Promise<boolean> | null = null;
+
+  /**
+   * A fighter's engines (AudioWorklet 'jet', audio/jet.ts); where AudioWorklet is missing or until the module is
+   * in, `JetSound`'s plain stand-in sounds.
+   */
+  private jetSound(spec: CarSpec) {
+    const sound = new JetSound(this.ctx, this.noise, this.sfx);
+    const e = spec.jet!.engines;
+    this.jetReady ??= this.ctx.audioWorklet ? this.ctx.audioWorklet.addModule(jetWorkletUrl).then(() => true, () => false) : Promise.resolve(false);
+    this.loading.push(
+      this.jetReady.then((ok) => {
+        if (!ok) return;
+        const processorOptions: JetProcessorOptions = { seed: (Math.random() * 2 ** 31) >>> 0, params: { ...JET_SOUND, idle: e.idle / e.ab, dry: e.dry / e.ab } };
+        sound.setNode(new AudioWorkletNode(this.ctx, 'jet', { numberOfInputs: 0, outputChannelCount: [2], processorOptions }));
+      }),
+    );
     return sound;
   }
 

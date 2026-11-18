@@ -2,6 +2,9 @@
 // flat, dry pad (Node, no browser): 0–100 km/h and top speed on a straight at full throttle (automatic gearbox, the
 // player's assists as in a race), the peak lateral acceleration on a skid circle (45.7 m radius, the 300 ft pad of the
 // magazines: a little faster each lap until the vehicle runs wide), plus the mass and peak power the spec gives.
+// A fighter's circle is found another way (`heldCircle`): its idle thrust alone speeds it up, so it cannot be led
+// round a little faster each lap; it is held at a speed with the stick hard over, and the speed is sought at which
+// the turn it settles into is the pad's circle.
 //   npx tsx tools/vehicle-stats.ts            every vehicle a player can pick (VEHICLE_ORDER); rewrites the file
 //   npx tsx tools/vehicle-stats.ts u9 e5      only these: their entries are replaced, the others kept
 //   npx tsx tools/vehicle-stats.ts --check    measures, writes nothing, fails if the file would change (after a
@@ -148,6 +151,48 @@ function skidCircle(id: CarId) {
   return { lateralG: peak, at: peakV * 3.6, end };
 }
 
+/**
+ * A fighter on the same circle: held at a speed (throttle and wheel brakes), the stick hard over for 14 s; the radius
+ * it settles into grows with the speed (the nose wheel's angle and the tyres give no more), and the figure is the
+ * lateral acceleration at the speed whose radius is the pad's.
+ */
+function heldCircle(id: CarId) {
+  const spec = CAR_SPECS[id];
+  const radiusAt = (speed: number) => {
+    const world = pad();
+    const v = new VehicleSim({ world } as unknown as PhysicsWorld, spec, new Vector3(0, 0, 0), 0);
+    v.reset(new Vector3(0, 0, 0), 0, speed);
+    const input = emptyInput();
+    let yaw = 0, n = 0;
+    for (let t = 0; t < 14; t += PHYSICS_DT) {
+      input.throttle = clamp(0.4 + (speed - v.forwardSpeed) * 0.5, 0, 1);
+      input.brake = v.forwardSpeed > speed + 0.3 ? clamp((v.forwardSpeed - speed) * 0.4, 0.05, 0.6) : 0;
+      input.steer = t < 2 ? 0 : 1;
+      v.input = input;
+      v.preStep(PHYSICS_DT);
+      world.step();
+      v.postStep(PHYSICS_DT);
+      if (t > 9) {
+        yaw += Math.abs(v.yawRate);
+        n++;
+      }
+    }
+    const r = v.forwardSpeed / Math.max(yaw / n, 1e-6);
+    const at = v.forwardSpeed;
+    world.free();
+    return { r, at };
+  };
+  let lo = 6, hi = 30, at = 0;
+  for (let k = 0; k < 14; k++) {
+    const mid = (lo + hi) / 2;
+    const m = radiusAt(mid);
+    at = m.at;
+    if (m.r < R) lo = mid;
+    else hi = mid;
+  }
+  return { lateralG: (at * at) / R / G, at: at * 3.6, end: 'held turn' };
+}
+
 const args = process.argv.slice(2);
 const check = args.includes('--check');
 const ids = args.filter((a) => !a.startsWith('--')) as CarId[];
@@ -166,7 +211,7 @@ const measured: Record<string, VehicleStats> = {};
 console.log('id            0-100 km/h   top speed            lateral g                         mass      power');
 for (const id of todo) {
   const s = straight(id);
-  const c = skidCircle(id);
+  const c = CAR_SPECS[id].jet ? heldCircle(id) : skidCircle(id);
   const f = specFigures(CAR_SPECS[id]);
   const m: VehicleStats = {
     zeroTo100: s.zeroTo100 === null ? null : round(s.zeroTo100, 2),

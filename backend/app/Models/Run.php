@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\Vehicles;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -37,7 +38,8 @@ class Run extends Model
     /**
      * Each player's single best run on a track (optionally for one car),
      * ordered fastest first. Ties are broken by who set the time first.
-     * Runs in retired vehicles (no longer in config game.cars) stay stored but are left out.
+     * Runs in retired vehicles (no longer in config game.cars), or in one the course does not offer, stay stored but
+     * are left out.
      */
     public static function personalBests(string $trackId, ?string $carId = null): Builder
     {
@@ -45,7 +47,7 @@ class Run extends Model
             ->select('runs.id')
             ->selectRaw('ROW_NUMBER() OVER (PARTITION BY player_id ORDER BY time_ms ASC, id ASC) AS rn')
             ->where('track_id', $trackId)
-            ->whereIn('car_id', array_keys(config('game.cars')))
+            ->whereIn('car_id', Vehicles::on($trackId))
             ->when($carId, fn ($q) => $q->where('car_id', $carId));
 
         return static::query()

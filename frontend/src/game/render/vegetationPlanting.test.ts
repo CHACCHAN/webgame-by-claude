@@ -5,7 +5,8 @@ import { buildTerrain } from '../track/terrain';
 import { COVER_SETS, plantCover, plantTrees, roadViews, SPECIES, TREE_SETS, UNDER_SETS, vegetationFiles, viewLimiter } from './vegetationPlanting';
 
 describe('vegetation planting', () => {
-  for (const course of Object.values(COURSES)) {
+  // (an airfield in the desert has no forest: its sets are empty and nothing is planted)
+  for (const course of Object.values(COURSES).filter((c) => TREE_SETS[c.style].length > 0)) {
     const track = new Track(course.design);
     const terrain = buildTerrain(track, course.landform);
     const ids = TREE_SETS[course.style];

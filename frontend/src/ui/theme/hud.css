@@ -159,6 +159,8 @@
 .gear { width: 13cqw; height: 15cqw; display: grid; place-items: center; font-stretch: var(--w-tight); font-weight: 800; font-size: 13cqw; line-height: 1; border: 1px solid var(--line-hot); background: rgb(var(--c-ink) / 0.62);
   clip-path: polygon(2cqw 0, 100% 0, 100% calc(100% - 2cqw), calc(100% - 2cqw) 100%, 0 100%, 0 2cqw); }
 .hud-br.hot .gear { color: var(--void); text-shadow: none; background: var(--magenta); border-color: var(--magenta); animation: kf-blink 0.16s steps(2) infinite; }
+.gear.wide { font-size: 7.6cqw; }
+.gear.ab { color: var(--amber); border-color: var(--amber); }
 .speed-box { display: flex; align-items: baseline; gap: 1.6cqw; }
 .speed { min-width: 1.32em; font-stretch: var(--w-tight); font-weight: 800; font-size: 25cqw; line-height: 0.86; text-align: right; font-variant-numeric: tabular-nums; }
 .speed.wide { font-size: 19cqw; line-height: 1.1; }

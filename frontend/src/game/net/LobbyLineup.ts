@@ -57,7 +57,7 @@ export class LobbyLineup {
   set(entries: readonly LineupEntry[]) {
     if (this.disposed) return;
     this.entries = entries.map((e) => ({ ...e })).sort((a, b) => a.slot - b.slot);
-    const { spots, span, scale } = lineupPlan(this.entries, this.track.startS);
+    const { spots, span, scale } = lineupPlan(this.entries, this.track.startS, this.track.design.gridWidth);
     this.span = span;
     this.scale = scale;
     for (const [slot, st] of this.slots) {

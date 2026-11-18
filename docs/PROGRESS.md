@@ -2248,3 +2248,32 @@ to be seen). The films still show the balls until they are recorded again.
   quota upstream); a headless `vibe` from a background shell did not start (waits for the system keyring): the
   second review of the Edwards backend has not happened yet. The agents were stopped once more by a usage limit
   and resumed after the owner's login.
+
+## Release 2.6 (11-18): Edwards AFB and the three fighters are open
+
+- **The owner (11-13)**: release Edwards with the stand-in aircraft models (my reading of their yes; told so).
+  Finished by an agent on Opus 5.5 (`~/.local/opt/wt/EDWARDS_FINAL.md`, branch
+  `worktree-agent-af9a3b6158beebe1a`, release commit `de77535`).
+- **In**: the course `edwards` (style `airbase`), F-15J, F-15C, Su-47 (procedural stand-ins: no cockpit, intakes,
+  panel lines or markings), the take-off after the finish, the course select's film (hayate, dawn, 296 s), the
+  bots' runs and medals; the occlusion's depth taken at texel middles (bands 4.6-6.8 % -> 0.9-1.2 % on the four old
+  courses, pictures 1.6-3.3 % brighter: the agent's numbers, `~/.local/opt/wt/edwards/ao-compare.txt`).
+- **Server, from a second review by another model** (gemini-4-hydrogen through Vibe, read-only; the agent checked
+  each claim and fixed eight with tests, rejected three that only a wrong config file causes): a closed course's
+  runs are in no answer (ghost 404, `bests`), the leaderboard takes only a vehicle the course offers (422), a
+  room's vehicle is checked on the locked row (join, change of car, change of course, rematch), `finish` on a
+  closed course is 409.
+- Verified by me on the merged tree: tsc; vitest 264; build; backend tests 76 (999 assertions) on an isolated
+  stack; `gpu-errors` 0 on WebGPU and WebGL 2, default course and `COURSE=edwards` with the three fighters; the
+  race pictures of both looked at. By the agent: full E2E 19 of 19 on the release tree, `paint-drawn` for the
+  fighters on both backends, the upscaler at Edwards, medals by the sim.
+- Not verified: E2E after my merge; two real browsers online on this build (the agent's round two did it on an
+  earlier one); the old courses with the upscaler after the occlusion change; phones; the flames by eye in motion.
+  Known: orange patches in the lakebed's wet film in night rain; the film is five slow minutes.
+- **Models for the work (benchmark, 11-13...18)**: the hayate's three measured defects given to gemini-4-hydrogen,
+  gpt-6.1-sol, gpt-6-astra (Vibe, read-only, xhigh; I build and measure) and to the cars agent (Fable).
+  After two rounds hydrogen and sol pass the gate (lamp overlap 0.217 -> 0.419 / 0.417); astra failed round one.
+  Data: `~/.local/opt/wt/bench/hydrogen-hayate/`. Not decided yet who models what.
+- The mirror repository (push only, the owner's) has main since 11-13: pushed in steps of 15 commits (one push
+  of the whole history is refused, HTTP 413). GitHub is not pushed: three commits of 11-11 hold the gateway's
+  address (removed since); the owner has not said.

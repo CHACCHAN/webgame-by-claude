@@ -156,7 +156,9 @@ describe('terrain never covers the road (all courses)', () => {
           worstFar = Math.max(worstFar, farAt(p.x, p.z) - Math.min(p.y, T.heightAt(p.x, p.z)));
         }
       }
-      expect(worstNear).toBeLessThan(-0.05);
+      // (an airfield has no road bed: the land is level with the pavement and with the strips beside it)
+      if (c.design.bed === 0) expect(worstNear).toBeLessThan(0.08);
+      else expect(worstNear).toBeLessThan(-0.05);
       expect(worstFar).toBeLessThan(-1);
     });
   }

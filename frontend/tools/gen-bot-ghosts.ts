@@ -4,7 +4,7 @@
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { Track } from '../src/game/track/Track';
-import { COURSES, COURSE_ORDER, type CourseId } from '../src/game/track/courses';
+import { ALL_COURSES, COURSES, type CourseId } from '../src/game/track/courses';
 import { PhysicsWorld, PHYSICS_DT, initRapier } from '../src/game/vehicle/PhysicsWorld';
 import { VehicleSim, emptyInput } from '../src/game/vehicle/VehicleSim';
 import { CAR_SPECS, type CarId } from '../src/game/vehicle/carSpecs';
@@ -37,10 +37,15 @@ const extras: Record<CourseId, Bot[]> = {
     { name: 'ミッドナイト白石', car: 'shiden', profile: { ...AI_PROFILES.ace, gripUse: 0.76 }, seed: 15 },
     { name: 'LINKE_SPUR', car: 'raijin', profile: { ...AI_PROFILES.legend, gripUse: 0.9 }, seed: 16 },
   ],
+  edwards: [
+    { name: 'NIGHT_OWL', car: 'r34', profile: { ...AI_PROFILES.ace, gripUse: 0.8 }, seed: 17 },
+    { name: 'DRYLAKE_22L', car: 'f15j', profile: { ...AI_PROFILES.ace, gripUse: 0.78 }, seed: 18 },
+    { name: 'ミッドナイト白石', car: 'shiden', profile: { ...AI_PROFILES.ace, gripUse: 0.76 }, seed: 19 },
+  ],
 };
 
 const out: unknown[] = [];
-for (const course of COURSE_ORDER.map((id) => COURSES[id])) {
+for (const course of ALL_COURSES.map((id) => COURSES[id])) {
   const track = new Track(course.design);
   const line = new RacingLine(track);
   const levels: AILevel[] = ['legend', 'ace', 'rookie'];
@@ -62,8 +67,16 @@ for (const course of COURSE_ORDER.map((id) => COURSES[id])) {
     const rec = new GhostRecorder();
     const splits: number[] = [];
     let t = 0;
-    while (t < 300 && splits.length < track.sectorSplits.length) {
+    let proj = track.project(v.position.x, v.position.y, v.position.z);
+    const ground = !!(track.design.zoneGrip || track.design.verge);
+    while (t < 600 && splits.length < track.sectorSplits.length) {
       ai.update(v, PHYSICS_DT, input);
+      // the ground under the tyres, as the game sets it (`Game.trackRacer`)
+      if (ground) {
+        proj = track.project(v.position.x, v.position.y, v.position.z, proj.index, proj);
+        v.gripScale = course.surface.grip * track.surfaceGrip(proj.index, proj.lateral, v.position.x, v.position.z);
+        v.rollScale = track.surfaceRoll(proj.index, proj.lateral, v.position.x, v.position.z);
+      }
       v.input = input;
       v.preStep(PHYSICS_DT);
       physics.step();

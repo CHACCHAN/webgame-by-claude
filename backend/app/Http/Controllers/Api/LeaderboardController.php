@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Run;
+use App\Support\Vehicles;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -15,7 +16,8 @@ class LeaderboardController extends Controller
         abort_unless(config("game.tracks.$trackId"), 404, 'Unknown track.');
 
         $data = $request->validate([
-            'car_id' => ['nullable', 'string', Rule::in(array_keys(config('game.cars')))],
+            // (a vehicle the course does not offer has no list there)
+            'car_id' => ['nullable', 'string', Rule::in(Vehicles::on($trackId))],
             'limit' => ['nullable', 'integer', 'min:1', 'max:100'],
         ]);
         $limit = $data['limit'] ?? 50;

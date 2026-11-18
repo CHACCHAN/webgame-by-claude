@@ -78,6 +78,27 @@
    "massKg": 320,
    "powerKw": 128.7
   },
+  "f15j": {
+   "zeroTo100": 5.69,
+   "topSpeed": 1254.5,
+   "lateralG": 0.59,
+   "massKg": 20200,
+   "powerKw": 88320
+  },
+  "f15c": {
+   "zeroTo100": 5.67,
+   "topSpeed": 1262.9,
+   "lateralG": 0.59,
+   "massKg": 20200,
+   "powerKw": 89781
+  },
+  "su47": {
+   "zeroTo100": 6.01,
+   "topSpeed": 1439.2,
+   "lateralG": 0.6,
+   "massKg": 25670,
+   "powerKw": 130150
+  },
   "e231": {
    "zeroTo100": 74.53,
    "topSpeed": 120,

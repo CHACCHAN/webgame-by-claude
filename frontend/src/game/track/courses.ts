@@ -1,15 +1,20 @@
 import type { AILevel } from '../ai/AIDriver';
 import type { CarId, RoadCarId } from '../vehicle/carSpecs';
-import { AUTOBAHN, KIRIFURI_LAKESIDE, OBORO_DOWNHILL, TENROU_SKYLINE, type CourseDesign } from './courseDesign';
-import { BAY, CALDERA, PLATEAU, RIDGE, type Landform } from './landforms';
+import { AUTOBAHN, EDWARDS, KIRIFURI_LAKESIDE, OBORO_DOWNHILL, TENROU_SKYLINE, type CourseDesign } from './courseDesign';
+import { BAY, CALDERA, MOJAVE, PLATEAU, RIDGE, type Landform } from './landforms';
+import type { JetId } from '../vehicle/jets';
+import { RELEASED } from '../release';
 import type { TrainId } from '../vehicle/trains';
 import type { BikeId } from '../vehicle/bikes';
 import type { VoiceId } from '../audio/speech/text';
 
-export type CourseId = 'oboro-downhill' | 'kirifuri-lakeside' | 'tenrou-skyline' | 'autobahn';
+export type CourseId = 'oboro-downhill' | 'kirifuri-lakeside' | 'tenrou-skyline' | 'autobahn' | 'edwards';
 
-/** a Japanese mountain pass, or a German motorway (no Japanese roadside dressing, motorway structures instead) */
-export type CourseStyle = 'touge' | 'autobahn';
+/**
+ * a Japanese mountain pass, a German motorway (no Japanese roadside dressing, motorway structures instead), or an
+ * air base in the desert (render/airbaseScenery.ts: aprons, a runway, a dry lake; no roadside at all)
+ */
+export type CourseStyle = 'touge' | 'autobahn' | 'airbase';
 
 export interface RivalInfo {
   name: string;
@@ -164,9 +169,47 @@ export const COURSES: Record<CourseId, CourseInfo> = {
     music: 'bgm_race_autobahn',
     art: '/img/courses/autobahn.webp',
   },
+  edwards: {
+    id: 'edwards',
+    name: 'エドワーズ空軍基地',
+    nameEn: 'EDWARDS AFB',
+    style: 'airbase',
+    tagline: '滑走路04Rから乾湖へ、音速の手前まで',
+    description: 'モハーヴェ砂漠の試験飛行の聖地。駐機場から誘導路を抜け、4.6kmのコンクリート滑走路を全開で駆け、ロジャース乾湖のコンパスローズをかすめて湖面滑走路へ。約12km、壁はひとつもない。戦闘機はここでだけ走れる。',
+    design: EDWARDS,
+    landform: MOJAVE,
+    // dry concrete; the lakebed's clay gives less (`CourseDesign.zoneGrip`)
+    surface: { grip: 1, label: '乾いたコンクリートと乾湖の粘土（湖面は滑りやすい）' },
+    rivals: {
+      // the ace and the legend come in fighters. Their AI needs 208 s / 189 s (tools/sim-run.ts): slow on the taxiway,
+      // out of sight on the runway. A sports car's legend lap is 227–232 s, the Ninja H2's 168 s, the U9's 128 s: with
+      // most cars it is a race into the first turn and a long look at two afterburners
+      rookie: { name: 'ノーラ・ヘイズ', voice: 'F4', title: 'ROOKIE / 整備班の新人', car: 'cybertruck', color: '#c8ccd0', portrait: '', description: 'フライトラインの整備班に来たばかり。夜勤明けに、牽引車がわりのトラックで滑走路を走るのが楽しみ。' },
+      ace: { name: 'デイル・マッケンジー', voice: 'M2', title: 'LOCAL ACE / 412試験航空団のテストパイロット', car: 'f15c', color: '#7f8890', portrait: '', description: 'EDのテイルコードを背負うイーグル乗り。この滑走路の継ぎ目の数まで知っている。' },
+      legend: { name: 'ベールクト', voice: 'M3', title: 'LEGEND / 乾湖に現れる黒い前進翼', car: 'su47', color: '#3b4049', portrait: '', description: '記録にない夜、湖面にだけ現れるという黒い機体。誰が乗っているのか、基地の誰も知らない。' },
+    },
+    // mostly flat out, like the autobahn: the legend AI's time +1.5 % (clean runs), silver +7 %, bronze +17 %
+    // (EDWARDS=1 COURSE=edwards npx tsx tools/sim-run.ts <cars> legend, 2026-11-12)
+    medals: {
+      hayate: { gold: 293_500, silver: 309_500, bronze: 338_500 },
+      raijin: { gold: 234_000, silver: 246_500, bronze: 269_500 },
+      shiden: { gold: 230_500, silver: 243_000, bronze: 266_000 },
+      supra: { gold: 235_000, silver: 248_000, bronze: 271_000 },
+      r34: { gold: 233_500, silver: 246_000, bronze: 269_500 },
+      cybertruck: { gold: 237_500, silver: 250_000, bronze: 273_500 },
+      u9: { gold: 129_500, silver: 136_500, bronze: 149_500 },
+      s15: { gold: 252_000, silver: 265_500, bronze: 290_500 },
+    },
+    // (no track of its own: the motorway's, the other flat-out course)
+    music: 'bgm_race_autobahn',
+    art: '/img/courses/edwards.webp',
+  },
 };
 
-export const COURSE_ORDER: CourseId[] = ['oboro-downhill', 'kirifuri-lakeside', 'tenrou-skyline', 'autobahn'];
+/** every course there is, shown to players or not yet (tests and tools) */
+export const ALL_COURSES: CourseId[] = ['oboro-downhill', 'kirifuri-lakeside', 'tenrou-skyline', 'autobahn', 'edwards'];
+/** the courses a player can choose (Edwards with its fighters once released: `release.ts`) */
+export const COURSE_ORDER: CourseId[] = ALL_COURSES.filter((id) => id !== 'edwards' || RELEASED.edwards);
 export const DEFAULT_COURSE: CourseId = 'oboro-downhill';
 
 /**
@@ -212,6 +255,16 @@ export const TRAIN_MEDALS: Record<CourseId, Record<TrainId, { gold: number; silv
     e5: { gold: 174_000, silver: 186_500, bronze: 202_000 },
     l0: { gold: 130_000, silver: 139_000, bronze: 151_000 },
   },
+  // Edwards (2026-11-12; `LIMIT=700`: the commuter trains need seven minutes): the E235, the Tobu, the Keikyu, the
+  // E5 and the L0 each ran off a quarter turn of the taxiway once and were put back (a train does not take 51 m)
+  edwards: {
+    e231: { gold: 436_500, silver: 467_000, bronze: 506_000 },
+    e235: { gold: 431_000, silver: 461_000, bronze: 500_000 },
+    keikyu1000: { gold: 406_000, silver: 434_500, bronze: 471_000 },
+    tobu30000: { gold: 425_000, silver: 454_500, bronze: 493_000 },
+    e5: { gold: 331_000, silver: 354_500, bronze: 384_000 },
+    l0: { gold: 265_000, silver: 283_500, bronze: 307_500 },
+  },
 };
 
 /**
@@ -227,6 +280,8 @@ export const ROACH_MEDALS: Record<CourseId, { gold: number; silver: number; bron
   'tenrou-skyline': { gold: 44_000, silver: 47_000, bronze: 51_000 },
   // the autobahn: from a standing start (as TRAIN_MEDALS)
   autobahn: { gold: 35_500, silver: 38_000, bronze: 41_000 },
+  // Edwards: the legend AI's run, clean (1226 km/h on the runway), 2026-11-12
+  edwards: { gold: 71_500, silver: 76_500, bronze: 83_000 },
 };
 
 /**
@@ -255,4 +310,22 @@ export const BIKE_MEDALS: Record<CourseId, Record<BikeId, { gold: number; silver
     ninjah2: { gold: 90_500, silver: 97_000, bronze: 105_000 },
     hayabusa: { gold: 95_500, silver: 102_000, bronze: 111_000 },
   },
+  // Edwards (2026-11-12, clean)
+  edwards: {
+    nsr250r: { gold: 262_500, silver: 281_000, bronze: 304_500 },
+    ninjah2: { gold: 167_500, silver: 179_500, bronze: 194_500 },
+    hayabusa: { gold: 176_500, silver: 189_000, bronze: 205_000 },
+  },
+};
+
+/**
+ * Medal times of the fighters at Edwards, the only course they run on: gold = the legend AI's time (tools/sim-run.ts,
+ * 2026-11-12, no respawn), silver +7 %, bronze +16 %. The AI keeps a wide margin in the taxiway's quarter turns
+ * (0.42 g at 52 km/h) and brakes from the middle of the runway for the lake's sweep: a player who dares more beats
+ * gold by far. The three come out alike because the taxiway and the sweep, not the thrust, set the time.
+ */
+export const JET_MEDALS: Record<JetId, { gold: number; silver: number; bronze: number }> = {
+  f15j: { gold: 189_000, silver: 202_000, bronze: 219_000 },
+  f15c: { gold: 188_500, silver: 201_500, bronze: 218_500 },
+  su47: { gold: 188_500, silver: 202_000, bronze: 219_000 },
 };

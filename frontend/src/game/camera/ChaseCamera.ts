@@ -41,6 +41,13 @@ export const TRAIN_CAMERA: CameraProfile = {
   front: { ahead: 2.5, up: 2.55 },
 };
 
+/** a fighter, 19–23 m long with a 13–17 m span: the chase takes all of it in; the front view from the cockpit */
+export const JET_CAMERA: CameraProfile = {
+  chase: { dist: 27, perKmh: 0.012, height: 8 },
+  near: { dist: 21, perKmh: 0.008, height: 6.2 },
+  front: { ahead: 3.6, up: 1.5 },
+};
+
 /** the most the chase camera trails its damped target (m): what ~500 km/h gives */
 const MAX_LAG = 10;
 const _fwd = new THREE.Vector3(), _desired = new THREE.Vector3(), _look = new THREE.Vector3(), _up = new THREE.Vector3();

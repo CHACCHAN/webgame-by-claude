@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\Vehicles;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -31,30 +32,16 @@ class Room extends Model
     }
 
     /**
-     * What may race on a course, in the game's order: every vehicle, but for one that names its courses
-     * (`game.cars.<id>.courses`: the fighters at their air base; the client's `vehiclesFor`).
-     *
-     * @return list<string>
-     */
-    public static function vehiclesOn(string $trackId): array
-    {
-        return array_keys(array_filter(
-            config('game.cars'),
-            fn (array $car) => ! isset($car['courses']) || in_array($trackId, $car['courses'], true),
-        ));
-    }
-
-    /**
-     * The host's change of course and / or conditions (null: as it is). A member whose vehicle the new course does
-     * not offer gets the course's first one, without a paint (it was the other vehicle's); what a change takes back
-     * of `loaded` / `ready` is this model's `updated` hook.
+     * The host's change of course and / or conditions (null: as it is): the one way a room's course changes. A
+     * member whose vehicle the new course does not offer (`App\Support\Vehicles`: a fighter away from its air base)
+     * gets the course's first one, without a paint (it was the other vehicle's); what a change takes back of
+     * `loaded` / `ready` is this model's `updated` hook.
      */
     public function change(?string $trackId, ?string $timeOfDay): void
     {
         $trackId ??= $this->track_id;
         if ($trackId !== $this->track_id) {
-            $offered = self::vehiclesOn($trackId);
-            $this->members()->whereNotIn('car_id', $offered)->update(['car_id' => $offered[0], 'color' => null]);
+            $this->members()->whereNotIn('car_id', Vehicles::on($trackId))->update(['car_id' => Vehicles::fallback($trackId), 'color' => null]);
         }
         $this->update(['track_id' => $trackId, 'time_of_day' => $timeOfDay ?? $this->time_of_day ?? 'night']);
     }

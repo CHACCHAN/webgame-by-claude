@@ -45,20 +45,26 @@ export function footprint(spec: CarSpec): { width: number; ahead: number; behind
     const length = cars.reduce((sum, c) => sum + c.length, 0);
     return { width: spec.size.width, ahead: cars[0].front, behind: length - cars[0].front };
   }
+  // a fighter: its wings, not its fuselage box, and its origin is midway between the nose wheel and the main wheels,
+  // well ahead of its middle
+  if (spec.jet) {
+    const ahead = spec.jet.noseGear + spec.wheelbase / 2;
+    return { width: spec.jet.wing.span, ahead, behind: spec.size.length - ahead };
+  }
   return { width: spec.size.width, ahead: spec.size.length / 2, behind: spec.size.length / 2 };
 }
 
 type Placed = GridEntry & ReturnType<typeof footprint>;
 
-const fits = (row: Placed[], c: Placed) =>
-  row.length < MAX_ABREAST && row.reduce((w, m) => w + m.width, c.width) + (row.length + 2) * GRID_CLEARANCE <= GRID_WIDTH + 1e-9;
+const fits = (row: Placed[], c: Placed, width: number) =>
+  row.length < MAX_ABREAST && row.reduce((w, m) => w + m.width, c.width) + (row.length + 2) * GRID_CLEARANCE <= width + 1e-9;
 
 /** Rows in order, each as wide as the road allows. */
-function pack(list: Placed[]): Placed[][] {
+function pack(list: Placed[], width: number): Placed[][] {
   const rows: Placed[][] = [];
   for (const c of list) {
     const row = rows[rows.length - 1];
-    if (row && fits(row, c)) row.push(c);
+    if (row && fits(row, c, width)) row.push(c);
     else rows.push([c]);
   }
   return rows;
@@ -80,15 +86,17 @@ function pack(list: Placed[]): Placed[][] {
  * - The front row stands `GRID_FRONT` before the start line; a grid too deep for the road behind it (three trains or
  *   more) moves forward as a whole until its last row stands at `GRID_MIN_S`. The clock starts at the green light
  *   for everybody either way.
+ * - `width`: the room a course gives its grid when it is not a road's (`CourseDesign.gridWidth`: the ramp at Edwards,
+ *   where fighters 13–17 m across stand three abreast; they count as long and stand behind the cars).
  */
-export function onlineGrid(room: readonly GridEntry[], startS: number): Map<number, GridSpot> {
+export function onlineGrid(room: readonly GridEntry[], startS: number, width = GRID_WIDTH): Map<number, GridSpot> {
   const tail = (c: Placed) => (c.behind > LONG_TAIL ? c.behind : 0);
   const all = room.map((e) => ({ slot: e.slot, carId: e.carId, ...footprint(CAR_SPECS[e.carId]) }));
   all.sort((a, b) => tail(a) - tail(b) || a.slot - b.slot);
   const short = all.filter((c) => !tail(c));
   // the long ones are packed from the back, so the row left short is their first and the fullest rows are the last
-  const long = pack(all.filter((c) => tail(c)).reverse()).reverse().map((row) => row.reverse());
-  const rows = [...pack(short), ...long];
+  const long = pack(all.filter((c) => tail(c)).reverse(), width).reverse().map((row) => row.reverse());
+  const rows = [...pack(short, width), ...long];
 
   const out = new Map<number, GridSpot>();
   let back = 0;
@@ -101,8 +109,8 @@ export function onlineGrid(room: readonly GridEntry[], startS: number): Map<numb
   const front = Math.max(startS - GRID_FRONT, GRID_MIN_S + back);
   rows.forEach((row, r) => {
     // the road's free width shared equally between the vehicles and the edges
-    const gap = (GRID_WIDTH - row.reduce((w, c) => w + c.width, 0)) / (row.length + 1);
-    let x = -GRID_WIDTH / 2;
+    const gap = (width - row.reduce((w, c) => w + c.width, 0)) / (row.length + 1);
+    let x = -width / 2;
     for (const c of row) {
       x += gap + c.width / 2;
       out.set(c.slot, { s: front - backOf[r], lateral: x, row: r });
@@ -111,7 +119,7 @@ export function onlineGrid(room: readonly GridEntry[], startS: number): Map<numb
     // alone behind a row of three: behind the gap to the right of its middle vehicle, not behind its bumper
     if (row.length === 1 && r > 0 && rows[r - 1].length === 3) {
       const ahead = rows[r - 1].map((c) => out.get(c.slot)!.lateral);
-      out.get(row[0].slot)!.lateral = Math.min((ahead[1] + ahead[2]) / 2, GRID_WIDTH / 2 - GRID_CLEARANCE - row[0].width / 2);
+      out.get(row[0].slot)!.lateral = Math.min((ahead[1] + ahead[2]) / 2, width / 2 - GRID_CLEARANCE - row[0].width / 2);
     }
   });
   return out;
