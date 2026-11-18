@@ -188,7 +188,8 @@ def flare_at(zz):
     edge (the vent's step, r07); the rear one swells out of the door over a forearm's length (r11: no step there)"""
     ramp = lambda t: float(np.clip(t, 0.0, 1.0)) ** 2 * (3 - 2 * float(np.clip(t, 0.0, 1.0)))
     front = 0.030 * ramp((zz - 0.745) / 0.05) * (1 - 0.35 * ramp((zz - 1.75) / 0.25))
-    rear = 0.036 * ramp((-0.56 - zz) / 0.42) * (1 - 0.45 * ramp((-1.70 - zz) / 0.30))
+    # (0.030 + the arch lip's 4 mm = the 0.034 the sheet alone had: the catalogue's width is over the lips)
+    rear = 0.030 * ramp((-0.56 - zz) / 0.42) * (1 - 0.45 * ramp((-1.70 - zz) / 0.30))
     return front + rear
 
 
@@ -330,7 +331,11 @@ def nose_z(x, y):
     return float(_NOSE(y)) - 0.028 * t ** 2 - 0.066 * t ** 6
 
 
-TAIL_Z, TAIL_SWEEP, TAIL_HW, TAIL_POW = -2.235, 0.10, 0.79, 2.6
+# TAIL_Z -2.185 (2026-11-18, the precision gate's tools/gate/r34tail.py: the panel moved along the car against the
+# lenses traced on r11, r38, r37 and the outline of the side view r36): at -2.235 the rear 3/4 r11 had its lamps a
+# lens' third too far back (IoU 0.47 -> 0.26) and the side view a tail too full; at the old -2.122 the tail-on and
+# r38 were the poorer. The sum over the three photos is best 4.5-6 cm ahead of -2.235.
+TAIL_Z, TAIL_SWEEP, TAIL_HW, TAIL_POW = -2.185, 0.10, 0.79, 2.6
 
 
 def lamp_face_z(x, y):

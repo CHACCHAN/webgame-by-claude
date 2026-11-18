@@ -87,7 +87,10 @@ def polyline(pts, step=0.04):
 # ---------------------------------------------------------------- wing
 
 WING_X = 0.775
-WING_DZ = -0.085        # the wing stands over the lid's rear edge (SH.TAIL_Z)
+# the wing stands over the lid's rear part (SH.TAIL_Z). -0.03 (2026-11-18, tools/gate/r34wing.py: the wing moved along
+# the car against the outlines): the side view r36, r38 and the tail-on want it further forward than -0.085, the rear
+# 3/4 r11 further back; at -0.03 each of the four is as good as or better than with the old tail
+WING_DZ = -0.03
 STAY_X = 0.47
 
 
@@ -320,7 +323,8 @@ def door_line(part, surf):
 def arch_lips(part, surf):
     """the wheel arches' rolled lips: a low bead round each opening, standing on the wing's own surface, and the
     flange turned in behind it (the cut-out alone left a paper edge and an arch that read as a hole in a flat side)"""
-    prof = [(0.034, 0.0006), (0.024, 0.0026), (0.013, 0.0066), (0.004, 0.0074)]   # (beyond the opening, proud)
+    # (beyond the opening, proud): 4 mm proud at most; at 7.4 mm the car was 1,804 mm over the rear lips (gate)
+    prof = [(0.034, 0.0004), (0.024, 0.0015), (0.013, 0.0035), (0.004, 0.0040)]
     for (zc, yc, r) in (SH.ARCH_F, SH.ARCH_R):
         for s in (1, -1):
             rows = []
