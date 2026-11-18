@@ -2,10 +2,10 @@
 //   node tools/blender-models.cjs trains [ids]   tools/blender/<id>.py        → public/models/trains/<id>.glb
 //   node tools/blender-models.cjs cars [ids]     tools/blender/cars/<id>.py   → public/models/cars/<id>.glb
 //   node tools/blender-models.cjs bikes [ids]    tools/blender/bikes/<id>.py  → public/models/bikes/<id>.glb
-//   node tools/blender-models.cjs jets [ids]     tools/blender/jets/<id>.py   → public/models/jets/<id>.glb (+ <id>-<variant>.glb)
 //   node tools/blender-models.cjs props [ids]    tools/blender/props/<id>.py  → public/models/props/<id>.glb
 //   node tools/blender-models.cjs roadside [ids] tools/blender/roadside/<id>.py → public/models/roadside/<id>.glb
 //   node tools/blender-models.cjs creatures      tools/blender/creatures/roach.py → public/models/roach/roach.glb
+//   node tools/blender-models.cjs jets [ids]     tools/blender/jets/<id>.py   → public/models/jets/<id>.glb
 //   node tools/blender-models.cjs nature [ids]   tools/blender/nature/<id>.py → public/models/nature/<id>.glb + <id>.lite.glb
 //   … --render [dir]   also renders each model's check views with its script (default dir: /tmp/<id>-render)
 // A train's line variants (`variants`: the same model painted and signed for another line, `Livery.variant` in
@@ -34,8 +34,6 @@ const KINDS = {
   cars: { dir: 'tools/blender/cars', out: 'public/models/cars', palette: false, textureSize: 1024, big: {}, ids: ['hayate', 'raijin', 'shiden', 'supra', 'r34', 's15', 'cybertruck', 'u9'] },
   // the motorcycles: nodes steer / spin_f / spin_r stay apart (render/BikeModel.ts turns and spins them)
   bikes: { dir: 'tools/blender/bikes', out: 'public/models/bikes', palette: false, textureSize: 1024, big: {}, ids: ['nsr250r', 'ninjah2', 'hayabusa'] },
-  // the fighters: gear, nozzles and tailplanes stay nodes of their own (render/JetModel.ts); a two-seater is a variant
-  jets: { dir: 'tools/blender/jets', out: 'public/models/jets', palette: false, textureSize: 2048, big: {}, ids: ['f15j', 'f15c'], variants: { f15j: ['dj'], f15c: ['d'] } },
   // (a prop's script bakes each of its textures at the size it should have, 2048 px at most: tools/blender/props/prop_bake.py)
   props: {
     dir: 'tools/blender/props', out: 'public/models/props', palette: false, textureSize: 2048, big: {}, outDir: true,
@@ -50,6 +48,8 @@ const KINDS = {
     dir: 'tools/blender/roadside', out: 'public/models/roadside', palette: false, textureSize: 512, big: {}, outDir: true,
     ids: ['guardrail', 'guardrail_end', 'delineator', 'gutter_grate', 'rockfall_fence'],
   },
+  // the fighters (render/JetModel.ts: named nodes for gear, nozzles and moving surfaces stay apart; one atlas each)
+  jets: { dir: 'tools/blender/jets', out: 'public/models/jets', palette: false, textureSize: 2048, big: {}, ids: ['f15j', 'f15c'], variants: { f15j: ['dj'], f15c: ['d'] } },
   creatures: { dir: 'tools/blender/creatures', out: 'public/models/roach', palette: false, textureSize: 1024, big: {}, resample: true, ids: ['roach'] },
   // trees, bushes, undergrowth, rocks (tools/blender/nature/nature_kit.py): the script writes the geometry (every level
   // of detail a node) and its textures as PNG files next to it, which `textures` puts into the materials by name

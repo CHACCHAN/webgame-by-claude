@@ -159,6 +159,19 @@ Blender models are made and the owner has seen their sheets). Course art `img/co
 picture of our own build (the F-15J stand-in lifting off the lakebed at dawn, WebGPU, 1600×900 WebP q86; to be taken
 again with the real model). Thumbnails `img/vehicles/{f15j,f15c,su47}.webp`: `COURSE=edwards node tools/thumbs.cjs`.
 The fighters' sound is synthesised (`audio/jet.ts`), no recordings.
+The F-15 (2026-11-18: `models/jets/f15j.glb`, `f15j-dj.glb`, `f15c.glb`, `f15c-d.glb`; 12 draw calls, 28–31 k
+triangles, 0.9 MB each) is our own Blender model, one airframe for the four: `tools/blender/jets/f15.py` (assembly,
+`--id`, `--variant`), `f15_shape.py` (the geometry: stations in metres aft of the nose), `f15_paint.py` +
+`jet_atlas.py` (everything on its surface, painted by the script into one 2048 px atlas: camouflage, panel lines,
+stencils, markings, the steady lamps as an emissive map), `f15_scene.py` (check renders). Built with
+`BLENDER=<bin> node tools/blender-models.cjs jets`. The shape follows the published dimensions (19.43 m long, 13.05 m
+span, 5.63 m high, tailplane span 8.61 m, wheel track 2.75 m, wheelbase 5.42 m) and three photographs from Wikimedia
+Commons that were measured only and are not in the repository (side, head-on, planform from below; their authors and
+licences in `tools/blender/jets/fitdata/f15c/ref/list.json`, the solved cameras in `fitdata/f15c/cams.json`). The
+markings are drawn by the script in its own stroke letters: national insignia (hinomaru; star and bar), invented
+numbers (62-8999 / 999 and 62-8100 / 100; TG 96-500 and 96-510), an invented fin band "NOCTURNE" and the game's own
+fin badge (a moon over a pass); no unit's emblem is copied. The pilot, the seats and the cockpit are part of the
+model. The aircraft parked on the airfield (`airbaseScenery.ts`) and the course art are still the stand-in.
 
 ### Vegetation and rocks (own, Blender; 2026-11-11)
 Trees, bushes, undergrowth and rocks are our own too: Python scripts in `frontend/tools/blender/nature/` grow each
