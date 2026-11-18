@@ -5,6 +5,7 @@
 //   node tools/blender-models.cjs props [ids]    tools/blender/props/<id>.py  → public/models/props/<id>.glb
 //   node tools/blender-models.cjs roadside [ids] tools/blender/roadside/<id>.py → public/models/roadside/<id>.glb
 //   node tools/blender-models.cjs creatures      tools/blender/creatures/roach.py → public/models/roach/roach.glb
+//   node tools/blender-models.cjs jets [ids]     tools/blender/jets/<id>.py   → public/models/jets/<id>.glb
 //   node tools/blender-models.cjs nature [ids]   tools/blender/nature/<id>.py → public/models/nature/<id>.glb + <id>.lite.glb
 //   … --render [dir]   also renders each model's check views with its script (default dir: /tmp/<id>-render)
 // A train's line variants (`variants`: the same model painted and signed for another line, `Livery.variant` in
@@ -47,6 +48,8 @@ const KINDS = {
     dir: 'tools/blender/roadside', out: 'public/models/roadside', palette: false, textureSize: 512, big: {}, outDir: true,
     ids: ['guardrail', 'guardrail_end', 'delineator', 'gutter_grate', 'rockfall_fence'],
   },
+  // the fighters (render/JetModel.ts: named nodes for gear, nozzles and moving surfaces stay apart; one atlas each)
+  jets: { dir: 'tools/blender/jets', out: 'public/models/jets', palette: false, textureSize: 2048, big: {}, ids: ['su47'] },
   creatures: { dir: 'tools/blender/creatures', out: 'public/models/roach', palette: false, textureSize: 1024, big: {}, resample: true, ids: ['roach'] },
   // trees, bushes, undergrowth, rocks (tools/blender/nature/nature_kit.py): the script writes the geometry (every level
   // of detail a node) and its textures as PNG files next to it, which `textures` puts into the materials by name

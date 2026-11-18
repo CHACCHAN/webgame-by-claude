@@ -240,6 +240,13 @@ const JETS: JetDef[] = [
       noseGear: 5.6,
       vr: 72,
       lof: 82,
+      // measured on the model (`tools/blender/jets/su47.py --measure`): the nose leg forward into its bay, the main
+      // legs forward and inward into the intake trunks' sides
+      gearFold: {
+        nose: { axis: [-1, 0, 0], angle: 1.714 },
+        left: { axis: [-0.93, -0.335, -0.155], angle: 1.968 },
+        right: { axis: [-0.93, 0.335, 0.155], angle: 1.968 },
+      },
       liveries: [{ name: '「01」試作機', swatch: '#3b4049', crew: 1 }],
       camo: ['#3b4049', '#2a2e35'],
       courses: ['edwards'],
