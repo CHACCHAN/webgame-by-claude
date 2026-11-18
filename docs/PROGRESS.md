@@ -2329,3 +2329,17 @@ to be seen). The films still show the balls until they are recorded again.
 - Not verified: the raijin's and supra's own sheets only reduced; `paint-drawn` on WebGL 2 (the agent ran it for
   raijin, supra, r34); phones; vehicle thumbnails of the four are the agent's.
 - Left with the agent: u9 (no GLB in the game yet).
+
+## v2.6.4 (11-18): the U9 has its own model; all eight cars are through round two
+
+- **In**: the cars branch at `a73a918` (agent on Fable, high; its final report): `u9.glb` (78 k triangles, 22 draw
+  calls, 616 kB) in place of the procedural stand-in: body, lamps, wheels and calipers, wing (1.99 m, measured on
+  a photo), a cabin, an electric underside. Gate against its plain script build: nothing worse (outlines 0.9714).
+  Left as it is: 57 mm wider and 28 mm higher than the catalogue (at the catalogue's figures every outline is
+  worse); the lamp's dark lens reads grey, the plate is blank, few shut lines.
+- Verified by me on the merged tree: tsc; vitest 264; build; `gpu-errors` 0 / 0 (WebGPU, WebGL 2) with the u9
+  three times through the garage; `paint-drawn.cjs u9` 5 of 5 (WebGPU); `lamps.cjs u9` (anchors from the model, no
+  errors; picture looked at: the beams start at the lamps); the sheet, the garage and race pictures looked at.
+- Not verified: `paint-drawn` on WebGL 2 by me (the agent ran it); phones; the films (old cars in them).
+- The cars agent is finished. Open with the owner: the lamps' streaks on the body (car-look branch `f7529bf`,
+  sheets sent; it also holds the fix of v2.6.1's mirror).
