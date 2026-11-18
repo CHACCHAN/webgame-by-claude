@@ -2470,3 +2470,13 @@ rival put back, phone layout, two games in a room.
 Not verified: the tanks' figures against sources (written from memory), the sound by ear, a real gamepad, phones.
 Before the switch can go on: figures checked, own models (owner sees the sheets), the points above.
 
+## Tanks' figures checked against published sources (11-18/19, still behind the switch; no deploy needed)
+
+Merged `tank-figures` (`2c00112`): `docs/TANK_FIGURES.md` gives per vehicle and figure the value before, the published
+value, the source and the verdict. 10式 / 16式: every published figure matched; their gun data are not published
+(stay `estimated`). Corrected: Leopard 2A5 (70 km/h, 59.5 t, 9.67 m over the gun), M1A2 (M829A3 1,552.5 m/s, 9.77 m),
+T-14 (55 t, 3.9 m wide, 32 usable rounds, reverse 45 km/h estimated, -7/+15). Medals of the Leopard and the T-14
+re-derived. Japan's MoD pages could not be read by the agent (403): those figures rest on sources that agree.
+Verified here: tsc, vitest 285 (switch off and `TANKS=1`). Not found anywhere: track contact lengths, pivot rates,
+elevation rates, the M1's reverse speed.
+

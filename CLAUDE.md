@@ -617,8 +617,8 @@ pending. `docs/PLAN.md` holds the design.
   `node tools/tank-check.cjs <dir>` (a build with `VITE_TANKS=1`: garage, a rival battle, sight laid, shot, the
   rival put back, pictures; `PHONE=1` the touch layout) and `URL=<preview on a test stack> node tools/tank-duel.cjs
   <dir>` (two games in a room: A's shell puts B back on both screens; the stack must offer the tanks).
-  **Not open yet** (11-18): the figures were written from memory and are not checked against sources, the
-  models are procedural stand-ins (own models come first, and the owner sees their sheets), sound unheard by ear,
+  **Not open yet** (11-18): the figures are checked against sources (`docs/TANK_FIGURES.md`: keep it with every change of a
+  figure), but the models are procedural stand-ins (own models come first, and the owner sees their sheets), sound unheard by ear,
   no real gamepad tried.
 - Course style `'airbase'` (Edwards): `render/airbaseScenery.ts` (places in the airfield's frame: `a` m along 04R
   from its threshold, `b` m to its left; hangars, tower, parked aircraft silhouettes, all procedural),

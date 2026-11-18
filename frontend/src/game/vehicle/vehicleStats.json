@@ -94,9 +94,9 @@
   },
   "leopard2a5": {
    "zeroTo100": null,
-   "topSpeed": 68.1,
+   "topSpeed": 70.1,
    "lateralG": 0.59,
-   "massKg": 59700,
+   "massKg": 59500,
    "powerKw": 1102.7
   },
   "m1a2": {
@@ -110,7 +110,7 @@
    "zeroTo100": null,
    "topSpeed": 80.1,
    "lateralG": 0.61,
-   "massKg": 48000,
+   "massKg": 55000,
    "powerKw": 1103.7
   },
   "f15j": {
