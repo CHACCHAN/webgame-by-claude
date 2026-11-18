@@ -2384,3 +2384,20 @@ to be seen). The films still show the balls until they are recorded again.
   host is gone from every commit, the final tree is identical). Not pushed: every hash from 11-11 on changes, so the
   mirror needs a forced push and the owner is told first.
 
+## History rewritten for GitHub (11-18, on the owner's yes)
+
+- The LLM gateway's host stood in three files of the commits of 11-11 (`docs/HANDOVER.md`, `backend/config/llm.php`,
+  `docker-compose.yml`). `filter-branch --tree-filter` over everything from there on put `llm-gateway.invalid` in
+  its place: **every commit id from 11-11 on is new** (v2.6.6 is `a5e2ddf`, was `9c29e8d`); the files of the newest
+  commit are identical. Ids quoted in older sections of this file are the old ones (find a commit by its title).
+- Checked on the rewritten history before pushing: the host in no commit; no long value of `.env` in any commit;
+  the public host name in none; mail-like strings in the tree are package authors in lock files only.
+- Pushed to GitHub (a fast-forward from its state of 11-04). **The mirror is not updated yet**: its server did not
+  answer on 11-18 (connection timed out), and it needs a forced push (`ccr-de1f3a33-58aazj`), in steps of ~12
+  commits to a temporary branch first (HTTP 413 on a big pack). Until then the mirror holds the old history at
+  v2.6.6's files.
+- The old history: bundle `~/.local/opt/wt/rewrite/pre-rewrite-9c29e8d.bundle`; local branches `tts` and one old
+  agent branch still stand on it (never push them).
+- Started the same day: two modelling agents (Fable, high) for the fighters' own models (F-15J/DJ + F-15C/D; Su-47);
+  sheets go to the owner before anything is merged.
+
