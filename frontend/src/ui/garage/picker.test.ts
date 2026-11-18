@@ -11,13 +11,17 @@ describe('measured vehicle figures (tools/vehicle-stats.ts)', () => {
     for (const id of VEHICLE_ORDER) {
       const s = VEHICLE_STATS[id];
       expect(s, `${id}: run npx tsx tools/vehicle-stats.ts ${id}`).toBeDefined();
-      expect(s!.topSpeed, id).toBeGreaterThan(100);
+      // (a tank is governed to its sheet's speed: 67–80 km/h on tracks, 100 on the 16式's wheels)
+      const tank = !!CAR_SPECS[id].tank;
+      expect(s!.topSpeed, id).toBeGreaterThan(tank ? 60 : 100);
       // (Mach 1 for the cockroach; a fighter in full afterburner on the ground a little more)
       expect(s!.topSpeed, id).toBeLessThan(CAR_SPECS[id].jet ? 1500 : 1300);
-      // everything in the game gets to 100 km/h (a commuter train in about a minute)
-      expect(s!.zeroTo100, id).not.toBeNull();
-      expect(s!.zeroTo100!, id).toBeGreaterThan(0.5);
-      expect(s!.zeroTo100!, id).toBeLessThan(90);
+      // everything else in the game gets to 100 km/h (a commuter train in about a minute)
+      if (!tank || s!.topSpeed >= 100) {
+        expect(s!.zeroTo100, id).not.toBeNull();
+        expect(s!.zeroTo100!, id).toBeGreaterThan(0.5);
+        expect(s!.zeroTo100!, id).toBeLessThan(90);
+      } else expect(s!.zeroTo100, id).toBeNull();
       expect(s!.lateralG, id).toBeGreaterThan(0.4);
       expect(s!.lateralG, id).toBeLessThan(6);
       expect(s!.massKg, id).toBeGreaterThan(100);
@@ -26,7 +30,9 @@ describe('measured vehicle figures (tools/vehicle-stats.ts)', () => {
       const bars = vehicleBars(id)!;
       expect(bars.map((b) => b.key)).toEqual(['accel', 'speed', 'corner', 'power', 'weight']);
       for (const b of bars) {
-        expect(b.fill, `${id} ${b.key}`).toBeGreaterThan(0);
+        // (no bar for a 0–100 time that does not exist)
+        if (b.key === 'accel' && s!.zeroTo100 === null) expect(b.fill, id).toBe(0);
+        else expect(b.fill, `${id} ${b.key}`).toBeGreaterThan(0);
         expect(b.fill, `${id} ${b.key}`).toBeLessThanOrEqual(1);
       }
     }
@@ -80,7 +86,8 @@ describe('car select', () => {
     expect(by('speed')[0]).toBe(RELEASED.edwards ? 'su47' : 'roach');
     expect(by('corner')[0]).toBe('roach');
     expect(by('weight')[0]).toBe('nsr250r');
-    const t = by('accel').map((id) => VEHICLE_STATS[id]!.zeroTo100!);
+    // (what never reaches 100 km/h comes last)
+    const t = by('accel').map((id) => VEHICLE_STATS[id]!.zeroTo100 ?? Infinity);
     expect([...t].sort((a, b) => a - b)).toEqual(t);
     const v = by('speed').map((id) => VEHICLE_STATS[id]!.topSpeed);
     expect([...v].sort((a, b) => b - a)).toEqual(v);

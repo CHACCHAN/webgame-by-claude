@@ -17,6 +17,10 @@ import { JetSound } from './JetSound';
 import { JET_SOUND } from './jet';
 import type { JetProcessorOptions } from './jet.worklet';
 import jetWorkletUrl from './jet.worklet.ts?worker&url';
+import { TankSound, tankSoundOf } from './TankSound';
+import { gunShot, shellBurst } from './tank';
+import type { TankProcessorOptions } from './tank.worklet';
+import tankWorkletUrl from './tank.worklet.ts?worker&url';
 import type { RainBody } from './rain';
 import type { RainProcessorOptions } from './rain.worklet';
 import rainWorkletUrl from './rain.worklet.ts?worker&url';
@@ -212,7 +216,7 @@ export class AudioEngine {
   private noise: AudioBuffer;
   private squeal: { src: AudioBufferSourceNode; gain: GainNode; filter: BiquadFilterNode };
   private wind: { gain: GainNode; filter: BiquadFilterNode };
-  private engines = new Map<string, (EngineSound | TrainSound | BugSound | EvSound | JetSound) & { kind: string }>();
+  private engines = new Map<string, (EngineSound | TrainSound | BugSound | EvSound | JetSound | TankSound) & { kind: string }>();
   private musicNodes: AudioNode[] = [];
 
   constructor(offline?: OfflineAudioContext) {
@@ -345,7 +349,7 @@ export class AudioEngine {
   }
 
   /** The running sound of a vehicle: a synthesised engine or electric drive, a train's traction equipment or a creature's legs. */
-  engine(id: string, spec: CarSpec): EngineSound | TrainSound | BugSound | EvSound | JetSound {
+  engine(id: string, spec: CarSpec): EngineSound | TrainSound | BugSound | EvSound | JetSound | TankSound {
     const e = this.engines.get(id);
     // (a train on another line may run another inverter: a sound of its own)
     const kind = spec.train?.vvvf ? `${spec.id}|${spec.train.vvvf.pattern}` : spec.id;
@@ -362,6 +366,7 @@ export class AudioEngine {
     if (kind === 'creature') return new BugSound(this.ctx, this.noise, this.sfx);
     if (spec.engine.electric) return new EvSound(this.ctx, this.noise, this.sfx);
     if (spec.jet) return this.jetSound(spec);
+    if (spec.tank) return this.tankSound(spec);
     const e = spec.engine;
     return new EngineSound(this.ctx, e.cylinders, e.turbo, this.noise, this.sfx, { strokes: e.strokes, supercharger: e.supercharger });
   }
@@ -394,6 +399,67 @@ export class AudioEngine {
       }),
     );
     return sound;
+  }
+
+  private tankReady: Promise<boolean> | null = null;
+
+  /**
+   * A tank's engine and tracks (AudioWorklet 'tank', audio/tank.ts); where AudioWorklet is missing or until the
+   * module is in, the plain engine sound stands in (a turbine as six smooth cylinders).
+   */
+  private tankSound(spec: CarSpec) {
+    const e = spec.engine;
+    const sound = new TankSound(this.ctx, this.sfx, (out) => new EngineSound(this.ctx, e.cylinders || 6, e.turbo, this.noise, out));
+    this.tankReady ??= this.ctx.audioWorklet ? this.ctx.audioWorklet.addModule(tankWorkletUrl).then(() => true, () => false) : Promise.resolve(false);
+    this.loading.push(
+      this.tankReady.then((ok) => {
+        if (!ok) return;
+        const processorOptions: TankProcessorOptions = { seed: (Math.random() * 2 ** 31) >>> 0, params: tankSoundOf(spec) };
+        sound.setNode(new AudioWorkletNode(this.ctx, 'tank', { numberOfInputs: 0, outputChannelCount: [2], processorOptions }));
+      }),
+    );
+    return sound;
+  }
+
+  private shots = new Map<string, AudioBuffer>();
+
+  /** a one-shot made in audio/tank.ts, kept as a buffer */
+  private shotBuffer(key: string, make: (rate: number) => Float32Array) {
+    let b = this.shots.get(key);
+    if (!b) {
+      const x = make(this.ctx.sampleRate);
+      b = this.ctx.createBuffer(1, x.length, this.ctx.sampleRate);
+      b.getChannelData(0).set(x);
+      this.shots.set(key, b);
+    }
+    return b;
+  }
+
+  /**
+   * A one-shot heard from `distance` m: later by the sound's travel (at most 3 s), fainter, and duller (the air
+   * takes the top first).
+   */
+  private far(buffer: AudioBuffer, distance: number, gain: number) {
+    const t = this.ctx.currentTime + Math.min(3, distance / 343);
+    const src = this.ctx.createBufferSource();
+    src.buffer = buffer;
+    const f = this.ctx.createBiquadFilter();
+    f.type = 'lowpass';
+    f.frequency.value = 16000 / (1 + distance / 70);
+    const g = this.ctx.createGain();
+    g.gain.value = gain / (1 + distance / 45);
+    src.connect(f).connect(g).connect(this.sfx);
+    src.start(t);
+  }
+
+  /** A tank gun's shot (`calibre` mm), `distance` m from the listener (0: the player's own). */
+  gunShot(calibre: number, distance: number) {
+    this.far(this.shotBuffer(`shot${calibre}`, (rate) => gunShot(rate, calibre)), distance, 0.8);
+  }
+
+  /** A shell's end on the ground or on a vehicle (`metal`), `distance` m from the listener. */
+  shellImpact(distance: number, metal: boolean) {
+    this.far(this.shotBuffer(metal ? 'plate' : 'earth', (rate) => shellBurst(rate, metal)), distance, 0.7);
   }
 
   private runningReady: Promise<boolean> | null = null;

@@ -13,6 +13,7 @@
 */
 $release = [
     'edwards' => true,
+    'tanks' => false,
 ];
 $open = fn (array $list): array => array_filter($list, fn (array $e): bool => ! isset($e['release']) || $release[$e['release']]);
 
@@ -78,6 +79,13 @@ $cars = [
     'nsr250r' => ['name' => 'NSR250R'],
     'ninjah2' => ['name' => 'Ninja H2'],
     'hayabusa' => ['name' => 'GSX1300R 隼'],
+    // tanks (frontend vehicle/tanks.ts): they run on every course; their guns are the game's own business (a hit
+    // puts the vehicle hit back on the road: nothing of it reaches the server, a run counts like any other)
+    'type10' => ['name' => '10式戦車', 'release' => 'tanks'],
+    'type16' => ['name' => '16式機動戦闘車', 'release' => 'tanks'],
+    'leopard2a5' => ['name' => 'Leopard 2A5', 'release' => 'tanks'],
+    'm1a2' => ['name' => 'M1A2 SEPv3', 'release' => 'tanks'],
+    't14' => ['name' => 'T-14 アルマータ', 'release' => 'tanks'],
     // joke entries: three-car trains (frontend vehicle/trains.ts)
     'e231' => ['name' => 'E231系'],
     'e235' => ['name' => 'E235系'],

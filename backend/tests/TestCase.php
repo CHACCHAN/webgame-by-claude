@@ -12,9 +12,24 @@ abstract class TestCase extends BaseTestCase
      */
     protected function edwards(bool $open): void
     {
-        $keep = fn (array $list): array => array_filter($list, fn (array $e): bool => $open || ($e['release'] ?? null) !== 'edwards');
+        $this->release('edwards', $open);
+    }
+
+    /** The tanks open or closed, likewise. */
+    protected function tanks(bool $open): void
+    {
+        $this->release('tanks', $open);
+    }
+
+    private function release(string $name, bool $open): void
+    {
+        // (what waits behind another switch stays as it is)
+        config(['game.release.'.$name => $open]);
+        $keep = fn (array $list): array => array_filter(
+            $list,
+            fn (array $e): bool => ! isset($e['release']) || (bool) config('game.release.'.$e['release']),
+        );
         config([
-            'game.release.edwards' => $open,
             'game.tracks' => $keep(config('game.catalog.tracks')),
             'game.cars' => $keep(config('game.catalog.cars')),
         ]);

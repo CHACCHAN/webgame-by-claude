@@ -9,7 +9,8 @@ import { sfx } from '../sfx';
 import { COURSES } from '../../game/track/courses';
 import { currentCourseId } from '../../store/settings';
 import { fullscreenSupported, toggleFullscreen, useFullscreen } from '../fullscreen';
-import { CONTROL_ROWS, Portrait } from '../screens/Menus';
+import { CONTROL_ROWS, Portrait, TANK_ROWS } from '../screens/Menus';
+import { CAR_SPECS } from '../../game/vehicle/carSpecs';
 import type { Game, HudState } from '../../game/Game';
 import { leaveRoom } from '../../store/online';
 import { SLOT_COLORS } from '../../game/net/RemoteRacers';
@@ -545,7 +546,10 @@ export function Hud() {
       </div>
       {guideOn && (
         <div className="start-guide" ref={refs.guide}>
-          {CONTROL_ROWS.filter(([a]) => !a.includes('MT時') || !autoShift).map(([action, key, padKey]) => (
+          {(CAR_SPECS[gameHolder.game?.currentConfig?.carId ?? 'hayate']?.tank
+            ? [...TANK_ROWS, ...CONTROL_ROWS.filter(([a]) => ['ステアリング', 'コースに復帰', 'ポーズ'].includes(a))]
+            : CONTROL_ROWS.filter(([a]) => !a.includes('MT時') || !autoShift)
+          ).map(([action, key, padKey]) => (
             <div key={action}>
               <kbd className="k-key">{key}</kbd>
               <kbd className="k-pad">{padKey}</kbd>

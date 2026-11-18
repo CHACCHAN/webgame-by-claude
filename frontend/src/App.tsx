@@ -13,6 +13,8 @@ import { OnlineLobbyScreen, OnlineResultsScreen, OnlineRoomScreen } from './ui/s
 import { ConditionsScreen, TransmissionScreen } from './ui/screens/RaceSetup';
 import { CarsScreen } from './ui/screens/Cars';
 import { TouchControls } from './ui/hud/TouchControls';
+import { GunSight } from './ui/hud/GunSight';
+import { CAR_SPECS } from './game/vehicle/carSpecs';
 import { useTouch } from './ui/touch';
 import { toggleFullscreen } from './ui/fullscreen';
 import { AccountNotice, BusyMark, RoomNotice, ShellNav, ShellTop } from './ui/Shell';
@@ -127,6 +129,8 @@ export function App() {
         {screen === 'onlineResults' && <OnlineResultsScreen />}
         {/* one HUD from the grid to the finish (it boots at every start by itself) */}
         {inRace && (phase === 'countdown' || phase === 'racing' || phase === 'finished') && <Hud key={String(gameHolder.game?.currentConfig?.carId)} />}
+        {/* a tank's gun: its marks, its sight, and the pointer while the race runs */}
+        {screen === 'race' && (phase === 'countdown' || phase === 'racing') && !!CAR_SPECS[gameHolder.game?.currentConfig?.carId ?? 'hayate']?.tank && <GunSight touch={touch} />}
         {screen === 'results' && <ResultsScreen />}
         {screen === 'replay' && <ReplayOverlay />}
         {screen === 'race' && paused && <PauseMenu />}

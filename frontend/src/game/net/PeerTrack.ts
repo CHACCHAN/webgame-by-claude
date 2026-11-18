@@ -17,10 +17,13 @@ export interface TrackPose {
   ahead: number;
   /** a fighter's take-off (`NetState.dep`): 0 = on its wheels */
   depart: number;
+  /** a tank's turret bearing and gun elevation (`NetState.tu`, `gp`; rad) */
+  turret: number;
+  gunPitch: number;
 }
 
 export function newPose(): TrackPose {
-  return { position: new Vector3(), quaternion: new Quaternion(), velocity: new Vector3(), speed: 0, steer: 0, brake: false, throttle: 0, rpm: 0, ahead: 0, depart: 0 };
+  return { position: new Vector3(), quaternion: new Quaternion(), velocity: new Vector3(), speed: 0, steer: 0, brake: false, throttle: 0, rpm: 0, ahead: 0, depart: 0, turret: 0, gunPitch: 0 };
 }
 
 interface Snap {
@@ -124,6 +127,10 @@ export class PeerTrack {
     out.throttle = near.st.th;
     out.rpm = near.st.rp;
     out.depart = near.st.dep ?? 0;
+    // (the turret the short way round)
+    const ta = a.st.tu ?? 0, tb = b.st.tu ?? 0;
+    out.turret = ta + (((tb - ta + Math.PI * 3) % (Math.PI * 2)) - Math.PI) * u;
+    out.gunPitch = (a.st.gp ?? 0) + ((b.st.gp ?? 0) - (a.st.gp ?? 0)) * u;
     out.ahead = 0;
     return true;
   }
@@ -145,6 +152,8 @@ export class PeerTrack {
     out.throttle = s.st.th;
     out.rpm = s.st.rp;
     out.depart = s.st.dep ?? 0;
+    out.turret = s.st.tu ?? 0;
+    out.gunPitch = s.st.gp ?? 0;
     out.ahead = dt;
     return true;
   }

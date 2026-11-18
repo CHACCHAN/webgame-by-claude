@@ -2456,3 +2456,17 @@ to be seen). The films still show the balls until they are recorded again.
 - Left by the agent, with estimates: the scenery's build is one 2.0–2.4 s main-thread task (workers could save
   1–2 s: a large change); the remaining 250–300 ms at a race start (shadow-map shaders, the rival's car).
 
+## v2.6.9 (11-18): the tanks' cannon, in the code behind the release switch (off)
+
+Merged the tanks agent's branch (`46ccf94`): `game/weapons/` (gun control, ballistics, what a shell meets, gunnery),
+`net/gunEvents.ts` (`client-gun`, the firer's screen decides, the victim's game checks), turret / gun angles in the
+state packet's flag word, `ui/hud/GunSight.tsx`, tank sound, tools `tank-figures.ts`, `tank-wav.ts`, `tank-check.cjs`,
+`tank-duel.cjs`. The switch `tanks` stays off on client and server: players meet nothing new.
+
+Verified on the merged tree: tsc; vitest 285 with the switch off and with `TANKS=1`; build; `gpu-errors.cjs` WebGPU 0,
+WebGL 2 0 (switch off); backend tests 78; E2E 19/19 on the isolated stack; one race picture looked at.
+Verified by the agent only (its pictures in `~/.local/opt/wt/tanks/sheets/`): garage, rival battle, sight, shot, the
+rival put back, phone layout, two games in a room.
+Not verified: the tanks' figures against sources (written from memory), the sound by ear, a real gamepad, phones.
+Before the switch can go on: figures checked, own models (owner sees the sheets), the points above.
+

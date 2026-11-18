@@ -445,7 +445,7 @@ export const CAR_ORDER: CarId[] = ['hayate', 's15', 'shiden', 'supra', 'raijin',
 /** everything a player can drive: the cars, the motorcycles, the tanks, the fighters (Edwards only: `allowedOn`), the
  * trains, then the cockroach */
 /**
- * The tanks (no cannon yet) and the fighters with their course are kept out of every player-facing list until
+ * The tanks (own models still to come) and the fighters with their course are kept out of every player-facing list until
  * their switch is on (`release.ts`).
  */
 export const VEHICLE_ORDER: CarId[] = [...CAR_ORDER, ...BIKE_ORDER, ...(RELEASED.tanks ? TANK_ORDER : []), ...(RELEASED.edwards ? JET_ORDER : []), ...TRAIN_ORDER, 'roach'];

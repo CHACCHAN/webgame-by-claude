@@ -210,6 +210,59 @@
 .tc-pedal.brake.on { --edge: var(--magenta); --fill: rgb(var(--c-magenta) / 0.36); }
 .tc-pedal.side { height: min(15vh, 70px); }
 
+/* ------------------------------------------------------------- a tank's gun (hud/GunSight.tsx) */
+.gun-hud { position: absolute; inset: 0; z-index: 3; pointer-events: none; overflow: hidden; }
+.gun-hud.none { display: none; }
+.gun-cross, .gun-mark, .gun-read { position: absolute; left: 0; top: 0; will-change: transform; }
+/* the line of sight's end: a broken cross */
+.gun-cross { filter: drop-shadow(0 0 1px rgb(var(--c-void))); }
+.gun-cross::before, .gun-cross::after { content: ''; position: absolute; }
+.gun-cross::before { left: -1.2rem; top: -1px; width: 2.4rem; height: 2px; background: linear-gradient(90deg, rgb(var(--c-text) / 0.92) 0 34%, rgb(var(--c-text) / 0) 34% 66%, rgb(var(--c-text) / 0.92) 66%); }
+.gun-cross::after { left: -1px; top: -1.2rem; width: 2px; height: 2.4rem; background: linear-gradient(rgb(var(--c-text) / 0.92) 0 34%, rgb(var(--c-text) / 0) 34% 66%, rgb(var(--c-text) / 0.92) 66%); }
+/* where the round would land: a ring whose rim fills as the next round goes in */
+.gun-mark svg { position: absolute; left: -1.3rem; top: -1.3rem; width: 2.6rem; height: 2.6rem; overflow: visible; }
+.gm-ring { fill: none; stroke: rgb(var(--c-void) / 0.55); stroke-width: 3.4; }
+.gm-load { fill: none; stroke: var(--amber); stroke-width: 1.8; }
+.gun-hud.ready .gm-load { stroke: var(--green); }
+.gun-hud.empty .gm-load { stroke: var(--magenta); }
+.gun-read { translate: -50% 2.1rem; display: flex; align-items: center; gap: 0.9rem; white-space: nowrap; font-family: var(--font-display); font-stretch: var(--w-cond); font-variant-numeric: tabular-nums;
+  color: var(--text); text-shadow: 0 0 0.3rem rgb(var(--c-void)), 0 0 1px rgb(var(--c-void)); }
+.gr-state { min-width: 4.6rem; font-family: var(--font-jp); font-weight: 700; font-size: var(--fs-s); color: var(--amber); text-align: right; }
+.gun-hud.ready .gr-state { color: var(--green); }
+.gun-hud.empty .gr-state { color: var(--magenta); }
+.gr-fig { display: inline-flex; align-items: baseline; gap: 0.3rem; }
+.gr-fig b { font-size: var(--fs-l); font-weight: 600; color: var(--cyan); min-width: 2ch; text-align: right; }
+.gr-fig small { font-family: var(--font-jp); font-size: var(--fs-xs); color: var(--text-2); }
+.gr-zoom { font-size: var(--fs-m); font-weight: 600; }
+.gr-zoom:empty { display: none; }
+.gr-turret { width: 1.9rem; height: 1.9rem; }
+.gt-hull { fill: rgb(var(--c-void) / 0.45); stroke: rgb(var(--c-text) / 0.7); stroke-width: 1; }
+.gt-ring { fill: rgb(var(--c-void) / 0.6); stroke: var(--cyan); stroke-width: 1; }
+.gt-gun { fill: none; stroke: var(--cyan); stroke-width: 1.4; }
+/* the gunner's sight: a round field stop and a plain reticle; the figures at its foot */
+.gun-scope { display: none; position: absolute; inset: 0; background: radial-gradient(circle at 50% 50%, rgb(var(--c-void) / 0) 0, rgb(var(--c-void) / 0) 46.5vmin, rgb(var(--c-void)) 47.5vmin); }
+.gun-hud.scope .gun-scope { display: block; }
+.gun-scope svg { position: absolute; inset: 0; width: 100%; height: 100%; filter: drop-shadow(0 0 1px rgb(var(--c-void))); }
+.gs-line, .gs-tick { fill: none; stroke: rgb(var(--c-text) / 0.9); vector-effect: non-scaling-stroke; }
+.gs-line { stroke-width: 1.5px; }
+.gs-tick { stroke-width: 1px; }
+.gs-dot { fill: rgb(var(--c-text) / 0.95); }
+.gun-hud.scope .gun-read { left: 50%; top: auto; bottom: calc(50% - 40vmin); translate: -50% 0; }
+/* the pointer is not the gun's yet */
+.gun-lock { --c: var(--cut-s); display: none; position: absolute; left: 50%; top: 64%; translate: -50% 0; padding: 0.6rem 1.1rem; text-align: center; font-family: var(--font-jp); font-weight: 700; font-size: var(--fs-m); text-shadow: none; }
+.gun-lock small { display: block; margin-top: 0.2rem; font-weight: 400; font-size: var(--fs-xs); color: var(--text-2); }
+.gun-hud.free .gun-lock { display: block; }
+/* touch: the right half aims (under every button), sight and fire stand over the steering pad */
+.tc-aim { right: 0; top: 0; width: 50%; height: 100%; }
+.tc-gun { left: max(14px, env(safe-area-inset-left)); bottom: calc(max(14px, env(safe-area-inset-bottom)) + min(36vh, 170px) + 8px); width: min(38vw, 330px); display: grid; grid-template-columns: 2fr 3fr; gap: 6px; }
+.tc-pedal.sight, .tc-pedal.fire { width: auto; height: min(14vh, 62px); }
+.tc-pedal.fire { --edge: rgb(var(--c-amber) / 0.6); }
+/* (on a phone the gun's figures stand over its mark: under it they ran into the two buttons) */
+.touch .gun-hud:not(.scope) .gun-read { translate: -50% -4.2rem; }
+/* (and in the sight they stand in its upper part: the speed and the gear are drawn over its lower rim) */
+.touch .gun-hud.scope .gun-read { bottom: auto; top: calc(50% - 31vmin); }
+.tc-pedal.fire.on { --edge: var(--amber); --fill: rgb(var(--c-amber) / 0.36); }
+
 /* ------------------------------------------------------------- touch screens: the cluster between the steering pad
    and the pedals, the map under the buttons */
 .touch .start-guide { display: none; }

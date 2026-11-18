@@ -32,9 +32,11 @@ describe('the release switch', () => {
   it('is the same on both sides: the client\'s lists and the server\'s', () => {
     const client = readFileSync(new URL('../release.ts', import.meta.url), 'utf8');
     const server = readFileSync(new URL('../../../../backend/config/game.php', import.meta.url), 'utf8');
-    const c = /edwards: (true|false)\b/.exec(client), s = /'edwards' => (true|false)/.exec(server);
-    expect(c && s).toBeTruthy();
-    expect(c![1]).toBe(s![1]);
+    for (const name of ['edwards', 'tanks']) {
+      const c = new RegExp(`${name}: (true|false)\\b`).exec(client), s = new RegExp(`'${name}' => (true|false)`).exec(server);
+      expect(c && s, name).toBeTruthy();
+      expect(c![1], name).toBe(s![1]);
+    }
   });
 
   it('the server offers the vehicles on every course that the game does (config/game.php `courses`, `vehiclesFor`)', () => {

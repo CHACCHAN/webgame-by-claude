@@ -3,6 +3,7 @@ import type { CarId, RoadCarId } from '../vehicle/carSpecs';
 import { AUTOBAHN, EDWARDS, KIRIFURI_LAKESIDE, OBORO_DOWNHILL, TENROU_SKYLINE, type CourseDesign } from './courseDesign';
 import { BAY, CALDERA, MOJAVE, PLATEAU, RIDGE, type Landform } from './landforms';
 import type { JetId } from '../vehicle/jets';
+import type { TankId } from '../vehicle/tanks';
 import { RELEASED } from '../release';
 import type { TrainId } from '../vehicle/trains';
 import type { BikeId } from '../vehicle/bikes';
@@ -315,6 +316,50 @@ export const BIKE_MEDALS: Record<CourseId, Record<BikeId, { gold: number; silver
     nsr250r: { gold: 262_500, silver: 281_000, bronze: 304_500 },
     ninjah2: { gold: 167_500, silver: 179_500, bronze: 194_500 },
     hayabusa: { gold: 176_500, silver: 189_000, bronze: 205_000 },
+  },
+};
+
+/**
+ * Medal times of the tanks (vehicle/tanks.ts), from the legend AI's laps as the others' are
+ * (`TANKS=1 COURSE=<id> LIMIT=1800 npx tsx tools/sim-run.ts type10,type16,leopard2a5,m1a2,t14 legend`; silver +7 %,
+ * bronze +16 %). On the passes the AI's lap in a tracked one leans on the walls (it brakes as for a car): the gold
+ * is within a careful driver's reach. Re-run after a change of the tanks' figures, the physics or a course.
+ */
+export const TANK_MEDALS: Record<CourseId, Record<TankId, { gold: number; silver: number; bronze: number }>> = {
+  'oboro-downhill': {
+    type10: { gold: 196_500, silver: 210_500, bronze: 228_000 },
+    type16: { gold: 143_000, silver: 153_000, bronze: 166_000 },
+    leopard2a5: { gold: 201_000, silver: 215_000, bronze: 233_000 },
+    m1a2: { gold: 206_000, silver: 220_500, bronze: 239_000 },
+    t14: { gold: 207_500, silver: 222_000, bronze: 240_500 },
+  },
+  'kirifuri-lakeside': {
+    type10: { gold: 158_500, silver: 169_500, bronze: 184_000 },
+    type16: { gold: 123_000, silver: 131_500, bronze: 142_500 },
+    leopard2a5: { gold: 175_000, silver: 187_000, bronze: 203_000 },
+    m1a2: { gold: 170_000, silver: 182_000, bronze: 197_000 },
+    t14: { gold: 177_500, silver: 190_000, bronze: 206_000 },
+  },
+  'tenrou-skyline': {
+    type10: { gold: 154_000, silver: 165_000, bronze: 178_500 },
+    type16: { gold: 116_000, silver: 124_000, bronze: 134_500 },
+    leopard2a5: { gold: 167_000, silver: 178_500, bronze: 193_500 },
+    m1a2: { gold: 162_500, silver: 174_000, bronze: 188_500 },
+    t14: { gold: 152_500, silver: 163_000, bronze: 177_000 },
+  },
+  'autobahn': {
+    type10: { gold: 361_500, silver: 387_000, bronze: 419_500 },
+    type16: { gold: 293_500, silver: 314_000, bronze: 340_500 },
+    leopard2a5: { gold: 350_000, silver: 374_500, bronze: 406_000 },
+    m1a2: { gold: 344_000, silver: 368_000, bronze: 399_000 },
+    t14: { gold: 334_500, silver: 358_000, bronze: 388_000 },
+  },
+  'edwards': {
+    type10: { gold: 624_500, silver: 668_000, bronze: 724_500 },
+    type16: { gold: 477_000, silver: 510_500, bronze: 553_500 },
+    leopard2a5: { gold: 650_000, silver: 695_500, bronze: 754_000 },
+    m1a2: { gold: 654_500, silver: 700_500, bronze: 759_000 },
+    t14: { gold: 564_500, silver: 604_000, bronze: 655_000 },
   },
 };
 

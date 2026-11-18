@@ -3,14 +3,35 @@ import type { CarSpec } from './carSpecs';
 /**
  * Tanks (joke entries on every course). Owner (2026-11-10): 「戦車たちには特殊効果でマウス操作を付与…砲撃ができることで
  * 狙った対象に当たると対象は強制リスタート」, 「史実通り仕様を改変しないで」: the figures are the published ones, and
- * where a maker or army publishes none (marked `estimated`), a stated estimate from comparable vehicles.
+ * where a maker or army publishes none (marked `estimated`, shown as （推定） on the spec sheet), a stated estimate
+ * from comparable vehicles. Nothing is tuned for play.
+ *
+ * Sources (the figures were written from memory of these, 2026-11: to be checked against them before the release):
+ *   10式, 16式        陸上自衛隊 装備品紹介 / 防衛装備庁（旧 技術研究本部）の公表諸元: 全備重量, 寸法, 最高速度, 機関と
+ *                     その定格 (1,200 PS / 2,300 rpm; 570 PS / 2,100 rpm), 乗員, 砲. Nothing on the gun's laying
+ *                     rates and limits, the rounds' velocity or the loading time is published: estimates (see each).
+ *   Leopard 2A5       Krauss-Maffei Wegmann's data sheet and the Bundeswehr's figures (59.7 t, 68 km/h, 31 km/h back,
+ *                     −9° / +20°, 42 rounds, the turret round in 9 s), MTU (MB 873 Ka-501: 1,103 kW at 2,600 rpm,
+ *                     4,700 N·m), Rheinmetall (Rh 120 L/44; DM53: 1,670 m/s from the L/44, 8.35 kg shot, 8.9 kg
+ *                     charge). Top speed: 68 km/h is the German army's figure for the A5/A6; 72 km/h is quoted for
+ *                     the lighter A4. Taken: 68.
+ *   M1A2 SEPv3        US Army (Weapon Systems Handbook) and General Dynamics Land Systems: 73.6 short tons (66.8 t),
+ *                     1,500 shp AGT1500 (Honeywell: 3,950 lb·ft at the output shaft), governed to 42 mph (67.6 km/h),
+ *                     42 rounds, crew of four, sight 3× / 10×. The M829A4's velocity is not published: the M829A3's
+ *                     1,555 m/s is taken. Elevation: −10° / +20° (−9° in some references).
+ *   T-14              Uralvagonzavod's and the Russian ministry of defence's statements as reported (TASS, 2015–):
+ *                     48 t (55 t in other reports), 1,500 hp (ChTZ 12N360, 2,000 rpm), 75–80 km/h (90 in some),
+ *                     2A82-1M, 45 rounds of which 32 in the autoloader, 10–12 rounds a minute, crew of three in the
+ *                     hull. Gearbox: a reversible robotised one with eight speeds each way is taken (a twelve-speed
+ *                     automatic in other reports). Little else is confirmed by the maker: estimates.
  *
  * The simulation is the cars' VehicleSim with:
  * - tracks (`running: 'tracks'`): four contact points at a quarter of the track's ground length from its middle (a
  *   uniform track's turning resistance, μ·W·L/4), all driven; no steered wheels: the steering is a yaw moment from the
  *   two tracks' difference, at most what the tracks hold (μ·W·gauge/2), up to the pivot rate; the 16式 has wheels;
  * - a continuously variable transmission (`cvt`, the 10式's HMT): the engine held at its rated speed under full throttle;
- * - the gun (`gun`): turret and gun laid by the mouse at their real traverse/elevation rates (game/weapons/).
+ * - the gun (`gun`): turret and gun laid by the mouse at their real traverse/elevation rates, a simulated shell
+ *   (game/weapons/).
  */
 export type TankId = 'type10' | 'type16' | 'leopard2a5' | 'm1a2' | 't14';
 
@@ -34,8 +55,16 @@ export interface GunInfo {
   elevationRate: number;
   /** gunner's sight magnifications (low, high) */
   zoom: [number, number];
+  /**
+   * What leaves the muzzle (kg: penetrator and sabot) and the propellant behind it (kg). Only the recoil reads them:
+   * its momentum is shot × muzzle velocity + charge × `GAS_SPEED` (weapons/gun.ts).
+   */
+  shot: number;
+  charge: number;
+  /** speed the round loses per kilometre of flight near the muzzle (m/s): a long rod's drag */
+  dropPerKm: number;
   /** which of the figures above are estimates (nothing published) */
-  estimated?: ('muzzleVelocity' | 'reload' | 'ammo' | 'elevation' | 'traverse' | 'zoom')[];
+  estimated?: ('muzzleVelocity' | 'reload' | 'ammo' | 'elevation' | 'traverse' | 'elevationRate' | 'zoom' | 'recoil' | 'drag')[];
 }
 
 export interface TankInfo {
@@ -52,9 +81,15 @@ export interface TankInfo {
   reverseSpeed: number;
   /** the engine's sound: a diesel (cylinders from the spec) or the M1's gas turbine */
   sound: 'diesel' | 'turbine';
-  /** dimensions of the procedural stand-in and the effects: hull length/width/height (m), turret ring forward of the
-   * origin (m), turret ring height, gun barrel length (m), trunnion height above the ring */
-  dims: { hull: [number, number, number]; turretZ: number; ringY: number; barrel: number; trunnion: number; turret: [number, number, number] };
+  /**
+   * Where the gun is on the vehicle (m; the shell starts from these, the stand-in is built to them and a model must
+   * agree with them: render/TankModel.ts): hull length/width/height, the turret ring forward of the origin and its
+   * height above the ground, the trunnions above the ring and forward of the traverse axis, the muzzle ahead of the
+   * trunnions (`barrel`: the published length over the gun less the hull's half and the trunnions' place), the
+   * turret's length/width/height, and the gunner's sight head in the turret's frame (default: on the roof, right of
+   * the gun: `sightOf` in weapons/gun.ts).
+   */
+  dims: { hull: [number, number, number]; turretZ: number; ringY: number; barrel: number; trunnion: number; trunnionZ: number; turret: [number, number, number]; sight?: [number, number, number] };
   /** metres of track one V unit of the model's track texture covers (default 1) */
   trackV?: number;
   /** the model's gun elevates with a negative rotation about X (1, default) or a positive one (−1) */
@@ -153,6 +188,7 @@ const TANKS: TankDef[] = [
     name: '10式戦車',
     tagline: '陸上自衛隊の第4世代主力戦車',
     description: '44トンの軽量な車体に1200馬力。無段変速のHMTで前進も後進も70km/h、スラローム射撃までこなす。自動装填の120mm滑腔砲が峠のライバルを狙う。',
+    // 全備重量 約44 t
     mass: 44000,
     contact: 4.3,
     gauge: 2.7,
@@ -167,6 +203,7 @@ const TANKS: TankDef[] = [
       cylinders: 8,
       turbo: true,
     },
+    // 最高速度 70 km/h, forwards and backwards alike (the HMT)
     gearSpeeds: [70],
     grip: 0.8,
     rolling: 0.035,
@@ -179,25 +216,35 @@ const TANKS: TankDef[] = [
         name: '44口径120mm滑腔砲（日本製鋼所）',
         calibre: 120,
         round: '10式120mm装弾筒付翼安定徹甲弾',
+        // not published: the 1,650 m/s of the JM33 (the licence-built DM33 the gun also fires) is taken, a lower bound
         muzzleVelocity: 1650,
+        // not published: the 90式's autoloader is quoted at about 4 s a round, the 10式's is said to be no slower
         reload: 4,
         loader: 'auto',
+        // the bustle autoloader's reported capacity (the rounds in the hull cannot be loaded on the move)
         ammo: 14,
-        elevation: [-10, 20],
+        // not published: the 90式's −7° / +10° (the same low turret; the suspension's hull tilt, which adds to both
+        // on the real one, is not simulated)
+        elevation: [-7, 10],
         traverse: 40,
         elevationRate: 15,
         zoom: [4, 10],
-        estimated: ['muzzleVelocity', 'reload', 'ammo', 'elevation', 'traverse', 'zoom'],
+        // (the JM33 / DM33: 7.3 kg in the bore, 7.6 kg of propellant)
+        shot: 7.3,
+        charge: 7.6,
+        dropPerKm: 60,
+        estimated: ['muzzleVelocity', 'reload', 'ammo', 'elevation', 'traverse', 'elevationRate', 'zoom', 'recoil', 'drag'],
       },
       pivotRate: 30,
       // HMT: full tractive effort (the tracks' grip) at a standstill, 70 km/h at the rated speed
       cvt: { low: 34, high: (2300 * Math.PI) / 30 / (70 / 3.6 / SPROCKET) },
       reverseSpeed: 70,
       sound: 'diesel',
-      dims: { hull: [7.5, 3.24, 1.3], turretZ: 0.2, ringY: 1.75, barrel: 5.3, trunnion: 0.35, turret: [4.6, 3.0, 0.6] },
+      // 全長 9.42 m over the gun, 全幅 3.24 m: the muzzle 9.42 − 7.5 / 2 = 5.67 m ahead of the middle
+      dims: { hull: [7.5, 3.24, 1.3], turretZ: 0.2, ringY: 1.75, barrel: 4.0, trunnion: 0.35, trunnionZ: 1.47, turret: [4.6, 3.0, 0.6] },
       camo: ['#4a5236', '#6b5a3e'],
       figures: { engine: '水冷4サイクル V型8気筒ディーゼル', power: '1,200 PS / 2,300 rpm', weight: '44 t', topSpeed: 70, crew: 3, transmission: 'HMT（油圧機械式無段変速）' },
-      estimated: ['砲弾初速', '装填時間', '搭載弾数', '砲塔旋回速度', '俯仰角'],
+      estimated: ['砲弾初速', '装填時間', '即応弾数', '砲塔旋回・俯仰速度', '俯仰角', '照準具の倍率'],
     },
     colors: { body: '#4a5236', accent: '#6b5a3e' },
     model: { title: '10式戦車', author: 'TOUGE NOCTURNE', url: '', license: '自作', own: true },
@@ -207,6 +254,7 @@ const TANKS: TankDef[] = [
     name: '16式機動戦闘車',
     tagline: '105mm砲を積んだ8輪の装輪戦車',
     description: '戦車並みの105mmライフル砲を26トンの8輪車体に載せた機動戦闘車。舗装路なら100km/hで駆け、前2軸のステアリングで峠のコーナーも曲がっていく。',
+    // 全備重量 約26 t
     mass: 26000,
     // first to last axle; wheel track
     contact: 4.6,
@@ -216,9 +264,9 @@ const TANKS: TankDef[] = [
     wheelRadius: 0.6,
     engine: {
       idleRpm: 700,
-      // 570 hp (425 kW); its rated speed is not published: 2,100 rpm estimated
+      // 570 PS (419 kW) at 2,100 rpm: 1,906 N·m there; the curve below it is estimated
       redline: 2100,
-      torque: [[700, 1500], [1100, 2150], [1400, 2300], [1800, 2150], [2100, 1930], [2200, 1300]],
+      torque: [[700, 1500], [1100, 2150], [1400, 2300], [1800, 2150], [2100, 1906], [2200, 1300]],
       cylinders: 4,
       turbo: true,
     },
@@ -236,7 +284,9 @@ const TANKS: TankDef[] = [
         name: '52口径105mmライフル砲（日本製鋼所）',
         calibre: 105,
         round: '93式105mm装弾筒付翼安定徹甲弾',
+        // the figure commonly quoted for the 93式 from the 105 mm gun; not in the army's own sheets
         muzzleVelocity: 1500,
+        // a loader by hand (crew of four): no figure published
         reload: 6,
         loader: 'manual',
         ammo: 40,
@@ -244,15 +294,19 @@ const TANKS: TankDef[] = [
         traverse: 40,
         elevationRate: 15,
         zoom: [4, 8],
-        estimated: ['muzzleVelocity', 'reload', 'ammo', 'elevation', 'traverse', 'zoom'],
+        shot: 5.8,
+        charge: 5.6,
+        dropPerKm: 60,
+        estimated: ['muzzleVelocity', 'reload', 'ammo', 'elevation', 'traverse', 'elevationRate', 'zoom', 'recoil', 'drag'],
       },
       pivotRate: 0,
       reverseSpeed: 20,
       sound: 'diesel',
-      dims: { hull: [8.0, 2.98, 1.5], turretZ: 0.1, ringY: 2.0, barrel: 5.5, trunnion: 0.3, turret: [3.6, 2.6, 0.6] },
+      // 全長 8.45 m over the gun, 全幅 2.98 m; the turret sits on the rear half (the engine is in the front left)
+      dims: { hull: [8.0, 2.98, 1.5], turretZ: -0.9, ringY: 2.0, barrel: 4.2, trunnion: 0.3, trunnionZ: 1.15, turret: [3.6, 2.6, 0.6] },
       camo: ['#4a5236', '#6b5a3e'],
-      figures: { engine: '水冷4サイクル 直列4気筒ターボディーゼル 11.3L', power: '570 hp', weight: '26 t', topSpeed: 100, crew: 4, transmission: '自動変速（8×8・前2軸操舵）' },
-      estimated: ['定格回転数', '変速段数', '後進速度', '砲弾初速', '装填時間', '搭載弾数', '砲塔旋回速度', '俯仰角'],
+      figures: { engine: '水冷4サイクル 直列4気筒ターボディーゼル', power: '570 PS / 2,100 rpm', weight: '26 t', topSpeed: 100, crew: 4, transmission: '自動変速（8×8・前2軸操舵）' },
+      estimated: ['変速段数', '後進速度', '砲弾初速', '装填時間', '搭載弾数', '砲塔旋回・俯仰速度', '俯仰角', '照準具の倍率'],
     },
     colors: { body: '#4a5236', accent: '#6b5a3e' },
     model: { title: '16式機動戦闘車', author: 'TOUGE NOCTURNE', url: '', license: '自作', own: true },
@@ -261,7 +315,7 @@ const TANKS: TankDef[] = [
     id: 'leopard2a5',
     name: 'Leopard 2A5',
     tagline: '楔形装甲のドイツ主力戦車',
-    description: '砲塔前面の楔形増加装甲が目印の2A5。60トン近い車体を1500馬力のV12ツインターボが72km/hまで運び、44口径120mm砲は5km先の目標も捉える。',
+    description: '砲塔前面の楔形増加装甲が目印の2A5。60トン近い車体を1500馬力のV12ツインターボが68km/hまで運び、44口径120mm砲は数km先の目標も捉える。',
     mass: 59700,
     contact: 4.95,
     gauge: 3.1,
@@ -275,8 +329,8 @@ const TANKS: TankDef[] = [
       cylinders: 12,
       turbo: true,
     },
-    // Renk HSWL 354: four forward, two reverse (31 km/h); the ratios are not published: spaced to 72 km/h
-    gearSpeeds: [17, 30, 46, 72],
+    // Renk HSWL 354: four forward, two reverse (31 km/h); the ratios are not published: spaced to 68 km/h
+    gearSpeeds: [16, 28, 44, 68],
     grip: 0.8,
     rolling: 0.035,
     stats: { power: 7, grip: 7, drift: 0, weight: 1 },
@@ -289,22 +343,29 @@ const TANKS: TankDef[] = [
         calibre: 120,
         round: 'DM53 APFSDS',
         muzzleVelocity: 1670,
+        // a loader by hand: no official figure (about 6 s is the usual one)
         reload: 6,
         loader: 'manual',
         ammo: 42,
         elevation: [-9, 20],
+        // the turret round in 9 s
         traverse: 40,
         elevationRate: 15,
+        // EMES 15: 12× by day, the thermal channel 4× / 12×
         zoom: [4, 12],
-        estimated: ['reload'],
+        shot: 8.35,
+        charge: 8.9,
+        dropPerKm: 55,
+        estimated: ['reload', 'elevationRate', 'drag'],
       },
       pivotRate: 30,
       reverseSpeed: 31,
       sound: 'diesel',
-      dims: { hull: [7.72, 3.75, 1.4], turretZ: 0.4, ringY: 1.95, barrel: 5.3, trunnion: 0.4, turret: [5.0, 3.6, 0.85] },
+      // 9.97 m over the gun, hull 7.72 m, 3.74 m wide: the muzzle 9.97 − 7.72 / 2 = 6.11 m ahead of the middle
+      dims: { hull: [7.72, 3.75, 1.4], turretZ: 0.4, ringY: 1.95, barrel: 4.11, trunnion: 0.4, trunnionZ: 1.6, turret: [5.0, 3.6, 0.85] },
       camo: ['#3f4a33', '#5a4632'],
-      figures: { engine: 'MTU MB 873 Ka-501 V型12気筒ツインターボディーゼル 47.6L', power: '1,500 PS / 2,600 rpm', weight: '59.7 t', topSpeed: 72, crew: 4, transmission: 'Renk HSWL 354（前進4段・後進2段）' },
-      estimated: ['変速比', '装填時間', '旋回性能'],
+      figures: { engine: 'MTU MB 873 Ka-501 V型12気筒ツインターボディーゼル 47.6L', power: '1,500 PS / 2,600 rpm', weight: '59.7 t', topSpeed: 68, crew: 4, transmission: 'Renk HSWL 354（前進4段・後進2段）' },
+      estimated: ['変速比', '装填時間', '俯仰速度', '超信地旋回の速さ'],
     },
     colors: { body: '#3f4a33', accent: '#5a4632' },
     model: { title: 'Leopard 2A5', author: 'TOUGE NOCTURNE', url: '', license: '自作', own: true },
@@ -329,8 +390,8 @@ const TANKS: TankDef[] = [
       cylinders: 0,
       turbo: false,
     },
-    // Allison X1100-3B: four forward, two reverse (40 km/h); governed to 67 km/h (42 mph)
-    gearSpeeds: [14, 27, 43, 67],
+    // Allison X1100-3B: four forward, two reverse; governed to 42 mph (67.6 km/h)
+    gearSpeeds: [14, 27, 43, 67.6],
     grip: 0.8,
     rolling: 0.035,
     stats: { power: 7, grip: 7, drift: 0, weight: 1 },
@@ -342,23 +403,33 @@ const TANKS: TankDef[] = [
         name: 'M256 44口径120mm滑腔砲',
         calibre: 120,
         round: 'M829A4 APFSDS-T',
+        // not published for the A4: the M829A3's
         muzzleVelocity: 1555,
+        // a loader by hand (the crew's qualification asks for 7 s; practised loaders are quicker)
         reload: 6,
         loader: 'manual',
         ammo: 42,
-        elevation: [-9, 20],
+        elevation: [-10, 20],
+        // the turret round in 9 s
         traverse: 40,
         elevationRate: 15,
+        // the gunner's primary sight by day: 3× / 10×
         zoom: [3, 10],
-        estimated: ['muzzleVelocity', 'reload'],
+        // (the M829A3: 10 kg in the bore, 8.1 kg of propellant)
+        shot: 10,
+        charge: 8.1,
+        dropPerKm: 50,
+        estimated: ['muzzleVelocity', 'reload', 'elevationRate', 'recoil', 'drag'],
       },
       pivotRate: 30,
+      // not in the army's sheets: 25 mph is the usual figure
       reverseSpeed: 40,
       sound: 'turbine',
-      dims: { hull: [7.93, 3.66, 1.3], turretZ: 0.3, ringY: 1.85, barrel: 5.3, trunnion: 0.35, turret: [5.6, 3.7, 0.8] },
+      // 9.83 m over the gun, hull 7.93 m, 3.66 m wide: the muzzle 9.83 − 7.93 / 2 = 5.87 m ahead of the middle
+      dims: { hull: [7.93, 3.66, 1.3], turretZ: 0.3, ringY: 1.85, barrel: 3.78, trunnion: 0.35, trunnionZ: 1.79, turret: [5.6, 3.7, 0.8] },
       camo: ['#b9a47a', '#a8936a'],
       figures: { engine: 'Honeywell AGT1500 ガスタービン', power: '1,500 shp', weight: '66.8 t', topSpeed: 67, crew: 4, transmission: 'Allison X1100-3B（前進4段・後進2段）' },
-      estimated: ['変速比', '装填時間', '旋回性能'],
+      estimated: ['変速比', '後進速度', '砲弾初速（M829A3の値）', '装填時間', '俯仰速度', '超信地旋回の速さ'],
     },
     colors: { body: '#b9a47a', accent: '#a8936a' },
     model: { title: 'M1A2 SEPv3 エイブラムス', author: 'TOUGE NOCTURNE', url: '', license: '自作', own: true },
@@ -375,13 +446,13 @@ const TANKS: TankDef[] = [
     boxHeight: 2.1,
     engine: {
       idleRpm: 800,
-      // ChTZ 12N360 (A-85-3A): 1,500 hp (1,103 kW) nominal; its rated speed is not published: 2,000 rpm estimated
+      // ChTZ 12N360 (A-85-3A): 1,500 hp (1,103 kW) at 2,000 rpm: 5,270 N·m there; the curve below it is estimated
       redline: 2000,
       torque: [[800, 3800], [1100, 5200], [1400, 5800], [1700, 5600], [2000, 5270], [2100, 3500]],
       cylinders: 12,
       turbo: true,
     },
-    // a robotised gearbox, eight forward and eight reverse; 80 km/h (the published estimates run 80–90)
+    // a robotised gearbox, eight forward and eight reverse; 80 km/h (the reports run from 75 to 90)
     gearSpeeds: [9, 14, 20, 28, 38, 49, 63, 80],
     grip: 0.8,
     rolling: 0.035,
@@ -394,24 +465,31 @@ const TANKS: TankDef[] = [
         name: '2A82-1M 125mm滑腔砲',
         calibre: 125,
         round: '3BM69 APFSDS',
+        // nothing published by the maker (claims run to 2,000 m/s): a figure of the 125 mm long rods before it
         muzzleVelocity: 1750,
+        // 10–12 rounds a minute as reported
         reload: 5.5,
         loader: 'auto',
         ammo: 45,
-        elevation: [-5, 20],
+        // not published: the T-90's −6° / +14°
+        elevation: [-6, 14],
         traverse: 40,
         elevationRate: 15,
         zoom: [4, 12],
-        estimated: ['muzzleVelocity', 'reload', 'elevation', 'traverse', 'zoom'],
+        shot: 8.5,
+        charge: 10,
+        dropPerKm: 60,
+        estimated: ['muzzleVelocity', 'reload', 'elevation', 'traverse', 'elevationRate', 'zoom', 'recoil', 'drag'],
       },
       pivotRate: 30,
       // the reversible gearbox: the same eight ratios backwards
       reverseSpeed: 80,
       sound: 'diesel',
-      dims: { hull: [8.7, 3.5, 1.5], turretZ: 0.0, ringY: 2.05, barrel: 6.0, trunnion: 0.3, turret: [4.4, 3.3, 0.75] },
+      // 10.8 m over the gun, hull 8.7 m, 3.5 m wide: the muzzle 10.8 − 8.7 / 2 = 6.45 m ahead of the middle
+      dims: { hull: [8.7, 3.5, 1.5], turretZ: 0.0, ringY: 2.05, barrel: 5.04, trunnion: 0.3, trunnionZ: 1.41, turret: [4.4, 3.3, 0.75] },
       camo: ['#4c5638', '#2f3326'],
-      figures: { engine: 'ChTZ 12N360 X型12気筒ディーゼル', power: '1,500 hp', weight: '48 t', topSpeed: 80, crew: 3, transmission: 'ロボット式（前進8段・後進8段）' },
-      estimated: ['重量（48〜55 t の諸説）', '最高速度（80〜90 km/h の諸説）', '定格回転数', '後進速度', '砲弾初速', '装填時間', '俯仰角', '旋回性能'],
+      figures: { engine: 'ChTZ 12N360 X型12気筒ディーゼル', power: '1,500 hp / 2,000 rpm', weight: '48 t', topSpeed: 80, crew: 3, transmission: 'ロボット式（前進8段・後進8段）' },
+      estimated: ['重量（48〜55 t の諸説）', '最高速度（75〜90 km/h の諸説）', '後進速度', '砲弾初速', '装填時間', '俯仰角', '砲塔旋回・俯仰速度', '照準具の倍率'],
     },
     colors: { body: '#4c5638', accent: '#2f3326' },
     model: { title: 'T-14 アルマータ', author: 'TOUGE NOCTURNE', url: '', license: '自作', own: true },

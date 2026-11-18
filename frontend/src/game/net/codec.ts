@@ -31,6 +31,13 @@ export interface NetState {
    * coming up, in the air), 2 = the gear going up, 3 = gone. From 1 on nobody can touch it.
    */
   dep?: number;
+  /**
+   * a tank's turret bearing relative to its hull (rad, + = left) and its gun's elevation (rad): how the others see
+   * it aim. They ride in the spare bits of the flags' number (12 bits: 0.09°; 8 bits: 0.25°, ±32°), so the packet
+   * keeps its length and every other vehicle's packet is what it was.
+   */
+  tu?: number;
+  gp?: number;
   /** throttle and engine speed as a share of the redline (for the exhaust) */
   th: number;
   rp: number;
@@ -53,6 +60,16 @@ export function seqDelta(a: number, b: number) {
   return ((((a - b) % SEQ_MOD) + SEQ_MOD + SEQ_MOD / 2) % SEQ_MOD) - SEQ_MOD / 2;
 }
 
+/** the turret's bearing in 12 bits and the gun's elevation in 8 (two's complement), above the flags' five bits */
+export const TURRET_STEP = (2 * Math.PI) / 4096;
+export const GUN_STEP = (0.25 * Math.PI) / 180;
+const aimBits = (tu: number, gp: number) => {
+  const yaw = ((Math.round(tu / TURRET_STEP) % 4096) + 4096) % 4096;
+  const pitch = Math.max(-128, Math.min(127, Math.round(gp / GUN_STEP))) & 255;
+  // (not a shift: the number stays a plain whole number whatever the engine's integer width)
+  return yaw * 32 + pitch * 131072;
+};
+
 /** mm, 1e-4 of a quaternion component, cm/s, mrad/s, cm/s², 0.1 ms: finer than anything the receiver can show */
 export function encodeState(s: NetState): number[] {
   const r = Math.round;
@@ -63,7 +80,7 @@ export function encodeState(s: NetState): number[] {
     r(s.vel[0] * 100), r(s.vel[1] * 100), r(s.vel[2] * 100),
     r(s.acc[0] * 100), r(s.acc[1] * 100), r(s.acc[2] * 100),
     r(s.w[0] * 1e3), r(s.w[1] * 1e3), r(s.w[2] * 1e3),
-    r(s.st * 1e3), r(s.s * 10), (s.br ? 1 : 0) | ((s.ep & 3) << 1) | (((s.dep ?? 0) & 3) << 3),
+    r(s.st * 1e3), r(s.s * 10), (s.br ? 1 : 0) | ((s.ep & 3) << 1) | (((s.dep ?? 0) & 3) << 3) | aimBits(s.tu ?? 0, s.gp ?? 0),
     r(s.th * 100), r(s.rp * 100), s.fin === undefined ? -1 : r(s.fin),
   ];
   if (s.echo) out.push(s.echo.id, r(s.echo.t * 10), r(s.echo.hold * 10));
@@ -89,6 +106,11 @@ export function decodeState(a: unknown): NetState | null {
     th: n[23] / 100, rp: n[24] / 100,
   };
   if ((n[22] >> 3) & 3) st.dep = (n[22] >> 3) & 3;
+  const yaw = (n[22] >> 5) & 4095, pitch = (n[22] >> 17) & 255;
+  if (yaw || pitch) {
+    st.tu = (yaw >= 2048 ? yaw - 4096 : yaw) * TURRET_STEP;
+    st.gp = (pitch >= 128 ? pitch - 256 : pitch) * GUN_STEP;
+  }
   if (n[25] >= 0) st.fin = n[25];
   if (n.length === FIXED + 3 && n[26] > 0) st.echo = { id: n[26], t: n[27] / 10, hold: n[28] / 10 };
   return st;

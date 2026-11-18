@@ -581,6 +581,45 @@ pending. `docs/PLAN.md` holds the design.
   join = seated in the fallback, a member's change = 422, the host's change of course replaces what the new course
   does not offer) all ask there. Room checks that depend on the course are made on the room row under
   `lockForUpdate` (the host can change the course in between). A course-bound vehicle needs its `courses` there.
+- Tanks (kind `tank`, `vehicle/tanks.ts`: 10式, 16式 (wheeled), Leopard 2A5, M1A2 SEPv3, T-14; `TANK_ORDER`, every
+  course; behind the release switch `tanks`, client and server): the published figures, nothing tuned for play
+  (owner 11-10: 史実通り); what no maker publishes is marked `estimated` (（推定） on the sheet). Tracks: four contact
+  points, a yaw moment from the two tracks' difference, pivot turn; the 10式's HMT is `cvt`. Check with
+  `TANKS=1 npx tsx tools/tank-figures.ts [ids] [--courses]` (acceleration, top / reverse speed, pivot rate, recoil,
+  laying, range table; `--courses`: that no shot ends at its own muzzle) and the tank tests in `tanks.test.ts`.
+  Medals `TANK_MEDALS` (from the AI's laps: `TANKS=1 COURSE=<id> npx tsx tools/sim-run.ts type10,… legend`).
+  The gun (`game/weapons/`, DOM-free): `gun.ts` (`GunControl`: **the player moves the line of sight, the fire
+  control lays the gun**: turret and gun follow at the real rates inside the real limits, the laser gives the range
+  every 0.1 s, the gun gets the superelevation for it; without the sight the line is carried by the hull, in the
+  sight it is held in the world), `ballistics.ts` (`Shells`: a shell is flown per physics step: gravity, drag as
+  `dropPerKm`, one ray per step), `world.ts` (what a shell can meet: the road, vehicles' bodies (CAR, PROXY), the
+  land by `terrain.heightAt`; **not the invisible walls and no scenery**: those have no colliders a shell should
+  stop at), `Gunnery.ts` (one per race with a tank in it: reload, recoil as an impulse at the trunnions, who was
+  hit). A hit puts the target back on the road as R does (`Game.respawn`): the rival, or an online member; ghosts
+  and the replay cannot be hit and show no turret movement. No scoring: a tank's run counts like any vehicle's.
+  Online: **the firer's screen decides a hit**, the victim's game checks the word (`net/gunEvents.ts`
+  `GunReferee`: the firer drives a tank, the muzzle is where that member is, the round could be loaded, the hit is
+  near our own vehicle, we are racing) and respawns itself; another member's shell that meets a vehicle on our
+  screen ends without a burst (the firer's word brings it). Events are whole numbers on `client-gun`
+  (`[71, 1, shot, t·10, muzzle mm ×3, velocity cm/s ×3]`, `[71, 2, shot, target, point mm ×3]`); turret bearing
+  (12 bits) and gun elevation (8 bits, 0.25°) ride in the state packet's flag word (`n[22]` bits 5…24: the packet's
+  length and `NET_VERSION` unchanged). Controls: mouse with pointer lock while racing in a tank (`ui/hud/GunSight.tsx`:
+  a click takes the pointer, the browser's Esc gives it back and the pause menu opens; never in a menu), left =
+  fire, right held = the gunner's sight, wheel = magnification, middle = turret to the front; pad: right stick,
+  RT fire, LT sight, L3 front, and the left stick's Y drives (the triggers are the gun's: `InputManager.gunMode`);
+  touch: 照準 (a switch) and 射撃 over the steering pad, a drag on the right half aims (`touchGun`: a probe can aim
+  through it too). In the sight the camera is the gunner's eye (`ChaseCamera` `sight`; the own vehicle is hidden).
+  Effects `fx/GunFx.ts` (sprite pools: flash, smoke, tracer, burst; no light is added), sound `audio/tank.ts` +
+  worklet `'tank'` (diesels by cylinders, the M1's turbine, track links or tyres; `gunShot`, `shellBurst` buffers,
+  heard later and duller with distance: `AudioEngine.far`); check with `npx tsx tools/tank-wav.ts <dir>`.
+  Model contract: `render/TankModel.ts` header (`body` / `turret` / `gun`; **the gun's places are
+  `TankInfo.dims`, the simulation's**: a model is built to them). Checks on the GPU:
+  `node tools/tank-check.cjs <dir>` (a build with `VITE_TANKS=1`: garage, a rival battle, sight laid, shot, the
+  rival put back, pictures; `PHONE=1` the touch layout) and `URL=<preview on a test stack> node tools/tank-duel.cjs
+  <dir>` (two games in a room: A's shell puts B back on both screens; the stack must offer the tanks).
+  **Not open yet** (11-18): the figures were written from memory and are not checked against sources, the
+  models are procedural stand-ins (own models come first, and the owner sees their sheets), sound unheard by ear,
+  no real gamepad tried.
 - Course style `'airbase'` (Edwards): `render/airbaseScenery.ts` (places in the airfield's frame: `a` m along 04R
   from its threshold, `b` m to its left; hangars, tower, parked aircraft silhouettes, all procedural),
   `airbasePavement.ts` (slabs and strips one hand above the ground, runway numbers / markings), `airbaseGround.ts`

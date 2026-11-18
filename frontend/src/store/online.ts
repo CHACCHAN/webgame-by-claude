@@ -5,6 +5,7 @@ import { gameHolder } from '../ui/GameCanvas';
 import { useApp } from './app';
 import { useSettings } from './settings';
 import { parseImpairment, type NetTransport } from '../game/net/transport';
+import { isGunEvent } from '../game/net/gunEvents';
 import { hideRoomLineup, lobbyChannel, lobbyRoom, previewCar, showRoomLineup } from './lobby';
 import { heardLoad, LoadTeller, nextAbsent, nextWaits, readLoad, type Waiting } from '../game/net/roomWait';
 import type { CarId } from '../game/vehicle/carSpecs';
@@ -533,6 +534,11 @@ function beginRace(room: RoomState) {
 // ---- car states: the transport the engine's NetLink sends and receives on
 
 const STATE_EVENT = 'client-state';
+/**
+ * a tank's shot or hit (`game/net/gunEvents.ts`: whole numbers, at most one shot per loading time and one hit per
+ * shot from a member; every receiver checks what it hears before anything follows)
+ */
+const GUN_WIRE = 'client-gun';
 
 /**
  * Car states as client events on the room's presence channel: Reverb passes each on to the other members with
@@ -544,16 +550,18 @@ const relay: NetTransport = {
     return !!channel?.subscribed;
   },
   send(data) {
-    channel?.trigger(STATE_EVENT, data);
+    channel?.trigger(isGunEvent(data) ? GUN_WIRE : STATE_EVENT, data);
   },
   onReceive: null,
 };
 
 function bindStates(ch: PresenceChannel) {
-  ch.bind(STATE_EVENT, (data: number[], meta?: { user_id?: string }) => {
+  const hear = (data: number[], meta?: { user_id?: string }) => {
     const id = Number(meta?.user_id);
     if (id) relay.onReceive?.(id, data);
-  });
+  };
+  ch.bind(STATE_EVENT, hear);
+  ch.bind(GUN_WIRE, hear);
 }
 
 /** The game sends its car's state itself, after its physics (`Game.step`), on whatever it is attached to. */
