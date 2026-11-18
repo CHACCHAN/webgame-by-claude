@@ -5,6 +5,7 @@ import { buildTank, type TankRig } from './TankModel';
 import { buildJet, type JetRig } from './JetModel';
 import * as THREE from 'three';
 import type { CarId, CarSpec, RoadCarId } from '../vehicle/carSpecs';
+import { glassMaterial, onCarsGround, paintMaterial } from './carSurface';
 
 /**
  * Procedural car bodies. Each car is lofted from cross sections along its
@@ -111,6 +112,9 @@ export interface CarMaterials {
   brake: THREE.MeshStandardMaterial;
 }
 
+/** how much of the cabin a car's glass hides, head-on, unless its spec says otherwise (`CarSpec.glassOpacity`) */
+export const GLASS_OPACITY = 0.62;
+
 /** the paint: metallic flake under a clear coat */
 const PAINT = { metalness: 0.45, roughness: 0.32, clearcoat: 1 };
 
@@ -128,22 +132,24 @@ export function paintFinish(mat: THREE.MeshPhysicalMaterial, spec: CarSpec, colo
 
 export function createCarMaterials(spec: CarSpec, bodyColor = spec.colors.body): CarMaterials {
   const mats: CarMaterials = {
-    paint: new THREE.MeshPhysicalMaterial({
+    // paint, the two-tone's second colour and the glass mirror the car's surroundings (render/carSurface.ts)
+    paint: paintMaterial({
       color: bodyColor,
       ...PAINT,
       clearcoatRoughness: 0.035,
       envMapIntensity: 1.25,
     }),
-    accent: new THREE.MeshStandardMaterial({ color: spec.colors.accent, metalness: 0.3, roughness: 0.45 }),
-    glass: new THREE.MeshPhysicalMaterial({
+    accent: paintMaterial({ color: spec.colors.accent, metalness: 0.3, roughness: 0.45, clearcoat: 0.6, clearcoatRoughness: 0.08 }),
+    glass: glassMaterial({
       color: '#0b1016',
       metalness: 0.1,
       roughness: 0.04,
       clearcoat: 1,
       clearcoatRoughness: 0.02,
       envMapIntensity: 1.6,
-      transparent: true,
-      opacity: 0.88,
+      // (head-on the cabin shows through as in a photograph of the car; towards a flat angle the pane mirrors more
+      // and lets less through, `glassMaterial`)
+      opacity: spec.glassOpacity ?? GLASS_OPACITY,
     }),
     trim: new THREE.MeshStandardMaterial({ color: '#0d0e10', metalness: 0.2, roughness: 0.6 }),
     chrome: new THREE.MeshStandardMaterial({ color: '#d8dade', metalness: 1, roughness: 0.12 }),
@@ -481,6 +487,13 @@ export interface CarRig {
 }
 
 export function buildCar(spec: CarSpec, opts: { bodyColor?: string; procedural?: boolean } = {}): CarRig {
+  const rig = buildVehicle(spec, opts);
+  // (what its paint and glass mirror of the road lies under this root)
+  onCarsGround(rig.root);
+  return rig;
+}
+
+function buildVehicle(spec: CarSpec, opts: { bodyColor?: string; procedural?: boolean }): CarRig {
   if (spec.train) return buildTrain(spec, opts);
   if (spec.creature) return buildRoach(spec, opts);
   if (spec.bike) return buildBike(spec, opts);

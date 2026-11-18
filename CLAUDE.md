@@ -607,6 +607,17 @@ pending. `docs/PLAN.md` holds the design.
   Measured on the four old courses against v2.5.1 (night, dawn, 8 viewpoints): band amplitude 4.6–6.8 % → 0.9–1.2 %,
   pictures 1.6–3.3 % brighter on average (flat ground no longer occludes itself), contact shadows under the cars
   and at walls and rails kept. Keep sample points at texel middles in any pass that reads the depth at its own places.
+- Car paint, black trim and glass are made in `render/carSurface.ts` (v2.6.1); at quality low (`surfaceDetail` 0) they
+  keep the plain environment map. Paint and trim (`paintMaterial`): the environment map plus the 8 street lamps
+  nearest the camera (`lampsAround`, each frame in `Game.update`, ≤ 180 m) as discs in the clear coat; a material
+  marked `userData.lampImage` gets no coat highlight from the lamp field. Glass (`glassMaterial`,
+  `userData.carGlass`): mirrors a worked-out picture of the surroundings (the sky as the dome draws it, the road as
+  a plane through the wheels, the lamps' pools), premultiplied, `CarSpec.glassOpacity` see-through head-on
+  (default 0.62; 0.88 where nothing presentable is under the glass: the shiden until its cabin is in, the
+  fighters), fully mirrored at flat angles. **A car's cabin shows through its glass: a model's interior must be
+  presentable.** `KeyLight` / `BeamLight` (`coatGlint.ts`) draw the sun's, moon's and headlights' coat highlights.
+  A node made per material breaks shader sharing (three.js keys a shader by each node's id): share one node, as
+  `paneOpacity` does (a glass shader was built for every car coming into the scene).
 - Race timing/splits/AI run per physics step (`Game.raceStep`, `driveAI`); keep frame-time logic out of timing.
 - Tyre grip = course surface (`CourseInfo.surface.grip`) × weather (`WET_GRIP` in rain): `Game.roadGrip` → `VehicleSim.gripScale`
   (before `AIDriver.calibrate`). Headless tools take the course's grip. Changing a grip: re-check medals with the sim

@@ -150,6 +150,8 @@ export class LampField extends THREE.Light {
   readonly scale = new THREE.Vector3(1, 0, 1);
   readonly warm = new THREE.Color(0, 0, 0);
   readonly cool = new THREE.Color(0, 0, 0);
+  /** the lamps of the course that is shown */
+  shown: readonly FieldLamp[] = [];
 
   constructor(readonly atlas: LightAtlas) {
     super('#ffffff', 0);
@@ -159,6 +161,7 @@ export class LampField extends THREE.Light {
   show(lamps: readonly FieldLamp[]) {
     let l = layouts.get(lamps);
     if (!l) layouts.set(lamps, (l = layoutLamps(lamps)));
+    this.shown = lamps;
     this.atlas.put(CELLS_ROW, FIELD_SIZE, l.cells);
     this.atlas.put(TABLE_ROW, FIELD_TABLE, l.table);
     this.frame.set(l.x0, l.z0, 1 / l.cell);

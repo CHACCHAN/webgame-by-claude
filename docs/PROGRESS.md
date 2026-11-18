@@ -2277,3 +2277,20 @@ to be seen). The films still show the balls until they are recorded again.
 - The mirror repository (push only, the owner's) has main since 11-13: pushed in steps of 15 commits (one push
   of the whole history is refused, HTTP 413). GitHub is not pushed: three commits of 11-11 hold the gateway's
   address (removed since); the owner has not said.
+
+## v2.6.1 (11-18): a car's glass shows its cabin; the lamps' images in the clear coat
+
+- **The owner (11-18)**: yes to the car-look sheets (glass in; the lamps' highlights travelling over the body to
+  be pursued: step 2, with the agent, not merged). From now on the work is done with Claude Code's models only
+  (no Vibe models); GitHub's push is mine to decide: not before the gateway's address is out of the history.
+- **In** (agent on Opus 5.5, branch `worktree-agent-ab29bc64a9c82da41` at `b36413f`): `render/carSurface.ts`:
+  glass mirrors a worked-out picture of the surroundings and is 0.62 see-through head-on (`CarSpec.glassOpacity`;
+  the shiden and the three fighters keep 0.88: nothing presentable under their glass yet); paint keeps the
+  environment map and gets the near street lamps as discs in its coat; softer coat highlights (`coatGlint.ts`).
+  The inherited full mirror on paint was dropped (tan lower body by day, no difference by night).
+- Verified by me on the merged tree: tsc; vitest 264; build; `gpu-errors` 0 (WebGPU, WebGL 2, Edwards with the
+  fighters on WebGPU); a race picture looked at. By the agent: `paint-drawn` on both backends, shaders built per
+  car not more than main, frame gaps not worse, the bike / train / cockroach unchanged.
+- Not verified: the cost on a quiet machine (the agent's 4K estimate +0.46 ms inside the noise); traffic copies;
+  E2E (no UI change); phones.
+- Waiting for the owner: the sheets of round two of hayate, shiden, r34 (cars branch `32b8970`, gate: nothing worse).

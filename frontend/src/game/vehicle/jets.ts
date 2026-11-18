@@ -132,6 +132,8 @@ function jetSpec(d: JetDef): CarSpec {
     driftiness: 0,
     stats: d.stats,
     colors: { body: d.jet.liveries[0].swatch, accent: d.jet.camo[1] },
+    // (the canopy has no cockpit under it yet: the smoked bubble, not an empty one)
+    glassOpacity: 0.88,
     model: d.model,
     jet: d.jet,
   };
