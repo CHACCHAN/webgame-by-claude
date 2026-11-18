@@ -257,6 +257,8 @@
 .tc-gun { left: max(14px, env(safe-area-inset-left)); bottom: calc(max(14px, env(safe-area-inset-bottom)) + min(36vh, 170px) + 8px); width: min(38vw, 330px); display: grid; grid-template-columns: 2fr 3fr; gap: 6px; }
 .tc-pedal.sight, .tc-pedal.fire { width: auto; height: min(14vh, 62px); }
 .tc-pedal.fire { --edge: rgb(var(--c-amber) / 0.6); }
+/* (on a phone the gun's figures stand over its mark: under it they ran into the two buttons) */
+.touch .gun-hud:not(.scope) .gun-read { translate: -50% -4.2rem; }
 .tc-pedal.fire.on { --edge: var(--amber); --fill: rgb(var(--c-amber) / 0.36); }
 
 /* ------------------------------------------------------------- touch screens: the cluster between the steering pad

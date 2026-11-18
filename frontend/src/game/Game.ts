@@ -359,6 +359,8 @@ export class Game {
   /** what the hands asked since the last physics step */
   private gunIn: GunInput = { dYaw: 0, dPitch: 0, stabilised: false, recentre: false };
   private gunFire = false;
+  /** the trigger was pulled in a frame: held for the next physics step (a frame can pass without one) */
+  private gunPull = false;
   private gunScope = false;
   /** the sight's higher magnification is swung in */
   private gunZoomHigh = false;
@@ -794,7 +796,7 @@ export class Game {
     this.gunnery = null;
     this.net.onEvent = null;
     this.input.gunMode = false;
-    this.gunScope = this.gunFire = false;
+    this.gunScope = this.gunFire = this.gunPull = false;
     this.hud.gun = null;
     this.chase?.leaveSight();
     if (this.gunFx) {
@@ -1195,7 +1197,7 @@ export class Game {
     const h = this.input.pollGun(dt, this.gunHands), i = this.gunIn;
     if (pl.finished || (this.phase !== 'racing' && this.phase !== 'countdown')) {
       // past the line: the eye off the sight, the turret to the front
-      this.gunScope = this.gunFire = i.stabilised = false;
+      this.gunScope = this.gunFire = this.gunPull = i.stabilised = false;
       i.dYaw = i.dPitch = 0;
       i.recentre = true;
       return;
@@ -1208,6 +1210,7 @@ export class Game {
     i.dPitch -= h.dy / mag;
     i.recentre ||= h.recentre;
     this.gunFire = this.phase === 'racing' && h.fire;
+    this.gunPull ||= this.gunFire;
   }
 
   /** Per physics step, after the world's: the player's gun, then every shell in the air. */
@@ -1221,7 +1224,8 @@ export class Game {
       p.sPitch = c.sight.pitch;
       p.wYaw = c.world.yaw;
       p.wPitch = c.world.pitch;
-      g.step(PHYSICS_DT, pl.sim, this.gunIn, this.gunFire && !pl.finished, performance.now());
+      g.step(PHYSICS_DT, pl.sim, this.gunIn, (this.gunFire || this.gunPull) && !pl.finished, performance.now());
+      this.gunPull = false;
       this.gunIn.dYaw = this.gunIn.dPitch = 0;
       this.gunIn.recentre = false;
     }

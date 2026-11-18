@@ -6,13 +6,17 @@
 // The server must offer the tanks (`'tanks' => true` in backend/config/game.php of the tree the stack was built
 // from) and the build too (`VITE_TANKS=1 npm run build`), served with the API proxied to that stack:
 //   API_PROXY=http://127.0.0.1:<stack's port> npx vite preview --port <p> --strictPort --host 127.0.0.1
-// Env: URL (required: the preview), TANK (type10), CAR (hayate), QUALITY (medium), CHROME, PW_MODULE.
+// Env: URL (required: the preview), TANK (type10), CAR (hayate), QUALITY (medium), SOFT=1 (software renderer:
+// use QUALITY=low), CHROME, PW_MODULE.
 const { chromium } = require(process.env.PW_MODULE || 'playwright');
 const fs = require('fs');
 const OUT = process.argv[2] || '.';
 const URL_ = process.env.URL;
 const TANK = process.env.TANK || 'type10';
 const CAR = process.env.CAR || 'hayate';
+const SOFT = !!process.env.SOFT;
+// (two games on one software renderer take minutes to load)
+const WAIT = SOFT ? 600000 : 240000;
 if (!URL_ || /:8080\b/.test(URL_)) {
   console.error('URL=<a preview whose API is a test stack> (not the live one)');
   process.exit(1);
@@ -23,7 +27,8 @@ if (!URL_ || /:8080\b/.test(URL_)) {
   const browser = await chromium.launch({
     executablePath: process.env.CHROME || '/usr/bin/google-chrome',
     headless: true,
-    args: ['--ignore-gpu-blocklist', '--use-angle=vulkan', '--enable-features=Vulkan'],
+    // (SOFT=1: the software renderer, for the logic alone; no pictures worth keeping)
+    args: process.env.SOFT ? ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] : ['--ignore-gpu-blocklist', '--use-angle=vulkan', '--enable-features=Vulkan'],
   });
   const seen = {};
   const failed = [];
@@ -34,7 +39,7 @@ if (!URL_ || /:8080\b/.test(URL_)) {
   };
   const tag = String(Date.now() % 10000);
   const open = async (who, car, query) => {
-    const ctx = await browser.newContext({ viewport: { width: 960, height: 540 } });
+    const ctx = await browser.newContext({ viewport: SOFT ? { width: 640, height: 360 } : { width: 960, height: 540 } });
     const page = await ctx.newPage();
     page.on('console', (m) => {
       if (m.type() !== 'error' && m.type() !== 'warning') return;
@@ -46,7 +51,7 @@ if (!URL_ || /:8080\b/.test(URL_)) {
     const settings = { quality: process.env.QUALITY || 'medium', timeOfDay: 'night', masterVolume: 0, controlsGuide: false, rivalVoice: 'off' };
     await page.addInitScript((s) => localStorage.setItem('touge-settings', JSON.stringify({ state: s, version: 1 })), settings);
     await page.goto(URL_ + query);
-    await page.waitForFunction(() => window.__game && window.__game.phase === 'attract', null, { timeout: 240000 });
+    await page.waitForFunction(() => window.__game && window.__game.phase === 'attract', null, { timeout: WAIT });
     await page.locator('.title h1').waitFor({ timeout: 60000 });
     await page.keyboard.press('Enter');
     await page.locator('.menu-list li', { hasText: 'ONLINE BATTLE' }).click();
@@ -56,6 +61,14 @@ if (!URL_ || /:8080\b/.test(URL_)) {
     await page.evaluate((c) => window.__online.setState({ carId: c, carColor: null }), car);
     return page;
   };
+  /** SOFT: a game that only has to wait draws nothing meanwhile (the other one gets the renderer) */
+  const idle = (page, on) =>
+    SOFT &&
+    page.evaluate((on) => {
+      const r = window.__game.renderer;
+      r.__render ??= r.render;
+      r.render = on ? () => {} : r.__render;
+    }, on);
   const shot = (page, name) => page.screenshot({ path: `${OUT}/${name}.jpg`, quality: 84, type: 'jpeg' });
   /** counts what the gunnery asks of this page's game */
   const watch = (page) =>
@@ -76,19 +89,24 @@ if (!URL_ || /:8080\b/.test(URL_)) {
   step = 'room';
   const a = await open('A', TANK, '');
   await a.locator('button', { hasText: 'ルームを作成' }).click();
-  const code = (await a.locator('.ol-code-big b').textContent({ timeout: 240000 })).trim();
+  const code = (await a.locator('.ol-code-big b').textContent({ timeout: WAIT })).trim();
   await a.locator('.rt-badge', { hasText: 'LIVE' }).waitFor({ timeout: 60000 });
+  console.log(`     room ${code} made by A`);
+  await idle(a, true);
   const b = await open('B', CAR, '?autodrive=1');
   await b.locator('.ol-code').fill(code);
   await b.locator('button', { hasText: '参加' }).click();
-  await b.locator('.ol-code-big b', { hasText: code }).waitFor({ timeout: 240000 });
+  await b.locator('.ol-code-big b', { hasText: code }).waitFor({ timeout: WAIT });
+  await idle(a, false);
+  console.log('     B is in the room');
   const room = await a.evaluate(() => window.__online.getState().room.players.map((p) => ({ id: p.id, car: p.car_id, slot: p.slot })));
   want(room.length === 2 && room.some((p) => p.car === TANK) && room.some((p) => p.car === CAR), `room ${code}: ${JSON.stringify(room)}`);
   await shot(a, 'duel-a-room');
-  await b.locator('.ol-ready:not([disabled])').click({ timeout: 240000 });
+  await b.locator('.ol-ready:not([disabled])').click({ timeout: WAIT });
   await a.locator('.ol-start:not([disabled])').click({ timeout: 120000 });
   step = 'race';
-  for (const p of [a, b]) await p.waitForFunction(() => window.__game.phase === 'racing', null, { timeout: 120000 });
+  for (const p of [a, b]) await p.waitForFunction(() => window.__game.phase === 'racing', null, { timeout: WAIT });
+  console.log('     both racing');
   await watch(a);
   await watch(b);
   const ids = await a.evaluate(() => ({ me: window.__game.onlineSelfId, peer: window.__game.remotes.standings()[0].id, gunnery: !!window.__game.gunnery?.control }));

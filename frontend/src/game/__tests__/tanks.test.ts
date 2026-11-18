@@ -2,6 +2,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { Quaternion, Vector3 } from 'three';
 import { TURRET_STEP, GUN_STEP, decodeState, encodeState, type NetState } from '../net/codec';
 import { GUN_EVENT, GunReferee, decodeGunEvent, encodeGunEvent, isGunEvent, type HitEvent, type ShotEvent } from '../net/gunEvents';
+import { InputManager, emptyHands } from '../input/Input';
 import { NetLink } from '../net/NetLink';
 import { PeerTrack, newPose } from '../net/PeerTrack';
 import type { NetTransport } from '../net/transport';
@@ -568,5 +569,29 @@ describe('turret and gun in a car state', () => {
     expect(pose.gunPitch / RAD).toBeCloseTo(5, 6);
     track.sample(100, pose);
     expect(pose.turret / RAD).toBeCloseTo(-170, 6);
+  });
+});
+
+describe('the trigger', () => {
+  it('a pull shorter than a frame is still a shot; a held trigger stays pulled', () => {
+    const none = () => undefined;
+    const input = new InputManager({ addEventListener: none, removeEventListener: none } as unknown as Window);
+    const hands = emptyHands();
+    expect(input.pollGun(1 / 60, hands).fire).toBe(false);
+    // a finger's tap: down and up between two frames (ui/hud/TouchControls.tsx)
+    input.touchGun.fire = input.touchGun.shot = true;
+    input.touchGun.fire = false;
+    expect(input.pollGun(1 / 60, hands).fire).toBe(true);
+    expect(input.pollGun(1 / 60, hands).fire).toBe(false);
+    // held
+    input.touchGun.fire = input.touchGun.shot = true;
+    expect(input.pollGun(1 / 60, hands).fire).toBe(true);
+    expect(input.pollGun(1 / 60, hands).fire).toBe(true);
+    input.touchGun.fire = false;
+    expect(input.pollGun(1 / 60, hands).fire).toBe(false);
+    // a drag is taken once
+    input.touchGun.dx = 40;
+    expect(input.pollGun(1 / 60, hands).dx).toBeGreaterThan(0);
+    expect(input.pollGun(1 / 60, hands).dx).toBe(0);
   });
 });

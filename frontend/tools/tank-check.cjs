@@ -79,10 +79,13 @@ const TANKS = ['type10', 'type16', 'leopard2a5', 'm1a2', 't14'];
     );
     await page.waitForFunction(() => window.__game.phase === 'racing', null, { timeout: 60000 });
   };
-  /** Lays the sight on the rival through the touch path until the gun is on it (true) or `ms` are over. */
-  const lay = (ms) =>
+  /**
+   * Lays the sight on the rival through the touch path until the gun is on it (true) or `ms` are over. `fire`: the
+   * trigger is pulled in the frame the gun is on (the rival moves on while a picture is taken).
+   */
+  const lay = (ms, fire = false) =>
     page.evaluate(
-      (ms) =>
+      ([ms, fire]) =>
         new Promise((done) => {
           const g = window.__game, c = g.gunnery.control, t0 = performance.now();
           const tick = () => {
@@ -96,12 +99,13 @@ const TANKS = ['type10', 'type16', 'leopard2a5', 'm1a2', 't14'];
             g.input.touchGun.dx = (-ey * 0.5 * mag) / 0.005;
             g.input.touchGun.dy = (-ep * 0.5 * mag) / 0.005;
             const on = Math.abs(ey) < 0.002 && Math.abs(ep) < 0.002 && c.off < 0.002 && c.lased;
-            if (on || performance.now() - t0 > ms) return done({ on, range: c.range, off: c.off, ey, ep, dist: Math.hypot(dx, dy, dz) });
+            if (on && fire) g.input.touchGun.fire = g.hud.gun.loaded >= 1;
+            if ((on && (!fire || g.input.touchGun.fire)) || performance.now() - t0 > ms) return done({ on, range: c.range, off: c.off, ey, ep, dist: Math.hypot(dx, dy, dz) });
             requestAnimationFrame(tick);
           };
           tick();
         }),
-      ms,
+      [ms, fire],
     );
   const guns = () => page.evaluate(() => ({ ...window.__guns, hud: window.__game.hud.gun && { ...window.__game.hud.gun }, rivalS: window.__game.rival?.proj.s, shells: window.__game.gunnery.shells.live.length }));
   const pauseOn = (k) => page.evaluate((k) => (window.__guns.pauseOn = k), k);
@@ -118,7 +122,7 @@ const TANKS = ['type10', 'type16', 'leopard2a5', 'm1a2', 't14'];
         const r = document.querySelector(s)?.getBoundingClientRect();
         return r ? { s, l: r.left, t: r.top, r: r.right, b: r.bottom } : null;
       };
-      return ['.tc-top', '.tc-steer', '.tc-gun', '.tc-pedals', '.hud-tl', '.hud-br', '.hud-tr'].map(box);
+      return ['.tc-top', '.tc-steer', '.tc-gun', '.tc-pedals', '.hud-tl', '.hud-br', '.hud-tr', '.gun-read'].map(box);
     });
     const have = boxes.filter(Boolean);
     want(have.some((b) => b.s === '.tc-gun'), 'the gun buttons are there');
@@ -131,12 +135,12 @@ const TANKS = ['type10', 'type16', 'leopard2a5', 'm1a2', 't14'];
       }
     // the sight button is a switch; a drag on the right half moves the sight
     const before = await page.evaluate(() => window.__game.gunnery.control.sight.yaw);
-    await page.touchscreen.tap(60, 200);
+    await page.locator('.tc-pedal.sight').tap();
     await page.waitForTimeout(600);
     const g1 = await guns();
     want(g1.hud.scope, 'a tap on 照準 takes the sight up');
     await shot('phone-scope');
-    await page.touchscreen.tap(60, 200);
+    await page.locator('.tc-pedal.sight').tap();
     await page.waitForTimeout(400);
     want(!(await guns()).hud.scope, 'another tap puts it down');
     const cdp = await ctx.newCDPSession(page);
@@ -147,7 +151,7 @@ const TANKS = ['type10', 'type16', 'leopard2a5', 'm1a2', 't14'];
     await page.waitForTimeout(300);
     const after = await page.evaluate(() => window.__game.gunnery.control.sight.yaw);
     want(after < before - 0.2, `a drag to the right on the right half turns the sight to the right (${before.toFixed(2)} → ${after.toFixed(2)} rad)`);
-    await page.touchscreen.tap(180, 200);
+    await page.locator('.tc-pedal.fire').tap();
     await page.waitForTimeout(500);
     want((await guns()).fired === 1, 'a tap on 射撃 fires');
     await shot('phone-fired');
@@ -172,7 +176,7 @@ const TANKS = ['type10', 'type16', 'leopard2a5', 'm1a2', 't14'];
       step = `shot ${time}`;
       const s0 = (await guns()).rivalS;
       await pauseOn('fired');
-      await fire(true);
+      await lay(6000, true);
       await page.waitForFunction(() => window.__game.paused, null, { timeout: 5000 }).catch(() => 0);
       await fire(false);
       await page.waitForTimeout(300);
@@ -200,7 +204,7 @@ const TANKS = ['type10', 'type16', 'leopard2a5', 'm1a2', 't14'];
       want(g.hud.scope && g.hud.zoom > 1, `through the sight at ×${g.hud.zoom} (laid: ${b.on})`);
       await shot(`${time}-sight`);
       await pauseOn('struck');
-      await fire(true);
+      await lay(8000, true);
       await page.waitForFunction(() => window.__game.paused, null, { timeout: 8000 }).catch(() => 0);
       await fire(false);
       await page.waitForTimeout(300);

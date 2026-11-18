@@ -37,7 +37,7 @@ export function TouchControls() {
     return () => {
       const input = gameHolder.game?.input;
       if (input) input.touch = { steer: 0, throttle: 0, brake: 0, handbrake: false, active: false };
-      if (input) input.touchGun = { dx: 0, dy: 0, scope: false, fire: false };
+      if (input) input.touchGun = { dx: 0, dy: 0, scope: false, fire: false, shot: false };
     };
   }, []);
 
@@ -62,6 +62,8 @@ export function TouchControls() {
   const fire = (on: boolean) => {
     const gun = gameHolder.game?.input.touchGun;
     if (gun) gun.fire = on;
+    // (a tap shorter than a frame is a shot too)
+    if (gun && on) gun.shot = true;
     setFiring(on);
   };
   const sight = () => {

@@ -47,8 +47,10 @@ export class InputManager {
   /** the player drives a tank: the pad's triggers and right stick are the gun's */
   gunMode = false;
   /** set by the touch overlay: a finger's drag since the last frame (px), the two buttons */
-  touchGun = { dx: 0, dy: 0, scope: false, fire: false };
-  private mouse = { dx: 0, dy: 0, fire: false, scope: false, recentre: false, wheel: 0 };
+  touchGun = { dx: 0, dy: 0, scope: false, fire: false, shot: false };
+  /** (`shot`, here and above: the trigger was pulled since the last frame, however briefly: a tap or a click
+   * shorter than a frame fires too) */
+  private mouse = { dx: 0, dy: 0, fire: false, shot: false, scope: false, recentre: false, wheel: 0 };
 
   constructor(private target: Window = window) {
     target.addEventListener('keydown', this.onDown);
@@ -81,7 +83,7 @@ export class InputManager {
   };
   private onMouseDown = (e: MouseEvent) => {
     if (!this.locked) return;
-    if (e.button === 0) this.mouse.fire = true;
+    if (e.button === 0) this.mouse.fire = this.mouse.shot = true;
     else if (e.button === 2) this.mouse.scope = true;
     else if (e.button === 1) this.mouse.recentre = true;
   };
@@ -96,21 +98,22 @@ export class InputManager {
   /** Call once per frame while the player drives a tank: what its hands ask of the gun. */
   pollGun(dt: number, out: GunHands) {
     const m = this.mouse;
-    if (!this.locked) m.fire = m.scope = false;
+    if (!this.locked) m.fire = m.shot = m.scope = false;
     out.dx = m.dx * MOUSE_AIM;
     out.dy = m.dy * MOUSE_AIM;
     out.scope = m.scope;
-    out.fire = m.fire;
+    out.fire = m.fire || m.shot;
     out.recentre = m.recentre;
     out.zoom = Math.sign(m.wheel);
     m.dx = m.dy = m.wheel = 0;
-    m.recentre = false;
+    m.recentre = m.shot = false;
     const t = this.touchGun;
     out.dx += t.dx * TOUCH_AIM;
     out.dy += t.dy * TOUCH_AIM;
     t.dx = t.dy = 0;
     out.scope ||= t.scope;
-    out.fire ||= t.fire;
+    out.fire ||= t.fire || t.shot;
+    t.shot = false;
     const pads = typeof navigator !== 'undefined' && navigator.getGamepads ? navigator.getGamepads() : [];
     const pad = Array.from(pads ?? []).find((p) => p && p.connected) ?? null;
     if (pad && this.lastDevice === 'gamepad') {
