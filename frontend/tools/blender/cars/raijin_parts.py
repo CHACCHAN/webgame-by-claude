@@ -397,9 +397,12 @@ def plates(part, surf, clean):
     part.box('trim', -pw / 2 - 0.006, pw / 2 + 0.006, yr - ph / 2 - 0.006, yr + ph / 2 + 0.006, zr + 0.002, zr + 0.03)
 
 
+EXHAUST = (0.455, 0.272, -2.20)          # the tip's middle (it is 0.20 long)
+
+
 def exhaust(part):
     """the single big round tip under the left of the rear bumper"""
-    c = (0.455, 0.272, -2.20)
+    c = EXHAUST
     part.cylinder('chrome', c, 0.052, 0.20, axis='z', segments=24, cap=False)
     # the inside of the tip, seen from behind, and a dark plug further in
     part.cylinder('under', (c[0], c[1], c[2] + 0.005), 0.046, 0.19, axis='z', segments=24, cap=False, flip=True)
@@ -614,7 +617,13 @@ def arch_lips(part, surf):
             a = math.radians(a0 + (180 - 2 * a0) * k / n)
             ca, sa = math.cos(a), math.sin(a)
             ring = []
-            for dr, dx in ((0.050, -0.002), (0.022, 0.006), (0.008, 0.010), (0.0, 0.004), (0.0, -0.012)):
+            # 4.5 mm proud at most (it was 10: the car measured 1,760 mm over the lips, the catalogue says 1,740 and
+            # the sheet alone is 1,741)
+            # the return into the arch stands 2 mm inside the opening's radius, at the sheet's place just outside the
+            # opening: a ray at the opening's own radius met the sheet's edge at one station and the well's inner
+            # wall at the next (the saw-toothed edge the lips had)
+            x_in = None
+            for dr, dx in ((0.050, -0.002), (0.022, 0.003), (0.008, 0.0045)):
                 rr = R + dr
                 z, y = zc + rr * ca, yc + rr * sa
                 h = surf.hit((2.0, y, z), (-1, 0, 0))
@@ -622,6 +631,11 @@ def arch_lips(part, surf):
                     ring = None
                     break
                 ring.append((h[0].x + dx, y, z))
+                x_in = h[0].x
+            if ring:
+                rr = R - 0.002
+                for dx in (0.002, -0.014):
+                    ring.append((x_in + dx, yc + rr * sa, zc + rr * ca))
             if ring:
                 rows.append(ring)
         part.grid(rows, 'paint')
@@ -657,26 +671,26 @@ def interior(part):
     part.face([(-0.48, 1.33, -0.92), (-0.48, 1.33, -0.14), (0.48, 1.33, -0.14), (0.48, 1.33, -0.92)][::-1], M, smooth=False)
     part.face([(-0.70, 1.0, -1.48), (-0.70, 1.0, zr), (0.70, 1.0, zr), (0.70, 1.0, -1.48)], M, smooth=False)
     part.face([(-0.72, 0.30, zr), (-0.72, 1.0, zr), (0.72, 1.0, zr), (0.72, 0.30, zr)][::-1], M, smooth=False)
-    # dash: a block with a sloped top and the binnacle in front of the driver
-    part.box(M, -0.72, 0.72, 0.55, 0.86, 0.50, zf, bevel=0.03)
-    part.box(M, -0.72, 0.72, 0.80, 0.93, 0.62, zf, bevel=0.04)
-    part.box(M, -0.55, -0.18, 0.86, 0.98, 0.50, 0.66, bevel=0.03)
-    part.box(M, -0.10, 0.10, 0.32, 0.72, 0.20, 0.62, bevel=0.03)          # centre console
-    # steering wheel (driver on the right, −x)
-    _torus(part, 'trim', (-0.37, 0.93, 0.36), (0, 0.42, 1), 0.185, 0.016)
-    part.beam('trim', (-0.37, 0.93, 0.36), (-0.37, 0.86, 0.52), 0.06, 0.06)
-    for a in (0, 2.1, 4.2):
-        p = Vector((-0.37 + 0.17 * math.cos(a + 1.57), 0.93 + 0.17 * math.sin(a + 1.57) * 0.92, 0.36 - 0.07 * math.sin(a + 1.57)))
-        part.beam('trim', (-0.37, 0.93, 0.36), tuple(p), 0.03, 0.012)
-    # front bucket seats
-    for xc in (-0.37, 0.37):
-        part.box(M, xc - 0.25, xc + 0.25, 0.34, 0.52, -0.22, 0.30, bevel=0.05)
-        m = Matrix.Translation((xc, 0.48, -0.28)) @ Matrix.Rotation(math.radians(-14), 4, 'X')
-        part.box(M, -0.25, 0.25, 0.0, 0.66, -0.06, 0.08, bevel=0.05, matrix=m)
-        for s in (-1, 1):   # side bolsters
-            part.box(M, s * 0.22 - 0.05, s * 0.22 + 0.05, 0.05, 0.55, -0.02, 0.14, bevel=0.03, matrix=m)
-        part.box(M, -0.13, 0.13, 0.70, 0.88, -0.04, 0.06, bevel=0.03, matrix=m)
-    # rear bench
-    part.box(M, -0.68, 0.68, 0.34, 0.52, -0.98, -0.48, bevel=0.05)
-    m = Matrix.Translation((0, 0.50, -1.02)) @ Matrix.Rotation(math.radians(-22), 4, 'X')
-    part.box(M, -0.68, 0.68, 0.0, 0.56, -0.05, 0.10, bevel=0.05, matrix=m)
+    # dash: a block with a sloped top (the instruments' hood, the wheel and the seats: `furnish`)
+    part.box('c_dash', -0.72, 0.72, 0.55, 0.86, 0.50, zf, bevel=0.03)
+    part.box('c_dash', -0.72, 0.72, 0.80, 0.93, 0.62, zf, bevel=0.04)
+    part.box('c_plastic', -0.10, 0.10, 0.32, 0.72, 0.20, 0.62, bevel=0.03)          # centre stack
+    part.box('c_plastic', -0.10, 0.10, 0.30, 0.50, -0.62, 0.20, bevel=0.02)         # the tunnel's console
+    part.box('c_carpet', -0.72, 0.72, 0.30, 0.305, zr, zf)
+
+
+def furnish(mesh):
+    """the furniture, from car_common (a hayate_kit Mesh): the STI's high-backed front buckets (blue-black cloth: the
+    kit's grey with the darker panels), the rear bench for three, the three-spoke wheel on the right with the
+    instruments' hood behind it, lever, hand brake, mirror, the shelf's speakers"""
+    import car_common as CC
+    for x in (-0.37, 0.37):
+        CC.seat(mesh, x, 0.30, -0.28, width=0.50, length=0.50, h=0.20, back=0.62, recline=15.0, headrest='bucket',
+                bolster=1.2)
+    CC.bench(mesh, -0.66, 0.66, 0.30, -1.02, length=0.46, h=0.20, back=0.56, recline=22.0, places=3)
+    CC.steering_wheel(mesh, (-0.37, 0.905, 0.37), tilt=22.0, R=0.182)
+    CC.binnacle(mesh, -0.37, 0.925, 0.60, width=0.38, height=0.075, depth=0.20)
+    CC.gear_lever(mesh, 0.0, 0.50, 0.08)
+    CC.hand_brake(mesh, 0.055, 0.50, -0.36)
+    CC.inside_mirror(mesh, 1.275, 0.02)
+    CC.shelf_speakers(mesh, 1.0, -1.32)

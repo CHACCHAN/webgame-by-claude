@@ -65,9 +65,33 @@ def materials(paint='#1f47a8'):
     m.textured('taillight', load('taillight.png'), roughness=0.2, emissive_map=True, coat=1.0)
     m.textured('plate', load('plate.png'), roughness=0.5)
     m.textured('grille', load('grille.png'), roughness=0.6)
-    m.textured('tire', load('tire.png'), roughness=0.9)
     m.mats['cowl'] = m.mats['trim']
+    import car_common as CC
+    for name in ('c_dash', 'c_plastic', 'c_carpet'):        # the cabin's swatches (car_common)
+        CC.material_for(m.mats, name)
     return m
+
+
+def finish(root, body, mats):
+    """after the body's last deformation (car_common): the underside (a front engine driving all four wheels, the
+    rear on arms, the rear silencer across the car behind the axle, its big tip on the left; the tank ahead of the axle), the plain materials into two painted atlases, every
+    corner's share of the sky. The grille's mesh picture repeats, so it stays a material; so does the plate."""
+    import car_common as CC
+    import hayate_kit as HK
+    CC.underseal([o for o in body.children_recursive if o.type == 'MESH'], mats)
+    ub = HK.Mesh('underbody')
+    x, y, z = PT.EXHAUST
+    CC.underbody(ub, 0.19, SH.FRONT_AXLE, SH.REAR_AXLE, WH.TRACK_F, WH.TRACK_R, WH.R_TYRE, tip=(x, y, z + 0.10),
+                 layout='AWD', axle='irs', silencer='across')
+    print('TRIS underbody', ub.tris())
+    CC.build(ub, body, mats)
+    trim = CC.Atlas('trim')
+    rim = CC.Atlas('rim', size=512, fill=('#8a8c8f', 0.32, 0.85))
+    rim.region('disc', CC.disc_image(), 0.38, 0.85)
+    made = CC.consolidate(root, trim, rim, own=('tire', 'plate', 'grille'))
+    tyres = [o for o in root.children_recursive
+             if o.type == 'MESH' and any(mm and mm.name == 'tire' for mm in o.data.materials)]
+    CC.bake_ao(root, made + tyres)
 
 
 def lamp_report(root):
@@ -141,6 +165,12 @@ def build(o=None):
     tris = {'body_shell': sum(len(p.vertices) - 2 for p in shell_obj.data.polygons), 'details': det.tris(), 'exhaust': ex.tris(),
             'aero': aero.tris(), 'interior': cab.tris()}
     cab.build(body, m.mats, sharp=40.0)
+    import car_common as CC
+    import hayate_kit as HK
+    fur = HK.Mesh('furniture')
+    PT.furnish(fur)
+    tris['furniture'] = fur.tris()
+    CC.build(fur, body, m.mats)
     aero.build(body, m.mats, sharp=40.0)
     det.build(body, m.mats, sharp=40.0, weld=False)
     fuel.build(body, m.mats, weld=False)
@@ -162,6 +192,8 @@ def build(o=None):
         print('FFD', 'none' if L is None else 'applied')
     bpy.context.view_layer.update()
     lamps = lamp_report(root)
+    finish(root, body, m.mats)
+    bpy.context.view_layer.update()
     return root, m.mats, lamps
 
 
