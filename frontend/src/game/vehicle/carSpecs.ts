@@ -81,6 +81,12 @@ export interface CarSpec {
    * `clearcoat` keeps a coat over the metal (the Ninja H2's mirror-coated paint: a silver mirror under clear)
    */
   bareMetal?: { colors: string[]; roughness: number; clearcoat?: number };
+  /**
+   * How much of the cabin the glass hides, head-on (0…1; `GLASS_OPACITY` = 0.62 when not given: the cabin shows as in
+   * a photograph). A model whose cabin is not yet fit to be seen keeps the old dark glass (0.88). It is the glass
+   * material's own opacity, a uniform: no shader of its own.
+   */
+  glassOpacity?: number;
   /** tailpipe tip on the 3D model (body-local m, +x = left) where no part is named like an exhaust */
   exhaust?: [number, number, number];
   /** a train (joke entry, vehicle/trains.ts): drawn as three cars following the simulated front bogie */
@@ -217,6 +223,8 @@ const CARS: Record<RoadCarId, CarSpec> = {
     // our own model (tools/blender/cars/shiden*.py, fitted to photos): pop-up lamps modelled raised (popup_l/_r), the
     // beams start at their lenses; the tailpipe anchor comes from its mesh
     model: { title: 'RX-7（FD3S 後期 Type RS）', author: 'TOUGE NOCTURNE', url: '', license: '自作', own: true },
+    // (its cabin is still blocks: dark glass until the model has a real one)
+    glassOpacity: 0.88,
   },
   supra: {
     id: 'supra',

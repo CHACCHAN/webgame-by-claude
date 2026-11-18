@@ -112,6 +112,9 @@ export interface CarMaterials {
   brake: THREE.MeshStandardMaterial;
 }
 
+/** how much of the cabin a car's glass hides, head-on, unless its spec says otherwise (`CarSpec.glassOpacity`) */
+export const GLASS_OPACITY = 0.62;
+
 /** the paint: metallic flake under a clear coat */
 const PAINT = { metalness: 0.45, roughness: 0.32, clearcoat: 1 };
 
@@ -146,7 +149,7 @@ export function createCarMaterials(spec: CarSpec, bodyColor = spec.colors.body):
       envMapIntensity: 1.6,
       // (head-on the cabin shows through as in a photograph of the car; towards a flat angle the pane mirrors more
       // and lets less through, `glassMaterial`)
-      opacity: 0.62,
+      opacity: spec.glassOpacity ?? GLASS_OPACITY,
     }),
     trim: new THREE.MeshStandardMaterial({ color: '#0d0e10', metalness: 0.2, roughness: 0.6 }),
     chrome: new THREE.MeshStandardMaterial({ color: '#d8dade', metalness: 1, roughness: 0.12 }),
