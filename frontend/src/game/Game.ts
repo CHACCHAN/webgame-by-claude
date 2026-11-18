@@ -2217,6 +2217,14 @@ export class Game {
    * target format, so against a stand-in target of that format, or the work is wasted.
    */
   private precompile(loading = false) {
+    if (!loading || !this.env) return this.precompileScene(loading);
+    // (behind the loading screen: with what only another time of day shows)
+    this.env.holdParts(true);
+    const env = this.env;
+    return this.precompileScene(true).finally(() => env.holdParts(false));
+  }
+
+  private precompileScene(loading: boolean) {
     if (this.compileScene) return this.compileScene(loading).catch(() => undefined);
     const r = this.renderer, prev = r.getRenderTarget();
     this.compileTarget ??= new THREE.RenderTarget(1, 1, { type: THREE.HalfFloatType, depthTexture: new THREE.DepthTexture(1, 1) });

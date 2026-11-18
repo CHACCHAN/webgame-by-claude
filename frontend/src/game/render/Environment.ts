@@ -211,6 +211,13 @@ export interface EnvironmentRig {
   buildEnvMap(renderer: GameRenderer): THREE.Texture;
   /** frees what the reflection environment was drawn from */
   dispose(): void;
+  /**
+   * `true`: the parts that only some times of day show (the sea of clouds, the city's lights) are in the scene
+   * whatever the time, so that a compile behind the loading screen builds their shaders too; `false`: as the time of
+   * day last applied has them. (A compile leaves out what is hidden: the first change to dawn built the sea of
+   * clouds in the frame that first showed it.)
+   */
+  holdParts(on: boolean): void;
 }
 
 export function buildEnvironment(terrain: TerrainData, lights: LightRig): EnvironmentRig {
@@ -391,6 +398,10 @@ export function buildEnvironment(terrain: TerrainData, lights: LightRig): Enviro
       lights.pmrem ??= new PMREMGenerator(renderer);
       lights.envTarget = lights.pmrem.fromScene(envScene.scene, 0.02, 1, 12000, lights.envTarget ? { renderTarget: lights.envTarget } : {});
       return lights.envTarget.texture;
+    },
+    holdParts(on) {
+      city.visible = on || rig.preset.cityLights > 0;
+      cloudSea.visible = on || rig.preset.seaOfClouds > 0;
     },
     dispose() {
       if (!envScene) return;
