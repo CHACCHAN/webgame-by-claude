@@ -182,6 +182,10 @@ def render(view, path, size=(1600, 900), samples=48):
         cam.data.type = 'ORTHO'
         cam.data.ortho_scale = scale
         ground.hide_render = view == 'o_under'
+        # (from below the sun would leave a silhouette: it shines up for this one view)
+        sun = bpy.data.objects.get('sun')
+        if sun is not None:
+            look(sun, (-30.0, -42.0, 28.0) if view == 'o_under' else (-30.0, 42.0, 28.0), (0.0, 0.0, 0.0), (0, 1, 0))
     else:
         eye, target, lens, up = VIEWS[view]
         cam.data.type = 'PERSP'
