@@ -2369,3 +2369,18 @@ to be seen). The films still show the balls until they are recorded again.
   paths, which change cars through the garage, are clean); not looked into further.
 - Next: the course-select films again (cars' models and look have changed since they were recorded).
 
+## v2.6.6 (11-18): the course select's five films recorded again
+
+- All five (`tools/course-clip.cjs` on the v2.6.5 build, the hayate; oboro night, kirifuri dawn, tenrou night,
+  autobahn dawn, edwards dawn) and encoded (`course-clip-encode.sh`, new stamps in `courseFilms.json`): the films
+  showed the cars' models of before round two and the look of before v2.6.1. Sizes as before (7–21 MB).
+- Verified by me: frames of every film looked at (start, middle, end); vitest 264 (the stamps match the files);
+  tsc; build; `gpu-errors` 0 / 0; the course select on the GPU with each of the first four films sought to its
+  middle (plays, no page errors; oboro's picture looked at: relief and ring with the car).
+- Not verified: Edwards' film in the course select by picture (`coursesel.cjs` walks four courses); phones.
+- Housekeeping the same day: seven finished agent worktrees and their merged branches removed (root-owned `e2e`
+  leftovers of four remain under `.claude/worktrees/`, a few MB each); the history rewrite for GitHub rehearsed in a
+  scratch clone (`~/.local/opt/wt/rewrite`: `filter-branch --tree-filter` over the 203 commits from `8813459`; the
+  host is gone from every commit, the final tree is identical). Not pushed: every hash from 11-11 on changes, so the
+  mirror needs a forced push and the owner is told first.
+
