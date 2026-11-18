@@ -528,6 +528,8 @@ def wing(part, mats):
     part.absorb(g)
     # endplates
     ep = [(-2.235, 1.165), (-2.30, 1.305), (-2.47, 1.355), (-2.655, 1.345), (-2.705, 1.225), (-2.625, 1.12), (-2.40, 1.11)]
+    # c18, measured: the plates stand 115 px tall where these stood 133
+    ep = [(z, 1.2325 + (y - 1.2325) * 0.865) for z, y in ep]
     for s in (1, -1):
         part.absorb(_plate([(s * (WING_X + 0.006), y, z) for z, y in ep], 0.012, mats['carbon']))
     # the swan necks: from the engine cover up over the leading edge, down onto the wing's upper surface
