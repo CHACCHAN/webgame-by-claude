@@ -194,7 +194,9 @@ export function buildJet(spec: CarSpec, opts: { bodyColor?: string; procedural?:
       }
     },
     setPitch(a) {
-      for (const s of surfaces) s.node.quaternion.copy(s.base).multiply(_q.setFromAxisAngle(AXIS_X, (s.canard ? 1 : -1) * a));
+      // (a turn about +X by a positive angle takes the leading edge down: nose up is the tailplane's leading edge
+      // down and the canard's up)
+      for (const s of surfaces) s.node.quaternion.copy(s.base).multiply(_q.setFromAxisAngle(AXIS_X, (s.canard ? -1 : 1) * a));
     },
     setLights(on) {
       lightOn = on;
