@@ -2418,4 +2418,11 @@ to be seen). The films still show the balls until they are recorded again.
 - Also checked the same day: the lamps' streaks with the upscaler on (80 / 160 km/h, off against on:
   `~/.local/opt/wt/carlook/g4/up.jpg`): nothing breaks, the effect is as mild as native; the cars' thumbnails
   redrawn on v2.6.6 came out the same to the eye, so the old files stay.
+- E2E on the isolated stack, on v2.6.6's tree (`143d29f`, the first run since the merges of 11-13…18): **19 of 19
+  passed** (32 min; about, API, game, mobile, online with five members, waiting room, the host's changes, phone).
+  v2.6.7's two files were not in that run.
+- Edwards' film in the course select, by picture (`~/.local/opt/quality/cmp/rel267/now-1920x1080-4-at60.jpg`): plays,
+  the relief's ring is with the car.
+- Running since the afternoon (agents, nothing merged): the fighters' own models (F-15s, Su-47; Fable), the tanks'
+  cannon behind the release switch (Fable), load time and the first dawn's hitch (Opus).
 
