@@ -236,11 +236,6 @@ def occlusion(tris, R, reach=1.6, rays=20, floor=0.0):
     return ao
 
 
-def spread(a, R):
-    """a per-texel array painted on the covered texels only: its values carried into the padding (as `raster` did)"""
-    return a
-
-
 def resize(a, size):
     """bilinear resize of a square (h, w[, n]) array"""
     h = a.shape[0]
