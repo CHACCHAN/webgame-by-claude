@@ -63,11 +63,15 @@ export interface JetRig {
   setPitch(a: number): void;
   /** navigation, formation and taxi lights (0…1) */
   setLights(on: number): void;
+  /** how much of the headlight (the taxi lamp on the nose leg) is left: 1 with the gear down, 0 once it is stowed */
+  taxiLamp(): number;
   /** the nozzles' exits in the root's frame (the afterburner flames, heat) */
   readonly nozzles: { pos: THREE.Vector3; radius: number }[];
 }
 
 const _q = new THREE.Quaternion(), _v = new THREE.Vector3();
+/** the procedural stand-in's canopy: smoked, as there is nothing under it (`CarSpec.glassOpacity`) */
+const STANDIN_GLASS = 0.88;
 const AXIS_X = new THREE.Vector3(1, 0, 0), AXIS_Y = new THREE.Vector3(0, 1, 0);
 
 /** the afterburner plume: a hot core, an orange sheath and shock diamonds (additive, never written to depth) */
@@ -98,7 +102,8 @@ export function buildJet(spec: CarSpec, opts: { bodyColor?: string; procedural?:
     model = tpl.clone(true);
     mats = adoptMaterials(model, spec, opts.bodyColor);
   } else {
-    mats = createCarMaterials(spec, opts.bodyColor);
+    // (the stand-in has no cockpit under its canopy: the dark glass, whatever the model's glass lets through)
+    mats = createCarMaterials({ ...spec, glassOpacity: STANDIN_GLASS }, opts.bodyColor);
     mats.paint.clearcoat = 0.2;
     mats.paint.roughness = 0.55;
     mats.paint.metalness = 0.1;
@@ -217,6 +222,8 @@ export function buildJet(spec: CarSpec, opts: { bodyColor?: string; procedural?:
     setLights(on) {
       lightOn = on;
     },
+    // (the lamp goes out as its leg folds: a light left on lit the nose from below in the night take-off)
+    taxiLamp: () => 1 - gearK,
   };
   rig.setGear(0);
   void _v;

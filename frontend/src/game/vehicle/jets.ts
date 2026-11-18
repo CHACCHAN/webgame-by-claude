@@ -81,6 +81,8 @@ interface JetDef {
   /** fuselage collision box (width, height above the belly, belly clearance) */
   box: { width: number; height: number; clearance: number };
   maxSteerDeg: number;
+  /** how much of the cockpit the canopy hides, head-on (`CarSpec.glassOpacity`) */
+  glassOpacity: number;
   stats: CarSpec['stats'];
   jet: JetInfo;
   model: NonNullable<CarSpec['model']>;
@@ -132,8 +134,8 @@ function jetSpec(d: JetDef): CarSpec {
     driftiness: 0,
     stats: d.stats,
     colors: { body: d.jet.liveries[0].swatch, accent: d.jet.camo[1] },
-    // (the canopy has no cockpit under it yet: the smoked bubble, not an empty one)
-    glassOpacity: 0.88,
+    // (the models' cockpits are fit to be seen; the procedural stand-in keeps its smoked canopy: JetModel.ts)
+    glassOpacity: d.glassOpacity,
     model: d.model,
     jet: d.jet,
   };
@@ -154,6 +156,7 @@ const F15_BASE = {
   comHeight: 1.9,
   box: { width: 3.2, height: 2.0, clearance: 0.95 },
   maxSteerDeg: 45,
+  glassOpacity: 0.62,
 };
 
 // the F-15's model (tools/blender/jets/f15_shape.py): the nose wheel stands 6.62 m behind the nose tip; the nose leg folds
@@ -214,7 +217,7 @@ const JETS: JetDef[] = [
       vr: 66,
       lof: 75,
       liveries: [
-        { name: 'F-15C 412TW（ED）', swatch: '#7f8890', crew: 1 },
+        { name: 'F-15C 制空グレー', swatch: '#7f8890', crew: 1 },
         { name: 'F-15D（複座）', swatch: '#6c757d', variant: 'd', crew: 2, mass: 20500 },
       ],
       camo: ['#7f8890', '#5f6870'],
@@ -240,6 +243,8 @@ const JETS: JetDef[] = [
     comHeight: 2.2,
     box: { width: 3.6, height: 2.2, clearance: 1.0 },
     maxSteerDeg: 45,
+    // (a shade darker than the Eagle: chosen on the model's cockpit pictures)
+    glassOpacity: 0.66,
     stats: { power: 10, grip: 3, drift: 0, weight: 1 },
     jet: {
       maker: 'Sukhoi',
