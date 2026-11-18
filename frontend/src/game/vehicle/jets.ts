@@ -156,6 +156,15 @@ const F15_BASE = {
   maxSteerDeg: 45,
 };
 
+// the F-15's model (tools/blender/jets/f15_shape.py): the nose wheel stands 6.62 m behind the nose tip; the nose leg folds
+// forward, each main leg forward about a skewed hinge line so that its wheel ends lying flat in the body (GEAR_FOLD there)
+const F15_NOSE_GEAR = 6.62;
+const F15_GEAR_FOLD: NonNullable<JetInfo['gearFold']> = {
+  nose: { axis: [1, 0, 0], angle: (-96 * Math.PI) / 180 },
+  left: { axis: [1, 1, -1], angle: (-120 * Math.PI) / 180 },
+  right: { axis: [1, -1, 1], angle: (-120 * Math.PI) / 180 },
+};
+
 const JETS: JetDef[] = [
   {
     id: 'f15j',
@@ -171,7 +180,8 @@ const JETS: JetDef[] = [
       // F100-IHI-220E: 23,450 lbf with afterburner, 14,590 lbf dry
       engines: { count: 2, name: 'F100-IHI-220E', idle: lbf(1200), dry: lbf(14590), ab: lbf(23450), spoolUp: 4, spoolDown: 3 },
       wing: F15_WING,
-      noseGear: 5.0,
+      noseGear: F15_NOSE_GEAR,
+      gearFold: F15_GEAR_FOLD,
       vr: 66,
       lof: 75,
       liveries: [
@@ -199,7 +209,8 @@ const JETS: JetDef[] = [
       // F100-PW-220: 23,770 lbf with afterburner, 14,590 lbf dry
       engines: { count: 2, name: 'F100-PW-220', idle: lbf(1200), dry: lbf(14590), ab: lbf(23770), spoolUp: 4, spoolDown: 3 },
       wing: F15_WING,
-      noseGear: 5.0,
+      noseGear: F15_NOSE_GEAR,
+      gearFold: F15_GEAR_FOLD,
       vr: 66,
       lof: 75,
       liveries: [
