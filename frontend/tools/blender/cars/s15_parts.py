@@ -40,29 +40,6 @@ AX = TYRE_W / 0.215     # the profiles below were drawn for a 215 section
 SPOKE_FACE = 0.058      # how far the spoke face sits outboard of the wheel's centre plane
 
 
-def tyre(p, s, seg=48):
-    """205/55R16 tyre about the origin (axis x, s = outward sign); tread blocks on the shoulders"""
-    R = BD.TYRE_R
-    h = TYRE_W / 2
-    prof = [(RIM_R + 0.004, -0.086), (RIM_R + 0.022, -0.100), (R - 0.040, -0.108), (R - 0.016, -0.104), (R - 0.004, -0.092),
-            (R, -0.080), (R, -0.058), (R - 0.008, -0.055), (R - 0.008, -0.047), (R, -0.044), (R, -0.014), (R - 0.008, -0.011),
-            (R - 0.008, -0.003), (R, 0.000), (R, 0.030), (R - 0.008, 0.033), (R - 0.008, 0.041), (R, 0.044), (R, 0.080),
-            (R - 0.004, 0.092), (R - 0.016, 0.104), (R - 0.040, 0.108), (RIM_R + 0.022, 0.100), (RIM_R + 0.004, 0.086)]
-    rows = []
-    for i in range(seg):
-        t = 2 * math.pi * (i + 0.5 * (i % 2 == 0) * 0) / seg
-        row = []
-        for k, (r, a) in enumerate(prof):
-            rr = r
-            # shoulder blocks: every other segment's shoulder sits a little lower
-            if k in (4, 5, 6, 18, 19, 20) and i % 2:
-                rr -= 0.005
-            row.append((s * a * AX, rr * math.cos(t), rr * math.sin(t)))
-        rows.append(row)
-    rows.append(rows[0])
-    p.grid(rows, 'tire', flip=s > 0)
-
-
 def rim(p, s, seg=48):
     """the rim barrel and lip, five broad swept spokes, hub, lug nuts and centre cap"""
     # barrel: from the outer lip in to the inner flange (inside faces visible through the spokes)
@@ -124,51 +101,41 @@ def _spoke(p, s, base):
     strip(0.058, RIM_R - 0.006, 0.050, 0.092, 0.0, 0.0, n=8)
 
 
-def disc_and_caliper(p_spin, p_pivot, s, front):
-    r_disc = 0.140 if front else 0.129
-    a = -0.045
-    # (the profiles run so the faces look outward on either side)
-    rot = [(0.085, s * (a - 0.012)), (r_disc, s * (a - 0.012)), (r_disc, s * (a + 0.012)), (0.085, s * (a + 0.012))]
-    hat = [(0.06, s * (a + 0.012)), (0.085, s * (a + 0.012)), (0.085, s * (a + 0.03)), (0.06, s * (a + 0.03))]
-    p_spin.revolve('disc', rot if s < 0 else rot[::-1], (0, 0, 0), 'x', seg=36, smooth=False)
-    p_spin.revolve('disc', hat if s < 0 else hat[::-1], (0, 0, 0), 'x', seg=18, smooth=False)
-    # caliper behind the axle (trailing), a curved block over the disc's edge
-    ang0 = math.pi * (1.05 if front else 0.95)
-    rows_o, rows_i = [], []
-    for j in range(7):
-        t = ang0 + (j / 6 - 0.5) * 0.85
-        row = []
-        for r in (r_disc - 0.035, r_disc + 0.012):
-            row.append((r * math.cos(t), r * math.sin(t)))
-        rows_o.append(row)
-    for x0, x1 in ((a + 0.014, a + 0.040), (a - 0.040, a - 0.014)):
-        pts_top = [[(s * x1, y, z) for y, z in row] for row in rows_o]
-        pts_bot = [[(s * x0, y, z) for y, z in row] for row in rows_o]
-        p_pivot.grid(pts_top, 'brake', flip=s < 0)
-        p_pivot.grid(pts_bot, 'brake', flip=s > 0)
-        p_pivot.grid([[pts_top[j][1], pts_bot[j][1]] for j in range(7)], 'brake', flip=s > 0)
-        p_pivot.grid([[pts_top[j][0], pts_bot[j][0]] for j in range(7)], 'brake', flip=s < 0)
-    # bridge over the disc
-    t = ang0
-    p_pivot.oriented_box('brake', (s * a, (r_disc + 0.006) * math.cos(t), (r_disc + 0.006) * math.sin(t)), (0.085, 0.018, 0.07),
-                         rot=(t, 0, 0), bevel=0.004)
-
-
 def wheels(root, mats, count):
-    nodes = {}
+    """four pivots with spin children. Tyre, disc and caliper come from the shared kit (car_common: a profiled
+    205/55R16 with its own texture set; Ø280 vented discs with bare iron four-pot calipers in front, ahead of the axle
+    as r14 shows them through the spokes; Ø258 discs with a floating caliper at the rear, its place not seen on any
+    photo); the five-spoke rim is this car's own"""
+    import car_common as CC
+    import hayate_kit as HK
+    nodes, made, info = {}, [], None
     for name, zc, s in (('fl', BD.AXLE_F, 1), ('fr', BD.AXLE_F, -1), ('rl', BD.AXLE_R, 1), ('rr', BD.AXLE_R, -1)):
-        x = s * (BD.TRACK_F if name[0] == 'f' else BD.TRACK_R) / 2
+        front = name[0] == 'f'
+        x = s * (BD.TRACK_F if front else BD.TRACK_R) / 2
         pivot = K.empty(f'wheel_{name}', (x, BD.TYRE_R, zc), root)
         spin = K.empty(f'spin_{name}', (0, 0, 0), pivot)
-        ps = K.Part(f'wheel_{name}_parts')
-        tyre(ps, s)
+        ps = K.Part(f'wheel_{name}_rim')
         rim(ps, s)
-        pc = K.Part(f'caliper_{name}')
-        disc_and_caliper(ps, pc, s, name[0] == 'f')
-        count['wheels'] = count.get('wheels', 0) + ps.tris() + pc.tris()
+        t = HK.Mesh(f'tyre_{name}')
+        # the bead lies under the rim's lip (its crest at RIM_R + 0.012, 86-93 mm out)
+        info = CC.tyre(t, BD.TYRE_R, RIM_R + 0.002, TYRE_W, 0.164, grooves=4)
+        r_disc = 0.140 if front else 0.129
+        thick = 0.026 if front else 0.012
+        CC.brake_disc(t, r_disc, -0.033, thick=thick, r_hat=0.078, hat=0.060, vented=front)
+        c = HK.Mesh(f'caliper_{name}')
+        if front:
+            CC.caliper(c, r_disc, -0.033, thick=thick, kind='4pot', angle=78.0, colour='cal_iron')
+        else:
+            CC.caliper(c, r_disc, -0.033, thick=thick, kind='floating', angle=62.0, colour='cal_iron')
+        if s < 0:
+            t, c = CC.turned(t), c.mirrored()
+        count['wheels'] = count.get('wheels', 0) + ps.tris() + t.tris() + c.tris()
         ps.build(spin, mats)
-        pc.build(pivot, mats)
+        made += [(t, spin), (c, pivot)]
         nodes[name] = pivot
+    mats['tire'] = CC.tyre_material(info, 'NOCTURNE', '205/55R16 89V')
+    for mesh, parent in made:
+        CC.build(mesh, parent, mats)
     return nodes
 
 
@@ -493,41 +460,21 @@ def exhaust(p):
 # ---------------------------------------------------------------- interior
 
 def interior(p):
+    """the cabin's tub (laid out 0.4 m behind where it sits: s15.py moves it forward): floor and tunnel, dash, door
+    cards, parcel shelf, headliner. What stands in it comes from the shared kit (furnish)"""
     m = 'interior'
     # floor and tunnel
-    p.box(m, -0.74, 0.74, 0.20, 0.23, -1.62, 0.60)
-    p.box(m, -0.12, 0.12, 0.23, 0.42, -1.10, 0.55, bevel=0.05)
-    # dash: a wedge under the windshield, the binnacle in front of the driver (right-hand drive: x < 0)
-    p.oriented_box(m, (0, 0.80, 0.30), (1.45, 0.16, 0.42), rot=(0.25, 0, 0), bevel=0.04)
-    p.oriented_box(m, (0, 0.62, 0.20), (1.40, 0.24, 0.18), bevel=0.03)
-    p.oriented_box(m, (-0.37, 0.90, 0.10), (0.36, 0.08, 0.16), rot=(-0.2, 0, 0), bevel=0.03)
-    p.oriented_box(m, (0, 0.62, 0.08), (0.24, 0.30, 0.22), bevel=0.03)
-    # steering wheel and column
-    c = Vector((-0.37, 0.80, -0.06))
-    d = Vector((0, 0.35, -1.0)).normalized()
-    a = Vector((1, 0, 0))
-    b = d.cross(a)
-    ring = []
-    for k in range(24):
-        t = 2 * math.pi * k / 24
-        ring.append(c + (a * math.cos(t) + b * math.sin(t)) * 0.180)
-    for k in range(24):
-        _beam(p, 'trim', ring[k], ring[(k + 1) % 24], 0.028, 0.028)
-    for t in (0, math.pi, -math.pi / 2):
-        _beam(p, 'trim', c, c + (a * math.cos(t) + b * math.sin(t)) * 0.17, 0.05, 0.02)
-    _beam(p, 'trim', c - d * 0.02, c - d * 0.32, 0.06, 0.06)
-    # front seats
+    p.box('c_carpet', -0.74, 0.74, 0.20, 0.23, -1.62, 0.60)
+    p.box('c_plastic', -0.12, 0.12, 0.23, 0.42, -1.10, 0.55, bevel=0.05)
+    # dash: a wedge under the windshield, the centre stack
+    p.oriented_box('c_dash', (0, 0.80, 0.30), (1.45, 0.16, 0.42), rot=(0.25, 0, 0), bevel=0.04)
+    p.oriented_box('c_dash', (0, 0.62, 0.20), (1.40, 0.24, 0.18), bevel=0.03)
+    p.oriented_box('c_plastic', (0, 0.62, 0.08), (0.24, 0.30, 0.22), bevel=0.03)
     for s in (1, -1):
-        x = s * 0.37
-        p.oriented_box(m, (x, 0.36, -0.62), (0.50, 0.12, 0.52), rot=(-0.08, 0, 0), bevel=0.05)
-        p.oriented_box(m, (x, 0.72, -0.94), (0.50, 0.66, 0.12), rot=(-0.28, 0, 0), bevel=0.05)
-        p.oriented_box(m, (x, 1.08, -1.06), (0.26, 0.17, 0.10), rot=(-0.25, 0, 0), bevel=0.04)
         # door cards
         p.box(m, s * 0.70 - 0.02, s * 0.70 + 0.02, 0.30, 0.88, -0.62, 0.36, bevel=0.01)
         p.box(m, s * 0.66 - 0.02, s * 0.66 + 0.02, 0.32, 0.88, -1.28, -0.66, bevel=0.01)
-    # rear seat and parcel shelf
-    p.oriented_box(m, (0, 0.40, -1.32), (1.20, 0.14, 0.42), bevel=0.05)
-    p.oriented_box(m, (0, 0.70, -1.52), (1.20, 0.55, 0.12), rot=(-0.35, 0, 0), bevel=0.05)
+    # parcel shelf
     p.box(m, -0.62, 0.62, 0.90, 0.93, -1.85, -1.55)
     # headliner (seen through the glass from below)
     rows = []
@@ -538,3 +485,19 @@ def interior(p):
             row.append((x, y, z))
         rows.append(row)
     p.grid(rows, m, flip=False)
+
+
+def furnish(mesh):
+    """car_common's furniture, in the car's own frame (right-hand drive): the spec-R's one-piece sport seats, the rear
+    bench under the shelf, wheel, the instruments' hood, lever and hand brake on the tunnel, the mirror at the
+    windscreen's top (1.196 up, 0.292 ahead of the middle)"""
+    import car_common as CC
+    for x in (-0.37, 0.37):
+        CC.seat(mesh, x, 0.23, -0.48, width=0.50, length=0.50, h=0.19, back=0.56, recline=18.0, headrest='bucket',
+                bolster=1.2)
+    CC.bench(mesh, -0.60, 0.60, 0.23, -1.13, length=0.42, h=0.24, back=0.48, recline=24.0, places=2)
+    CC.steering_wheel(mesh, (-0.37, 0.80, 0.34), tilt=19.0, R=0.180)
+    CC.binnacle(mesh, -0.37, 0.865, 0.44, width=0.38, height=0.075, depth=0.20, drop=0.02)
+    CC.gear_lever(mesh, 0.0, 0.42, 0.20)
+    CC.hand_brake(mesh, 0.06, 0.42, -0.22)
+    CC.inside_mirror(mesh, 1.125, 0.31)
