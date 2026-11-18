@@ -75,6 +75,13 @@ export interface Landform {
   follow?: number;
   /** the rough ground the road's cutting leaves beside it, as a share of the mountain roads' ±7 m (default 1) */
   roadsideRelief?: number;
+  /**
+   * the warm lamps the reflections carry all round (render/Environment.ts `buildEnvMap`; default 1): a stand-in for the
+   * lamps that line the passes' roads. 0 where the land is open and its few lamps stand far apart: their own light
+   * gives them their highlights, and on a mirror-smooth wet surface (the lakebed's film of water, the apron's puddles)
+   * the ring stood as orange patches that went with the camera
+   */
+  lampRing?: number;
   /** bridges are viaducts over valleys of the landform (the ground follows the valley down, as wide as the bridge) */
   viaducts?: boolean;
   features: {
@@ -348,6 +355,8 @@ export const MOJAVE: Landform = {
   hillside: 0,
   gullies: 0,
   roadsideRelief: 0,
+  // (no lamps around the lakebed: its film of water mirrored the reflections' ring as orange patches at night in rain)
+  lampRing: 0,
   follow: 0,
   features: { towers: [ED.at(600, 2400), ED.at(3900, 2600)] },
 };

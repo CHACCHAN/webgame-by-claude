@@ -383,7 +383,10 @@ export function buildEnvironment(terrain: TerrainData, lights: LightRig): Enviro
         scene.add(ground);
         envScene = { scene, lampMat, groundMat };
       }
-      envScene.lampMat.color.set('#ffb070').multiplyScalar(4 * rig.preset.lampsOn + 0.2);
+      // (a landform without the ring leaves its panels out: drawn black they would stand dark against the sky)
+      const ring = terrain.landform.lampRing ?? 1;
+      envScene.lampMat.color.set('#ffb070').multiplyScalar((4 * rig.preset.lampsOn + 0.2) * ring);
+      envScene.lampMat.visible = ring > 0;
       envScene.groundMat.color.set(rig.preset.hemiGround);
       lights.pmrem ??= new PMREMGenerator(renderer);
       lights.envTarget = lights.pmrem.fromScene(envScene.scene, 0.02, 1, 12000, lights.envTarget ? { renderTarget: lights.envTarget } : {});

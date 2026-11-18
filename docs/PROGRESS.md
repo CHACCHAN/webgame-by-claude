@@ -2401,3 +2401,21 @@ to be seen). The films still show the balls until they are recorded again.
 - Started the same day: two modelling agents (Fable, high) for the fighters' own models (F-15J/DJ + F-15C/D; Su-47);
   sheets go to the owner before anything is merged.
 
+## v2.6.7 (11-18): Edwards in night rain, the orange patches on the wet ground are gone
+
+- **Cause** (agent on Opus, high; shown by switching candidates off one at a time on a held frame): the reflection
+  environment (`Environment.buildEnvMap`) carries a ring of 14 warm panels that stands in for the lamps along the
+  passes; the lakebed's film of water (roughness 0.07) and the apron's puddles mirrored them as orange ovals that
+  went with the camera. **Fix**: `Landform.lampRing` (default 1; the Mojave 0): the ring is left out of the
+  reflection scene there. Other landforms multiply by 1.
+- Verified by me on the merged tree: tsc; vitest 264; build; `gpu-errors` 0 / 0; the agent's off / on / off sheet
+  looked at; my own eight viewpoints at Edwards in rain (`~/.local/opt/quality/rel267/rain.jpg`): no patches.
+  The same day on v2.6.6's tree: backend tests 76 passed (isolated stack).
+- From the agent's report, not repeated by me: WebGL 2 at Edwards in rain (same fault before, gone after);
+  oboro night rain unchanged; Edwards dawn unchanged; Edwards night dry 5/255 less red in the shadows.
+- Side effect, accepted: paint at Edwards loses the ring's warm tint and reads cooler in rain.
+- Seen by the agent, not touched: the apron's puddles have hard edges and now read as dark spots.
+- Also checked the same day: the lamps' streaks with the upscaler on (80 / 160 km/h, off against on:
+  `~/.local/opt/wt/carlook/g4/up.jpg`): nothing breaks, the effect is as mild as native; the cars' thumbnails
+  redrawn on v2.6.6 came out the same to the eye, so the old files stay.
+

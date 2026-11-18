@@ -601,6 +601,9 @@ pending. `docs/PLAN.md` holds the design.
   aircraft below the results card). Results come at once, the take-off plays behind them. Online: `NetState.dep`
   (2 bits), `TrackPose.depart`; a peer's proxy body is ghosted (not solid) during it, gear and flames from the
   packet (`enginesAt(rpm)`), hidden once gone. `tools/net-replay.ts depart=1` checks it.
+- The reflection environment (`Environment.buildEnvMap`) carries a ring of warm panels standing in for roadside
+  lamps; a mirror-smooth surface (roughness under ~0.1: a film of water, a puddle) shows them as orange patches that
+  move with the camera. A landform without lamps all round sets `lampRing: 0` (the Mojave; v2.6.7).
 - Ambient occlusion (`render/ambientOcclusion.ts`, 11-12): every point is taken at the middle of a depth texel
   (`middle()`): a depth read between texels and put on another view ray stood up to a pixel over or under its
   surface and gave even bands across open ground (4.5–8.5 % of the light, 18–34 rows apart, on every course).
