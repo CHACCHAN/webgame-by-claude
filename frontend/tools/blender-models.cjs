@@ -49,7 +49,7 @@ const KINDS = {
     ids: ['guardrail', 'guardrail_end', 'delineator', 'gutter_grate', 'rockfall_fence'],
   },
   // the fighters (render/JetModel.ts: named nodes for gear, nozzles and moving surfaces stay apart; one atlas each)
-  jets: { dir: 'tools/blender/jets', out: 'public/models/jets', palette: false, textureSize: 2048, big: {}, ids: ['su47'] },
+  jets: { dir: 'tools/blender/jets', out: 'public/models/jets', palette: false, textureSize: 2048, big: {}, ids: ['f15j', 'f15c', 'su47'], variants: { f15j: ['dj'], f15c: ['d'] } },
   creatures: { dir: 'tools/blender/creatures', out: 'public/models/roach', palette: false, textureSize: 1024, big: {}, resample: true, ids: ['roach'] },
   // trees, bushes, undergrowth, rocks (tools/blender/nature/nature_kit.py): the script writes the geometry (every level
   // of detail a node) and its textures as PNG files next to it, which `textures` puts into the materials by name

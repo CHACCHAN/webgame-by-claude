@@ -14,6 +14,9 @@ import { clamp, damp } from '../util/math';
  * `gear_l` / `gear_r` (origin at the hinge) → `spin_l` / `spin_r`; meshes `nozzle_l` / `nozzle_r` (the afterburner flame
  * at each one's aft end); optional `stab_l` / `stab_r` / `canard_l` / `canard_r` pitching about X. Lamp materials
  * navlight_red / navlight_green / navlight_white / beacon / formation / taxilight (the headlight).
+ * A model that counts its draw calls (the F-15) may give both nozzles as one mesh `nozzles` (mirrored about the centre
+ * line), both tailplanes as one node `stab`, the nose wheel as part of `steer_nose`, and its steady lamps in the
+ * emissive map of the material `airframe` (its atlas) instead of lamp materials.
  *
  * The gear retracts after the take-off (`setGear`): each leg turns by its fold (`JetInfo.gearFold`, measured on the
  * model; by default forward through 90°) and is hidden once stowed.
@@ -107,24 +110,35 @@ export function buildJet(spec: CarSpec, opts: { bodyColor?: string; procedural?:
   const node = (name: string) => model.getObjectByName(name) ?? null;
   const gears = (['gear_nose', 'gear_l', 'gear_r'] as const).map((name, k) => {
     const n = node(name);
-    const fold = info.gearFold?.[(['nose', 'left', 'right'] as const)[k]];
+    // (a fold is measured on the model: the stand-in keeps the plain one)
+    const fold = tpl ? info.gearFold?.[(['nose', 'left', 'right'] as const)[k]] : undefined;
     return n ? { node: n, base: n.quaternion.clone(), axis: new THREE.Vector3(...(fold?.axis ?? [1, 0, 0])).normalize(), angle: fold?.angle ?? -Math.PI / 2 } : null;
   });
   const steerNose = node('steer_nose');
   const steerBase = steerNose?.quaternion.clone() ?? new THREE.Quaternion();
   const spins = [node('spin_nose'), node('spin_l'), node('spin_r')];
-  const surfaces = ['stab_l', 'stab_r', 'canard_l', 'canard_r'].map((n) => node(n)).filter((n): n is THREE.Object3D => !!n).map((n) => ({ node: n, base: n.quaternion.clone(), canard: n.name.startsWith('canard') }));
+  const surfaces = ['stab', 'stab_l', 'stab_r', 'canard_l', 'canard_r'].map((n) => node(n)).filter((n): n is THREE.Object3D => !!n).map((n) => ({ node: n, base: n.quaternion.clone(), canard: n.name.startsWith('canard') }));
 
   // nozzles: each exit's centre and radius in the root's frame, with a plume
   const nozzles: JetRig['nozzles'] = [];
   const flames: ReturnType<typeof flameMaterial>[] = [];
   const toRoot = root.matrixWorld.clone().invert();
+  const exits: JetRig['nozzles'] = [];
   for (const name of ['nozzle_l', 'nozzle_r']) {
     const n = node(name);
     if (!n) continue;
     const box = new THREE.Box3().setFromObject(n).applyMatrix4(toRoot);
     const radius = Math.max(0.2, Math.min(box.max.x - box.min.x, box.max.y - box.min.y) / 2);
-    const pos = new THREE.Vector3((box.min.x + box.max.x) / 2, (box.min.y + box.max.y) / 2, box.min.z);
+    exits.push({ pos: new THREE.Vector3((box.min.x + box.max.x) / 2, (box.min.y + box.max.y) / 2, box.min.z), radius });
+  }
+  // (both in one mesh: two round exits side by side, as high as each is wide)
+  const both = exits.length ? null : node('nozzles');
+  if (both) {
+    const box = new THREE.Box3().setFromObject(both).applyMatrix4(toRoot);
+    const radius = Math.max(0.2, (box.max.y - box.min.y) / 2);
+    for (const s of [1, -1]) exits.push({ pos: new THREE.Vector3(s * (box.max.x - radius), (box.min.y + box.max.y) / 2, box.min.z), radius });
+  }
+  for (const { pos, radius } of exits) {
     nozzles.push({ pos, radius });
     const flame = flameMaterial(), mat = flame.material;
     flames.push(flame);
@@ -146,6 +160,8 @@ export function buildJet(spec: CarSpec, opts: { bodyColor?: string; procedural?:
       if (seen.has(mat)) continue;
       seen.add(mat);
       if (/^(navlight_|beacon|formation)/.test(mat.name)) lamps.push({ mat: mat as THREE.MeshStandardMaterial, beacon: mat.name.startsWith('beacon') });
+      // an atlas whose emissive map holds the steady lamps: lit with them
+      if (mat.name === 'airframe' && (mat as THREE.MeshStandardMaterial).emissiveMap) lamps.push({ mat: mat as THREE.MeshStandardMaterial, beacon: false });
       if (mat.name === 'taxilight') {
         const sm = mat as THREE.MeshStandardMaterial;
         sm.emissive = new THREE.Color('#fff4e0');

@@ -55,6 +55,7 @@ import { GhostPlayer, GhostRecorder, type GhostData } from './race/Ghost';
 import { clamp, damp, lerp, smoothstep, wrapAngle } from './util/math';
 import { Departure } from './race/Departure';
 import { jetForLivery } from './vehicle/jets';
+import { jetModelKey } from './render/JetModel';
 import type { TrackProjection } from './track/Track';
 import { loadTrainModel, loadTrainVariants, trainModelReady, trainNose } from './render/TrainModel';
 import { specForLivery, trainLivery, trainModelKey, TRAIN_ORDER } from './vehicle/trains';
@@ -2455,6 +2456,11 @@ export class Game {
       const show = () => this.garageWant === color && this.garageCar?.spec.id === id && this.showGarage(id, color);
       if (trainModelReady(id, l)) show();
       else void loadTrainModel(trainModelKey(id, l)).then(show);
+      return;
+    }
+    // a fighter's two-seater is a model of its own (fetched together with the base model): the aircraft is built again
+    if (car.spec.jet && jetModelKey(car.spec, color) !== jetModelKey(car.spec, car.color)) {
+      this.showGarage(id, color);
       return;
     }
     car.setColor(color);
