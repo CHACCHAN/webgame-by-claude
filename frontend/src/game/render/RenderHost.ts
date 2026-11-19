@@ -307,7 +307,8 @@ export class RenderHost {
       this.holding = hold;
       this.aim();
       try {
-        await Promise.all(this.seeAll(hold ? what : null, () => (hold ? this.lanes(what) : [what]).map((part) => this.forPass(() => this.renderer.compileAsync(part, this.camera, this.scene)))));
+        // (one object about to be shown is taken as in view as a whole: the camera may still be elsewhere)
+        await Promise.all(this.seeAll(hold || what !== this.scene ? what : null, () => (hold ? this.lanes(what) : [what]).map((part) => this.forPass(() => this.renderer.compileAsync(part, this.camera, this.scene)))));
         // three.js draws no shadow map while it compiles. A map first met in a compile therefore gets its depth
         // texture from a material's binding, as an ordinary texture, and the first drawing into the map replaces it
         // by a new one on the GPU. What three.js then takes for unchanged (a plain material on a thing that stands
