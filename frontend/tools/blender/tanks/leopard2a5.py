@@ -1,4 +1,4 @@
-"""Round-two Leopard 2A5. Blender background entry point, arguments after --.
+"""Round-three Leopard 2A5. Blender background entry point, arguments after --.
 --out leo.glb --stage shape --dump leo.npz --render checks --quick --views o_side,o_front
 Raw GLB is the input to the game's mesh/texture optimization, not the delivery size.
 """
@@ -27,15 +27,16 @@ def build():
     root,body,turret,gun=T.tank_nodes('leopard2a5',DIMS); rg=L.running_spec()
     objects=[L.hull(rg,marks).build(body,mats)]
     gear=T.running_gear(body,rg,mats); objects.extend(gear['objects'])
-    # Preserve the kit objects (including metric UV scale and spin pivots).
-    # The replacements are modelled in the original mesh-local frames.
-    def reskin(obj,part):
-        tmp=part.build(None,mats); old=obj.data; obj.data=tmp.data
-        bpy.data.objects.remove(tmp,do_unlink=True); bpy.data.meshes.remove(old)
+    # running_gear supplies the complete assembly but not per-kind seg overrides.
+    # Keep its band UVs, nodes and non-road discs; refine just the exposed road rims.
+    road={round(z,5):r for z,y,r in rg.road}
     for pivot in gear['nodes']:
-        reskin(pivot.children[0],L.wheel(T.G(pivot.location)[2],rg))
-    for band in gear['objects']:
-        if band.name.startswith('band_'): reskin(band,L.belt(rg,band.name[-1]))
+        r=road.get(round(T.G(pivot.location)[2],5))
+        if r is None: continue
+        wheel=pivot.children[0]; old=wheel.data
+        part=T.road_wheel(r,rg.wheel_width,rg.tyre_width,rg.tyre_depth,rg.dish_depth,rg.hub_bolts,seg=L.S['road_seg'])
+        tmp=part.build(None,mats); wheel.data=tmp.data
+        bpy.data.objects.remove(tmp,do_unlink=True); bpy.data.meshes.remove(old)
     objects.extend((L.turret(marks).build(turret,mats),L.gun().build(gun,mats)))
     bpy.context.view_layer.update()
     return root,objects,mats,rg,marks
@@ -54,8 +55,8 @@ def _pose_check(nodes):
     # cover, fixed cheeks, sight furniture, hatches, fenders and upper deck.
     # Collision is between assemblies, not between joined detail islands.
     turret=nodes['turret']; gun=nodes['gun']; gt=gun.matrix_basis.copy(); tt=turret.matrix_basis.copy()
-    def tree(key,exclude_race=False):
-        o=nodes[key]; me=o.data; me.calc_loop_triangles(); m=o.matrix_world
+    def tree(key,exclude_race=False,drop=0.):
+        o=nodes[key]; me=o.data; me.calc_loop_triangles(); m=Matrix.Translation(T.B(0,-drop,0))@o.matrix_world
         triangles=me.loop_triangles
         if exclude_race:
             # The race seats in the deck by design. Exclude only its annular surface.
@@ -71,10 +72,15 @@ def _pose_check(nodes):
         if hit: raise ValueError(f'{label}: intersecting triangles {hit[:3]}')
     hull=tree('hull_shell'); a=L.S['axis']
     try:
+        # Probe both actual surfaces and the deck gap, not just the AABBs
+        # (those would incorrectly fill the opening under the bustle).
+        for yaw in range(0,360,a['sweep_step']):
+            turret.matrix_basis=tt@Matrix.Rotation(math.radians(yaw),4,'Z'); bpy.context.view_layer.update()
+            for drop in (0.,a['gap']):
+                check(tree('turret_shell',exclude_race=True,drop=drop),hull,f'yaw={yaw:g} turret/deck gap={drop:g}')
         for yaw in a['traverse_check']:
             turret.matrix_basis=tt@Matrix.Rotation(math.radians(yaw),4,'Z'); bpy.context.view_layer.update()
             fixed=tree('turret_shell')
-            check(tree('turret_shell',exclude_race=True),hull,f'yaw={yaw:g} turret/hull outside seat')
             for pitch in a['limits']:
                 for recoil in (0.,a['recoil']):
                     gun.matrix_basis=gt@Matrix.Rotation(math.radians(-pitch),4,'X')@Matrix.Translation(T.B(0,0,-recoil))
@@ -137,9 +143,9 @@ def main():
                   else 'carrier' if any(abs(z-c[0])<1e-5 for c in rg.rollers) else 'road')
         tri.setdefault(kind,[]).append(count)
     print('PART_TRIS '+ ' '.join(f'{k}={sum(v)}({len(v)}x)' for k,v in tri.items()))
-    if sum(map(sum,tri.values()))>72000: raise ValueError('shape exceeds round-two 72000 triangle budget')
+    if sum(map(sum,tri.values()))>72000: raise ValueError('shape exceeds round-three 72000 triangle budget')
     if args.stage=='full':
-        wd=args.out.resolve().parent/'tex-leopard2a5'; T.paint_tracks(mats,rg,wd); skin.paint(objects,mats,wd,marks)
+        wd=args.out.resolve().parent/'tex-leopard2a5'; T.paint_tracks(mats,rg,wd,metal_tint=L.S['track_tint']); skin.paint(objects,mats,wd,marks)
         _contract(root,objects,rg,True)
     total,_=T.report(root)
     if total>72000: raise ValueError(f'{total} triangles exceeds budget')

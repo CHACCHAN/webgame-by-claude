@@ -10,21 +10,18 @@ import leopard2a5_parts as P
 S = {
     # Rig datums (unchanged); roof.window is the centre of the exposed glass.
     'axis': dict(traverse_z=.40, ring_y=1.70, elevation_z=1.48, bore_y=2.12,
-                 muzzle_z=5.69, limits=(-9.,20.), traverse_check=(0.,30.), recoil=.45),
+                 muzzle_z=5.69, limits=(-9.,20.), traverse_check=(0.,30.), sweep_step=10, gap=.020, recoil=.45),
     'gear': dict(track_centre=1.45, track_width=.635, track_thickness=.050, pitch=.185,
                  road_z=(2.46,1.61,.83,.06,-.79,-1.64,-2.46), hub_y=(.40,.42), radius=.35,
                  wheel_width=.46, tyre_width=.14, tyre_depth=.041, dish_depth=.034, hub_bolts=6,
-                 idler=(3.15,.93,.33,.45), sprocket=(-3.26,.79,.35,11,.46),
+                 idler=(3.08,.92,.315,.45), sprocket=(-3.26,.79,.35,11,.46),
                  rollers=((2.035,1.14,.105),(.445,1.13,.105),(-1.215,1.105,.105),(-2.05,1.085,.105)),
-                 sag=.024, horns=2, horn_width=.037, horn_height=.067, pad_share=.72, skirt_outer=1.88),
-    # Local cosmetic sections: radial profiles are scaled by wheel radius/width.
-    'discs': dict(road_seg=26,idler_seg=24,drive_seg=28,carrier_seg=16,
-                  spoke_n=8,spoke_w=.065,drive_bolts=8,bolt_r=.017),
-    'shoe': dict(body=.89, half=.476, pad_inner=.035,pad_outer=.33,
-                 connector=(.385,.476,.30),steel_top=.42), # width/pitch/half-thickness fractions
+                 sag=.024, horns=2, horn_width=.037, horn_height=.044, pad_share=.84, skirt_outer=1.88),
+    'road_seg':36,
+    'track_tint':'#494943',
     # Tub stations (z, keel y, deck y, bottom half-width, shoulder half-width).
     # Tiny truncated end edges avoid a zero-area cap at the prow.
-    'tub': [(-3.98,1.64,1.70,.99,1.08),(-3.90,.77,1.70,.95,1.09),
+    'tub': [(-4.005,1.17,1.73,1.04,1.08),(-3.90,.77,1.70,.95,1.09),
             (-3.55,.50,1.69,.96,1.09),(-1.20,.515,1.70,.97,1.10),
             (1.25,.533,1.70,.98,1.10),(1.48,.535,1.66,.98,1.10),
             (2.80,.54,1.35,.70,1.10),(3.72,1.125,1.135,1.035,1.09)],
@@ -32,7 +29,7 @@ S = {
     'well': dict(aft=-.30,front=.91,width=1.32,floor=1.43,rim=.025),
     'deck_seam': ((1.78,1.70,-3.79),(1.78,1.70,1.22)),
     # Sponson shelves (z, underside, roof, outer half-width); inner edge laps the tub.
-    'shelf': [(-3.98,1.17,1.70,1.70),(-3.83,1.20,1.70,1.80),(-1.20,1.30,1.70,1.81),
+    'shelf': [(-4.03,1.17,1.73,1.70),(-3.83,1.20,1.70,1.80),(-1.20,1.30,1.70,1.81),
               (1.25,1.30,1.70,1.81),(2.65,1.32,1.42,1.80),(3.19,1.30,1.325,1.77)],
     'shelf_inner':1.055,
     'skirt': dict(heavy=(3.28,2.60,1.92,1.25), light=(1.25,.34,-.55,-1.43,-2.25,-3.05,-3.86),
@@ -40,59 +37,78 @@ S = {
                   heavy_depth=.11, light_depth=.043, gap=.016, strip=.048, bevel_run=.28,
                   bevel_rise=.22, steps_z=(1.22,-.365,-2.05),step_x=1.866,step_low=(.695,.72,.705),
                   step_span=(.45,.39,.48),step_bar=.018,rail_r=.021, bolt=.020, bolt_inset=.09),
-    'fender': dict(inner=1.105, outer=1.90, ribs=((2.76,1.412,1.41),(3.266,1.33,1.32),
-                   (3.28,1.302,1.04)),track_lip_x=1.782,thickness=.019,
-                   rear=(1.45,.865,-3.84),flap=(.625,.63,.035)),
+    'fender': dict(inner=1.105, outer=1.90, ribs=((2.76,1.412,1.41),(3.32,1.33,1.32),
+                   (3.45,1.085,1.035)),track_lip_x=1.782,thickness=.019,
+                   apron_x=1.45, apron_w=.69, flap_y=(.565,.855,1.19),
+                   flap_z=(-3.954,-3.994), flap_skin=.032, step=.058, hinge_r=.023),
     'driver': dict(centre=(-.62,1.543,2.03), lid=(.69,.70), thick=.037, rail_x=.365,
                    rail_size=(.033,.043,.89),window_size=(.154,.096,.115),
                    windows=((- .22,.28),(0,.33),(.22,.28))), # hatch-local x,z
     'bow': dict(lens=(1.018,1.365,3.238), lamp_r=.087,lamp_depth=.144,guard=(.242,.189,.16),rod=.012,
                 eye=(.83,1.12,3.64),eye_r=.091, eye_bar=.027,marker=(1.69,1.345,3.21),marker_size=(.076,.046,.068),
-                clip=(.029,.054,.245), pin_r=.022, shoe_x=(0.,.40,-.40),shoe_z=3.17,shoe_size=(.345,.046,.215),pad_size=(.135,.028,.145)),
-    'deck': dict(grilles=((.84,1.708,-3.37,1.40,.031,.72,12),(.87,1.706,-2.47,1.28,.028,.73,11)),
-                 lids=((1.57,1.718,-1.18),(1.57,1.718,-.31),(1.57,1.718,.56)),lid_size=(.39,.032,.82),latch=(0,.019,.31),latch_size=(.09,.024,.042),
-                 tool_x=1.71,tool_y=1.75,tool_z=(-3.48,-1.85), tool_r=.019),
-    'stern': dict(grille=(0,1.439,-3.983),size=(3.36,.042,.448),slats=9, uprights=(-1.12,0.,1.12), post_w=.038,
-                  transom=((-3.946,1.01),(-3.91,.93),(-3.81,.93),(-3.81,1.27),(-3.946,1.27)),half=1.70,
-                  lamp=(1.51,1.115,-3.979),case=(.30,.14,.081),r=.049,
-                  eye=(.78,.93,-3.907),eye_r=.084,eye_bar=.023,camera=(.34,1.14,-3.959),
-                  camera_size=(.13,.096,.11),cable_top=(1.56,1.61,-4.015), cable_low=(.83,.985,-3.984),cable_r=.019),
+                clip=(.029,.054,.245), pin_r=.022, shoe_x=(0.,.40,-.40),shoe_z=3.17,shoe_size=(.345,.069,.215),pad_size=(.135,.028,.145)),
+    'deck': dict(grilles=((.72,1.818,-3.64,1.36,.026,.62,14),(.87,1.708,-2.52,1.28,.028,.62,11)),
+                 # Raised plinth only under the aft pair; narrow outer cowls start
+                 # beyond the low-angle window. Rear shelf corners remain at 1.73.
+                 surround=(.72,1.754,-3.645),surround_size=(1.44,.121,.68),
+                 cowl_x=(1.30,1.675),cowl_profile=((-3.99,1.71),(-3.20,1.69),(-3.24,1.837),(-3.41,1.88),(-3.91,1.88)),
+                 lids=((1.57,1.695,-1.18),(1.57,1.695,-.31),(1.57,1.695,.56)),lid_size=(.39,.016,.82),latch=(0,.007,.31),latch_size=(.09,.008,.042),
+                 tool_x=1.71,tool_y=1.739,tool_z=(-3.48,-2.06), tool_r=.019,
+                 vent=(1.834,1.517,-2.69),vent_size=(.64,.029,.144),vent_slats=5),
+    'stern': dict(grille=(0,1.453,-4.034),size=(3.45,.047,.544),slats=15,
+                  uprights=(-1.695,-1.13,-.56,0.,.56,1.13,1.695), post_w=.026,frame_h=.021,
+                  transom=((-3.984,.733),(-3.84,.685),(-3.80,1.25),(-3.997,1.25)),half=1.095,
+                  lamp=(1.478,1.085,-4.015),case=(.365,.153,.082),r=.061,
+                  strip_size=(.139,.061,.013),strip_dx=.078,round_dx=.091,
+                  screen=(.536,.953,-4.019),screen_r=.163,screen_depth=.022,screen_pitch=.030,screen_bar=.005,
+                  reflector=(.964,.838,-3.995),reflector_size=(.13,.044,.019),
+                  eye=(.835,.792,-3.982),eye_r=.096,eye_bar=.028,camera=(.34,1.127,-3.998),camera_size=(.13,.096,.092),
+                  # From corner saddle to the opposite tow eye; crossing is below blade field.
+                  cable=((1.63,1.74,-3.86),(1.734,1.66,-4.077),(1.753,1.38,-4.087),
+                         (1.713,1.205,-4.091),(1.55,1.148,-4.101),(1.18,1.094,-4.10),
+                         (.70,.994,-4.084),(.21,.906,-4.078),(-.31,.827,-4.074),(-.713,.805,-4.066)),
+                  cross_offset=.050,cable_r=.019,cable_lay=.19,loop_x=.069,loop_y=.036),
     # Solid rear turret stations (z, lower y, upper y, lower and upper half-width).
     # Front has two side walls and a thin roof bridge, NOT a wall through the gun.
     'bustle': [(-2.06,2.07,2.436,1.29,1.34),(-1.69,2.00,2.454,1.40,1.47),
-               (-.68,1.83,2.482,1.46,1.50),(-.18,1.80,2.49,1.46,1.50)],
+               (-.68,1.77,2.482,1.46,1.50),(-.18,1.728,2.49,1.46,1.50)],
     'crown': dict(back=-.181,front=1.31,y=2.49,thick=.041,width=2.89,slot=.392,
                   eave_drop=.028,front_drop=.011),
-    'race': dict(low=1.69,high=1.79,r=1.065,inner=.83),
+    'race': dict(low=1.69,high=1.79,r=1.065,inner=.83,guard_inner=1.093,guard_r=1.196,guard_base=1.692,guard_top=1.705),
     # Chin / lip underside / lip edge / shoulder. The lip sweep and the two
     # returns can be fitted independently without disturbing the shield slot.
-    'cheeks': [(1.777,[(.386,2.52),(1.44,1.62),(1.52,.37),(1.46,-.20),(.386,-.20)]),
+    'cheeks': [(1.728,[(.386,2.52),(1.44,1.62),(1.52,.37),(1.46,-.20),(.386,-.20)]),
                (2.142,[(.379,3.015),(1.583,2.075),(1.645,.40),(1.55,-.20),(.379,-.20)]),
-               (2.159,[(.379,3.010),(1.583,2.070),(1.645,.40),(1.55,-.20),(.379,-.20)]),
-               (2.465,[(.389,1.87),(1.478,1.20),(1.55,.40),(1.50,-.20),(.389,-.20)])],
-    'side_module':[(1.82,[(1.39,.42),(1.544,.42),(1.526,-.70),(1.39,-.70)]),
+               (2.153,[(.379,3.010),(1.583,2.070),(1.645,.40),(1.55,-.20),(.379,-.20)]),
+               (2.425,[(.389,1.73),(1.478,1.09),(1.55,.40),(1.50,-.20),(.389,-.20)]),
+               (2.461,[(.395,1.285),(1.431,.967),(1.445,.40),(1.445,-.20),(.395,-.20)])],
+    'side_module':[(1.729,[(1.39,.42),(1.544,.42),(1.526,-.70),(1.39,-.70)]),
                    (2.45,[(1.39,.42),(1.563,.42),(1.535,-.70),(1.39,-.70)])],
     # Bottom/top rear corner (half-width, y, z); solid stowage inside the rim.
-    'basket':dict(base=(1.44,1.86,-3.04),rim=(1.34,2.21,-3.13),front=-1.98,
-                  bar=.016, ribs=(-2.77,-2.32), rear_stays=(-.85,0,.85)),
+    'basket':dict(base=(1.59,1.86,-2.96),rim=(1.50,2.22,-3.07),front=-1.895,
+                  splits=(-1.,-.49,0.,.51,1.),gap=.014,lid_h=.034,lip=.012,
+                  ribs=(.14,.30,.46,.62),rib_span=.255, rib_r=.011,
+                  pull_r=.087,pull_bar=.012,catch_w=.071,catch_drop=.058,catch_relief=(.009,.004),
+                  # Plan widths vary with height; the forward side lockers join
+                  # the last rear station at the same widths, without a shelf.
+                  flank_front=-.695,flank_low=2.031,flank_high=2.424,flank_inner=1.32),
     'roof':dict(commander=(-.69,2.487,-.18),loader=(.69,2.487,-.20),hatch_r=.32,lid_h=.042,
-                ring_r=.375,ring_h=.035,scope_r=.402,scope_size=(.127,.075,.10),scope_n=8,
+                ring_r=.375,ring_h=.055,scope_r=.402,scope_size=(.127,.075,.10),scope_n=8,
                 handle=(.095,.075,.035),handle_r=.012,loader_rail=.305,
                 peri=(-.62,2.48,-.79),peri_top=3.018,peri_r=.214,peri_head=(.35,.168,.30),
                 window=(-.86,2.516,1.435),emes_width=.48,emes_base=2.415,
                 emes_top=((.89,2.61),(1.43,2.57)),door_tip=(1.64,2.53),door_skin=.014,
                 glass=(.371,.067,.005), jamb=.029,
                 fan=(.43,2.478,-.91),fan_r=.156,fan_h=.065,
-                aerial=(1.16,2.455,-1.58),aerial_r=.062,aerial_h=.13,stub=.407,
+                aerial=(1.16,2.455,-1.58),aerial_r=.062,aerial_h=.13,stub=.96,
                 sensor=(.88,2.465,-1.23),sensor_h=.20, sensor_r=.018,
                 eye=(1.19,2.459,1.10),eye_r=.063,eye_bar=.014),
-    'bins': dict(centre=(1.46,2.22,-1.43),size=(.233,.36,1.04),lid_h=.030),
-    'smoke':dict(banks=((1.612,2.09,-.64),(1.636,2.265,-1.34)),count=4,spacing=.145,
-                 direction=(.66,.78,.37),radius=.055,length=.247, mount=(.045,.050,.562),
-                 feet=(.125,.077,.063)),
+    'smoke':dict(banks=((1.653,2.255,-1.03,6),(1.665,2.065,-1.32,2)),spacing=.145,
+                 direction=(.66,.78,.37),radius=.055,length=.247, mount=(.043,.042),
+                 feet=(.166,.054,.055),rail_lift=.038,rail_r=.012),
     'cheek_rail':dict(paths=(((1.561,2.255,1.47),(1.625,2.269,1.45),(1.644,2.269,1.13),(1.58,2.255,1.11)),
                              ((1.604,2.255,.86),(1.666,2.269,.84),(1.672,2.269,.55),(1.608,2.255,.53))),
-                      radius=.013,hinge=(1.567,2.264,.355),plate=(.028,.154,.108),pin=.025),
+                      radius=.013,hinge=(1.567,2.264,.355),plate=(.028,.154,.108),pin=.025, panel_inset=.062,panel_skin=.009),
     # Cosmetic moving shell: z axial stations, widths/heights. The breech is
     # just a blind animation plug; no internal mechanism or operating geometry.
     'cover':dict(profile=((1.38,1.976),(1.65,1.943),(2.36,1.952),(2.99,2.052),(3.01,2.174),
@@ -106,7 +122,7 @@ S = {
                 muzzle_r=.098,bore_r=.060,recess=.12,segments=40,
                 collar=(5.525,5.573,.105),sensor=(.050,.100,5.554),sensor_size=(.066,.052,.083)), # sensor y relative to bore
     # Projected artwork centre and size in surface metres; no decal meshes.
-    'insignia':dict(side=(-.18,2.295,.236),rear=(.0,1.093,.169),number=(.812,2.31,.184)),
+    'insignia':dict(side=(-.18,2.295,.236),rear=(.0,1.037,.133),number=(.812,2.31,.184)),
 }
 
 
@@ -181,10 +197,17 @@ def _skirts(rg,marks):
 
 def hull(rg,marks):
     parts=_shell()+_skirts(rg,marks); f=S['fender']; b=S['bow']; r=S['stern']; d=S['deck']
+    race=S['race']; parts.append(P.ring((0,race['guard_base'],S['axis']['traverse_z']),race['guard_r'],
+                                       race['guard_inner'],race['guard_top']-race['guard_base'],'steel',56))
     parts.append(T.prism(r['transom'],-r['half'],r['half']))
+    # The backing bridges the slanted tub and both rear shelves; the dark grille face is proud of it.
+    _,y,z=r['grille']; width,depth,height=r['size']
+    parts.append(T.cbox((0,y,z+depth),(width,height,depth*1.9),.008))
     parts.append(P.face_grille(r['grille'],r['size'],r['slats'],-1))
     _,gy,gz=r['grille']; _,gd,gh=r['size']
-    for xx in r['uprights']: parts.append(T.cbox((xx,gy,gz-gd/2),(r['post_w'],gh,gd),.006))
+    for xx in r['uprights']: parts.append(T.cbox((xx,gy,gz-gd/2),(r['post_w'],gh,gd),.004))
+    for sign in (-1,1):
+        parts.append(T.cbox((0,gy+sign*(gh-r['frame_h'])/2,gz-gd/2),(r['size'][0],r['frame_h'],gd),.004))
     for s in (-1,1):
         # Opaque locker behind the folded track flap. The sloping lower side clears the idler arc.
         ribs=f['ribs']; x0=f['inner']; x1=f['outer']; t=f['thickness']
@@ -192,8 +215,7 @@ def hull(rg,marks):
                        (ribs[-2][0],ribs[-2][2]),(ribs[0][0],ribs[0][2])],
                       min(s*x1,s*(x1-t)),max(s*x1,s*(x1-t)))
         parts.append(flank)
-        # Break the flap across its width: only its outboard ear hangs beside
-        # the idler. Do not run a full-depth sheet through the track wrap.
+        # Full-width fold clears the reduced idler wrap; only the outer ear drops further.
         for left,right in ((x0,f['track_lip_x']),(f['track_lip_x'],x1)):
             def height(x,i):
                 _,yi,yo=ribs[i]
@@ -202,7 +224,13 @@ def hull(rg,marks):
                 return yi+(yo-yi)*(x-x0)/(x1-x0)
             parts.append(T.mudguard([[(s*x,height(x,i),z) for x in (left,right)]
                                      for i,(z,_,_) in enumerate(ribs)],t))
-        parts.append(T.cbox(_signed(f['rear'],s),f['flap'],.009,'rubber'))
+        # Overlapping stepped leaves, with a hinge between them rather than a single plank.
+        x=f['apron_x']; w=f['apron_w']; step=f['step']; bot,joint,top=f['flap_y']; za,zb=f['flap_z']
+        for lo,hi,z,width,zone in ((joint,top,za,w,'tank_paint'),(bot,joint+step/2,zb,w-step,'rubber')):
+            parts.append(T.loft([(zz,[(s*(x-width/2+step),lo),(s*(x+width/2),lo),(s*(x+width/2),hi),
+                               (s*(x-width/2),hi),(s*(x-width/2),lo+step)]) for zz in (z-f['flap_skin']/2,z+f['flap_skin']/2)],zone))
+        for off in (-.30,0.,.30):
+            parts.append(P.turning((s*(x+w*off),joint,zb),(1,0,0),[(-w*.09,f['hinge_r']),(w*.09,f['hinge_r'])],segments=10))
         x,y,z=_signed(b['lens'],s); w,h,l=b['guard']; rod=b['rod']
         parts.append(P.bezel((x,y,z),(0,0,1),b['lamp_r'],b['lamp_depth'],'headlight'))
         # One bowed guard, below the lens centre at its feet; two short returns into the deck.
@@ -212,6 +240,14 @@ def hull(rg,marks):
         parts.append(T.cbox(_signed(b['marker'],s),b['marker_size'],.01,'steel'))
         for t,axis in ((b,1),(r,-1)):
             parts.append(T.tow_hook(_signed(t['eye'],s),(0,0,axis),t['eye_r'],t['eye_bar']))
+        parts.append(T.cbox(_signed(d['surround'],s),d['surround_size'],.016))
+        parts.append(T.prism(d['cowl_profile'],*sorted(s*v for v in d['cowl_x'])))
+        vent=T.grille((0,0,0),d['vent_size'],d['vent_slats']); matrix=np.eye(4)
+        # Mount flush with the sloping shoulder, not a vertical plane through it.
+        shelf=np.asarray(S['shelf']); sz=d['vent'][2]; sh=np.interp(sz,shelf[:,0],shelf[:,2]); sw=np.interp(sz,shelf[:,0],shelf[:,3])
+        skirt=S['skirt']; up=sh-skirt['rail_y']; run=rg.skirt_outer-skirt['light_depth']*.52-sw; hyp=math.hypot(up,run)
+        matrix[:3,:3]=((0,s*up/hyp,-s*run/hyp),(0,run/hyp,up/hyp),(s,0,0)); matrix[:3,3]=_signed(d['vent'],s)
+        vent.transform(matrix); parts.append(vent)
         for x,y,z,w,h,l,n in d['grilles']: parts.append(T.grille((s*x,y,z),(w,h,l),n))
         for c in d['lids']:
             parts.append(T.cbox(_signed(c,s),d['lid_size'],.012)); x,y,z=_signed(c,s)
@@ -219,11 +255,22 @@ def hull(rg,marks):
         parts.append(P.piping([(s*d['tool_x'],d['tool_y'],z) for z in d['tool_z']],d['tool_r'],'steel'))
         T.weld_seam(marks,*[_signed(pt,s) for pt in S['deck_seam']])
         x,y,z=_signed(r['lamp'],s); w,h,l=r['case']
-        parts.append(T.cbox((x,y,z+l/2),r['case'],.014,'recess'))
-        for off in (-.23,.23): parts.append(P.bezel((x+w*off,y,z-.009),(0,0,-1),r['r'],l/2,'taillight'))
-        parts.append(P.piping([(x-w*.57,y-h*.55,z),(x-w*.57,y+h*.66,z),(x+w*.57,y+h*.66,z),(x+w*.57,y-h*.55,z)],rod))
-        a=_signed(r['cable_top'],s); c=_signed(r['cable_low'],-s)
-        parts.append(P.piping([a,(0,(a[1]+c[1])/2,a[2]-s*rod),c],r['cable_r'],'steel'))
+        parts.append(T.cbox((x,y,z+l*.72),r['case'],.014,'recess'))
+        parts.append(P.bezel((x+s*r['round_dx'],y,z-l*.13),(0,0,-1),r['r'],l/2,'taillight'))
+        # Split lens: the amber/clear segment is pigmented on the atlas, not an extra material.
+        sx,sy,sz=r['strip_size']; xc=x-s*r['strip_dx']
+        for off,zone in ((-.25,'taillight'),(.25,T.PAINT)):
+            parts.append(T.cbox((xc+s*off*sx,y,z-sz/3),(.48*sx,sy,sz),.004,zone))
+        parts.append(P.piping([(x-w*.52,y-h*.44,z),(x-w*.52,y+h*.50,z),(x+w*.52,y+h*.50,z),(x+w*.52,y-h*.44,z)],rod))
+        parts.append(P.round_screen(_signed(r['screen'],s),r['screen_r'],r['screen_depth'],r['screen_pitch'],r['screen_bar']))
+        parts.append(T.cbox(_signed(r['reflector'],s),r['reflector_size'],.004,'taillight'))
+        path=[np.array(_signed(pt,s)) for pt in r['cable']]
+        if s<0:
+            for pt in path: pt[2]-=r['cross_offset']*max(0.,1-abs(pt[0])/r['eye'][0])
+        parts.append(P.laid_cable(path,r['cable_r'],r['cable_lay']))
+        end=path[-1]; rx=r['loop_x']; ry=r['loop_y']
+        loop=[end+(-s*rx*(1-math.cos(t)),ry*math.sin(t),0) for t in np.linspace(0,math.tau,17)]
+        parts.append(P.piping(loop,r['cable_r']*.83,'steel'))
     parts.append(T.periscope(r['camera'],r['camera_size'],(0,0,-1)))
     # Rest frame on the upper glacis, Z rising toward the stern.
     tub=S['tub']; grad=(tub[-1][2]-tub[-3][2])/(tub[-1][0]-tub[-3][0]); norm=np.array((0,1,-grad)); norm/=np.linalg.norm(norm)
@@ -247,7 +294,7 @@ def hull(rg,marks):
 
 
 def turret(marks):
-    b=S['basket']; c=S['crown']; r=S['roof']; a=S['axis']; race=S['race']; st=S['bins']; sm=S['smoke']
+    b=S['basket']; c=S['crown']; r=S['roof']; a=S['axis']; race=S['race']; sm=S['smoke']
     parts=[T.loft([(z,[(-lo,y),(lo,y),(hi,h),(-hi,h)]) for z,y,h,lo,hi in S['bustle']]),
            P.ring((0,race['low'],a['traverse_z']),race['r'],race['inner'],race['high']-race['low'],'recess',56)]
     # One crowned bridge, falling shallowly both towards the eaves and towards the bow.
@@ -258,34 +305,59 @@ def turret(marks):
     parts.append(T.loft(ribs))
     for name in ('cheeks','side_module'):
         cheek=P.tiered_plate(S[name]); cheek.mirror_x(); parts.append(cheek)
-    xb,low,zb=b['base']; xt,top,zt=b['rim']; front=b['front']; bar=b['bar']
-    def plan(x,z): return [(-x,z),(x,z),(x,front),(-x,front)]
-    parts.append(P.tiered_plate([(low,plan(xb,zb)),(top-bar*2,plan(xt,zt+bar))]))
-    edge=[(x,top-bar,z) for x,z in plan(xt-bar,zt+bar)]
-    parts.append(P.piping(edge+edge[:1],bar))
-    for xx in b['rear_stays']:
-        parts.append(P.piping([(xx,low+bar,zb),(xx,top-bar,zt+bar)],bar))
+    xb,low,zb=b['base']; xt,top,zt=b['rim']; front=b['front']; lip=b['lip']; gap=b['gap']
+    # Four independent closed bins. Their actual lid outer corners (not the
+    # centre of a projecting bar) are the surveyed rim stations.
+    def section(left,right,t,inset=0.):
+        width=xb+t*(xt-xb); back=zb+t*(zt-zb)
+        x0=left*width+(gap/2 if left>-1 else 0)+inset; x1=right*width-(gap/2 if right<1 else 0)-inset
+        return [(x0,back+inset),(x1,back+inset),(x1,front-inset),(x0,front-inset)]
+    t0=1-b['lid_h']/(top-low)
+    for i,(left,right) in enumerate(zip(b['splits'],b['splits'][1:])):
+        parts.append(P.tiered_plate([(low,section(left,right,0)),(top-b['lid_h'],section(left,right,t0,lip))]))
+        parts.append(P.tiered_plate([(top-b['lid_h'],section(left,right,t0)),(top,section(left,right,1))]))
+        def face(u,v):
+            w=xb+(xt-xb)*v
+            return np.array([(left+(right-left)*u)*w,low+(top-low)*v,zb+(zt-zb)*v+lip*v-b['rib_r']/2])
+        if i==1:
+            for u in b['ribs']: parts.append(P.piping([face(u,.11),face(u+b['rib_span'],.79)],b['rib_r']))
+        if i==2:
+            pt=face(.5,.38); rad=b['pull_r']; angles=np.linspace(0,math.pi,13)
+            parts.append(P.piping([pt+(rad*math.cos(t),rad*math.sin(t),-rad*.22*math.sin(t)) for t in angles],b['pull_bar'],'steel'))
+        for u in (.22,.78):
+            pt=face(u,t0); foot=face(u,t0-b['catch_drop']/(top-low)); radius,height=b['catch_relief']
+            for dx in (-b['catch_w']/2,b['catch_w']/2):
+                T.weld_seam(marks,pt+(dx,0,0),foot+(dx,0,0),radius,height)
+            T.weld_seam(marks,foot-(b['catch_w']/2,0,0),foot+(b['catch_w']/2,0,0),radius,height)
     for s in (-1,1):
-        for zz in b['ribs']:
-            parts.append(P.piping([(s*(xb-bar*.5),low+bar,zz),(s*(xt-bar*.5),top-bar,zz)],bar))
-        x,y,z=_signed(st['centre'],s); w,h,l=st['size']
-        parts.extend([T.cbox((x,y,z),(w,h,l),.018),T.cbox((x,y+h/2,z),(w*1.03,st['lid_h'],l),.01)])
+        inner=b['flank_inner']; zf=b['flank_front']
+        parts.append(T.loft([(front,[(s*inner,low),(s*xb,low),(s*xt,top),(s*inner,top)]),
+                             (zf,[(s*inner,b['flank_low']),(s*xb,b['flank_low']),(s*xt,b['flank_high']),(s*inner,b['flank_high'])])]))
         rail=S['cheek_rail']; centre=np.array(_signed(rail['hinge'],s)); plate=rail['plate']
+        # Floating hinge detail alone reads as a handle. Overlay the actual
+        # four-corner end facet, leaving a narrow reveal round its perimeter.
+        cheek=S['cheeks']; panel=[]
+        for row,corner in ((0,1),(0,2),(1,2),(1,1)):
+            yy,plan=cheek[row]; xx,zz=plan[corner]; panel.append([s*xx,yy,zz])
+        poly=np.array(panel); poly+=rail['panel_inset']*(poly.mean(axis=0)-poly)
+        poly[:,0]+=s*rail['panel_skin']; orient=np.cross(poly[1]-poly[0],poly[2]-poly[0])[0]
+        parts.append(T.slab(poly if orient*s>0 else poly[::-1],rail['panel_skin']))
         parts.append(T.cbox(centre,plate,.006))
         parts.append(P.turning(centre+(s*plate[0]/2,0,0),(0,1,0),[(-plate[1]/2,rail['pin']),(plate[1]/2,rail['pin'])],'steel',12))
         for path in rail['paths']: parts.append(P.piping([_signed(p,s) for p in path],rail['radius']))
-        for base in sm['banks']:
-            pt=np.array(_signed(base,s)); parts.append(T.cbox(pt,sm['mount'],.009))
-            fw,fh,fl=sm['feet']
-            for end in (-1,1): parts.append(T.cbox(pt+(-s*fw/2,-fh*.30,end*sm['mount'][2]*.38),(fw,fh,fl),.008))
-            # Banks follow the hull Z direction, rather than running across X.
-            for i in range(sm['count']):
-                parts.append(T.smoke_dischargers(1,pt+(0,0,(i-(sm['count']-1)/2)*sm['spacing']),
+        for x,y,z,count in sm['banks']:
+            pt=np.array((s*x,y,z)); span=count*sm['spacing']; w,h=sm['mount']
+            parts.append(T.cbox(pt,(w,h,span),.007)); fw,fh,fl=sm['feet']
+            for end in (-1,1): parts.append(T.cbox(pt+(-s*fw/2,0,end*span*.36),(fw,fh,fl),.006))
+            lift=sm['rail_lift']; rr=sm['rail_r']; outer=s*w*.54
+            parts.append(P.piping([pt+(outer,0,-span/2),pt+(outer,-lift,-span/2),pt+(outer,-lift,span/2),pt+(outer,0,span/2)],rr))
+            for i in range(count):
+                parts.append(T.smoke_dischargers(1,pt+(0,0,(i-(count-1)/2)*sm['spacing']),
                              _signed(sm['direction'],s),sm['spacing'],sm['radius'],sm['length']))
         eye=_signed(r['eye'],s); parts.append(T.tow_hook(eye,(0,1,0),r['eye_r'],r['eye_bar']))
         base=np.array(_signed(r['aerial'],s)); parts.append(T.antenna_mount(base,r['aerial_r'],r['aerial_h']))
         parts.append(P.turning(base,(0,1,0),[(r['aerial_h'],r['aerial_r']*.22),(r['aerial_h']+r['stub'],r['aerial_r']*.09)],'steel',12))
-        tier=S['cheeks'][-1]; y,plan=tier
+        tier=S['cheeks'][-2]; y,plan=tier
         T.weld_seam(marks,(s*plan[0][0],y,plan[0][1]),(s*plan[1][0],y,plan[1][1]))
         parts.append(T.bolt_row(marks,(s*plan[1][0],y,plan[1][1]),(s*plan[2][0],y,plan[2][1]),6))
     for key in ('commander','loader'):
@@ -332,27 +404,3 @@ def gun():
     lo,hi,rr=t['collar']; collar=P.turning((0,y,0),(0,0,1),[(lo,rr),(hi,rr)],segments=t['segments'])
     return T.combine('gun_shell',[plug,cover,tube,collar,ref])
 
-
-def carrier(r,width):
-    """Low-detail paired carrier in axle-local game metres, for the screened upper run."""
-    profile=[(-.50*width,.55*r),(-.47*width,r),(-.14*width,r),(-.12*width,.56*r),
-             (.12*width,.56*r),(.14*width,r),(.47*width,r),(.50*width,.55*r)]
-    return P.turning((0,0,0),(1,0,0),profile,segments=S['discs']['carrier_seg'],bands=[T.PAINT,'rubber',T.PAINT,'steel',T.PAINT,'rubber',T.PAINT])
-
-
-def wheel(z,rg):
-    d=S['discs']
-    if abs(z-rg.sprocket[0])<1e-5:
-        _,_,r,n,w=rg.sprocket
-        return P.spoked_drive(r,w,n,d['spoke_n'],d['spoke_w'],d['drive_bolts'],d['bolt_r'],d['drive_seg'])
-    if abs(z-rg.idler[0])<1e-5:
-        _,_,r,w=rg.idler
-        return P.paired_disc(r,w,rg.tyre_width,rg.tyre_depth,rg.dish_depth,rg.hub_bolts,d['bolt_r'],d['idler_seg'],'steel')
-    for zz,_,r,*width in rg.rollers:
-        if abs(z-zz)<1e-5: return carrier(r,width[0] if width else .76*rg.track_width)
-    r=next(r for zz,_,r in rg.road if abs(z-zz)<1e-5)
-    return P.paired_disc(r,rg.wheel_width,rg.tyre_width,rg.tyre_depth,rg.dish_depth,rg.hub_bolts,d['bolt_r'],d['road_seg'])
-
-
-def belt(rg,side):
-    return P.linked_band(rg,side,S['shoe'])

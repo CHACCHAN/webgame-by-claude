@@ -5,7 +5,7 @@ import tank_atlas as A
 import jet_atlas as JA
 from leopard2a5_shape import S
 
-GREEN='#515C42'; BROWN='#644932'; BLACK='#30332E'; DUST='#918770'
+GREEN='#505A41'; BROWN='#605044'; BLACK='#272926'; DUST='#918770'
 
 
 def _field(p, lattice):
@@ -54,11 +54,14 @@ def _stencils(rgb,p,n,oid,objs):
     hull=objs.index('hull_shell'); turret=objs.index('turret_shell'); white=A._rgb('#E9E7D9'); ink=A._rgb('#262822')
     for side in (True,False):
         u=z if side else x; uc,yc,size=st['side' if side else 'rear']
-        facing=((oid==turret)&(n[:,0]*np.sign(x)>.72)) if side else ((oid==hull)&(n[:,2]<-.75))
+        facing=((oid==turret)&(n[:,0]*np.sign(x)>.72)) if side else ((oid==hull)&(n[:,2]<-.75)&(z<S['stern']['transom'][0][0]+.01))
         mask=facing&(abs(u-uc)<size*.53)&(abs(y-yc)<size*.53)
         if mask.any():
             outline,inside=_cross(u[mask]-uc,y[mask]-yc,size)
             rgb[mask]=A._mix(A._mix(rgb[mask],white,outline),ink,inside)
+    lamp=S['stern']; lx,ly,lz=lamp['lamp']; w,h,d=lamp['strip_size']; xc=lx-lamp['strip_dx']+.25*w
+    lens=(oid==hull)&(abs(abs(x)-xc)<w*.25)&(abs(y-ly)<h*.51)&(abs(z-lz)<d)&(n[:,2]<-.8)
+    rgb[lens]=A._rgb('#B77C49')
     zc,yc,h=st['number']; mask=(oid==turret)&(n[:,0]*np.sign(x)>.72)&(abs(z-zc)<h*1.3)&(abs(y-yc)<h*.55)
     if mask.any():
         # +Z is screen-left when viewed from +X; read correctly from either flank.
@@ -78,21 +81,23 @@ def _maps(tris,raster,ao,names,marks,ppm):
         sl=slice(row,row+96); valid=fill[sl]; zz=zone[sl][valid]; p=raster['pos'][sl][valid]; oid=raster['obj'][sl][valid]
         if not len(p): continue
         rgb=base[sl][valid]; painted=zz==pid; q=p[painted]; ids=oid[painted]; norm=raster['nrm'][sl][valid][painted]
+        om=orm[sl][valid]
         if len(q):
             # Rotate the sampling frame to avoid rectangular alignment with plates.
             coord=np.column_stack((.80*q[:,0]+.60*q[:,2],q[:,1],-.60*q[:,0]+.80*q[:,2]))
-            warp=_field(coord*1.79,grids[2])-.5
-            coord=coord*np.array([1.02,1.48,1.04])+warp[:,None]*np.array([.68,-.39,.47])
-            # A common warped stripe coordinate makes the colours interlock,
-            # rather than overlaying two unrelated sets of circular spots.
-            wave=np.sin(2.9*q[:,2]+2.2*q[:,1]-1.6*q[:,0]+6.3*_field(coord,grids[0]))
-            edge=.5+.32*wave+.30*(_field(coord*.83,grids[1])-.5)
-            brown=A._step(.721,.731,edge); black=1-A._step(.224,.234,edge)
+            # Independent, broad fields with a low-amplitude domain warp. No
+            # periodic longitudinal phase, so roof patches can end or branch.
+            warp=_field(coord*.93,grids[2])-.5
+            coord=coord*np.array([.88,1.13,.86])+warp[:,None]*np.array([.39,-.27,.31])
+            umber=.84*_field(coord,grids[0])+.16*_field(coord*1.85,grids[1])
+            tar=.88*_field(coord*.94,grids[1])+.12*_field(coord*1.72,grids[2])
+            brown=A._step(.557,.566,umber); black=A._step(.625,.635,tar)
             brown[wheel[ids]]=0; black[wheel[ids]]=0
+            om[painted,1]+=(.89-om[painted,1])*black
             col=A._mix(A._rgb(GREEN),A._rgb(BROWN),brown); col=A._mix(col,A._rgb(BLACK),black)
             _stencils(col,q,norm,ids,names); rgb[painted]*=col
         dirt=.078*(1-A._step(.19,1.54,p[:,1]))*(.7+.3*_field(p*2.39,grids[2])); dirt[zz==gid]=0
-        base[sl][valid]=A._mix(rgb,dust,dirt); om=orm[sl][valid]; om[:,1]+=(.95-om[:,1])*dirt; om[:,2]*=1-dirt; orm[sl][valid]=om
+        base[sl][valid]=A._mix(rgb,dust,dirt); om[:,1]+=(.95-om[:,1])*dirt; om[:,2]*=1-dirt; orm[sl][valid]=om
     return base,orm,normal
 
 
