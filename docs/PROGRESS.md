@@ -2575,3 +2575,4 @@ on the default check runs three times before a deploy that touches rendering.
 Open: after fast flipping every flipped-past vehicle is still compiled in turn (the last appears ~4.7 s after the
 key is let go, in both builds): skip a compile whose vehicle is no longer asked for.
 
+Verified on the merged tree (v2.7.3): tsc; vitest 288; build; default `gpu-errors.cjs` on WebGPU three times 0, WebGL 2 0, Edwards 0; `paint-drawn.cjs e231`; one race picture. Deployed on these; backend tests 78 and E2E 19/19 finished after the deploy.
