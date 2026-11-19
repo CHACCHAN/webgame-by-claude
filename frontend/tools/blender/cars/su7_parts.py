@@ -310,7 +310,7 @@ def cabin(body, mats, count):
     CC.bench(fur, -0.66, 0.66, y0, -1.36, length=0.48, h=0.27, back=0.55, recline=27.0, places=3, headrests=True,
              cloth='c_leather', insert='c_cloth2')
     CC.steering_wheel(fur, (0.37, 0.90, 0.40), tilt=21.0, R=0.180)
-    CC.inside_mirror(fur, 1.33, 0.36)
+    CC.inside_mirror(fur, 1.285, 0.27)      # under the glass at the header (glass y 1.376 at z 0.325, the stalk's top)
     count['furniture'] = fur.tris()
     CC.build(fur, body, mats.mats)
 
