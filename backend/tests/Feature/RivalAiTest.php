@@ -106,6 +106,39 @@ class RivalAiTest extends TestCase
         });
     }
 
+    public function test_a_model_may_carry_its_effort_and_is_asked_again_without_it_when_it_refuses(): void
+    {
+        config(['llm.decide_models' => ['quick', 'thinker@low', 'plain@low']]);
+        $seen = [];
+        Http::fake(function (Request $request) use (&$seen) {
+            $body = $request->data();
+            $seen[] = $body['model'].(isset($body['reasoning_effort']) ? '+'.$body['reasoning_effort'] : '');
+
+            return match ($body['model']) {
+                'quick' => Http::response(['error' => 'unknown model'], 400),
+                // (refuses the parameter, then answers without it)
+                'thinker' => isset($body['reasoning_effort']) ? Http::response(['error' => 'unknown parameter'], 400)
+                    : Http::response($this->answer(['content' => '', 'tool_calls' => [
+                        ['id' => 'a', 'type' => 'function', 'function' => ['name' => 'sound_horn', 'arguments' => '{"style": "double"}']],
+                    ]])),
+                default => Http::response(['error' => 'not asked'], 500),
+            };
+        });
+        // (the answer names the model, not its effort; a model without one is never sent the parameter)
+        $this->postJson('/api/ai/decide', $this->decidePayload())->assertOk()
+            ->assertExactJson(['block' => null, 'horn' => 'double', 'model' => 'thinker']);
+        $this->assertSame(['quick', 'thinker+low', 'thinker'], $seen);
+    }
+
+    public function test_llm_check_names_a_model_the_gateway_no_longer_offers(): void
+    {
+        config(['llm.decide_models' => ['judge', 'gone@low'], 'llm.taunt_models' => ['judge'], 'desk.models' => ['judge']]);
+        Http::fake(['llm.test/v1/models' => Http::response(['data' => [['id' => 'judge'], ['id' => 'other']]])]);
+        $this->artisan('llm:check')->expectsOutputToContain('NOT LISTED')->assertExitCode(1);
+        config(['llm.decide_models' => ['judge@low']]);
+        $this->artisan('llm:check')->doesntExpectOutputToContain('NOT LISTED')->assertExitCode(0);
+    }
+
     public function test_a_rival_that_is_behind_has_the_horn_only(): void
     {
         Http::fake(['llm.test/*' => Http::response($this->answer(['content' => '', 'tool_calls' => [

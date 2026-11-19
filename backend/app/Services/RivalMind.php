@@ -54,7 +54,7 @@ class RivalMind
             ]);
             $line = $this->line((string) ($message['content'] ?? ''), $max);
             if ($line !== '') {
-                return ['line' => $line, 'model' => $model];
+                return ['line' => $line, 'model' => self::name($model)];
             }
         }
 
@@ -89,7 +89,7 @@ class RivalMind
             if ($message === null) {
                 continue;
             }
-            $out = ['block' => null, 'horn' => null, 'model' => $model];
+            $out = ['block' => null, 'horn' => null, 'model' => self::name($model)];
             foreach ($message['tool_calls'] ?? [] as $call) {
                 $args = json_decode((string) ($call['function']['arguments'] ?? ''), true) ?: [];
                 match ($call['function']['name'] ?? '') {
@@ -149,13 +149,28 @@ class RivalMind
         ], $ahead ? 0 : 1);
     }
 
-    /** One chat completion; the assistant's message, or null when the model failed or took too long. */
-    private function chat(string $model, float $timeout, array $body): ?array
+    /** A model of the lists without its `@effort`. */
+    private static function name(string $spec): string
     {
+        return explode('@', $spec, 2)[0];
+    }
+
+    /**
+     * One chat completion; the assistant's message, or null when the model failed or took too long. `$spec` is
+     * `name` or `name@effort` (sent as `reasoning_effort`; a model that refuses it with 400 is asked once more without).
+     */
+    private function chat(string $spec, float $timeout, array $body): ?array
+    {
+        [$model, $effort] = array_pad(explode('@', $spec, 2), 2, '');
+        $until = microtime(true) + $timeout;
         try {
-            $response = Http::withHeaders([(string) config('llm.key_header') => (string) config('llm.key')])
-                ->connectTimeout(2)->timeout($timeout)->acceptJson()
-                ->post((string) config('llm.url'), ['model' => $model] + $body);
+            $ask = fn (array $extra) => Http::withHeaders([(string) config('llm.key_header') => (string) config('llm.key')])
+                ->connectTimeout(2)->timeout(max(0.5, $until - microtime(true)))->acceptJson()
+                ->post((string) config('llm.url'), ['model' => $model] + $extra + $body);
+            $response = $ask($effort !== '' ? ['reasoning_effort' => $effort] : []);
+            if ($response->status() === 400 && $effort !== '' && $until - microtime(true) > 0.5) {
+                $response = $ask([]);
+            }
             if ($response->successful() && is_array($message = $response->json('choices.0.message'))) {
                 return $message;
             }

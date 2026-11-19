@@ -2587,3 +2587,27 @@ geometries left after a 10 s hold +940 → 0 (a leak since v2.7.1: the 4 s fallb
 single press and first-showing gaps unchanged, waiting room seats right 28 / 56 ms after 30 changes.
 
 Verified on the merged tree: tsc; vitest 288; build; backend tests 78; E2E 19/19; default `gpu-errors.cjs` on WebGPU three times 0, WebGL 2 0, Edwards 0. Not verified: a real online room by hand; gamepad repeat; phones.
+
+## v2.7.5 (11-19): the rivals' and the desk's models (owner's word)
+
+Owner: the desk on deepseek-v4.1-flash at high effort; the rival in a race on sarashina, then deepseek-v4.1-flash at
+low effort. Found on the way: every rival model of the defaults answered 400 (the gateway lists `sarashina3-mini`, not
+`sarashina-3-mini`, and no longer `gemini-3.5-flash-lite`), so the rivals' lines and decisions came from the game's
+own `scriptedBrain` for an unknown time; the desk's `gemini-3.8-flash` answered 429 once today.
+- `config/llm.php`: taunts and decisions `sarashina3-mini,deepseek-v4.1-flash@low` (the owner's order for the rival; the
+  same for the lines, whose two old models were both gone). `name@effort` sends `reasoning_effort`; a 400 to it is
+  asked again without (`RivalMind::chat`, within the same time limit). `config/desk.php`: `deepseek-v4.1-flash` first,
+  `gemini-3.8-flash` when it fails (effort high, as before). `.env` sets none of these lists (defaults apply).
+- `php artisan llm:check`: each configured model listed / NOT LISTED by the gateway's `/models` (exit 1 if one is
+  missing; names only, never the address or key).
+- Measured through the live gateway from the app container (3 calls each): decision with tool calls sarashina3-mini
+  0.40–0.54 s, deepseek-v4.1-flash@low 0.94–1.03 s (max_tokens 120; both called `block_player` as a pursuer closed
+  in); lines sarashina3-mini 0.26–0.38 s, deepseek@low 0.93–1.34 s; the desk's `answer()` with deepseek@high
+  1.1–2.0 s (a question, a report: `file_report` called with a filled-in body; it added one detail the player had not
+  given, "横向き"). The game waits 1.5 s for a decision: deepseek fits only when sarashina fails fast (a 4xx / 5xx),
+  not when it hangs.
+Verified on the merged tree: backend tests 80 (two new: `name@effort` with its retry; `llm:check`); tsc; vitest 288;
+build; E2E 19/19; `gpu-errors.cjs` WebGPU 0, WebGL 2 0 (frontend unchanged but for the version). Not verified: a
+rival battle in the browser against the live gateway (the calls were made from the app container); `llm:check` on
+the live stack after the deploy (below).
+

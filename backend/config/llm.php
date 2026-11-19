@@ -20,10 +20,13 @@ return [
     })(),
     'key_header' => env('LLM_KEY_HEADER', 'X-Gravitee-Api-Key'),
 
-    // tried in this order; the next one when a model fails or takes too long (measured 2026-11-11: taunts
-    // 2.0 s / 0.3 s, decisions with tool calls 0.15–0.5 s)
-    'taunt_models' => $models('LLM_TAUNT_MODELS', 'gemini-3.5-flash-lite,sarashina-3-mini'),
-    'decide_models' => $models('LLM_DECIDE_MODELS', 'sarashina-3-mini,gemini-3.5-flash-lite'),
+    // tried in this order; the next one when a model fails or takes too long. `name@effort` sends that
+    // `reasoning_effort` with the request (a model that refuses it is asked again without). Owner, 11-19: the rival
+    // runs on sarashina, then deepseek-v4.1-flash at low effort (the gateway had renamed sarashina-3-mini to
+    // sarashina3-mini and dropped gemini-3.5-flash-lite: both answered 400). Measured 11-19 through the gateway:
+    // sarashina3-mini 0.3–0.5 s, deepseek-v4.1-flash@low 0.9–1.3 s for a line, 0.9–1.7 s for a decision with tool calls.
+    'taunt_models' => $models('LLM_TAUNT_MODELS', 'sarashina3-mini,deepseek-v4.1-flash@low'),
+    'decide_models' => $models('LLM_DECIDE_MODELS', 'sarashina3-mini,deepseek-v4.1-flash@low'),
     'taunt_timeout' => (float) env('LLM_TAUNT_TIMEOUT', 6),
     // a decision that comes later than this is about a situation that is gone
     'decide_timeout' => (float) env('LLM_DECIDE_TIMEOUT', 2.5),

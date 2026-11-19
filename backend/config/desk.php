@@ -18,7 +18,9 @@ return [
     'enabled' => filter_var(env('DESK_ENABLED', true), FILTER_VALIDATE_BOOL),
 
     // tried in this order; the next one when a model fails, says nothing or takes too long
-    'models' => $models('LLM_DESK_MODELS', 'gemini-3.8-flash'),
+    // owner, 11-19: deepseek-v4.1-flash at high effort (1–2 s an answer, measured that day); gemini-3.8-flash only
+    // when it fails
+    'models' => $models('LLM_DESK_MODELS', 'deepseek-v4.1-flash,gemini-3.8-flash'),
     // sent as the OpenAI-compatible `reasoning_effort` (empty: not sent; a model that refuses it is asked again without)
     'effort' => trim((string) env('LLM_DESK_EFFORT', 'high')),
     // the cap on what one answer may cost; a reasoning model's thinking counts in it, so it is well above `reply_chars`
