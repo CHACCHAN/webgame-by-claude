@@ -2576,3 +2576,14 @@ Open: after fast flipping every flipped-past vehicle is still compiled in turn (
 key is let go, in both builds): skip a compile whose vehicle is no longer asked for.
 
 Verified on the merged tree (v2.7.3): tsc; vitest 288; build; default `gpu-errors.cjs` on WebGPU three times 0, WebGL 2 0, Edwards 0; `paint-drawn.cjs e231`; one race picture. Deployed on these; backend tests 78 and E2E 19/19 finished after the deploy.
+
+## v2.7.4 (11-19): the car select after flipping fast
+
+Merged `garage-stale` (`73b81e1`). Flipped-past vehicles are no longer built and compiled in turn: the garage builds
+only the latest request (a hold waits for 60 ms of quiet), a queued compile that is stale never starts, a visual is
+disposed only after its compile has settled. Agent's paired numbers (main v2.7.3 → new): last vehicle shown after a
+10 s hold 4.3 s → 57–435 ms (what that vehicle's single press costs), worst gap during the hold ~347 → 49–121 ms,
+geometries left after a 10 s hold +940 → 0 (a leak since v2.7.1: the 4 s fallback disposed visuals still compiling),
+single press and first-showing gaps unchanged, waiting room seats right 28 / 56 ms after 30 changes.
+
+Verified on the merged tree: tsc; vitest 288; build; backend tests 78; E2E 19/19; default `gpu-errors.cjs` on WebGPU three times 0, WebGL 2 0, Edwards 0. Not verified: a real online room by hand; gamepad repeat; phones.

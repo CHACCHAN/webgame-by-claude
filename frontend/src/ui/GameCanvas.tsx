@@ -35,7 +35,7 @@ function startGame(host: RenderHost) {
     const ram = (navigator as { deviceMemory?: number }).deviceMemory ?? 8;
     game.keepBudget = isTouchDevice() || s.quality === 'low' || ram < 4 ? 0 : ram < 8 ? 500 : 2000;
     game.compileScene = (hold) => host.precompile(hold);
-    game.compileObject = (object) => host.precompile(false, object);
+    game.compileObject = (object, stale) => host.precompile(false, object, stale);
     const params = new URLSearchParams(location.search);
     game.assist = s.assist;
     game.autoShift = s.autoShift;

@@ -45,10 +45,12 @@ export class LobbyLineup {
   private scale = 1;
   private lamps = 1;
   private disposed = false;
+  /** visuals whose compile has not settled: disposed only after it has (`discard`) */
+  private compiling = new Map<CarVisual, Promise<unknown>>();
 
   constructor(
     private track: Track,
-    private opts: { shadows: boolean; compile?: ((o: THREE.Object3D) => Promise<unknown>) | null },
+    private opts: { shadows: boolean; compile?: ((o: THREE.Object3D, stale?: () => boolean) => Promise<unknown>) | null },
   ) {
     this.group.name = 'lobby-lineup';
   }
@@ -147,7 +149,13 @@ export class LobbyLineup {
       done = true;
       show();
     };
-    void compile(visual.root).then(once, once);
+    // (no longer wanted: another vehicle asked for in the seat, or the line-up gone; its compile then stops early)
+    const settled = compile(visual.root, () => this.disposed || (st.pending !== pending && st.visual !== visual)).catch(() => undefined);
+    this.compiling.set(visual, settled);
+    void settled.then(() => {
+      this.compiling.delete(visual);
+      once();
+    });
     setTimeout(once, COMPILE_WAIT);
   }
 
@@ -168,7 +176,10 @@ export class LobbyLineup {
   private discard(visual: CarVisual | null) {
     if (!visual) return;
     this.group.remove(visual.root);
-    visual.dispose();
+    // (a compile of it still under way: disposed once that has settled)
+    const compiling = this.compiling.get(visual);
+    if (compiling) void compiling.then(() => visual.dispose());
+    else visual.dispose();
   }
 
   /**

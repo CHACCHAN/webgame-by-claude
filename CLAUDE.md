@@ -102,6 +102,13 @@ pending. `docs/PLAN.md` holds the design.
   `setShaderStage`: check them on a three.js update (`~/.local/opt/wt/garage-pipeline/repro.cjs`: DRIFT lines).
   A pipeline error goes to the console only, never to `renderer.onError`: one intermittent line of
   `gpu-errors.cjs` is a part of something not drawn, not noise.
+  The garage builds one vehicle at a time and only the latest request (`Game.showGarage` → `garageTurn`; requests
+  less than 150 ms apart wait until 60 ms of quiet). An object compile is given `stale` (`RenderHost.precompile`):
+  a queued one whose object is no longer wanted never starts, a running one stops after its current object
+  (through `compileAsync`'s progress callback). **Never dispose a visual whose compile has not settled**
+  (`Game.retire`, `LobbyLineup.discard`): the compile registers its geometry again and it is never freed (+940
+  geometries after holding the arrow key 10 s, v2.7.1–v2.7.3). Check with `~/.local/opt/wt/garage-stale/garage.cjs`
+  (key-up → shown, `renderer.info.memory`).
   Passes that work from the depth buffer share `render/screenSpace.ts` (view position from the depth, sized targets,
   the surface-keeping blur that cancels a five-pixel tap pattern). The glow in the haze (`render/volumetricLights.ts`)
   takes its lights from `volume` (the course's lamps; a cone per headlamp via `CarVisual.beamsInto`, at most
