@@ -8,7 +8,7 @@ import math
 import numpy as np
 
 import roach_anatomy as A
-from roach_geom import Part, cap_ts, end_profile, frame, rot, smoothstep, tube_rows, unit
+from roach_geom import Part, bristle, cap_ts, end_profile, frame, rot, smoothstep, tube_rows, unit
 from roach_tex import LAYOUT
 
 UP = np.array((0.0, 1.0, 0.0))
@@ -190,14 +190,17 @@ def tegmen_hinge(side):
 
 
 def build_hindwing(side):
-    """a hind wing as it lies folded under its tegmen: a thin closed leaf, leading edge outside, tip to the rear"""
+    """
+    a hind wing as it lies folded under its tegmen: a thin closed leaf, leading edge outside, tip to the rear; at
+    the hinge a narrow stalk, thick along the leading edge (the wing's root: the bases of the stiff front veins)
+    """
     H = A.HIND
     name = 'hind_L' if side > 0 else 'hind_R'
     part = Part(name, 'roach_body')
     u0, v0, u1, v1 = LAYOUT['hindwing']
     xh, zh = H['hinge']
-    across = H['chord'] + H['tip_inset']
-    nr, nc = 22, 8
+    across = A.hind_across()
+    nr, nc = 24, 12
     ls = [0.985 * (1 - (1 - k / (nr - 1)) ** 1.25) for k in range(nr)]      # denser at the rounded tip
     top, bot, uvs = [], [], []
     for l in ls:
@@ -205,18 +208,20 @@ def build_hindwing(side):
         z = zh - H['length'] * l
         rt, rb, ru = [], [], []
         for j in range(nc):
-            d = inset + c * j / (nc - 1)                   # mm in from the leading edge's line
+            a = j / (nc - 1)
+            d = inset + c * a                              # mm in from the leading edge's line
             x = side * (xh - d)
-            rt.append(ENV.point(x, z, -H['depth'] + H['thick'] / 2))
-            rb.append(ENV.point(x, z, -H['depth'] - H['thick'] / 2))
-            # the texture is laid out as the wing lies: along its length, and across from the leading edge's line
-            ru.append((u0 + (u1 - u0) * l, v0 + (v1 - v0) * d / across))
+            th = H['thick'] + 0.14 * (1 - float(smoothstep(0.0, 0.2, l))) * (1 - float(smoothstep(0.0, 0.45, a)))
+            rt.append(ENV.point(x, z, -H['depth'] + th / 2))
+            rb.append(ENV.point(x, z, -H['depth'] - th / 2))
+            # the texture is laid out as the wing lies: across from the leading edge's line, and along its length
+            ru.append((u0 + (u1 - u0) * d / across, v0 + (v1 - v0) * l))
         top.append(rt)
         bot.append(rb)
         uvs.append(ru)
     inset, _ = A.hind_planform(1.0)
     xa, za = side * (xh - inset), zh - H['length']
-    pole_uv = (u1, v0 + (v1 - v0) * inset / across)
+    pole_uv = (u0 + (u1 - u0) * inset / across, v1)
     w = {name: 1.0}
     T = [[part.vert(p, w) for p in row] for row in top]
     Bt = [[part.vert(p, w) for p in row] for row in bot]
@@ -330,14 +335,15 @@ def build_pronotum():
 
 # ---------------------------------------------------------------- thorax and abdomen (lofted along z)
 
-def superellipse_ring(cx, cy, z, a, b_top, b_bot, n, p=2.4, zbend=None):
+def superellipse_ring(cx, cy, z, a, b_top, b_bot, n, p=2.4, zbend=None, p_top=None):
     """a ring around the body axis: half width a, heights above / below cy; seam at the top (θ = 90°)"""
     pts = []
     for k in range(n):
         th = math.pi / 2 + 2 * math.pi * k / n
         c, s = math.cos(th), math.sin(th)
-        x = a * math.copysign(abs(c) ** (2 / p), c)
-        y = cy + (b_top if s >= 0 else b_bot) * math.copysign(abs(s) ** (2 / p), s)
+        q = p_top if (p_top and s > 0) else p
+        x = a * math.copysign(abs(c) ** (2 / q), c)
+        y = cy + (b_top if s >= 0 else b_bot) * math.copysign(abs(s) ** (2 / q), s)
         zz = z + (zbend(x / max(a, 1e-6), s) if zbend else 0.0)
         pts.append((cx + x, y, zz))
     return np.array(pts)
@@ -349,6 +355,8 @@ def build_thorax():
     zs = np.linspace(A.THORAX[0][0], A.THORAX[-1][0], 14)
     for z in zs:
         a, yb, yt = A.interp(A.THORAX, z)
+        # (behind the pronotum's middle its back lies under the nota: roach_dorsum)
+        yt -= 0.4 * float(smoothstep(-5.8, -7.2, z))
         cy = (yb + yt) / 2
         rows.append(superellipse_ring(0.0, cy, z, a, yt - cy, cy - yb, 28, p=2.6))
     z0, z1 = zs[0], zs[-1]
@@ -372,6 +380,36 @@ def abdomen_zs():
     return zs, fac
 
 
+# The abdomen's tube is its venter (the sternites) and its sides (the pleural membranes); its back lies under the
+# tergites (roach_dorsum), lower and rounder at the shoulders than they are. The texture goes to what is seen: the
+# hidden back (ABD_HIDDEN of the way round, either side of the top) takes ABD_HIDDEN_U of the patch's width.
+ABD_TOP = 0.86
+ABD_P_TOP = 2.0
+ABD_HIDDEN = 0.17
+ABD_HIDDEN_U = 0.04
+
+
+def abdomen_warp(a):
+    """the way round the tube (0 the top, 0.5 the keel, 1 the top again) → u in the tube's patch (numbers or arrays)"""
+    xs = (0.0, ABD_HIDDEN, 1 - ABD_HIDDEN, 1.0)
+    us = (0.0, ABD_HIDDEN_U, 1 - ABD_HIDDEN_U, 1.0)
+    return np.interp(a, xs, us)
+
+
+def abdomen_unwarp(u):
+    xs = (0.0, ABD_HIDDEN, 1 - ABD_HIDDEN, 1.0)
+    us = (0.0, ABD_HIDDEN_U, 1 - ABD_HIDDEN_U, 1.0)
+    return np.interp(u, us, xs)
+
+
+def abdomen_y(x, z):
+    """height of the tube's back at (x, z)"""
+    a, yb, yt = A.interp(A.ABDOMEN, z)
+    cy = (yb + yt) / 2
+    u = min(1.0, abs(x) / a)
+    return cy + ABD_TOP * (yt - cy) * (1 - u ** ABD_P_TOP) ** (1 / ABD_P_TOP)
+
+
 def build_abdomen():
     part = Part('abdomen', 'roach_body')
     zs, fac = abdomen_zs()
@@ -386,13 +424,13 @@ def build_abdomen():
         a, yb, yt = A.interp(A.ABDOMEN, z)
         cy = (yb + yt) / 2
         bend = (lambda u, s: 0.55 * u * u * (1 if s < 0 else 0.6))
-        rows.append(superellipse_ring(0.0, cy, z, a * f * endf, (yt - cy) * f * endf, (cy - yb) * f * endf, 30,
-                                      p=2.5, zbend=bend))
+        rows.append(superellipse_ring(0.0, cy, z, a * f * endf, (yt - cy) * ABD_TOP * endf, (cy - yb) * f * endf, 30,
+                                      p=2.5, zbend=bend, p_top=ABD_P_TOP))
         vv.append((z_front - z) / (z_front - z_tip))
     vv = [min(1.0, max(0.0, v)) for v in vv]
     a, yb, yt = A.interp(A.ABDOMEN, z_tip)
     part.loft(rows, LAYOUT['abdomen'], {'abdomen': 1.0}, pole0=(0, 4.8, z_front + 0.35),
-              pole1=(0, (yb + yt) / 2, z_tip), v_of=vv)
+              pole1=(0, (yb + yt) / 2, z_tip), v_of=vv, u_of=[float(abdomen_warp(j / 30)) for j in range(31)])
     return part
 
 
@@ -761,7 +799,7 @@ def cercus_joints(side):
     pts = [b]
     for k in range(segs):
         # slightly curved up at the tip
-        dk = unit(d + np.array((0, 0.02 * k, 0)))
+        dk = unit(d + np.array((0, C['rise'] * k, 0)))
         seg = L / segs * (1.25 - 0.5 * k / segs)
         pts.append(pts[-1] + dk * seg)
     return pts
@@ -775,5 +813,21 @@ def build_cercus(side):
     n = len(j)
     radii = [R * (0.75 + 0.25 * math.sin(math.pi * min(1, i / (n - 1) * 2.2))) * (1 - 0.82 * (i / (n - 1)) ** 1.3)
              for i in range(n)]
-    segmented_tube(part, j, radii, LAYOUT['cercus'], lambda k, u: {f'cercus_{sd}': 1.0}, n=7, rings=3)
+    w = {f'cercus_{sd}': 1.0}
+    segmented_tube(part, j, radii, LAYOUT['cercus'], lambda k, u: w, n=7, rings=3)
+    # the cercus' sensory bristles: three to a segment, out to the sides and down (the wings lie above), leaning
+    # towards the tip, longest along the middle
+    up = np.array((0.0, 1.0, 0.0))
+    for k in range(1, n - 2):
+        a, b = j[k], j[k + 1]
+        t = unit(b - a)
+        N = unit(up - np.dot(up, t) * t)
+        Bn = np.cross(t, N)
+        r = (radii[k] + radii[k + 1]) / 2
+        for i, base in enumerate((100.0, 180.0, 260.0)):
+            phi = math.radians(base + 12.0 * math.sin(2.4 * k + 1.7 * i))
+            rad = N * math.cos(phi) + Bn * math.sin(phi)
+            c = a + (b - a) * (0.35 + 0.3 * ((k + i) % 2))
+            ln = (0.36 + 0.36 * math.sin(math.pi * k / (n - 2))) * (0.85 + 0.15 * math.sin(3.1 * k + i))
+            bristle(part, c + rad * (r * 0.7), rad * 0.8 + t * 0.6, ln, 0.04, LAYOUT['seta'], w, side=t)
     return part

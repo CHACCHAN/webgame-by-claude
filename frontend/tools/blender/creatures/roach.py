@@ -9,7 +9,8 @@ Output (see render/RoachModel.ts): one skinned mesh on one armature, head +Z, +Y
 game's scale (body 3.4 m from the head's front to the wing tips). One animation, a seamless in-place scuttle
 (alternating tripod) whose planted feet move back 1.6 m per cycle. The foremost bone named head… (`head_eyes`)
 sits between the compound eyes. Modules: roach_anatomy (proportions), roach_geom (mesh building), roach_body /
-roach_legs (shells), roach_rig (skeleton, gait), roach_tex (textures), roach_stage (check renders).
+roach_legs (shells), roach_dorsum (the back under the wings: nota, wing roots, tergites), roach_rig (skeleton, gait),
+roach_tex (textures), roach_stage (check renders).
 """
 import sys
 
@@ -31,6 +32,7 @@ if HERE not in sys.path:
 import roach_anatomy as A  # noqa: E402
 import roach_body as RB  # noqa: E402
 import roach_check as RC  # noqa: E402
+import roach_dorsum as RD  # noqa: E402
 import roach_geom as RGm  # noqa: E402
 import roach_legs as RL  # noqa: E402
 import roach_rig as RG  # noqa: E402
@@ -76,6 +78,9 @@ def build(args):
     parts.append(RB.build_pronotum())
     parts.append(RB.build_thorax())
     parts.append(RB.build_abdomen())
+    # the back the wings lie on (seen when they are out in flight)
+    parts += RD.build()
+    print('[roach] the back: clearances (mm)', json.dumps(RD.clearance()), flush=True)
     parts.append(RB.build_head())
     parts.append(RB.build_mouth())
     for side in (1, -1):
@@ -92,9 +97,31 @@ def build(args):
     order = ['roach_shell', 'roach_body', 'roach_legs']
     obj = RGm.assemble('roach_body_mesh', parts, [mats[m] for m in order], arm, names)
     obj.data.set_sharp_from_angle(angle=math.radians(60))
+    fan_normals(obj, names)
     RG.animate(arm)
     print(f'[roach] rig + animation {time.time() - t0:.1f}s, leg reach warnings {RG.leg_warnings()}', flush=True)
     return arm, obj
+
+
+def fan_normals(obj, names):
+    """
+    The hind wings' normals, for the fan as it is in flight. The game opens a fan by scaling its bone across the
+    chord, and a skinned normal is turned by the bone's matrix itself, not by its inverse transpose: a leaf that
+    lies on the curved back would be lit, opened, as if it were bent 3.6 times as sharply as it is folded (the open
+    fans came out with a false gradient across them). So the normals are stored already scaled the other way,
+    (x / unfold², y, z): opened they are right; folded, where they are wrong, the wings lie hidden under the tegmina.
+    """
+    me = obj.data
+    groups = {obj.vertex_groups[n].index for n in ('hind_L', 'hind_R')}
+    hind = np.zeros(len(me.vertices), bool)
+    for v in me.vertices:
+        hind[v.index] = any(g.group in groups and g.weight > 0.5 for g in v.groups)
+    normals = np.array([tuple(n.vector) for n in me.corner_normals], np.float64)
+    corner_vert = np.array([l.vertex_index for l in me.loops])
+    m = hind[corner_vert]
+    normals[m, 0] /= A.HIND['unfold'] ** 2
+    normals[m] /= np.linalg.norm(normals[m], axis=1, keepdims=True)
+    me.normals_split_custom_set([tuple(n) for n in normals])
 
 
 def export(arm, obj, path, image_format):

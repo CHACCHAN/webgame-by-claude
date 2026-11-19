@@ -38,8 +38,10 @@ OVERLAP_RIGHT = 1.0           # the right tegmen's inner margin, under the left 
 # modelled as they lie at rest: folded like a fan under the tegmina, on the same envelope `depth` mm below it, their
 # leading edge outside. In flight a hind wing swings out about its hinge and its fan opens: the game scales the bone
 # across the chord by `unfold`, the leading edge (x = hinge x) staying where it is.
+# The hind wings belong to the metathorax: their hinge is on the metanotum's front corner, a segment behind the
+# tegmina's (it was beside it, and both pairs of wings grew out of one place behind the pronotum).
 TEGMEN_HINGE = (2.2, -9.2)    # x, z (left; the right one mirrored)
-HIND = dict(hinge=(4.0, -9.5), length=27.5, chord=3.6, tip_inset=2.2, depth=0.3, thick=0.05, unfold=3.6)
+HIND = dict(hinge=(4.0, -11.6), length=25.4, chord=3.6, tip_inset=2.2, depth=0.3, thick=0.05, unfold=3.6)
 # the flight pose: degrees the wing swings out (about the vertical), is held up, beats up and down and feathers
 # (the tegmina a little forward of straight out and held high, the hind wings behind and below them: they beat in
 # step, so the hind wings' upstroke ends under the tegmina)
@@ -50,6 +52,41 @@ ABDOMEN = [(-10.0, 3.9, 3.35, 6.2), (-12.5, 5.0, 3.0, 6.6), (-16.0, 5.7, 2.75, 6
            (-24.0, 5.55, 2.75, 6.2), (-27.5, 4.75, 2.9, 5.6), (-30.5, 3.6, 3.15, 4.95), (-32.6, 2.3, 3.45, 4.5),
            (-33.6, 1.2, 3.7, 4.35)]
 STERNITES = [-12.4, -15.3, -18.2, -21.0, -23.8, -26.6]    # posterior edges of the visible sternites (2..7 start)
+
+# ---- the back under the wings (players' reports: with the wings out in the air, what showed under them was a plain
+# tube). The wings lie on it: its surface is the tegmina's envelope less a clearance (`off` at the midline by z),
+# nearly flat across and falling `sag` mm to a sharp lateral margin at `half`; plates like roof tiles, each one's
+# hind margin over the next one's front: the mesonotum (it carries the tegmina) and the metanotum (the hind
+# wings), the abdomen's tergites 1–9 (8 and 9 short, mostly under 7) and the supra-anal plate (tergite 10, its
+# hind margin notched), the cerci coming out from under its sides.
+DORSUM = dict(
+    off=[(-6.8, 0.2), (-7.2, 0.2), (-8.0, 0.26), (-9.0, 0.32), (-10.4, 0.46), (-11.6, 0.52), (-12.5, 0.52),
+         (-14.3, 0.48), (-16.0, 0.47), (-35.0, 0.47)],
+    half=[(-6.8, 3.2), (-7.2, 3.3), (-9.0, 3.65), (-10.4, 4.0), (-11.6, 4.45), (-12.5, 4.85), (-14.3, 5.45),
+          (-16.0, 5.82), (-20.0, 5.97), (-24.0, 5.67), (-27.5, 4.87), (-30.5, 3.72), (-31.5, 3.1), (-32.6, 2.42),
+          (-33.4, 1.78), (-34.0, 1.1), (-34.5, 0.8)],
+    sag=[(-6.8, 0.7), (-10.4, 0.78), (-12.5, 0.95), (-14.3, 1.2), (-16.0, 1.5), (-20.0, 1.52), (-24.0, 1.38),
+         (-27.5, 1.26), (-30.5, 0.96), (-32.6, 0.62), (-34.5, 0.3)],
+    p=3.4,
+    # what must stay free under the wings: under the folded hind wings (from their hinge back, |x| < 4.2), and
+    # under the tegmina alone (ahead of the hind wings, and outside them)
+    clear=0.47, clear_fore=0.16, clear_side=0.24,
+    # a plate: thickness, how far its front lies under the plate before it, the step at a hind margin
+    thick=0.13, tuck=0.45, step=0.3)
+# hind margins at the midline (z) and how far the margin runs back at the sides (the hind corners of the rear
+# tergites are drawn out; the nota's hind margins are longest in the middle: `sweep` < 0)
+PLATES = [
+    dict(name='meso', hind=-10.55, sweep=-0.35, step=0.2),
+    dict(name='meta', hind=-14.3, sweep=-0.3, step=0.25),
+    dict(name='T1', hind=-16.3, sweep=0.0), dict(name='T2', hind=-18.6, sweep=0.05),
+    dict(name='T3', hind=-21.0, sweep=0.1), dict(name='T4', hind=-23.4, sweep=0.18),
+    dict(name='T5', hind=-25.8, sweep=0.28), dict(name='T6', hind=-28.15, sweep=0.4),
+    dict(name='T7', hind=-30.4, sweep=0.5), dict(name='T8', hind=-31.0, sweep=0.35, step=0.18),
+    dict(name='T9', hind=-31.5, sweep=0.2, step=0.15),
+    # the supra-anal plate: two rounded lobes either side of a notch
+    dict(name='T10', hind=-34.15, sweep=-0.85, step=0.16, notch=(0.42, 0.32)),
+]
+NOTA_FRONT = -7.2             # the mesonotum's front, under the pronotum
 
 # ---- thorax (under the pronotum and the wing bases): z, half width, underside y, top y
 THORAX = [(-2.6, 1.3, 4.4, 5.6), (-3.6, 2.4, 3.8, 6.0), (-5.5, 3.2, 3.6, 6.3), (-8.0, 3.6, 3.5, 6.2),
@@ -70,7 +107,8 @@ MAX_PALP = [0.55, 0.5, 1.45, 1.25, 1.35]
 LAB_PALP = [0.5, 0.55, 0.9]
 
 # ---- cerci: base, direction, length, segments
-CERCUS = dict(base=(1.3, 4.0, -32.4), dir=(0.62, 0.1, -0.78), length=5.2, segs=15, r=0.36)
+# (they run out under the wings: rising as they did, a tip came through the right tegmen)
+CERCUS = dict(base=(1.3, 3.95, -32.4), dir=(0.62, -0.14, -0.78), rise=0.006, length=5.2, segs=15, r=0.36)
 
 # ---- legs (left side; right = mirror): coxa base on the thorax, coxa direction, segment lengths, neutral foot,
 # the tarsus' heading on the ground, knee pole, coxa swing
@@ -82,11 +120,11 @@ LEGS = {
     2: dict(hip=(2.0, 3.75, -8.6), coxa_dir=(0.55, -0.35, -0.76), coxa=4.3, coxa_w=(1.35, 0.7), coxa_t=0.48,
             femur=6.9, femur_r=(0.47, 0.76), tibia=7.8, tibia_r=(0.28, 0.37), tarsi=[2.4, 1.05, 0.8, 0.6, 1.15],
             tarsus_r=0.22, foot=(17.8, -20.0), heading=(0.62, -0.78), pole=(1.0, 0.35, 0.0), swing=0.42, lift=2.0,
-            ankle=26, femur_spines=(4, 3), tibia_rows=4, tibia_spines=4, spine_len=(1.1, 1.6)),
+            ankle=26, femur_spines=(4, 3), tibia_rows=4, tibia_spines=5, spine_len=(1.1, 1.6)),
     3: dict(hip=(2.3, 3.6, -12.2), coxa_dir=(0.45, -0.25, -0.86), coxa=5.3, coxa_w=(1.6, 0.75), coxa_t=0.52,
             femur=8.9, femur_r=(0.52, 0.86), tibia=11.6, tibia_r=(0.3, 0.42), tarsi=[3.9, 1.55, 1.1, 0.8, 1.75],
             tarsus_r=0.24, foot=(12.2, -38.6), heading=(0.45, -0.9), pole=(1.0, 0.3, 0.15), swing=0.4, lift=2.2,
-            ankle=24, femur_spines=(4, 3), tibia_rows=4, tibia_spines=6, spine_len=(1.2, 1.9)),
+            ankle=24, femur_spines=(4, 3), tibia_rows=4, tibia_spines=7, spine_len=(1.2, 1.9)),
 }
 
 # ---- gait: one cycle covers STRIDE mm of ground (1.6 m at game scale), the alternating tripod
@@ -150,13 +188,19 @@ def hind_planform(l):
     H = HIND
     inset = H['tip_inset'] * max(0.0, (l - 0.75) / 0.25) ** 2
     if l < 0.4:
+        # (a narrow stalk at the hinge: the wing's root, then the fan's lobe)
         t = l / 0.4
-        f = 0.3 + 0.7 * t * t * (3 - 2 * t)
+        f = 0.14 + 0.86 * t * t * (3 - 2 * t)
     elif l < 0.7:
         f = 1.0
     else:
         f = math.sqrt(max(0.0, 1 - ((l - 0.7) / 0.3) ** 2))
     return inset, H['chord'] * f
+
+
+def hind_across():
+    """how far a folded hind wing reaches in from its leading edge's line (mm): the width of its texture"""
+    return max(sum(hind_planform(k / 200)) for k in range(201)) + 0.02
 
 
 def wing_half_width(z):

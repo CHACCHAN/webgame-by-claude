@@ -387,7 +387,16 @@ pending. `docs/PLAN.md` holds the design.
   title's car; online peers, ghosts and the replay are drawn from poses and keep them shut). The clip's tracks on
   the wing bones are dropped at load. The flutter is `BugSound.flight(level)`. Check with
   `node tools/roach-wings.cjs <dir>` (GPU: pose sheet, a drop from 9 m in a race); the model's sheet:
-  `roach.py --wings name:open:beat,… --sheet <file>`.
+  `roach.py --wings name:open:beat,… --sheet <file>`. What the open wings show (players' reports: crude under
+  them) is `roach_dorsum.py`: mesonotum, metanotum and the tergites T1–T10 as overlapping plates just under the
+  folded wings (the build prints the three clearances in mm: all must stay above 0), mounds under the four
+  hinges, bristles as small cones (`roach_geom.bristle`: cerci, the supra-anal plate's fringe, tarsi; no
+  cut-outs, nothing see-through); the hind wing's texture is painted as the open fan (u across, v along).
+  **A bone scaled unevenly turns skinned normals wrongly** (three.js turns a normal by the bone's matrix itself,
+  not by its inverse transpose: the open fans were lit with a false gradient): the hind wings' normals are stored
+  scaled the other way (`roach.py` `fan_normals`); do the same for any part opened by a bone's scale. The eyes'
+  patch of the body atlas (`EYE_UV` in `RoachModel.ts` = `LAYOUT['eye']` in `roach_tex.py`) stays where it is
+  when the atlas is laid out anew: the headlights are found by it.
 - Rain sound (11-12; the old one was one 2 s loop of filtered noise, the same in both ears): AudioWorklet `'rain'`
   (`audio/rain.ts` + `rain.worklet.ts`, stereo, synthesised: the hillside's wash with gusts, drops around the listener,
   drops on the vehicle by kind, tyre spray by speed, drips and a muffled wash under a roof). `AudioEngine.setRain(level)`

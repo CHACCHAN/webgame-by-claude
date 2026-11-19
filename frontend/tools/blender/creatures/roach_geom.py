@@ -141,6 +141,28 @@ class Part:
                     self.face((ids[i][j], ids[i][j2], pid), (ua, ub, um))
         return ids
 
+    def plate(self, rings, uv, weight):
+        """
+        a thin closed plate: `rings` are closed loops of points (the plate's section: over the top, round the edge,
+        back underneath), lofted from the first to the last, both ends closed on their middle; uv(point) → (u, v),
+        a flat projection (the underside takes the top's texture).
+        """
+        n = len(rings[0])
+        ids = [[self.vert(p, weight) for p in ring] for ring in rings]
+        at = lambda k: uv(self.co[k])
+        for i in range(len(rings) - 1):
+            for j in range(n):
+                j2 = (j + 1) % n
+                q = (ids[i][j], ids[i][j2], ids[i + 1][j2], ids[i + 1][j])
+                self.face(q, tuple(at(k) for k in q))
+        for i in (0, len(rings) - 1):
+            pid = self.vert(np.mean(np.asarray(rings[i], float), axis=0), weight)
+            for j in range(n):
+                j2 = (j + 1) % n
+                q = (pid, ids[i][j2], ids[i][j]) if i == 0 else (ids[i][j], ids[i][j2], pid)
+                self.face(q, tuple(at(k) for k in q))
+        return ids
+
     def mirrored(self, name, weight_map):
         """the same shell mirrored across x = 0 (faces turned round), bones renamed by weight_map"""
         p = Part(name, self.mat)
@@ -148,6 +170,19 @@ class Part:
         p.w = [{weight_map.get(k, k): v for k, v in w.items()} for w in self.w]
         p.faces = [(tuple(reversed(ids)), tuple(reversed(uvs))) for ids, uvs in self.faces]
         return p
+
+
+def bristle(part, base, d, length, r0, region, weight, n=3, curve=0.1, side=(0.0, 1.0, 0.0)):
+    """a seta: a thin cone of n sides from `base` (just inside the surface) along d, bent a little towards `side`"""
+    d = unit(d)
+    X, Y, Z = frame(d, side if abs(np.dot(d, unit(side))) < 0.95 else (1.0, 0.0, 0.0))
+    th = np.arange(n) / n * 2 * math.pi
+    rows = []
+    for u, r in ((0.0, r0), (0.5, r0 * 0.6)):
+        c = np.asarray(base, float) + d * (length * u) + Z * (curve * length * u * u)
+        rows.append(c + np.outer(r * np.cos(th), X) + np.outer(r * np.sin(th), Z))
+    tip = np.asarray(base, float) + d * length + Z * (curve * length)
+    part.loft(rows, region, weight, pole0=np.asarray(base, float) - d * 0.03, pole1=tip, v_of=(0.0, 0.5))
 
 
 def tube_rows(origin, X, Y, Z, length, half_x, half_z, n_around, ts, offset=None, bulge=None):
