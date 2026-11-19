@@ -191,8 +191,8 @@ insignia). 37,932 triangles, 12 draw calls, 0.6 MB. Until the owner has seen its
 
 The **16式機動戦闘車** (`models/tanks/type16.glb`, 2026-11-19) is our own model: `frontend/tools/blender/tanks/type16.py`
 (assembly, rig checks) + `type16_shape.py` (hull, turret, gun, fittings in numbers), `type16_wheels.py` (one tyre / rim
-mesh for the eight stations), `type16_paint.py` (the atlas on the shared `tank_atlas.py` scheme: two-tone camouflage
-laid out as photographed, seams, bolts, dust), `type16_scene.py` (check renders); built by
+mesh for the eight stations), `type16_paint.py` (the atlas on the shared `tank_atlas.py` scheme with the JGSDF pair of the 10式, green #435349 / brown #645A48: two-tone
+camouflage laid out as photographed, seams, bolts, dust), `type16_scene.py` (check renders); built by
 `BLENDER=<bin> node tools/blender-models.cjs tanks type16`. Written by GPT-6.2 (astra, through Mistral Vibe) on our
 measurements; fitted to six Wikimedia Commons photos through solved cameras (measuring only, never committed; the fit
 in `tools/blender/tanks/fitdata/type16/`: annotations, cameras, masks; mean IoU 0.877, outline p95 19.6 cm).

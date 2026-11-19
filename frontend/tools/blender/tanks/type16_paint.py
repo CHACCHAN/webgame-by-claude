@@ -11,7 +11,10 @@ from tank_atlas import DEFAULT_SCHEME
 from type16_shape import AXLES, TRUN, BUSTLE_DOORS, DECK
 from type16_wheels import CY, TRACK_HALF, TREAD_COUNT
 
-BASE,GREEN,BROWN,DUST=(DEFAULT_SCHEME[k] for k in ('base','green','brown','dust'))
+# The JGSDF pair shared with the 10式 (set from a sunlit photo: brown ~1.3x the green's luminance, the green's hue);
+# the kit's DEFAULT_SCHEME brown read warm and reddish in the game.
+BASE,GREEN,BROWN,DUST=(dict(DEFAULT_SCHEME,base='#435349',green='#435349',brown='#645A48',dust='#a79778')[k]
+                       for k in ('base','green','brown','dust'))
 PALETTE = dict(bustle=GREEN, door=GREEN, plate=GREEN, cheek=BROWN, shield=GREEN, sleeve=GREEN, brake=BROWN,
                keel='#353b2c', chin='#4b4637', rib=GREEN, iron='#363a35',
                grille='#202521', rubber='#30302c', tyre='#2b2c29', tread='#2b2c29',
