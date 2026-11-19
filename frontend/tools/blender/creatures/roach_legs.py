@@ -10,7 +10,7 @@ import numpy as np
 
 import roach_anatomy as A
 import roach_rig as RG
-from roach_geom import Part, cap_ts, end_profile, frame, unit
+from roach_geom import Part, bristle, cap_ts, end_profile, frame, unit
 from roach_tex import LAYOUT, leg_rect
 
 
@@ -157,6 +157,13 @@ def build_leg(k, fr):
             reg = leg_rect(k, region, (t_a, t_b))
             seg_tube(part, (o + Y * (acc - 0.05), X, Y, Z), L + 0.12, rr, rr, reg, {bn(seg): 1.0},
                      cap0=0.1, cap1=0.12, n=8, n_mid=2, n_cap=2)
+            # the sole's bristles: pairs of short stout setae under each tarsomere, leaning towards the claws
+            if not last:
+                for s_at in ((0.22, 0.48, 0.72) if seg == 'tarsus1' else (0.5,)):
+                    for sgn in (1, -1):
+                        base = o + Y * (acc + L * s_at) + Z * (rr(s_at) * 0.55) + X * (sgn * rr(s_at) * 0.5)
+                        bristle(part, base, Z * 0.72 + X * (sgn * 0.45) + Y * 0.55, 0.36 + 0.5 * rt, 0.05,
+                                LAYOUT['spine'], {bn(seg): 1.0}, side=Y)
             # pulvillus: a pale pad under the end of tarsomeres 1–4
             if not last:
                 pc = o + Y * (acc + L * 0.78) + Z * (rr(0.8) * 0.72)

@@ -297,7 +297,9 @@ player's browser downloads it only after they said yes.
 Our own model since 2026-11-04 (`frontend/tools/blender/creatures/roach.py`: body, legs and antennae from numbers,
 skinned, with a scuttle cycle; the texture painted by the script) built by `node tools/blender-models.cjs creatures`
 into `frontend/public/models/roach/roach.glb`; scaled and tinted at runtime (`render/RoachModel.ts`). The Sketchfab
-model used before (CK / xcellf, CC BY 4.0) was removed.
+model used before (CK / xcellf, CC BY 4.0) was removed. 2026-11-18: the back under the wings (`roach_dorsum.py`:
+nota, tergites, wing roots), the hind wings' venation, bristles on cerci, tarsi and the supra-anal plate; all from
+numbers and painted by the script, no outside mesh, texture or image.
 
 ### Motorcycle models (own, Blender; 2026-11-10)
 Honda NSR250R (MC21), Kawasaki Ninja H2 and Suzuki GSX1300R 隼 (first generation), each with its rider:

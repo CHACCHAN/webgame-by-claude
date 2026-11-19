@@ -22,8 +22,13 @@ LAYOUT = {
     'tegmen_R': (0.38, 0.0, 0.70, 1.0),
     'pronotum': (0.70, 0.45, 1.0, 1.0),
     'head': (0.70, 0.0, 1.0, 0.45),
-    # roach_body
-    'abdomen': (0.0, 0.0, 0.5, 0.75),
+    # roach_body (the abdomen's patch is its venter and sides: its back lies under the tergites, see roach_body)
+    'abdomen': (0.0, 0.0, 0.5, 0.26),
+    # the back under the wings (roach_dorsum), flat projections: the two nota, and the tergites
+    'nota': (0.0, 0.26, 0.25, 0.44),
+    'tergites': (0.68, 0.6, 1.0, 1.0),
+    'root': (0.25, 0.26, 0.5, 0.35),
+    'seta': (0.25, 0.35, 0.5, 0.44),
     'thorax': (0.5, 0.0, 0.75, 0.3),
     'eye': (0.75, 0.0, 1.0, 0.15),
     'cercus': (0.75, 0.15, 1.0, 0.3),
@@ -31,8 +36,8 @@ LAYOUT = {
     'palp': (0.55, 0.3, 0.62, 1.0),
     'lpalp': (0.62, 0.3, 0.68, 1.0),
     'mouth': (0.68, 0.3, 1.0, 0.6),
-    # (both hind wings: the free strip above the abdomen's patch; the eyes' patch is told by its place, see RoachModel)
-    'hindwing': (0.0, 0.77, 0.5, 1.0),
+    # (both hind wings, across u and along v, as wide as the fan is; the eyes' patch is told by its place, see RoachModel)
+    'hindwing': (0.0, 0.44, 0.5, 1.0),
     # roach_legs
     'spine': (0.9, 0.0, 1.0, 0.5),
     'claw': (0.9, 0.5, 1.0, 0.7),
@@ -41,7 +46,8 @@ LAYOUT = {
 LEG_V = {'coxa': (0.0, 0.15), 'femur': (0.15, 0.42), 'tibia': (0.42, 0.74), 'tarsus1': (0.74, 0.85),
          'tarsus2': (0.85, 1.0)}
 ATLAS_OF = {'roach_shell': ('tegmen_L', 'tegmen_R', 'pronotum', 'head'),
-            'roach_body': ('abdomen', 'thorax', 'eye', 'cercus', 'antenna', 'palp', 'lpalp', 'mouth', 'hindwing'),
+            'roach_body': ('abdomen', 'thorax', 'eye', 'cercus', 'antenna', 'palp', 'lpalp', 'mouth', 'hindwing', 'nota',
+                           'tergites', 'root', 'seta'),
             'roach_legs': ('spine', 'claw', 'pad')}
 
 
@@ -173,30 +179,88 @@ def paint_tegmen(U, V, shape):
 
 # ---------------------------------------------------------------- hind wings
 
+def _vein(r, phi, at, width, r0=0.0, r1=1e9):
+    """a vein on the ray `at` (degrees) from the wing's base, `width` mm wide, between r0 and r1 mm out"""
+    d = r * np.radians(np.abs(phi - at))
+    return np.exp(-(d / width) ** 2) * ss(r0 - 0.6, r0 + 0.6, r) * ss(r1 + 0.6, r1 - 0.6, r)
+
+
 def paint_hindwing(U, V):
     """
-    A hind wing's membrane: smoky amber, a stiff red-brown leading edge, the fan's veins running out from the base
-    and a faint net of cross veins. U along the wing, V across it from the leading edge's line, both as it lies
-    folded (the fan is `unfold` times as wide in flight). Opaque: the game draws no see-through surfaces here.
+    A hind wing, painted as it is in flight (the fan open: `unfold` times as wide as the model has it): U across
+    from the leading edge's line, V along. The stiff front part with its veins running to the tip and the costal
+    margin (the radius and its comb of branches, media, cubitus), the fold behind it, and the fan: veins on rays
+    from the wing's base, alternately on the crests and in the furrows of its pleats, a net of cross veins between.
+    The membrane is smoky and clear in life: here it is opaque (the game draws no see-through surfaces on the
+    cockroach), painted pale with darker veins, lighter in the middle of each cell, a faint sheen of thin-film
+    colours over it, and smooth enough to glint.
     """
     H = A.HIND
-    b = U * H['length']                              # mm from the base
-    a = V * (H['chord'] + H['tip_inset'])            # mm in from the leading edge's line (folded)
-    n1 = fbm(U * 9.0, V * 5.0, 41)
-    n2 = fbm(U * 40.0, V * 22.0, 47)
-    # the fan: veins on rays from the wing's base, a little way in from the leading edge
-    ang = np.arctan2(a - 0.25, b + 1.2)
-    fan = ridge(ang, math.radians(2.6), math.radians(0.42))
-    fine = ridge(ang + math.radians(1.3), math.radians(2.6), math.radians(0.2))
-    cross = ridge(np.hypot(a - 0.25, b + 1.2), 0.9, 0.035) * (0.3 + 0.7 * (n2 > 0.5))
-    lead = np.exp(-(a / 0.3) ** 2)                   # costa and radius: the stiff front of the wing
-    h = 0.012 * fan + 0.004 * fine + 0.002 * cross + 0.02 * lead + 0.004 * (n1 - 0.5)
-    col = mix((0.6, 0.44, 0.25), (0.72, 0.56, 0.34), ss(0.2, 0.95, U))
-    col = mix(col, (0.36, 0.17, 0.08), np.clip(0.75 * fan + 0.3 * fine + 0.2 * cross, 0, 1))
-    col = mix(col, (0.4, 0.17, 0.07), ss(0.0, 1.0, lead) * 0.9)
-    col = mix(col, (0.3, 0.14, 0.07), ss(0.1, 0.0, U) * 0.7)
-    col = col * (0.94 + 0.12 * n1)[..., None]
-    rough = 0.24 + 0.05 * (n2 - 0.5) + 0.08 * fan
+    L, k = H['length'], H['unfold']
+    l = V
+    b = l * L                                           # mm from the hinge along the leading edge's line
+    a = U * A.hind_across() * k                         # mm behind that line
+    inset = H['tip_inset'] * np.clip((l - 0.75) / 0.25, 0, None) ** 2
+    t4 = np.clip(l / 0.4, 0, 1)
+    f = np.where(l < 0.4, 0.14 + 0.86 * t4 * t4 * (3 - 2 * t4),
+                 np.where(l < 0.7, 1.0, np.sqrt(np.clip(1 - ((l - 0.7) / 0.3) ** 2, 0, 1))))
+    a_le = inset * k
+    a_te = a_le + H['chord'] * f * k
+    q = a - a_le                                        # mm behind the leading edge
+    e = a_te - a                                        # mm before the trailing edge
+    db, da = b + 0.9, a - 0.7
+    r = np.hypot(db, da)
+    phi = np.degrees(np.arctan2(da, db))
+    n1 = fbm(b * 0.35, a * 0.35, 41)
+    n2 = fbm(b * 3.0, a * 3.0, 47)
+    n3 = fbm(b * 0.12, a * 0.12, 43)
+    fold = 19.5
+    fan = ss(fold - 0.6, fold + 0.6, phi)               # 1 behind the fold
+    # the front part
+    costa = np.exp(-(np.clip(q, 0, None) / 0.2) ** 2)
+    sc = _vein(r, phi, 1.4, 0.07, 0.0, 10.5)
+    rad = _vein(r, phi, 3.1, 0.11)
+    comb = ridge(b + q * 2.25, 1.7, 0.06) * ss(3.3, 2.6, phi) * ss(6.5, 8.5, r) * ss(0.05, 0.3, q)
+    media = _vein(r, phi, 6.9, 0.085) + _vein(r, phi, 8.4, 0.06, 13.0)
+    cub = (_vein(r, phi, 11.4, 0.09) + _vein(r, phi, 13.1, 0.06, 6.0) + _vein(r, phi, 14.7, 0.06, 9.0)
+           + _vein(r, phi, 16.2, 0.055, 12.0) + _vein(r, phi, 17.6, 0.05, 15.0))
+    furrow = _vein(r, phi, fold, 0.1)
+    # the fan: a vein every 2.4°, crests and furrows by turns, thinner ones between them in the outer half
+    step = 2.4
+    fa = (phi - (fold + step)) / step
+    near = np.abs(fa - np.round(fa)) * step
+    anal = np.exp(-(r * np.radians(near) / 0.075) ** 2) * fan
+    mid = np.abs(fa - 0.5 - np.round(fa - 0.5)) * step
+    inter = np.exp(-(r * np.radians(mid) / 0.045) ** 2) * fan * ss(11.0, 15.0, r)
+    tri = np.abs(((fa / 2) % 1.0) * 2 - 1) * 2 - 1     # −1 in a furrow … 1 on a crest
+    pleat = tri * fan * ss(1.5, 6.0, r)
+    # cross veins: short rungs between neighbouring veins, staggered from one cell to the next
+    cell = np.where(fan > 0.5, np.floor(fa), np.floor(phi / 1.55) + 40.0)
+    shift = np.modf(np.abs(np.sin(cell * 12.9898) * 43758.5453))[0]
+    cross = ridge(r + shift * 1.3 + 0.25 * n1, 1.3, 0.022) * ss(0.35, 0.6, n2) * (1 - 0.3 * fan)
+    strong = np.clip(costa + rad + 0.8 * (sc + media + cub) + 0.9 * anal, 0, 1)
+    fine = np.clip(0.8 * comb + 0.6 * inter + 0.3 * cross, 0, 1)
+    rim = np.exp(-(np.clip(e, 0, None) / 0.12) ** 2)
+    base = ss(1.9, 0.4, b)                              # the wing's root: small dark plates in pale membrane
+    h = (0.03 * (costa + rad) + 0.02 * (sc + media + cub) + 0.018 * anal + 0.008 * comb + 0.006 * inter
+         + 0.004 * cross - 0.03 * furrow + 0.085 * pleat + 0.01 * rim + 0.004 * (n1 - 0.5) + 0.025 * base * (n2 - 0.5))
+    # the membrane: amber in the stiff front, paler and greyer in the fan, lighter away from the veins
+    front_col = mix((0.56, 0.37, 0.18), (0.66, 0.49, 0.27), ss(0.15, 0.95, l))
+    fan_col = mix((0.72, 0.62, 0.45), (0.63, 0.53, 0.38), ss(4.5, 0.0, e))
+    col = mix(front_col, fan_col, fan)
+    col = col * (1.0 + 0.1 * (1 - np.clip(1.6 * strong + fine, 0, 1)) * (0.6 + 0.8 * n1))[..., None]
+    # thin-film colours: faint bands of rose, gold and green wandering over the membrane
+    ph = 2 * math.pi * (1.6 * n3 + 0.9 * n1 + 0.035 * r)
+    film = np.stack([np.cos(ph), np.cos(ph + 2.1), np.cos(ph + 4.2)], axis=-1)
+    col = col + film * (0.007 + 0.011 * fan)[..., None]
+    col = mix(col, (0.3, 0.13, 0.06), np.clip(0.92 * strong, 0, 1))
+    col = mix(col, (0.36, 0.18, 0.09), fine * 0.75 * (1 - strong))
+    col = mix(col, (0.42, 0.26, 0.14), 0.5 * rim * (1 - strong))
+    col = mix(col, (0.5, 0.36, 0.2), 0.35 * furrow)
+    plates = ss(0.42, 0.66, fbm(b * 1.3, a * 1.3, 49))
+    col = mix(col, mix((0.7, 0.52, 0.31), (0.33, 0.15, 0.07), plates), base * 0.9)
+    col = col * (0.95 + 0.1 * n2)[..., None]
+    rough = 0.2 + 0.05 * (n2 - 0.5) + 0.16 * strong + 0.08 * fine + 0.2 * base
     return col, h, rough
 
 
@@ -326,33 +390,161 @@ def paint_thorax(U, V):
 
 
 def paint_abdomen(U, V):
+    """the abdomen's tube: the sternites underneath, the pleural membranes with the spiracles along the sides"""
     import roach_body as RB
-    zs, _ = RB.abdomen_zs()
     z_front, z_tip = A.ABDOMEN[0][0], A.ABDOMEN[-1][0]
     z = z_front - V * (z_front - z_tip)
     edges = np.array([z_front + 0.4] + A.STERNITES + [z_tip + 0.9])
-    # position inside the segment (0 front, 1 rear edge), bent forward at the sides as the plates are
-    th = math.pi / 2 + U * 2 * math.pi
+    # the way round (0 the top, 0.5 the keel); position inside the segment (0 front, 1 rear edge), bent forward at
+    # the sides as the plates are
+    W = RB.abdomen_unwarp(U)
+    th = math.pi / 2 + W * 2 * math.pi
     side = np.abs(np.cos(th))
     zz = z - 0.55 * side ** 2 * np.where(np.sin(th) < 0, 1.0, 0.6)
     k = np.clip(np.searchsorted(-edges, -zz) - 1, 0, len(edges) - 2)
     za, zb = edges[k], edges[k + 1]
     s = np.clip((za - zz) / (za - zb), 0, 1)
     ventral = ss(0.0, 0.6, -np.sin(th))
-    n1 = fbm(U * 20, V * 12, 81)
-    n2 = fbm(U * 90, V * 50, 83)
+    n1 = fbm(W * 20, V * 12, 81)
+    n2 = fbm(W * 90, V * 50, 83)
     plate = mix((0.36, 0.14, 0.07), (0.55, 0.23, 0.1), ss(0.05, 0.3, s))
     plate = mix(plate, (0.74, 0.45, 0.22), ss(0.8, 0.97, s) * 0.8)
     col = mix((0.3, 0.13, 0.07), plate, 0.35 + 0.65 * ventral)
+    # the pleural membrane between the tergites' margins and the sternites': pale, in lengthwise folds
+    pleura = ss(-0.22, 0.0, np.sin(th)) * ss(0.62, 0.3, np.sin(th))
+    folds = np.sin(W * 2 * math.pi * 46 + 3.0 * fbm(W * 8, V * 30, 87))
+    col = mix(col, mix((0.62, 0.42, 0.24), (0.76, 0.58, 0.36), 0.5 + 0.5 * folds), pleura * 0.85)
     col = col * (0.9 + 0.2 * n1)[..., None]
-    # spiracles on the sides
+    # spiracles on the sides: a dark slit in a brown ring, one to a segment
+    spir = np.zeros(U.shape)
+    ring = np.zeros(U.shape)
     for sgn in (1, -1):
-        uu = 0.5 + sgn * 0.25
-        d = np.hypot((U - uu) * 40, (s - 0.35) * 6)
-        col = mix(col, (0.08, 0.04, 0.03), ss(0.6, 0.35, d) * (k < len(edges) - 2))
-    h = 0.03 * ss(0.0, 0.9, s) - 0.025 * ss(0.06, 0.0, s) + 0.004 * (n2 - 0.5) + 0.006 * np.sin(s * 40) * (s < 0.2)
-    rough = 0.38 + 0.12 * ss(0.12, 0.0, s) + 0.04 * (n1 - 0.5)
+        uu = 0.5 + sgn * 0.265
+        d = np.hypot((W - uu) * 55, (s - 0.35) * 5.5)
+        spir = np.maximum(spir, ss(0.5, 0.3, d) * (k < len(edges) - 2))
+        ring = np.maximum(ring, ss(1.0, 0.75, d) * (k < len(edges) - 2))
+    col = mix(col, (0.4, 0.2, 0.1), ring * 0.8)
+    col = mix(col, (0.06, 0.03, 0.025), spir)
+    h = (0.03 * ss(0.0, 0.9, s) - 0.025 * ss(0.06, 0.0, s) + 0.004 * (n2 - 0.5) + 0.006 * np.sin(s * 40) * (s < 0.2)
+         + 0.012 * folds * pleura + 0.015 * ring - 0.03 * spir)
+    rough = 0.38 + 0.12 * ss(0.12, 0.0, s) + 0.04 * (n1 - 0.5) + 0.14 * pleura
     return col, h, rough
+
+
+def _back_surface(x, z, u, s, mm, me, seed):
+    """what all the plates of the back share: the cuticle's grain, the sockets of fine setae, the setae lying
+    backwards along the hind margins and the sides, the raised rim of the lateral margin and the groove inside it"""
+    import roach_dorsum as RD
+    hw = RD.half(z)
+    n1 = fbm(x * 1.6, z * 1.6, seed)
+    n2 = fbm(x * 9.0, z * 9.0, seed + 2)
+    pits = ss(0.7, 0.8, fbm(x * 15.0, z * 15.0, seed + 4))
+    hair = ss(0.62, 0.76, fbm(x * 24.0, z * 3.4, seed + 6)) * np.clip(ss(0.9, 0.2, me) + ss(0.8, 0.95, u), 0, 1)
+    edge = (1 - u) * hw                                  # mm inside the lateral margin
+    rim = np.exp(-(edge / 0.11) ** 2)
+    groove = np.exp(-((edge - 0.42) / 0.1) ** 2)
+    striae = np.sin(z * 2 * math.pi / 0.085 + 5.0 * n1)   # the cuticle's fine cross ridges
+    bead = np.exp(-((me - 0.13) / 0.11) ** 2)            # the hind margin's thickened edge
+    wrinkle = np.sin(mm * 2 * math.pi / 0.12 + 2.0 * n2) * ss(0.45, 0.1, mm)   # the membrane it comes out of
+    h = (0.02 * ss(0.0, 0.6, mm) + 0.028 * bead + 0.006 * wrinkle + 0.0022 * striae + 0.005 * (n1 - 0.5) + 0.003 * (n2 - 0.5)
+         - 0.008 * pits + 0.006 * hair + 0.022 * rim - 0.016 * groove - 0.005 * np.exp(-(x / 0.12) ** 2))
+    return n1, n2, pits, hair, rim, groove, bead, h
+
+
+def paint_tergites(U, V):
+    """
+    The abdomen's back: tergites 1–9 and the supra-anal plate, a flat projection (roach_dorsum TERG_BOX). Each
+    plate comes out pale from under the one before it (the membrane between them shows as a pale band), is
+    chestnut over its middle with the pits where muscles hold on, and ends in a dark hind margin with a thin clear
+    edge; darker towards the sides and along the heart's line down the middle.
+    """
+    import roach_dorsum as RD
+    x0, x1, z0, z1 = RD.TERG_BOX
+    x = x0 + U * (x1 - x0)
+    z = z0 + V * (z1 - z0)
+    k, s, mm, me, u = RD.plate_of(x, z)
+    n1, n2, pits, hair, rim, groove, bead, h = _back_surface(x, z, u, s, mm, me, 131)
+    last = k == RD.N_PLATES - 1
+    col = mix((0.38, 0.155, 0.07), (0.5, 0.215, 0.095), n1)
+    col = mix(col, (0.56, 0.3, 0.135), ss(0.42, 0.05, mm) * 0.45)
+    col = mix(col, (0.8, 0.62, 0.4), ss(0.1, 0.0, mm) * 0.6)
+    col = mix(col, (0.26, 0.11, 0.06), 0.3 * np.exp(-(x / 0.45) ** 2))
+    col = mix(col, (0.24, 0.1, 0.05), ss(0.78, 1.0, u) * 0.5)
+    col = mix(col, (0.2, 0.085, 0.045), ss(0.6, 0.15, me) * 0.7)
+    col = mix(col, (0.5, 0.27, 0.12), ss(0.06, 0.0, me) * 0.6)
+    # where the muscles hold on: two pairs of small pits in a row across each tergite
+    scars = np.zeros(x.shape)
+    hw = RD.half(z)
+    for uc in (0.2, 0.52):
+        d = np.hypot((u - uc) * hw / 0.17, (s - 0.42) * 8.0)
+        scars = np.maximum(scars, ss(1.0, 0.4, d))
+    scars = scars * (k >= 2) * (k <= 8)
+    col = mix(col, (0.27, 0.11, 0.06), scars * 0.6)
+    # the supra-anal plate: thin and clear, amber towards its lobes
+    col = mix(col, (0.74, 0.5, 0.24), last * ss(0.2, 0.85, s) * 0.85)
+    col = mix(col, (0.3, 0.14, 0.07), pits * 0.3)
+    col = mix(col, (0.8, 0.6, 0.36), hair * 0.2)
+    col = col * (0.9 + 0.2 * n2)[..., None]
+    h = h - 0.014 * scars
+    rough = 0.27 + 0.24 * ss(0.4, 0.05, mm) + 0.06 * pits + 0.05 * hair + 0.04 * (n2 - 0.5) + 0.05 * last
+    return col, h, rough
+
+
+def paint_nota(U, V):
+    """
+    The mesonotum and the metanotum (roach_dorsum NOTA_BOX): paler and duller than the abdomen's plates, each with
+    its median line, the two domed lobes of the scutum, the V of the furrow that sets the scutellum off behind
+    them, darker where the wings' muscles sit, pale membrane at the sides where the wings are hinged.
+    """
+    import roach_dorsum as RD
+    x0, x1, z0, z1 = RD.NOTA_BOX
+    x = x0 + U * (x1 - x0)
+    z = z0 + V * (z1 - z0)
+    k, s, mm, me, u = RD.plate_of(x, z)
+    n1, n2, pits, hair, rim, groove, bead, h = _back_surface(x, z, u, s, mm, me, 141)
+    hw = RD.half(z)
+    # the V: from the middle of the plate back and out to its hind corners
+    v_at = 0.5 + 0.42 * u
+    vee = np.exp(-(((s - v_at) * 3.6) / 0.11) ** 2) * ss(0.02, 0.1, u) * ss(1.0, 0.85, u)
+    scutellum = ss(v_at - 0.02, v_at + 0.06, s)
+    lobe = np.exp(-(((u - 0.45) / 0.3) ** 2 + ((s - 0.3) / 0.28) ** 2))
+    median = np.exp(-(x / 0.09) ** 2)
+    col = mix((0.5, 0.29, 0.13), (0.62, 0.4, 0.19), n1)
+    col = mix(col, (0.34, 0.15, 0.07), lobe * 0.75)
+    col = mix(col, (0.42, 0.19, 0.085), scutellum * 0.6)
+    col = mix(col, (0.74, 0.54, 0.3), ss(0.5, 0.05, mm) * 0.6)
+    col = mix(col, (0.2, 0.09, 0.05), vee * 0.7)
+    col = mix(col, (0.74, 0.56, 0.32), median * 0.5 * (1 - scutellum))
+    col = mix(col, (0.17, 0.075, 0.045), ss(0.55, 0.15, me) * 0.85)
+    # the sides: pale membrane with the small dark plates of the wing's base
+    memb = ss(0.74, 0.92, u)
+    plates = ss(0.42, 0.66, fbm(x * 1.5, z * 1.5, 149))
+    col = mix(col, mix((0.7, 0.52, 0.31), (0.34, 0.155, 0.075), plates), memb * 0.8)
+    col = mix(col, (0.8, 0.6, 0.36), hair * 0.25)
+    col = col * (0.9 + 0.2 * n2)[..., None] * (1 - 0.25 * pits)[..., None]
+    h = h + 0.03 * lobe - 0.024 * vee + 0.014 * scutellum - 0.01 * median + 0.012 * memb * (plates - 0.5)
+    rough = 0.36 + 0.14 * ss(0.4, 0.05, mm) + 0.1 * memb - 0.06 * lobe + 0.05 * pits + 0.04 * (n2 - 0.5)
+    return col, h, rough
+
+
+def paint_root(U, V):
+    """a mound a wing is hinged on (U round it, V from its foot to its top): dark plates in pale, wrinkled membrane"""
+    n1 = fbm(U * 14, V * 6, 151)
+    n2 = fbm(U * 40, V * 18, 153)
+    plates = ss(0.4, 0.62, fbm(U * 5, V * 2.5, 151)) * ss(0.4, 0.7, V)
+    col = mix((0.68, 0.5, 0.3), (0.32, 0.145, 0.07), np.clip(plates + ss(0.8, 0.95, V), 0, 1))
+    col = col * (0.9 + 0.2 * n2)[..., None]
+    wr = np.sin(V * 2 * math.pi * 9 + 4 * n1)
+    h = 0.03 * plates + 0.008 * wr * (1 - plates) + 0.004 * (n2 - 0.5)
+    rough = 0.5 - 0.16 * plates + 0.04 * (n2 - 0.5)
+    return col, h, rough
+
+
+def paint_seta(U, V):
+    """a bristle: dark at its socket, golden towards its tip"""
+    n1 = fbm(U * 5, V * 14, 161)
+    col = mix((0.32, 0.15, 0.07), (0.74, 0.52, 0.27), ss(0.05, 0.8, V)) * (0.92 + 0.16 * n1)[..., None]
+    return col, 0.002 * (n1 - 0.5), np.full(U.shape, 0.36, np.float32)
 
 
 def _annuli(s):
@@ -410,7 +602,10 @@ def paint_cercus(U, V):
     j = RB.cercus_joints(1)
     d = np.concatenate([[0.0], np.cumsum([np.linalg.norm(b - a) for a, b in zip(j[:-1], j[1:])])])
     col, h, r = _segments_paint(U, V, d / d[-1], (0.58, 0.29, 0.13), (0.3, 0.14, 0.07), 111, hairs=1.0)
-    return col, h, r
+    # the sockets of its bristles: dark pits in pale rings, a whorl to each segment
+    pits = ss(0.66, 0.76, fbm(U * 9, V * 60, 113))
+    col = col * (1 - 0.3 * pits)[..., None]
+    return col, h - 0.006 * pits, r + 0.06 * pits
 
 
 def paint_mouth(U, V):
@@ -461,8 +656,13 @@ def paint_leg(U, V, k, seg):
     pits = ss(0.68, 0.78, n2)
     col = col * (1 - 0.25 * pits)[..., None]
     carina = np.abs(np.sin(U * 2 * math.pi * 4))
-    h = 0.006 * carina ** 4 - 0.008 * pits + 0.004 * (n1 - 0.5) - 0.02 * (ss(0.04, 0.0, V) + ss(0.96, 1.0, V))
-    rough = 0.4 + 0.06 * (n1 - 0.5) + 0.05 * pits
+    # fine setae lying along the segment (short pale streaks, raised), thickest on the tibia and the tarsus
+    hair = ss(0.6, 0.75, fbm(U * circ * 16, V * length * 2.6, seed + 5)) * ss(0.35, 0.6, fbm(U * circ * 5, V * length * 5, seed + 7))
+    hair = hair * {'coxa': 0.5, 'femur': 0.6}.get(seg, 1.0)
+    col = mix(col, (0.86, 0.66, 0.4), hair * 0.3)
+    h = (0.006 * carina ** 4 - 0.008 * pits + 0.004 * (n1 - 0.5) - 0.02 * (ss(0.04, 0.0, V) + ss(0.96, 1.0, V))
+         + 0.007 * hair)
+    rough = 0.4 + 0.06 * (n1 - 0.5) + 0.05 * pits + 0.05 * hair
     return col, h, rough
 
 
@@ -587,7 +787,12 @@ def build_materials(out_dir, wings, sizes):
     # body
     at = Atlas('roach_body', sizes['body'])
     z_front, z_tip = A.ABDOMEN[0][0], A.ABDOMEN[-1][0]
-    at.region(LAYOUT['abdomen'], paint_abdomen, (34.0, z_front - z_tip))
+    import roach_dorsum as RD
+    at.region(LAYOUT['abdomen'], paint_abdomen, (34.0 * (1 - 2 * RB.ABD_HIDDEN) / (1 - 2 * RB.ABD_HIDDEN_U), z_front - z_tip))
+    for key, painter, box in (('nota', paint_nota, RD.NOTA_BOX), ('tergites', paint_tergites, RD.TERG_BOX)):
+        at.region(LAYOUT[key], painter, (box[1] - box[0], box[3] - box[2]))
+    at.region(LAYOUT['root'], paint_root, (3.6, 0.9))
+    at.region(LAYOUT['seta'], paint_seta, (0.3, 0.7))
     at.region(LAYOUT['thorax'], paint_thorax, (20.0, 11.0))
     at.region(LAYOUT['eye'], lambda U, V: paint_eye(U, V, (3.6, 2.8)), (3.6, 2.8))
     at.region(LAYOUT['cercus'], paint_cercus, (1.6, A.CERCUS['length']))
@@ -595,7 +800,7 @@ def build_materials(out_dir, wings, sizes):
     at.region(LAYOUT['palp'], lambda U, V: paint_palp(U, V, A.MAX_PALP), (1.1, sum(A.MAX_PALP)))
     at.region(LAYOUT['lpalp'], lambda U, V: paint_palp(U, V, A.LAB_PALP), (0.8, sum(A.LAB_PALP)))
     at.region(LAYOUT['mouth'], paint_mouth, (6.0, 2.0))
-    at.region(LAYOUT['hindwing'], paint_hindwing, (A.HIND['length'], A.HIND['chord'] + A.HIND['tip_inset']))
+    at.region(LAYOUT['hindwing'], paint_hindwing, (A.hind_across() * A.HIND['unfold'], A.HIND['length']))
     mats['roach_body'] = material('roach_body', *at.images(out_dir, sizes.get('mr')))
     # legs
     at = Atlas('roach_legs', sizes['legs'])

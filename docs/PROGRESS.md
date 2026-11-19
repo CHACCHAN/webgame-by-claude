@@ -2480,3 +2480,17 @@ re-derived. Japan's MoD pages could not be read by the agent (403): those figure
 Verified here: tsc, vitest 285 (switch off and `TANKS=1`). Not found anywhere: track contact lengths, pivot rates,
 elevation rates, the M1's reverse speed.
 
+## v2.6.10 (11-19): the cockroach's back under the wings (two players' reports DYA8QN, CFYXNJ)
+
+Merged `roach-dorsum` (`2d1ab1c`): `tools/blender/creatures/roach_dorsum.py` (mesonotum, metanotum, tergites T1-T10 as
+overlapping plates, supra-anal plate), wing roots, the hind wings' fan painted with veins, setae on cerci / plate /
+tergite corners / tarsi, one more tibial spine a row; the open fans' normals stored pre-scaled (the hind bone is
+scaled x3.6 and three.js turns a skinned normal by the bone's matrix: they were lit with a false gradient).
+36,872 -> 46,138 triangles, 4 draw calls as before, GLB 0.95 -> 1.24 MB. `thumbs.cjs` waits for a model still loading.
+Verified on the merged tree: tsc, vitest 285, build, `gpu-errors.cjs` with the roach on WebGPU and WebGL 2 (0), one
+race picture; by the agent: `roach-wings.cjs` and `paint-drawn.cjs roach` on both backends, pose sheets, before /
+after sheet (`~/.local/opt/wt/roach2/sheets/roach.jpg`, sent to the owner).
+Not verified: quality low / medium, phones, upscaler, rain, frame cost (+9k triangles in the same draw calls).
+Known, old: the mid / hind knees come through the open hind wings on the down-stroke; a wing case passes the
+pronotum's hind corner. Next step proposed: a tucked-leg flight pose.
+

@@ -110,10 +110,12 @@ async function render(browser, ids) {
   });
   const state = () => page.evaluate(() => ({ n: window.__game.__frames, pos: window.__game.camera.position.toArray().map((x) => x.toFixed(4)).join() }));
   for (const id of ids) {
+    // a model that is not loaded yet comes behind the menus: the garage shows the vehicle only once it is there
+    await page.evaluate((vid) => window.__game.showGarage(vid), id);
+    await page.waitForFunction((vid) => window.__game.garageCar && window.__game.garageCar.spec.id === vid, id, { timeout: 120000 });
     const kind = await page.evaluate(
       ([vid, views]) => {
         const g = window.__game;
-        g.showGarage(vid);
         const spec = g.garageCar.spec;
         const k = spec.train ? 'train' : spec.creature ? 'creature' : spec.bike ? 'bike' : spec.tank ? 'tank' : spec.jet ? 'jet' : 'car';
         const v = views[k];

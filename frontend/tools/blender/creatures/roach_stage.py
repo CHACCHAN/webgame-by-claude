@@ -25,6 +25,14 @@ VIEWS = {
     'wings_front': ((0.0, 22.0, 150.0), (0.0, 9.0, -10.0), 50),
     'wings_rear34': ((-85.0, 60.0, -110.0), (0.0, 7.0, -14.0), 45),
     'wings_side': ((150.0, 14.0, -15.0), (0.0, 8.0, -15.0), 50),
+    # what the wings uncover (players' reports: the back under the open wings was crude): as the game's chase camera
+    # sees the cockroach in the air (behind and above), the back from close by, from straight above, and the tail
+    'chase': ((0.0, 40.0, -112.0), (0.0, 6.0, -14.0), 50),
+    'dorsum': ((-24.0, 40.0, -62.0), (0.0, 5.0, -20.0), 62),
+    'dorsum_top': ((0.0, 150.0, -21.0), (0.0, 0.0, -21.0), 110),
+    'hinge': ((30.0, 26.0, -30.0), (2.5, 6.5, -11.5), 85),
+    'tail': ((-16.0, 17.0, -52.0), (0.0, 4.2, -31.5), 85),
+    'nota': ((0.0, 46.0, -34.0), (0.0, 6.0, -11.0), 120),
     # like the reference photos: Alex Wild's dorsal (25859665686) and oblique (25765232092) shots
     'match_top': ((0.0, 260.0, -19.0), (0.0, 0.0, -19.0), 60),
     'match_34': ((95.0, 85.0, -35.0), (0.0, 3.0, -18.0), 60),
