@@ -4,6 +4,7 @@ import { loadCarTemplates } from './carAssets';
 import { loadBikeModels } from './BikeModel';
 import { loadJetModel } from './JetModel';
 import { loadRoachModel } from './RoachModel';
+import { loadTankModel } from './TankModel';
 import { loadTrainModel } from './TrainModel';
 
 /**
@@ -30,6 +31,8 @@ const fetchModel = (id: CarId): Promise<unknown> => {
       // the base model and the liveries that are models of their own (the two-seaters); a missing file leaves the
       // base model or the procedural stand-in
       return Promise.all([id as string, ...(CAR_SPECS[id].jet?.liveries ?? []).flatMap((l) => (l.variant ? [`${id}-${l.variant}`] : []))].map(loadJetModel));
+    case 'tank':
+      return loadTankModel(id);
     default:
       // built in code
       return Promise.resolve();
