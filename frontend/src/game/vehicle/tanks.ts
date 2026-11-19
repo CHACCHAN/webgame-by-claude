@@ -368,8 +368,13 @@ const TANKS: TankDef[] = [
       pivotRate: 30,
       reverseSpeed: 31,
       sound: 'diesel',
-      // 9.67 m over the gun (KNDS), hull 7.72 m, 3.76 m wide: the muzzle 9.67 − 7.72 / 2 = 5.81 m ahead of the middle
-      dims: { hull: [7.72, 3.76, 1.4], turretZ: 0.4, ringY: 1.95, barrel: 3.81, trunnion: 0.4, trunnionZ: 1.6, turret: [5.0, 3.6, 0.85] },
+      // From our model (2026-11-19; fitted to four Commons photographs through solved cameras, the origin the middle of
+      // the road wheels): the muzzle 5.69 m ahead of the middle, the hull rear at z −4.13 (the photos: −4.12…−4.20),
+      // 9.82 m over the gun (published: 9.67 by the maker, 9.97 elsewhere); ring z 0.40 / y 1.70, trunnions 0.42 above and 1.08
+      // ahead (2.12 m up), barrel 4.21. The sight head is the model's EMES 15 window on the roof's right front, 0.40 m
+      // above and 0.86 m right of the bore (the fire control converges the bore on its line at the lased range).
+      dims: { hull: [7.72, 3.76, 1.4], turretZ: 0.4, ringY: 1.7, barrel: 4.21, trunnion: 0.42, trunnionZ: 1.08, turret: [5.0, 3.6, 0.85], sight: [-0.86, 0.816, 1.035] },
+      trackV: 1.48,
       camo: ['#3f4a33', '#5a4632'],
       figures: { engine: 'MTU MB 873 Ka-501 V型12気筒ツインターボディーゼル 47.6L', power: '1,500 PS / 2,600 rpm', weight: '59.5 t', topSpeed: 70, crew: 4, transmission: 'Renk HSWL 354（前進4段・後進2段）' },
       estimated: ['変速比', '装填時間', '俯仰速度', '照準具の低倍率', '超信地旋回の速さ'],
