@@ -1,7 +1,12 @@
 {
- "_note": "Hand overrides for mask.py (fitdata/tools/mask.py): ign = not judged (people, other vehicles, roof clutter, antennas), hand = outlined by hand, cut = certainly not tank. Pixel coordinates of the 1920-px photos (ref/list.json). p01: camouflage against the field defeats GrabCut, so the whole tank is outlined by hand (two boxes: the roof above y 528 / 515 is not judged: boxes, the commander's head, MG mount, antennas). p03: the shadowed ground between the road wheels reads as tank to GrabCut: the strip under y 592 is not judged. p01 third hand box: the daylight under the bustle (x 1250-1360; aft of it the gap is dark tank, not background).",
+ "_note": "tools/handmask.py (conductor 11-19: gate masks from hand hints only, never seeded by the model). Photos in ~/.local/opt/carfit/tanks/leopard2a5/ref (ref/list.json). Taken over from maskcfg.json (whose GrabCut was seeded by the model): its cut polygons are bg here, its ign boxes stay, its hand outlines stay, and the ground band under the tracks that maskcfg derived from the model lowest line is a fixed ign box from the photo. p01 is outlined by hand throughout. p03: the daylight under the wedge shows the tank 0176 behind (bg polygon, read off the photo zoomed).",
  "p01": {
-  "low": 0.0,
+  "rect": [
+   80,
+   515,
+   1810,
+   950
+  ],
   "ign": [
    [
     690,
@@ -20,26 +25,6 @@
     940,
     1920,
     1285
-   ]
-  ],
-  "cut": [
-   [
-    [
-     0,
-     0
-    ],
-    [
-     1920,
-     0
-    ],
-    [
-     1920,
-     1285
-    ],
-    [
-     0,
-     1285
-    ]
    ]
   ],
   "hand": [
@@ -773,32 +758,16 @@
      ]
     ]
    ]
-  ],
-  "_note": " Entries 4-7 (r03 review): the ground under the gun in front of the turret lower front (the first outline held it as tank) and the two daylight strips under the wedge (u 630-722, v 676-687); the daylight slits under the bustle aft of the window (v 638-641 to u 1500, v 627-632 at u 1497-1538)."
+  ]
  },
  "p03": {
-  "ign": [
-   [
-    1490,
-    300,
-    1720,
-    680
-   ],
-   [
-    1490,
-    272,
-    1920,
-    345
-   ],
-   [
-    290,
-    592,
-    1490,
-    660
-   ]
+  "rect": [
+   85,
+   80,
+   1920,
+   660
   ],
-  "low": 0.04,
-  "cut": [
+  "bg": [
    [
     [
      460,
@@ -884,26 +853,175 @@
      185,
      309
     ]
+   ],
+   [
+    [
+     1722,
+     350
+    ],
+    [
+     1920,
+     350
+    ],
+    [
+     1920,
+     660
+    ],
+    [
+     1722,
+     660
+    ]
+   ],
+   [
+    [
+     1252,
+     336
+    ],
+    [
+     1300,
+     321
+    ],
+    [
+     1350,
+     306
+    ],
+    [
+     1410,
+     295
+    ],
+    [
+     1486,
+     291
+    ],
+    [
+     1486,
+     341
+    ],
+    [
+     1252,
+     341
+    ]
+   ]
+  ],
+  "ign": [
+   [
+    1490,
+    300,
+    1720,
+    680
+   ],
+   [
+    1490,
+    272,
+    1920,
+    345
+   ],
+   [
+    290,
+    592,
+    1490,
+    660
+   ],
+   [
+    0,
+    655,
+    1920,
+    779
+   ]
+  ],
+  "fg": [
+   [
+    [
+     150,
+     350
+    ],
+    [
+     1280,
+     350
+    ],
+    [
+     1280,
+     470
+    ],
+    [
+     150,
+     470
+    ]
+   ],
+   [
+    [
+     340,
+     215
+    ],
+    [
+     980,
+     215
+    ],
+    [
+     980,
+     300
+    ],
+    [
+     340,
+     300
+    ]
+   ],
+   [
+    [
+     1190,
+     195
+    ],
+    [
+     1300,
+     205
+    ],
+    [
+     1300,
+     255
+    ],
+    [
+     1190,
+     255
+    ]
+   ],
+   [
+    [
+     1300,
+     210
+    ],
+    [
+     1400,
+     232
+    ],
+    [
+     1400,
+     250
+    ],
+    [
+     1300,
+     250
+    ]
+   ],
+   [
+    [
+     1480,
+     248
+    ],
+    [
+     1840,
+     242
+    ]
    ]
   ]
  },
  "p08": {
-  "ign": [
-   [
-    1360,
-    400,
-    1425,
-    482
-   ],
-   [
-    830,
-    740,
-    1400,
-    870
-   ]
+  "rect": [
+   120,
+   115,
+   1920,
+   870
   ],
-  "low": 0.06,
-  "cut": [
+  "bg": [
    [
     [
      0,
@@ -1105,31 +1223,101 @@
     ]
    ]
   ],
-  "_note": " Cut 3 (r03 review) now follows the gun barrel lower edge 5 px below it: the old line left a 20-40 px band of garage door under the barrel as tank."
- },
- "p12": {
   "ign": [
    [
-    730,
-    190,
-    900,
-    300
+    1360,
+    400,
+    1425,
+    482
    ],
    [
-    1500,
-    420,
-    1620,
-    780
+    830,
+    740,
+    1400,
+    870
    ],
    [
-    1250,
-    380,
-    1500,
-    480
+    0,
+    860,
+    1920,
+    1020
    ]
   ],
-  "low": 0.03,
-  "cut": [
+  "fg": [
+   [
+    [
+     180,
+     440
+    ],
+    [
+     600,
+     470
+    ],
+    [
+     600,
+     580
+    ],
+    [
+     180,
+     560
+    ]
+   ],
+   [
+    [
+     680,
+     540
+    ],
+    [
+     1500,
+     540
+    ],
+    [
+     1500,
+     600
+    ],
+    [
+     680,
+     600
+    ]
+   ],
+   [
+    [
+     460,
+     240
+    ],
+    [
+     1120,
+     240
+    ],
+    [
+     1120,
+     370
+    ],
+    [
+     460,
+     370
+    ]
+   ],
+   [
+    [
+     1420,
+     262
+    ],
+    [
+     1820,
+     197
+    ]
+   ]
+  ]
+ },
+ "p12": {
+  "rect": [
+   50,
+   50,
+   1890,
+   790
+  ],
+  "bg": [
    [
     [
      1490,
@@ -1242,6 +1430,152 @@
     [
      810,
      105
+    ]
+   ],
+   [
+    [
+     50,
+     50
+    ],
+    [
+     635,
+     50
+    ],
+    [
+     635,
+     200
+    ],
+    [
+     590,
+     270
+    ],
+    [
+     400,
+     282
+    ],
+    [
+     220,
+     322
+    ],
+    [
+     205,
+     400
+    ],
+    [
+     60,
+     410
+    ],
+    [
+     50,
+     410
+    ]
+   ],
+   [
+    [
+     945,
+     50
+    ],
+    [
+     1890,
+     50
+    ],
+    [
+     1890,
+     300
+    ],
+    [
+     1700,
+     308
+    ],
+    [
+     1450,
+     312
+    ],
+    [
+     1300,
+     290
+    ],
+    [
+     1150,
+     268
+    ],
+    [
+     945,
+     250
+    ]
+   ]
+  ],
+  "ign": [
+   [
+    730,
+    190,
+    900,
+    300
+   ],
+   [
+    1500,
+    420,
+    1620,
+    780
+   ],
+   [
+    1250,
+    380,
+    1500,
+    480
+   ],
+   [
+    0,
+    786,
+    1920,
+    961
+   ]
+  ],
+  "fg": [
+   [
+    [
+     110,
+     460
+    ],
+    [
+     1300,
+     460
+    ],
+    [
+     1300,
+     590
+    ],
+    [
+     110,
+     590
+    ]
+   ],
+   [
+    [
+     260,
+     310
+    ],
+    [
+     1150,
+     310
+    ],
+    [
+     1150,
+     410
+    ],
+    [
+     260,
+     410
+    ]
+   ],
+   [
+    [
+     1420,
+     345
+    ],
+    [
+     1860,
+     333
     ]
    ]
   ]
