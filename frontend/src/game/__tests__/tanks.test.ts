@@ -14,7 +14,7 @@ import { CAR_SPECS } from '../vehicle/carSpecs';
 import { TANK_ORDER, TANK_SPECS } from '../vehicle/tanks';
 import { RIVAL, SHELL_LIFE, SHELL_REACH, Shells, newShell, spent, stepShell, type Impact, type ShellWorld } from '../weapons/ballistics';
 import { Gunnery, type GunneryHost } from '../weapons/Gunnery';
-import { BATTLE_RANGE, GRAVITY, GunControl, dirOf, dragOf, dropAt, flightTime, gunPose, hullAngles, layGun, newGun, recoilOf, sightEye, superelevation } from '../weapons/gun';
+import { BATTLE_RANGE, GRAVITY, GunControl, dirOf, dragOf, dropAt, flightTime, gunPose, hullAngles, layGun, newGun, recoilOf, sightEye, sightOf, superelevation } from '../weapons/gun';
 
 // The tanks' guns are checked here whether the tanks are released or not (the lists a player sees leave them out
 // until then).
@@ -153,20 +153,60 @@ describe('laying the gun', () => {
     expect(c2.world.pitch / RAD).toBeCloseTo(c2.info.elevation[1] - 40, 4);
     // back to the front, once the gun has come round to the sight
     for (let t = 0; t < 3; t += DT) c.step(DT, q, { dYaw: 0, dPitch: 0, stabilised: true, recentre: false });
-    expect(c.gun.yaw / RAD).toBeCloseTo(50, 6);
+    // (the turret on the sight's bearing, turned in by the convergence on the line of sight at the range)
+    expect((c.gun.yaw - c.lay.yaw) / RAD).toBeCloseTo(50, 6);
+    expect(Math.abs(c.lay.yaw)).toBeLessThan(0.002);
     c.step(DT, q, { dYaw: 0, dPitch: 0, stabilised: true, recentre: true });
     expect(c.sight.yaw).toBe(0);
     // the gun follows at its rate: it is off its line until it has come round
     expect(c.off).toBeGreaterThan(0.3);
     for (let t = 0; t < 3; t += DT) c.step(DT, q, { dYaw: 0, dPitch: 0, stabilised: false, recentre: false });
     expect(c.off).toBeLessThan(1e-6);
-    // laid above the line of sight by the superelevation for the range the fire control has
+    // laid on the point of the line of sight at the range the fire control has (the head is above the bore: the
+    // gun is raised by the angle that makes over the range), plus the superelevation for that range
     expect(c.range).toBe(BATTLE_RANGE);
-    expect(c.gun.pitch).toBeCloseTo(superelevation(c.info, BATTLE_RANGE), 9);
+    const head = sightOf(c.spec.tank!), d = c.spec.tank!.dims;
+    const converge = (r: number) => Math.atan2(head[1] - d.trunnion, r + head[2] - d.trunnionZ);
+    expect(c.gun.pitch).toBeCloseTo(superelevation(c.info, BATTLE_RANGE) + converge(BATTLE_RANGE), 5);
     c.lase(2400);
     for (let t = 0; t < 1; t += DT) c.step(DT, q, { dYaw: 0, dPitch: 0, stabilised: false, recentre: false });
-    expect(c.gun.pitch).toBeCloseTo(superelevation(c.info, 2400), 9);
+    expect(c.gun.pitch).toBeCloseTo(superelevation(c.info, 2400) + converge(2400), 5);
     expect(hullAngles(turned, dirOf(30 * RAD, 0.1, new Vector3()), { yaw: 0, pitch: 0 }).yaw).toBeCloseTo(0, 9);
+  });
+});
+
+describe('the fire control converges the gun on the line of sight', () => {
+  it('a shot laid through a sight 0.43 m above and 0.6 m beside the bore meets the aim point near and far', () => {
+    const base = TANK_SPECS.type10;
+    const spec = { ...base, tank: { ...base.tank!, dims: { ...base.tank!.dims, sight: [0.6, 0.849, 0.932] as [number, number, number] } } };
+    const g = spec.tank.gun, q = new Quaternion(), origin = new Vector3();
+    for (const [range, left, height] of [[90, 1.5, 0.7], [1500, -4, 1.2]]) {
+      const c = new GunControl(spec);
+      const eye = sightEye(spec, 0, origin, q, 0, new Vector3());
+      const aim = new Vector3(left, height, range);
+      // the gunner lays the sight on the aim point, the laser gives its range, the gun is laid after it
+      const want = hullAngles(q, aim.clone().sub(eye), { yaw: 0, pitch: 0 });
+      c.step(DT, q, { dYaw: want.yaw, dPitch: want.pitch, stabilised: false, recentre: false });
+      for (let t = 0; t < 3; t += DT) {
+        sightEye(spec, 0, origin, q, c.gun.yaw, eye);
+        c.lase(aim.distanceTo(eye));
+        c.step(DT, q, { dYaw: 0, dPitch: 0, stabilised: false, recentre: false });
+      }
+      expect(c.off, `${range}`).toBeLessThan(1e-6);
+      const pose = { trunnion: new Vector3(), muzzle: new Vector3(), dir: new Vector3() };
+      gunPose(spec, 0, origin, q, c.gun.yaw, c.gun.pitch, pose);
+      const s = newShell(0, 1, pose.muzzle.clone(), pose.dir.clone().multiplyScalar(g.muzzleVelocity), dragOf(g));
+      const out = blank();
+      let last = s.p.clone();
+      while (s.p.z < range) {
+        last = s.p.clone();
+        stepShell(s, DT, empty, out);
+      }
+      // where it crosses the aim point's distance
+      const at = last.lerp(s.p, (range - last.z) / (s.p.z - last.z));
+      expect(Math.abs(at.y - height), `${range} m: high by ${(at.y - height).toFixed(3)}`).toBeLessThan(0.1);
+      expect(Math.abs(at.x - left), `${range} m: left by ${(at.x - left).toFixed(3)}`).toBeLessThan(0.1);
+    }
   });
 });
 

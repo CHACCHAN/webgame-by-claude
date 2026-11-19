@@ -5,7 +5,7 @@ import type { GunInfo } from '../vehicle/tanks';
 import type { VehicleSim } from '../vehicle/VehicleSim';
 import { GunReferee, decodeGunEvent, encodeGunEvent } from '../net/gunEvents';
 import { RIVAL, Shells, newShell, stepShell, type Impact, type Shell, type ShellTarget } from './ballistics';
-import { GunControl, LASE_RANGE, dirOf, dragOf, gunPose, recoilOf, sightEye, superelevation, type GunInput } from './gun';
+import { GunControl, LASE_RANGE, dirOf, dragOf, gunPose, recoilOf, sightEye, type GunInput } from './gun';
 import { GameShellWorld } from './world';
 
 /** What the gunnery asks of the game around it (effects, sound, the respawns, the link to the other players). */
@@ -47,7 +47,7 @@ export class Gunnery {
   control: GunControl | null = null;
   /** the local gun where the last step left it: trunnions, muzzle, the bore's direction */
   readonly pose = { trunnion: new Vector3(), muzzle: new Vector3(), dir: new Vector3() };
-  /** the gunner's eye and the line the sight shows: the bore's less the superelevation */
+  /** the gunner's eye and the line the sight shows: the bore's less what the fire control laid it off by */
   readonly eye = new Vector3();
   readonly line = new Vector3();
   /** the local player's key as a firer: its member id online, 0 alone */
@@ -89,7 +89,7 @@ export class Gunnery {
     const c = this.control!;
     gunPose(sim.spec, sim.rideHeight, sim.position, sim.quaternion, c.gun.yaw, c.gun.pitch, this.pose);
     sightEye(sim.spec, sim.rideHeight, sim.position, sim.quaternion, c.gun.yaw, this.eye);
-    dirOf(c.gun.yaw, c.gun.pitch - superelevation(c.info, c.range), this.line).applyQuaternion(sim.quaternion);
+    dirOf(c.gun.yaw - c.lay.yaw, c.gun.pitch - c.lay.pitch, this.line).applyQuaternion(sim.quaternion);
   }
 
   /**
