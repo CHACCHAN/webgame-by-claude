@@ -219,6 +219,8 @@ const _zero = new THREE.Vector3();
 /** car states go out this often (s): every other frame of a 60 Hz screen, so the peers get them evenly spaced */
 /** how long a rival's line waits for its voice before it is shown without it, ms */
 const VOICE_WAIT = 700;
+/** the garage shows a vehicle once its shaders are compiled, or after this long (ms) if that never comes back */
+const GARAGE_COMPILE_WAIT = 4000;
 const NET_SEND_INTERVAL = 1 / 30;
 /** the acceleration sent with a state is smoothed over about this long (s): suspension chatter and wall hits are not a trend */
 const NET_ACC_TAU = 0.06;
@@ -315,6 +317,8 @@ export class Game {
   private asked = 0;
   /** the colour last picked in the garage (a train's other line is shown once its model is loaded) */
   private garageWant: string | undefined;
+  /** a vehicle the garage is about to show, its shaders being compiled (`showGarage`), while `ask` is still the last request */
+  private garagePending: { ask: number; carId: CarId } | null = null;
   private garageAngle = 0;
   /** world yaw of the camera offset that looks from the hillside out over the valley */
   private garageViewYaw = 0;
@@ -876,9 +880,26 @@ export class Game {
     const view = traitsOf(spec).garage;
     visual.root.rotation.y = this.track.headingAt(s) + view.yaw;
     visual.refresh();
-    // (building its shaders ahead with `compileObject` was tried, 11-11: the frame that first draws it stood just as
-    // long, with the compile's own slow frames before it)
-    this.placeGarage(visual, color, s, p);
+    // Its shaders, textures and pipelines are made before it is shown (`compileObject`: in the background, for the
+    // scene pass, a material at a time between frames), and whatever stands there stays meanwhile: a vehicle shown
+    // for the first time stood the picture still for 0.1–0.3 s while its materials were built in the frame that
+    // first drew it (11-19). (Tried on 11-11 and dropped: the compile then built for another render context than the
+    // frame's, `threeFixes.compileAtPassDepth`, so the frame built everything again.)
+    const compile = this.compileObject;
+    if (!compile) return this.placeGarage(visual, color, s, p);
+    const ask = this.asked;
+    this.garagePending = { ask, carId };
+    let done = false;
+    const show = () => {
+      if (done) return;
+      done = true;
+      // (unless something else was asked for meanwhile)
+      if (ask !== this.asked) return visual.dispose();
+      this.garagePending = null;
+      this.placeGarage(visual, color, s, p);
+    };
+    void compile(visual.root).then(show, show);
+    setTimeout(show, GARAGE_COMPILE_WAIT);
   }
 
   private placeGarage(visual: CarVisual, color: string | undefined, s: number, p: THREE.Vector3) {
@@ -2444,6 +2465,12 @@ export class Game {
   }
 
   setGarageColor(color: string) {
+    // (another vehicle is on its way in: it comes in this paint)
+    const pending = this.garagePending;
+    if (pending && pending.ask === this.asked) {
+      this.showGarage(pending.carId, color);
+      return;
+    }
     const car = this.garageCar;
     if (!car) return;
     this.garageWant = color;

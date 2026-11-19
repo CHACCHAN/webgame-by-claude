@@ -2517,3 +2517,27 @@ numbers only); the SU7 in an online room; the first Su-47 shown in the garage st
 open. The autobahn's film shows other traffic than the game now (su7 in `CAR_ORDER`). The aircraft parked on the
 airfield and Edwards' course art are still the stand-in shape.
 
+## v2.7.1 (11-19): a vehicle's first showing in the garage; the autobahn's film again
+
+- **Garage hitch** (merged `su47-hitch` `023e0d7`). Where the first Su-47's 270-300 ms went (timed calls + CPU
+  profile): node builds 243 ms: the shared glass (82) and headlight (35) materials built again because the Su-47's
+  parts carry an unused all-white `COLOR_0` (attribute names are in the shader key); six transparent shaders (~50:
+  beam cones and plumes, their uniforms were nodes made per car, so every vehicle shown rebuilt them, every time);
+  the Su-47's own airframe / navlight variants (~65, real). Texture upload ~10 ms: not the cause. Changes: white
+  vertex colours dropped at load; beam and plume colour are one shared node read per mesh; `Game.showGarage`
+  compiles a new vehicle before showing it. Worst gap, night, paired runs (main → fix): su47 279/254 → 67/77 ms,
+  first f15j 195/201 → 115/89, first hayate 187/181 → 90/67, race start f15j 76/122 → 0/0; su7 unchanged (shadow
+  shaders, not covered by a compile); WebGL 2 one pair: su47 364 → 127. No GLB changed; pictures before / after
+  equal within frame noise.
+- **Autobahn's film** (merged `film-autobahn` `d155296`): recorded on v2.7.0 (su7 in the traffic's list), same run
+  (track equal within 0.0001), stamp `aea11958`; the course select plays it with the ring at the car (picture seen).
+- Not verified: a paint change during the frames a garage compile waits; two vehicles with different beam levels at
+  once (waiting room) by picture; quality medium / low; phones; whether the white fastback at frame 913 is the su7.
+- Open: ~65 ms of Su-47-only shaders (would need a re-export); the first F-15's three 2048 px uploads (11 ms each;
+  `renderer.initTexture` behind the menus); shadow-pass compile for a new car's shadow shaders.- Verified on the merged tree: tsc; vitest 286; build; backend tests 78; `gpu-errors.cjs` 0 (WebGPU default, WebGL 2
+  default, WebGPU Edwards with su47 / f15j / su7); `paint-drawn.cjs hayate su7 roach`; one race picture (beams there).
+  E2E: the first run 16/19: three tests read `__game.garageCar` at once after a selection, and the garage now shows
+  a vehicle only after its compile (seconds under SwiftShader): the tests wait for it now (`expect.poll`);
+  `game.spec.ts` + `online.spec.ts` again 14/14; the other five specs passed in the first run.
+  On a software renderer the vehicle shown before stays up to 4 s while the next is compiled (GPU: a few frames).
+

@@ -150,7 +150,7 @@ test('online battle: five in one room (three games, two more through the API), e
   await b.page.locator('.ol-vehicle').click();
   await b.page.locator('.vp-tile[data-id="shiden"]').click();
   await expect(b.page.locator('.vp .car-name')).toHaveText('RX-7 (FD3S)');
-  expect(await b.page.evaluate(() => (window as any).__game.garageCar.spec.id)).toBe('shiden');
+  await expect.poll(() => b.page.evaluate(() => (window as any).__game.garageCar?.spec.id), { timeout: 60_000 }).toBe('shiden');
   await b.page.waitForTimeout(1500);
   await expect(host.page.locator('.ol-slots em.ready')).toHaveCount(3);
   await b.page.locator('.vp .cta', { hasText: 'この車でエントリー' }).click();

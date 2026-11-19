@@ -19,6 +19,27 @@ const LIGHTS_ON = 0.75;
 /** pop-up pod: width, height, depth (m); hinge angle closed / open (rad, + = folded into the bonnet) */
 const POD = { w: 0.36, h: 0.13, d: 0.25, closed: 1.45, open: -0.06 };
 
+type N = any; // eslint-disable-line @typescript-eslint/no-explicit-any
+/** a cone's brightness: its own `userData.beamLevel`, read as it is drawn */
+const beamLevel: N = (uniform(0) as N).onObjectUpdate(({ object }: { object: THREE.Object3D | null }) => (object?.userData.beamLevel as number | undefined) ?? 0);
+let beamColour: N = null;
+/**
+ * The beam cones' colour: ONE node for every vehicle's cones. A node is part of a shader's key by its id: with a
+ * node (a uniform) per vehicle, every vehicle shown built the cones' two shaders again (6–15 ms each, 11-19).
+ */
+function beamColourNode(): N {
+  if (!beamColour) {
+    // brightest seen along the cone's wall, fading to nothing at its far rim. The clamp matters: interpolation
+    // leaves v a hair below 0 at the rim, pow() of a negative base is NaN, and one NaN pixel spread by the bloom
+    // blur blacked out the whole frame
+    const edge = pow(abs(dot(normalView, positionViewDirection)), 1.5);
+    // (with the lights' glow in the haze on, that pass draws the beams: render/volumetricLights.ts)
+    const a = pow(clampNode(uv().y, 0, 1), 2.2).mul(edge).mul(beamLevel).mul(beamCones);
+    beamColour = vec4(vec3(1, 0.93, 0.8).mul(a), 1);
+  }
+  return beamColour;
+}
+
 /** Pose source for a car visual: a live simulation or a ghost replay. */
 export interface CarPose {
   position: THREE.Vector3;
@@ -55,8 +76,6 @@ export class CarVisual {
   private lampParent: THREE.Object3D | null = null;
   private beamIntensity = 0;
   private beams: THREE.Mesh[] = [];
-  /** brightness of the beam cones (shared by this car's cones) */
-  private beamLevel = uniform(0);
   private bodyPitch = 0;
   private bodyRoll = 0;
   private ghostMaterials: THREE.Material[] = [];
@@ -136,17 +155,10 @@ export class CarVisual {
       this.lampSources = spread >= 0.5 ? sources.map((v) => v.clone()) : [new THREE.Vector3(0, height, lens)];
       // volumetric-ish beam cones
       const beamMat = new MeshBasicNodeMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, fog: false });
-      {
-        // brightest seen along the cone's wall, fading to nothing at its far rim. The clamp matters: interpolation
-        // leaves v a hair below 0 at the rim, pow() of a negative base is NaN, and one NaN pixel spread by the bloom
-        // blur blacked out the whole frame
-        const edge = pow(abs(dot(normalView, positionViewDirection)), 1.5);
-        // (with the lights' glow in the haze on, that pass draws the beams: render/volumetricLights.ts)
-        const a = pow(clampNode(uv().y, 0, 1), 2.2).mul(edge).mul(this.beamLevel).mul(beamCones);
-        beamMat.colorNode = vec4(vec3(1, 0.93, 0.8).mul(a), 1);
-      }
+      beamMat.colorNode = beamColourNode();
       for (const hl of sources) {
         const cone = new THREE.Mesh(new THREE.ConeGeometry(3.2, 22, 24, 1, true), beamMat);
+        cone.userData.beamLevel = 0;
         // apex at the lamp, dipping towards the road 22 m ahead (more from high lamps, e.g. a train's roof lamps)
         const dip = clamp((hl.y - 0.3) / 22, 0.03, 0.15);
         cone.rotation.x = -Math.PI / 2 + dip;
@@ -219,8 +231,8 @@ export class CarVisual {
 
   private applyBeams(level: number) {
     this.beamIntensity = this.lampOrigin ? HEADLIGHT.intensity * level : 0;
-    this.beamLevel.value = 0.05 * level;
     for (const b of this.beams) {
+      b.userData.beamLevel = 0.05 * level;
       b.visible = level > 0.05;
     }
   }

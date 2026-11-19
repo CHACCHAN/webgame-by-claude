@@ -153,6 +153,14 @@ pending. `docs/PLAN.md` holds the design.
   `gpuBytes`, oldest freed first, all on a GPU out-of-memory: `releaseKept`); `disposeWorld` frees only what no
   other built course uses. Vehicle models load in stages (`render/vehicleModels.ts`: one car before the title, the
   rest behind the menus): whatever shows a vehicle first waits with `Game.needs` / `ensureVehicleModels`.
+  A geometry's attribute names are part of a shader's key (three.js `getGeometryCacheKey`): an unused attribute
+  (an all-white `COLOR_0` on a part whose material is swapped) builds the shared material again
+  (`JetModel.dropWhiteColours` drops such colours at load). Per-vehicle values in a TSL node (beam level, plume
+  colour) go through ONE shared node with `uniform().onObjectUpdate` reading the mesh's `userData`, never a
+  `uniform()` per car: that rebuilt the beams' and plumes' shaders at every showing. The garage compiles a new
+  vehicle before showing it (`Game.showGarage` → `compileObject`, the old one stays meanwhile, `garagePending`,
+  4 s fallback; an object compile takes the whole object as in view): whatever reads `garageCar` straight after
+  `showGarage` must wait for the vehicle (v2.7.1: first Su-47 270 → 70 ms, first car 185 → 80 ms).
 - Ground, road and roadside at quality medium and up (`surfaceDetail` 1–3 in `store/settings.ts`; 0 = `low`, the old
   plain path `plainRoadside` / `plainTerrainMaterial`): `render/terrainMaterial.ts` (`groundMaterial`: photo layers
   blended by slope, height and the `surf` vertex attribute), `render/roadMaterial.ts` (`roadSurface`: wear, markings

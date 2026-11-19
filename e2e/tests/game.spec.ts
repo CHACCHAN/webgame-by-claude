@@ -87,12 +87,12 @@ test('menu navigation, settings persistence and controls screen', async ({ page 
   await page.keyboard.press('ArrowLeft');
   await expect(page.locator('.cars .car-name')).toHaveText('ゴキブリ');
   await expect(page.locator('.spec-table')).toContainText('6本脚');
-  expect(await page.evaluate(() => !!(window as any).__game.garageCar.rig.creature)).toBe(true);
+  await expect.poll(() => page.evaluate(() => !!(window as any).__game.garageCar?.rig.creature), { timeout: 60_000 }).toBe(true);
   await page.keyboard.press('ArrowLeft');
   await expect(page.locator('.cars .car-name')).toHaveText('L0系');
   await expect(page.locator('.train-badge')).toBeVisible();
   await expect(page.locator('.spec-table')).toContainText('起動加速度');
-  expect(await page.evaluate(() => !!(window as any).__game.garageCar.rig.train)).toBe(true);
+  await expect.poll(() => page.evaluate(() => !!(window as any).__game.garageCar?.rig.train), { timeout: 60_000 }).toBe(true);
   await page.keyboard.press('Escape');
   await expect(page.locator('.menu-list')).toBeVisible();
 });
@@ -289,7 +289,7 @@ test('car select: tabs by kind, pictures, sorting, favourites, grid keys', async
   // ← → step through the list as the old car select did, ↓ ↑ by a row; the garage shows the highlighted one
   await page.keyboard.press('ArrowRight');
   await expect(page.locator('.car-name')).toHaveText('SILVIA spec-R (S15)');
-  expect(await page.evaluate(() => (window as any).__game.garageCar.spec.id)).toBe('s15');
+  await expect.poll(() => page.evaluate(() => (window as any).__game.garageCar?.spec.id), { timeout: 60_000 }).toBe('s15');
   await page.keyboard.press('ArrowDown');
   await page.keyboard.press('ArrowUp');
   await expect(page.locator('.vp-tile.on')).toHaveAttribute('data-id', 's15');
@@ -329,7 +329,7 @@ test('car select: tabs by kind, pictures, sorting, favourites, grid keys', async
   await expect(page.locator('.car-name')).toHaveText('RX-7 (FD3S)');
   await page.locator('.vp-tile[data-id="shiden"]').click();
   await expect(page.locator('.choice-card.active')).toContainText('AT');
-  expect(await page.evaluate(() => (window as any).__game.garageCar.spec.id)).toBe('shiden');
+  await expect.poll(() => page.evaluate(() => (window as any).__game.garageCar?.spec.id), { timeout: 60_000 }).toBe('shiden');
   // Esc from the gearbox: back in the car select, on the tab and the car left
   await page.keyboard.press('Escape');
   await expect(page.locator('.vp-tab.on')).toHaveAttribute('data-tab', 'car');
