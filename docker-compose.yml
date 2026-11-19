@@ -75,10 +75,10 @@ services:
       # the rivals' language model, reached through the server only (backend/config/llm.php); no key or no URL = the game's own lines
       LLM_API_KEY: ${LLM_API_KEY:-}
       LLM_API_URL: ${LLM_API_URL:-}
-      LLM_TAUNT_MODELS: ${LLM_TAUNT_MODELS:-gemini-3.5-flash-lite,sarashina-3-mini}
-      LLM_DECIDE_MODELS: ${LLM_DECIDE_MODELS:-sarashina-3-mini,gemini-3.5-flash-lite}
+      LLM_TAUNT_MODELS: ${LLM_TAUNT_MODELS:-sarashina3-mini,deepseek-v4.1-flash@low}
+      LLM_DECIDE_MODELS: ${LLM_DECIDE_MODELS:-sarashina3-mini,deepseek-v4.1-flash@low}
       # the desk (About → AI窓口): its model through the same gateway (no key or no URL = the report form only)
-      LLM_DESK_MODELS: ${LLM_DESK_MODELS:-gemini-3.8-flash}
+      LLM_DESK_MODELS: ${LLM_DESK_MODELS:-deepseek-v4.1-flash,gemini-3.8-flash}
       LLM_DESK_EFFORT: ${LLM_DESK_EFFORT:-high}
       DESK_ENABLED: ${DESK_ENABLED:-true}
       # reports an hour per address (the E2E run files one each time: a test stack may want more)

@@ -2610,4 +2610,7 @@ Verified on the merged tree: backend tests 80 (two new: `name@effort` with its r
 build; E2E 19/19; `gpu-errors.cjs` WebGPU 0, WebGL 2 0 (frontend unchanged but for the version). Not verified: a
 rival battle in the browser against the live gateway (the calls were made from the app container); `llm:check` on
 the live stack after the deploy (below).
+After the first deploy `llm:check` on the live stack still listed the old names: `docker-compose.yml` gives the
+lists their own defaults (`${LLM_TAUNT_MODELS:-…}`), which win over the PHP config's. Changed there too and deployed
+again; `llm:check` then lists every model.
 

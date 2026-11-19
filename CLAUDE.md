@@ -461,7 +461,9 @@ pending. `docs/PLAN.md` holds the design.
   nobody to ask. The decision is real tool calls (`block_player`, `sound_horn`), clamped by the server. The models are
   `LLM_TAUNT_MODELS` / `LLM_DECIDE_MODELS` (first that answers; `name@effort` sends that `reasoning_effort`). The
   gateway renames and drops models without notice (11-19: every default answered 400 and the rivals ran on the
-  game's own lines for an unknown time): check a list against the gateway's `/models` when touching it. Check the block with
+  game's own lines for an unknown time): check a list with `docker exec touge-nocturne-app-1 php artisan llm:check` when touching it. The lists'
+  defaults are written twice: `config/llm.php` / `config/desk.php` AND `docker-compose.yml`'s `${LLM_…:-…}` (the
+  compose file's win on the stack: v2.7.5's first deploy still ran the old names): change both. Check the block with
   `BLOCK=4 npx tsx tools/sim-duel.ts <lead:level> <chase:level>`.
 - The rivals' voice (owner 11-11; `game/audio/speech/`): a rival's line is spoken by a speech model on the player's
   GPU: Supertonic 3 (four ONNX graphs, 398 MB, OpenRAIL-M) through `onnxruntime-web/webgpu` in a module worker
