@@ -60,13 +60,13 @@ T = {
     },
     "skirt": {
         "seams":(3.58,1.91,.69,-.46,-1.59,-2.78,-3.52), "gauge":.032,"gap":.015,
-        "top":1.27,"base":.595,"front_tip":1.16,"front_foot":3.174,"rear_tip":1.04,
+        "top":1.27,"base":.755,"front_tip":1.16,"front_foot":3.174,"rear_tip":1.04,
         "hole": {"half_height":.052,"half_width":.093,"radius":.026,
-                 "stations":(((2.37,.99),(2.83,.99),(2.65,.69)),(),(),(),
-                             ((-1.78,.97),(-2.24,.97),(-1.87,.67)),())},
+                 "stations":(((2.37,.99),(2.83,.99),(2.65,.85)),(),(),(),
+                             ((-1.78,.97),(-2.24,.97),(-1.87,.83)),())},
         "hinge": {"fractions":(.21,.77),"inset":.024,"r":.022,"y":1.265,"length":.135},
-        "bolts": {"y":.632,"margin":.15,"count":4,"radius":.014,"height":.003},
-        "drops": {"bottom":(.35,.30,.28,.30,.34),"upper":.605,"gap":.031,"gauge":.017,
+        "bolts": {"y":.778,"margin":.15,"count":4,"radius":.014,"height":.003},
+        "drops": {"bottom":(.35,.30,.28,.30,.34),"upper":.765,"gap":.031,"gauge":.017,
                   "mid_height":.42,"x_rows":(1.598,1.574,1.582),"clip":.085,"clip_start":.77},
         # Ground-anchored (inner,outer) face corners, xyz, left side. Reflect x only.
         "apron": {"strap_h":.032,"strap_depth":.018,"strap_bolts":5,"bolt_r":.012,
@@ -94,8 +94,8 @@ T = {
     'turret': dict(
         lower=((.30,1.78),(.84,1.73),(1.30,1.59),(1.32,1.34),(1.415,.48),(1.43,-1.40),(1.44,-1.95)),
         crease=((.30,2.23),(.83,2.18),(1.32,1.59),(1.35,1.34),(1.44,.48),(1.445,-1.40),(1.43,-1.95)),
-        upper=((.30,1.82),(.795,1.77),(1.100,1.405),(1.155,1.14),(1.24,.40),(1.24,-1.39),(1.195,-1.83)),
-        upper_y=(2.190,2.190,2.215,2.235,2.300,2.300,2.300),
+        upper=((.30,1.82),(.74,1.77),(1.06,1.405),(1.155,1.14),(1.24,.40),(1.24,-1.39),(1.195,-1.83)),
+        upper_y=(2.11,2.12,2.16,2.20,2.300,2.300,2.300),
         lower_y=(1.641,1.641,1.604,1.602,1.621,1.673,1.670),crease_y=(1.98,1.98,1.98,1.98,1.98,1.99,2.010), slot_back=.95,
         core_halfwidth=1.15, core_front=.95,core_aft=-1.48,core_bottom=1.667,core_recess=.025,
         race=((1.525,.95),(1.54,1.045),(1.60,1.045),(1.635,.985)),
@@ -115,12 +115,12 @@ T = {
                  cap_r=.0175,post_r=.012,horizontal_r=.013,skin=.008,back_div=9,side_div=4,
                  cleats=(-.96,.96),cleat_size=(.064,.094,.18)),
     'roof_fit':dict(
-        pano_top=((-0.99,2.75,-.33),(-.61,2.81,-.63),(-1.08,2.79,-.91)), # FO, FI, RO
+        pano_top=((-1.055,2.76,-.50),(-.735,2.77,-.64),(-1.095,2.76,-.90)), # FO, FI, RO
         plinth_lo=(.47,.51),plinth_hi=(.425,.45),plinth_h=.202,
-        pano_gap=.019,head_brow=(.45,.026,.060),shutter_size=(.30,.132,.016),
+        pano_gap=.019,head_brow=(.40,.026,.060),shutter_size=(.30,.132,.016),
         handle_half=.123,handle_h=.032,handle_r=.009,
         # Forward optical face (also the game's eye), not the panoramic head.
-        sight=(.60,2.399,.912),hood_cz=.73,hood_size=(.49,.245,.46),hood_t=.026,
+        sight=(.82,2.365,1.11),hood_cz=.93,hood_size=(.57,.23,.48),hood_t=.026,hood_rake=.05,hood_rear_rise=.04,
         hood_window=(.344,.158,.014),hood_foot=.032,
         cupola=(-.48,-.05),cup_profile=((0.,.315),(.044,.34),(.109,.316),(.131,.342),(.157,.331)),
         blocks=9,block_radius=.319,block_y=.077,block_size=(.141,.062,.029),
@@ -129,10 +129,12 @@ T = {
         aft_fitting=(1.306,2.086,-1.49),fitting_size=(.036,.158,.105),
         antenna=(1.16,2.297,-1.46),antenna_r=.041,antenna_base_h=.117,whip_delta=(.048,.435,-.099),whip_r=.007,
         mast=(0.,2.30,-1.32),mast_h=.532,mast_r=.025,mast_cap=(.079,.044,.067),
-        pintle=(-.15,2.443,.03),mg_scale=1.00,mg_post=.074,
-        mg_lift=.054,bag_offset=(-.142,.281,-.128),bag_size=(.122,.194,.229),
-        mg_body=(.157,.152,.466),mg_centre=(0.,.364,-.08),mg_box=(.212,.211,.274),
-        mg_box_centre=(.160,.324,-.126),mg_fork=(.109,.210,.414,-.158,.095),
+        pintle=(-.01,2.443,-.07),mg_scale=1.00,mg_post=.074,
+        # Side-profile adapter between cupola rim and offset foot (depth, thickness, embed).
+        mg_shelf=(.138,.055,.042),
+        mg_lift=.22,mg_base_radius=.134,mg_post_trim=.09,bag_offset=(-.142,.281,-.128),bag_size=(.122,.194,.229),
+        mg_body=(.157,.152,.466),mg_centre=(0.,.364,-.08),mg_box=(.31,.14,.30),
+        mg_box_centre=(.21,.324,-.126),mg_fork=(.109,.210,.414,-.158,.095),
         mg_stock_z=-.408,mg_jacket_z=.420,mg_tip=.99,mg_tip_r=.021),
     # Axial station and outside diameter, all z in hull frame; inside is a blind dark socket.
     'tube':dict(muzzle_y=1.97,root=((1.37,.245),(1.60,.271),(1.835,.312)),
@@ -145,10 +147,11 @@ T = {
                 bore=.120,bore_recess=.154,
                 reference=(-.13,1.97,5.53),ref_size=(.11,.10,.17),ref_glass=(.081,.069,.004),
                 dots=(-.022,0.,.022),dot_r=.006),
-    'zones':dict(race_contact=('#363831',.28,.78),skirt_rubber=('#34372F',.00,.91), amber=('#ad6926',.06,.38),
+    'zones':dict(camo_drop=('#34372F',.0,.91),race_contact=('#363831',.28,.78),skirt_rubber=('#34372F',.00,.91), amber=('#ad6926',.06,.38),
                  rack_mesh=('#4b5042',.35,.79), sensor=('#8d9282',.03,.73)),
-    'paint':dict(pattern='type10',brown_fraction=.40,base='#505845',green='#505845',brown='#716651',dust='#a79778',
-                 dust_strength=.11,scale=1.,seed=10),
+    'paint':dict(pattern='type10',brown_fraction=.42,base='#435349',green='#435349',brown='#645A48',dust='#a79778',
+                 dust_strength=.11,scale=1.,seed=10,drop_gain=.80,drop_dirt=(.10,.30),
+                 gun_crossing_z=4.18,gun_oblique=(.37,.30)),
 }
 
 
@@ -222,6 +225,8 @@ def _h_skirts(parts,side,s,marks):
             poly=[(high,top),(low,top),(low,s['rear_tip']),(high,base)]
         hole=s['hole']; hh,hw,r=hole['half_height'],hole['half_width'],hole['radius']
         cuts=sorted(hole['stations'][i]); slices=[]
+        if any(not (low+hw<z<high-hw and base+hh<y<top-hh) for z,y in cuts):
+            raise ValueError(f'skirt panel {i}: port no longer on hard plate')
         # Horizontal scan strips with radiused slot ends. Only boundary edges
         # of the union get thickness; no doubled, coincident internal walls.
         if cuts:
@@ -270,9 +275,12 @@ def _h_skirts(parts,side,s,marks):
             z=low+f*(end-low); cx=side*(x-hinge['inset'])
             parts.append(_turned('skirt hinge',(cx,hinge['y'],z),(0,0,1),[(-length/2,hinge['r']),(length/2,hinge['r'])],'steel',12))
         bolts=s['bolts']; end=s['front_foot'] if i==0 else high
-        parts.append(K.bolt_row(marks,(side*x,bolts['y'],low+bolts['margin']),
-                               (side*x,bolts['y'],end-bolts['margin']),bolts['count'],
-                               bolts['radius'],bolts['height'],normal=(side,0,0)))
+        for z in np.linspace(low+bolts['margin'],end-bolts['margin'],bolts['count']):
+            lower=base if i<len(seams)-2 else base+(s['rear_tip']-base)*(high-z)/(high-low)
+            y=lower+(bolts['y']-base); rad=bolts['radius']
+            if y-rad<=lower or y+rad>=top or any(abs(z-zp)<hw+rad and abs(y-yp)<hh+rad for zp,yp in cuts):
+                raise ValueError(f'skirt panel {i}: fastener outside material at {(z,y)}')
+            c=(side*x,y,z); parts.append(K.bolt_row(marks,c,c,1,rad,bolts['height'],normal=(side,0,0)))
         d=s['drops']
         if i>=len(d['bottom']):
             continue
@@ -286,7 +294,7 @@ def _h_skirts(parts,side,s,marks):
             rows.append([(xx,d['upper']-f*depth,z) for z in (start+inset,end-inset)])
         for (a,b),(c,e) in zip(rows,rows[1:]):
             loop=[a,b,e,c]
-            parts.append(K.slab(loop if side>0 else loop[::-1],d['gauge'],'skirt_rubber'))
+            parts.append(K.slab(loop if side>0 else loop[::-1],d['gauge'],'camo_drop'))
     def ribs(spec):
         return [[(side*x,y,z) for x,y,z in row] for row in spec['ribs']]
     ap=s['apron']; parts.append(K.mudguard(ribs(ap),ap['gauge']))
@@ -529,14 +537,21 @@ def _roof():
     x,ey,ez=t['sight']; z=t['hood_cz']; w,h,d=t['hood_size']; wall=t['hood_t']; foot=t['hood_foot']
     # Projecting brows above a recessed vertical lens, not a solid shiny cube.
     seat=_roof_front_y(z); aft=z-d/2; fore=z+d/2
-    # Level optics on a tapered foot: no daylight under the forward lip.
-    plinth=[(aft,_roof_front_y(aft)),(fore,_roof_front_y(fore)),(fore,seat+foot),(aft,seat+foot)]
+    # Rake the front of both cheek plates back at their feet. Follow the
+    # roof stations under the shoe; the brow and optical face stay level.
+    toe=fore-t['hood_rake']
+    foot_stations=sorted({aft,toe}|{zz for _,zz in T['turret']['upper'] if aft<zz<toe})
+    bottom=[(zz,_roof_front_y(zz)) for zz in foot_stations]
+    foot_edge=[(zz,yy+foot) for zz,yy in bottom]
+    plinth=bottom+foot_edge[::-1]
+    front_lip=seat+h; rear_lip=front_lip+t['hood_rear_rise']
+    brow=[(aft,rear_lip-wall),(fore,front_lip-wall),(fore,front_lip),(aft,rear_lip)]
     parts.extend([K.prism(plinth,x-w/2,x+w/2),
-                  K.cbox((x,seat+h-wall/2,z),(w,wall,d),.006),
+                  K.prism(brow,x-w/2,x+w/2),
                   K.cbox((x,ey,ez-t['hood_window'][2]/2),t['hood_window'],.005,'glass_dark')])
     for s in (-1,1):
         xl=x+s*(w-wall)/2
-        parts.append(K.prism([(aft,seat+foot),(fore-wall,seat+foot),(fore,seat+h),(aft+wall,seat+h)],xl-wall/2,xl+wall/2))
+        parts.append(K.prism(foot_edge+[(fore,front_lip-wall),(aft,rear_lip-wall)],xl-wall/2,xl+wall/2))
     parts.append(K.cbox((x,seat+h/2,ez-wall),(w-2*wall,h-wall,wall),.008,'recess'))
     x,z=t['cupola']; parts.append(_turned('cupola',(x,y,z),(0,1,0),t['cup_profile'],seg=48))
     for angle in np.arange(t['blocks'])*math.tau/t['blocks']:
@@ -556,9 +571,21 @@ def _roof():
     c=np.asarray(t['mast']); mh=t['mast_h']; r=t['mast_r']
     parts.extend([_turned('wind mast',c,(0,1,0),[(0,r*1.55),(mh*.14,r*1.55),(mh*.17,r),(mh,r*.85)]),
                   K.cbox(c+(0,mh+t['mast_cap'][1]/2,0),t['mast_cap'],.008)])
-    c=np.asarray(t['pintle']); lift=t['mg_lift']; base=c+(0,lift,0); scale=t['mg_scale']
+    c=np.asarray(t['pintle']); lift=t['mg_lift']; scale=t['mg_scale']
+    trim=t['mg_post_trim']; base=c+(0,lift-trim,0); base_r=t['mg_base_radius']
+    # Cantilever from the cupola lip to the shifted foot. Its top is the
+    # pintle datum; the enlarged base takes over the lowest section of post.
+    depth,thick,embed=t['mg_shelf']; cx,cz=t['cupola']; _,lip_r=t['cup_profile'][-1]
+    margin_z=abs(c[2]-cz)+depth/2
+    start_x=cx+math.sqrt(max(0.,lip_r**2-margin_z**2))-embed
+    shelf=[(start_x,c[1]-2*thick),(c[0]+base_r,c[1]-thick),
+           (c[0]+base_r,c[1]),(start_x,c[1])]
+    parts.append(K.loft([(c[2]-depth/2,shelf),(c[2]+depth/2,shelf)]))
     mg=K.Part('pintle prop'); half,lo,hi,zrear,zfore=t['mg_fork']; bx,by,bz=t['mg_centre']; w,h,d=t['mg_body']
-    K._turned(mg,(0,0,0),(0,1,0),[(0,t['mg_post']),(.45*lo,t['mg_post']),(.55*lo,.7*t['mg_post']),(lo,.7*t['mg_post'])],seg=24)
+    start=trim/scale; visible=lo-start
+    if visible<=0: raise ValueError('pintle base reaches the yoke')
+    K._turned(mg,(0,0,0),(0,1,0),[(start,t['mg_post']),(start+.45*visible,t['mg_post']),
+              (start+.55*visible,.7*t['mg_post']),(lo,.7*t['mg_post'])],seg=24)
     mg.box(K.PAINT,-half,half,lo,lo+.12*(hi-lo),zrear,zfore,bevel=.009,seg=1)
     for side in (-1,1): mg.box('steel',side*half-w*.08,side*half+w*.08,lo,hi,zrear,zfore,bevel=.008,seg=1)
     mg.obox('steel',(bx,by,bz),(w,h,d),bevel=.011); mg.obox(K.PAINT,t['mg_box_centre'],t['mg_box'],bevel=.011)
@@ -566,7 +593,7 @@ def _roof():
     K._turned(mg,(0,by,0),(0,0,1),[(bz+d/2,.26*w),(t['mg_jacket_z'],.24*w),
               (t['mg_jacket_z'],t['mg_tip_r']),(t['mg_tip'],t['mg_tip_r'])],'steel',16)
     mg.transform(np.diag([scale,scale,scale,1.])); K.placed(mg,base)
-    parts.extend([_turned('pintle foot',c,(0,1,0),[(0,t['mg_post']),(lift,t['mg_post'])]),
+    parts.extend([_turned('pintle foot',c,(0,1,0),[(0,base_r),(lift,base_r)]),
                   mg,K.cbox(base+np.array(t['bag_offset'])*scale,np.array(t['bag_size'])*scale,.025,'skirt_rubber')])
     return parts
 
@@ -712,7 +739,11 @@ def main():
     if full:
         wd=args.out.resolve().parent/'tex-type10'
         K.paint_tracks(mats,rg,wd,T['tile_links'],metal_tint=T['track_colour'])
-        scheme=dict(T['paint'],zones=dict.fromkeys(T['zones']))
+        drops=T['skirt']['drops']; turret=T['turret']; cx,cz=turret['crease'][0]
+        scheme=dict(T['paint'],zones=dict.fromkeys(T['zones']),
+                    drop_seams=T['skirt']['seams'][:len(drops['bottom'])+1],
+                    drop_bottom=drops['bottom'],drop_top=drops['upper'],
+                    cheek_anchor=(cx,turret['crease_y'][0],cz),bore_y=T['trunnion'][0])
         K.paint_tank(objects,mats,scheme,2048,wd,density=lambda ob,zone: .70 if ob.name.startswith('disc_') else 1.,
                      marks=marks)
     _contract(root,objects,rg,full); total,_=K.report(root)

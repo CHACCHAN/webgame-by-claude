@@ -191,14 +191,15 @@ The **10式戦車** (`models/tanks/type10.glb`, 2026-11-19, not yet in the game:
 owner sees its sheet first) is our own model on the shared tank kit: `frontend/tools/blender/tanks/tank_kit.py`
 (running gear: road wheels, sprocket, idler, return rollers, the track as one band along its path with UV V = distance;
 skirts, hull / turret / gun helpers, roof fittings, export to the `TankModel.ts` contract), `tank_atlas.py` (one atlas
-painted by the script: the JGSDF two-tone camouflage, panel lines, weathering; the tracks' own small texture),
+painted by the script: our own two-tone band pattern in the JGSDF manner (one warped band field over hull, skirts,
+turret and gun, traced from no vehicle), panel lines, weathering; the tracks' own small texture),
 `tank_scene.py` (check renders, `--sheet`), and `type10.py` (every station in one dict `T`). Built with
 `BLENDER=<bin> node tools/blender-models.cjs tanks type10`. Written by the modeller gpt-6.2-astra (via Mistral Vibe),
 driven and checked by Claude. Shape from the published figures (9.42 m over the gun, 3.24 m wide, 2.30 m high, five
 road wheels a side) and six photographs from Wikimedia Commons (CC0, Los688), measured only and not in the repository
 (`tools/blender/tanks/fitdata/type10/ref/list.json`; cameras solved from points read off them, `fitdata/type10/fit/ba.json`;
 masks drawn by hand hints, `handmask.json`; the gate `fitdata/tools/gate.py`). No markings but the camouflage: no
-registration number, no unit emblem. 40,316 triangles, 10 draw calls in the game (the wheels of both sides are one skinned mesh), 1.3 MB. Until the
+registration number, no unit emblem. 40,296 triangles, 10 draw calls in the game (the wheels of both sides are one skinned mesh), 1.27 MB. Until the
 owner has seen its sheet it is in the branch only (`models/tanks/type10.glb` is not committed).
 
 ### Vegetation and rocks (own, Blender; 2026-11-11)

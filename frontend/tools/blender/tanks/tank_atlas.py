@@ -122,33 +122,136 @@ def _relief(pos, obj, paint, features):
 
 # Rest-pose samples, not UV islands: neighbouring plates meet at the same
 # phase. Staggered ovals grow/shrink along their rows instead of repeating a tile.
-def _type10(pos, obj, labels, painted, sc, phase):
-    x, y, z = pos.T
-    size = np.full(len(x), sc['scale'], np.float32)
-    size[np.isin(obj, [i for i, n in enumerate(labels) if n == 'turret_shell'])] *= 1.45
-    across = x + y
-    u = (0.91*z + 0.41*across) / size + phase[0]
-    v = (0.91*across - 0.41*z) / size + phase[1]
-    v += 0.09*np.sin(3.2*u + phase[2])
-    # Two nearest rows suffice: minor radii are < row spacing. At the
-    # nominal contour the full axes are 0.70..1.40 m and 0.40..0.90 m.
-    spacing = 0.84
-    row = np.floor(v / spacing)
-    dist = np.full(len(x), np.inf, np.float32)
-    for j in (row, row + 1):
-        col = np.rint(u / 1.55 - 0.5*(j % 2))
-        du = u - (col + 0.5*(j % 2))*1.55
-        a = 0.525 + 0.175*np.sin(1.7*col + 2.2*j + phase[2])
-        b = 0.325 + 0.125*np.sin(2.4*col - 1.9*j + phase[3])
-        dist = np.minimum(dist, (du/a)**2 + ((v - j*spacing)/b)**2)
-    # Bias gun samples towards olive before setting one contour for the
-    # whole painted area. Do not count racks, tyres, lenses etc. as camo.
-    dist[np.isin(obj, [i for i, n in enumerate(labels) if n == 'gun_shell'])] += 0.9
-    fraction = float(sc.get('brown_fraction', 0.4))
-    if not 0.35 <= fraction <= 0.45:
-        raise ValueError('type10 brown_fraction must be in [0.35, 0.45]')
-    cutoff = np.quantile(dist[painted], fraction) if np.any(painted) else 1.0
-    return _mix(_rgb(sc['base']), _rgb(sc['brown']), 1 - _step(cutoff-0.035, cutoff+0.035, dist))
+# For cubic smoothstep, t=.1958001 and .8041999 give 10 and 90 percent.
+# This half-width gives .050 metres *between* those levels, not full support.
+_T10_EDGE = .050 / (2*(.8041999-.1958001))
+
+
+def _type10_bands(rng):
+    # A sequence of actual band lengths, not z divided by a varying pitch
+    # (which would make the phase jump or even run backwards). Keep the
+    # extrema as well as the mean exactly, then shuffle the order per body.
+    t = np.linspace(-1., 1., 32)
+    pitch = np.linspace(.72, 1.35, len(t))
+    pitch -= (pitch.mean()-1.)*(1-t*t)/np.mean(1-t*t)
+    rng.shuffle(pitch)
+    edges = np.r_[0., np.cumsum(2.25*pitch)]
+    phases = rng.uniform(0., 2*np.pi, (len(t), 2))
+    widths = rng.permutation(np.linspace(-1., 1., len(t)))
+    return edges, phases, widths, rng.uniform(0., edges[-1])
+
+
+def _type10_coords(pos, bands, scale):
+    """Distances in pattern metres from bent band centrelines, and local duty controls."""
+    edges, phases, widths, shift = bands
+    x, y, z = (pos/scale).T
+    y = y-1.55
+    lean = .45*np.tanh(x/.65)
+    u = z-.36*x-lean*y+shift
+    u = np.remainder(u, edges[-1])
+    i = np.minimum(np.searchsorted(edges, u, side='right')-1, len(widths)-1)
+    period = edges[i+1]-edges[i]
+    d = u-edges[i]-.5*period
+    # Bend the centreline, not the pixel mask. Integrate a local heading
+    # perturbation: sinusoidal slope components with wavelengths 1.2..2 m.
+    # Mix phases per band to avoid a repeating family of parallel curves.
+    v = y+.55*x
+    k1, k2 = 2*np.pi/1.90, 2*np.pi/1.28
+    p1, p2 = k1*v+phases[i,0], k2*v+phases[i,1]
+    wave = .73*np.sin(p1)+.27*np.sin(p2)
+    # Piecewise amplitude maps [-1,+1] to the slope deltas for [-18,+16]
+    # around the local side heading. Use its antiderivative (the asymmetric
+    # endpoints differ little, so a midpoint and half-range suffice).
+    theta = np.arctan(lean)
+    slope_lo = np.tan(theta-np.deg2rad(18.))-lean
+    slope_hi = np.tan(theta+np.deg2rad(16.))-lean
+    bias=(slope_hi+slope_lo)*.5; amp=(slope_hi-slope_lo)*.5
+    primitive=-.73*np.cos(p1)/k1-.27*np.cos(p2)/k2
+    d -= bias*v + amp*primitive
+    # Gradient of d in world coordinates (scale cancels for metres/metre).
+    dlean = .45/.65*(1-np.tanh(x/.65)**2)
+    dt = dlean/(1+lean*lean)
+    dlo = dt/np.cos(theta-np.deg2rad(18.))**2-dlean
+    dhi = dt/np.cos(theta+np.deg2rad(16.))**2-dlean
+    slope = bias+amp*wave
+    dx = -.36-dlean*y-.55*slope-.5*(dlo+dhi)*v-.5*(dhi-dlo)*primitive
+    dy = -lean-slope
+    # Duty varies by band and gently along it. The bounded mapping in
+    # _type10_mix keeps the calibrated widths inside [.28,.58] of pitch.
+    vphase=2*np.pi*v/3.4+phases[i,1]
+    width_key=1.45*widths[i]+.68*np.sin(vphase)
+    dw=.68*(2*np.pi/3.4)*np.cos(vphase)
+    return d, period, width_key, dx, dy, dw
+
+
+def _type10_mix(coords, offset, scale):
+    d, period, key, dx, dy, dw = coords
+    f=1/(1+np.exp(-(key+offset)))
+    half=.5*period*(.28+.30*f)
+    deriv=.15*period*f*(1-f)*dw
+    sign=np.sign(d)
+    grad=np.sqrt((.55*deriv-sign*dx)**2+(deriv-sign*dy)**2+1)
+    distance=(half-np.abs(d))*scale/grad
+    return _step(-_T10_EDGE, _T10_EDGE, distance)
+
+
+def _type10(pos, obj, painted, sc, tris, zone_ids, labels):
+    """Area-calibrated hull and turret fields, with a single borrowed cheek colour on the tube."""
+    fraction=float(sc.get('brown_fraction',.42)); scale=float(sc['scale'])
+    if not .35<=fraction<=.55:
+        raise ValueError('type10 brown_fraction must be in [.35,.55]')
+    rng=np.random.default_rng(sc['seed']); fields=[_type10_bands(rng) for _ in range(2)]
+    kind=np.array([2 if n=='gun_shell' else 1 if n=='turret_shell' else 0 for n in labels],np.int8)
+    anchor=np.array([sc.get('cheek_anchor',(.30,1.98,2.23))]); root=_type10_coords(anchor,fields[1],scale)
+    cross=sc.get('gun_crossing_z',4.18); gx,gy=sc.get('gun_oblique',(.37,.30)); axis_y=sc.get('bore_y',1.97)
+    def prepare(points, owners):
+        out=[]
+        for k in range(3):
+            idx=np.flatnonzero(owners==k)
+            if not len(idx): continue
+            pp=points[idx]
+            if k==2:
+                # Signed metre distance to ONE oblique plane, independent of sleeves.
+                dist=(pp[:,2]-cross-gx*pp[:,0]-gy*(pp[:,1]-axis_y))/np.sqrt(1+gx*gx+gy*gy)
+                data=_step(-_T10_EDGE,_T10_EDGE,dist)
+            else:
+                data=_type10_coords(pp,fields[k],scale)
+            out.append((idx,k,data))
+        return out
+
+    def mix(n,groups,offset):
+        values=np.empty(n,np.float32); cheek=_type10_mix(root,offset,scale)[0]
+        for idx,k,data in groups:
+            values[idx]=cheek+(1-2*cheek)*data if k==2 else _type10_mix(data,offset,scale)
+        return values
+
+    olive,brown=_rgb(sc['base']),_rgb(sc['brown'])
+    base=np.empty((len(pos),3),np.float32); base[:]=olive
+    if not painted.any(): return base
+    # Uniform samples per square metre, INCLUDING the flexible painted drops.
+    sel=np.isin(tris[3],zone_ids); q=tris[0][sel]; owners=kind[tris[4][sel]]
+    area=.5*np.linalg.norm(np.cross(q[:,1]-q[:,0],q[:,2]-q[:,0]),axis=1)
+    valid=area>0; q=q[valid]; owners=owners[valid]; cdf=np.cumsum(area[valid],dtype=np.float64)
+    if not len(cdf): raise ValueError('painted texels but no painted area')
+    count=131072; arng=np.random.default_rng(1979)
+    tickets=(np.arange(count)+arng.random(count))*(cdf[-1]/count); ii=np.searchsorted(cdf,tickets)
+    tri=q[ii]; a=np.sqrt(arng.random((count,1))); b=arng.random((count,1))
+    samples=tri[:,0]*(1-a)+a*((1-b)*tri[:,1]+b*tri[:,2])
+    groups=prepare(samples,owners[ii]); lo,hi=-16.,16.
+    # Solve for the realised colour share after feathering, not a percentile
+    # of unweighted atlas pixels. Gun-root inheritance is inside this solve.
+    for _ in range(24):
+        mid=(lo+hi)*.5; share=mix(count,groups,mid).mean(dtype=np.float64)
+        if share<fraction: lo=mid
+        else: hi=mid
+    offset=(lo+hi)*.5
+    share=mix(count,groups,offset).mean(dtype=np.float64)
+    print(f'CAMO type10 paint_m2={cdf[-1]:.2f} brown_target={fraction:.3f} brown_area={share:.3f} edge10_90_m=.050')
+    ids=np.flatnonzero(painted)
+    for j in range(0,len(ids),65536):
+        ix=ids[j:j+65536]; alpha=mix(len(ix),prepare(pos[ix],kind[obj[ix]]),offset)
+        base[ix]=_mix(olive,brown,alpha)
+    return base
 
 
 # Five-row stencil, most significant bit at the reader's left.
@@ -218,14 +321,16 @@ def _hull_maps(tris, raster, ao, sc, names, marks, ppm, labels=(), styles=None, 
     s = float(sc['scale'])
     if s <= 0:
         raise ValueError('camo scale must be positive')
-    phase = np.random.default_rng(sc['seed']).uniform(-np.pi, np.pi, 4)
     obj = raster['obj'][fill]
     pid = zone_id('tank_paint')
     painted = zone == pid
     type10 = sc.get('pattern', 'legacy') == 'type10'
     if type10:
-        base = _type10(pos, obj, labels, painted, sc, phase)
+        drop_id=zone_id('camo_drop'); drops=zone==drop_id
+        base = _type10(pos,obj,painted|drops,sc,tris,(pid,drop_id),labels)
+        base[drops] *= sc.get('drop_gain',.80)
     else:
+        phase = np.random.default_rng(sc['seed']).uniform(-np.pi, np.pi, 4)
         u, v, w = x / s, y / s, z / s
         wave = np.sin(2.25*w + 1.45*v + 0.85*u + phase[0] + 1.25*np.sin(1.5*u - 1.1*v + phase[1]))
         wave += 0.60*np.sin(2.4*u - 1.65*v + 1.2*w + phase[2]) + 0.16*np.sin(4.4*w - 3*v + phase[3])
@@ -245,7 +350,9 @@ def _hull_maps(tris, raster, ao, sc, names, marks, ppm, labels=(), styles=None, 
         base[rubber & np.isin(obj, discs)] = _rgb('#2C2E29')
     for key, (rgb, r, m) in (styles or {}).items():
         take = zone == zone_id(key)
-        base[take], rough[take], metal[take] = rgb, r, m
+        if not (type10 and key=='camo_drop'):
+            base[take] = rgb
+        rough[take], metal[take] = r, m
 
     features = _plate_edges(tris, pid)
     for mark in marks:
@@ -270,10 +377,18 @@ def _hull_maps(tris, raster, ao, sc, names, marks, ppm, labels=(), styles=None, 
     cloud = np.sin(5.3*x + 2.6*z) * np.sin(4.1*y - 3.5*z + np.sin(5*x))
     dirt = np.clip(sc['dust_strength'] * (1 - _step(0.26, 1.65, y)) * (0.8 + 0.2*cloud), 0, 1)
     dirt[zone == zone_id('glass_dark')] = 0
+    if type10 and np.any(drops):
+        # Keep mudflaps, tyres and the stowage bag out of the skirt treatment.
+        seams=np.asarray(sc.get('drop_seams',(1.,-1.))); feet=np.asarray(sc.get('drop_bottom',(.30,)))
+        panel=np.clip(np.searchsorted(-seams[1:],-z[drops]),0,len(feet)-1)
+        low,high=sc.get('drop_dirt',(.10,.30)); top=sc.get('drop_top',.765)
+        dirt[drops]=low+(high-low)*(1-_step(feet[panel],top,y[drops]))
     visibility = ao[fill]
     base = _mix(base, _rgb(sc['dust']), dirt)
     base *= ((1 + 0.035*cloud) * (1 - ink) * (0.86 + 0.14*visibility))[:, None]
-    orm = np.column_stack([visibility, rough + (0.95 - rough)*dirt, metal*(1 - dirt)])
+    weathered_rough=rough+(0.95-rough)*dirt
+    if type10: weathered_rough[drops]=rough[drops]
+    orm = np.column_stack([visibility, weathered_rough, metal*(1 - dirt)])
 
     def sheet(a, background):
         out = np.full(fill.shape + a.shape[1:], background, np.float32)
@@ -291,12 +406,13 @@ def paint_tank(objects, mats, scheme, size, workdir, density=None, marks=None, *
     Mark a..b is a segment (a=b for a point bolt); height is signed metres.
     Build in the neutral pose, before posing/animating the exported model.
 
-    scheme={'pattern': 'type10', 'brown_fraction': 0.40,
+    scheme={'pattern': 'type10', 'brown_fraction': 0.42,
             'zones': {'amber_lens': None}} selects the two-colour skin.
-    base/brown override its olive/brown swatches; scale multiplies lobe sizes.
-    brown_fraction (0.35..0.45) targets the fraction of painted atlas samples
-    before dust. turret_shell has larger lobes; gun_shell is mostly olive.
-    Use material key rubber for both skirts and disc_* tyres. Assign rack_mesh
+    base/brown override its two swatches; scale multiplies the band dimensions.
+    brown_fraction (.35.. .55) targets the fraction of physical painted area
+    after feathering and before dust. camo_drop continues the hull mask on
+    rubber; the turret has its own field. The tube inherits cheek_anchor colour
+    up to a single oblique transition. Unpainted rubber uses the rubber zone. Assign rack_mesh
     to the opaque lower rack panel only (no alpha, geometry or UV overlay).
     zones maps optional material keys to None (input Principled swatch) or
     an sRGB hex override. Roughness/metallic use the input scalar defaults;
@@ -334,7 +450,7 @@ def paint_tank(objects, mats, scheme, size, workdir, density=None, marks=None, *
     pattern = options.get('pattern', 'legacy')
     if pattern not in ('type10', 'legacy'):
         raise ValueError(f'unknown camo pattern: {pattern}')
-    swatches = dict(base='#505845', brown='#716651') if pattern == 'type10' else {}
+    swatches = dict(base='#485242', green='#485242', brown='#5E5545') if pattern == 'type10' else {}
     sc = {**DEFAULT_SCHEME, **swatches, **options}
     zones = dict(rack_mesh=None, amber_lens=None) if pattern == 'type10' else {}
     zones.update(sc.get('zones', {}))
