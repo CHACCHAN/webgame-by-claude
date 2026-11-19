@@ -2541,3 +2541,20 @@ airfield and Edwards' course art are still the stand-in shape.
   `game.spec.ts` + `online.spec.ts` again 14/14; the other five specs passed in the first run.
   On a software renderer the vehicle shown before stays up to 4 s while the next is compiled (GPU: a few frames).
 
+## v2.7.2 (11-19): Edwards' parked aircraft are the real models; its art and film again
+
+Owner said yes (11-19). Merged `edwards-parked` (`be62a6d`): nine aircraft (5 F-15C, 2 F-15J, 2 Su-47) from
+`parked.glb` (1.03 MB, baked offline), two merged meshes: 64.2k triangles, 2 draws + 1 shadow draw (stand-ins: 18.9k,
+1 + 1), ~+40 MB of video memory; quality low keeps the stand-ins. Agent's paired measurements: scene pass 1.955 /
+1.940 → 1.940 / 1.936 ms (ultra 1080p), first load into Edwards +0.4 s (4.12 → 4.52 s), a change of course to it
++0.04 s, no new hitch. Course art taken again with the F-15J; film recorded again (295.7 s, stamp `4e834f6d`, the
+same run within 1e-4).
+Verified on the merged tree: tsc; vitest 288; build; backend 78; **E2E 19/19 (full run, also covers v2.7.1's
+change)**; `gpu-errors.cjs` Edwards 0 on WebGPU and WebGL 2; default run WebGL 2 0; old | new sheet looked at
+(`~/.local/opt/wt/edwards-parked/sheets/edwards.jpg`, sent to the owner).
+**Open, found here, older than this change (in v2.7.1 live):** the default `gpu-errors.cjs` run on WebGPU shows
+intermittently `1× garage e231: Async render pipeline creation failed (renderPipeline_PaletteMaterial00x): The
+shader's texture sample type (TextureSampleType::Depth) …` (1 of 3 runs on v2.7.1, once on this tree; never before
+v2.7.1: the garage's compile before showing is the suspect). An agent is on it (`garage-pipeline`).
+Not verified: phones; the Edwards film in the live site's course select by picture.
+

@@ -645,7 +645,7 @@ pending. `docs/PLAN.md` holds the design.
   figure), but the models are procedural stand-ins (own models come first, and the owner sees their sheets), sound unheard by ear,
   no real gamepad tried.
 - Course style `'airbase'` (Edwards): `render/airbaseScenery.ts` (places in the airfield's frame: `a` m along 04R
-  from its threshold, `b` m to its left; hangars, tower, parked aircraft silhouettes, all procedural),
+  from its threshold, `b` m to its left; hangars, tower, all procedural; the parked aircraft: below),
   `airbasePavement.ts` (slabs and strips one hand above the ground, runway numbers / markings), `airbaseGround.ts`
   (the desert and the playa: oiled lakebed runway lines and the compass rose are painted by the ground's material;
   the wet film in rain). No roadside, no vegetation (`vegetationPlanting.ts` `airbase: []`). The road has no
@@ -655,6 +655,12 @@ pending. `docs/PLAN.md` holds the design.
   of the lamp field; the airfield's own lights (edge, threshold, approach, taxiway, lanterns) are sprites that light
   nothing; roofs and the tower's mast carry `render/beacons.ts` lights. Films: the course select's film is the
   hayate at dawn (296 s, 7.2 MB).
+  The parked aircraft are the fighters' own models, baked into `public/models/jets/parked.glb` by
+  `npx tsx tools/parked-jets.ts` (per type a simplified airframe + glass, one shared atlas pair; rerun after any
+  change of `f15c` / `f15j` / `su47.glb`: a vitest compares the sources' stamps). `render/parkedJets.ts`: fetched in
+  `Game.survey`, waited for (≤ `PARKED_WAIT` 6 s) in `buildWorld`, the nine spots become two merged meshes; without
+  the file, and always at quality low, the procedural stand-ins. A change of their look: the course art
+  (`img/courses/edwards.webp`) and the course select's film again.
 - Fighters (kind `jet`, `vehicle/jets.ts`: F-15J/DJ, F-15C/D, Su-47; `JET_ORDER`, only where `jet.courses` names the
   course): real figures (static thrust, masses, rotation and lift-off speeds; `EDWARDS_AIR` for the field's air),
   `VehicleSim.jetEngines` (spool lag, afterburner above 85 % throttle once at military power, Mach lapse),

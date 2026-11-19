@@ -14,6 +14,7 @@ import { shadeScene, type ShadeCaster } from './farShade';
 import { makeGlowTexture } from './textures';
 import { beaconPulse, buildBeacons } from './beacons';
 import { parkedJets } from './JetModel';
+import { parkedFromModels, parkedModelReady } from './parkedJets';
 import { CAR_SPECS, type CarId } from '../vehicle/carSpecs';
 import type { Float, Vec3 } from './tslNoise';
 
@@ -262,12 +263,25 @@ export function buildAirbaseScenery(track: Track, terrain: TerrainData, quality:
   }
 
   // ---------------------------------------------------------------- parked aircraft
+  // (the fighters' own models when `loadParkedJets` has brought them (render/parkedJets.ts), the wheels on the apron's
+  // slab; a type without one is the procedural stand-in, as before. Quality low keeps the stand-ins: the models cost
+  // it 0.4–1 s of loading and ~34 MB of video memory for a picture it draws without shadows)
+  const spots = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9].filter((k) => k !== 4).map((k) => {
+    // on its spot's lead-in line, nose to the taxi lane
+    const p = place(fld.apron.a0 + 33 + k * 66, lane + 78, 0);
+    return { position: p, heading: HEADING - Math.PI / 2, id: (['f15c', 'f15c', 'f15j', 'su47'] as const)[k % 4] };
+  });
+  const modelled = quality.surfaceDetail ? spots.filter((s) => parkedModelReady(s.id)) : [];
+  const fromModels = parkedFromModels(modelled.map((s) => ({ ...s, position: s.position.clone().setY(plane(s.position.x, s.position.z) + LIFT_SLAB) })));
+  if (fromModels) {
+    fromModels.traverse((o) => {
+      o.castShadow = shadows && o.name === 'parked-airframe';
+      o.receiveShadow = true;
+    });
+    group.add(fromModels);
+  }
   const parked = parkedJets(
-    [0, 1, 2, 3, 4, 5, 6, 7, 8, 9].filter((k) => k !== 4).map((k) => {
-      // on its spot's lead-in line, nose to the taxi lane
-      const p = place(fld.apron.a0 + 33 + k * 66, lane + 78, 0);
-      return { position: p, heading: HEADING - Math.PI / 2, id: (['f15c', 'f15c', 'f15j', 'su47'] as const)[k % 4] };
-    }),
+    spots.filter((s) => !fromModels || !modelled.includes(s)),
     (id) => CAR_SPECS[id as CarId],
   );
   if (parked) {
