@@ -3,7 +3,8 @@
 render_check(root, '/tmp/check', views=['front34_l', 'gear'], quick=True)
 sheet('/tmp/check', '/tmp/check/contact.jpg')
 
-VIEWS gives the PNG basenames in sheet order. Coordinates below are Blender
+VIEWS gives the PNG basenames in sheet order. traverse_min/max add combined
+yaw and elevation checks. Coordinates below are Blender
 metres: +X is vehicle left, -Y is forward, +Z is up (see TankModel.ts).
 """
 import math
@@ -26,9 +27,11 @@ VIEWS = {
     'traverse': ((.85, -1, .48), 'Traverse / 30 degrees left'),
     'elev_min': ((1, 0, 0), 'Elevation / minimum'),
     'elev_max': ((1, 0, 0), 'Elevation / maximum'),
+    'traverse_min': ((1, -.35, .12), 'Traverse left / minimum elevation'),
+    'traverse_max': ((1, -.35, .12), 'Traverse left / maximum elevation'),
     'gear': ((1, -.14, .09), 'Front running gear / left'),
     'top': ((0, 0, 1), 'Top'),
-    'under': ((.18, -.12, -1), 'Underside'),
+    'under': ((.86, .38, -.80), 'Belly / from below left'),
     'o_side': ((1, 0, 0), 'Outline / left side'),
     'o_top': ((0, 0, 1), 'Outline / top'),
     'o_front': ((0, -1, 0), 'Outline / front'),
@@ -180,9 +183,9 @@ def render_check(root, outdir, elev=(-7, 10), views=None, quick=False):
         for name in names:
             # Rotation about +Z carries -Y towards vehicle left; about -X lifts the nose.
             if turret:
-                turret.rotation_quaternion = Matrix.Rotation(math.radians(30 if name == 'traverse' else 0), 3, 'Z').to_quaternion()
+                turret.rotation_quaternion = Matrix.Rotation(math.radians(30 if name.startswith('traverse') else 0), 3, 'Z').to_quaternion()
             if gun:
-                pitch = elev[0] if name == 'elev_min' else elev[1] if name == 'elev_max' else 0
+                pitch = elev[0] if name.endswith('_min') else elev[1] if name.endswith('_max') else 0
                 gun.rotation_quaternion = Matrix.Rotation(math.radians(-pitch), 3, 'X').to_quaternion()
             layer.update()
             points = _bounds(meshes)
@@ -196,6 +199,17 @@ def render_check(root, outdir, elev=(-7, 10), views=None, quick=False):
             direction = VIEWS[name][0]
             _frame(cam, direction, points, outline)
             floor.hide_render = outline or name == 'under'
+            if name == 'under':
+                # Place and aim explicitly in Blender world space. No Euler
+                # basis inherited from the preceding top shot, no floor in
+                # either render engine. Log the setup alongside the image.
+                a,b = _box(points); target = (a+b)*.5
+                cam.location = target + Vector(direction).normalized()*((b-a).length*1.9)
+                sightline = target - cam.location
+                cam.rotation_euler = sightline.to_track_quat('-Z','Y').to_euler()
+                if not (cam.location.z < lo.z and sightline.z > 0):
+                    raise ValueError('underside camera not below vehicle')
+                print(f'VIEW under cameraZ={cam.location.z:.3f} targetZ={target.z:.3f} floor=off')
             key = Vector(direction) + Vector((.35, -.45, -1 if name == 'under' else 1))
             sun.rotation_euler = (-key).to_track_quat('-Z', 'Y').to_euler()
             bg = (1, 1, 1) if outline else (.35, .4, .48)
@@ -211,6 +225,7 @@ def render_check(root, outdir, elev=(-7, 10), views=None, quick=False):
             sh.show_cavity = sh.show_shadows = not outline
             sh.show_specular_highlight = not outline
             sc.render.filepath = str(directory / f'{name}.png')
+            layer.update()
             bpy.ops.render.render(scene=sc.name, write_still=True)
 
 
