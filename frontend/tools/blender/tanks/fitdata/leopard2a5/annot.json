@@ -1,5 +1,5 @@
 {
- "_note": "Leopard 2A5: points read off the 1920-px Commons pictures (photos: ref/list.json; never committed). tools/ba.py -> fit/ba.json. Game frame, x = left. Names: w1..w7 road wheel hub centres (hub cap face), spr sprocket hub, idl idler hub, gt1/gt7 the track's outer bottom edge (ground) under w1 / w7, hlb headlamp guard box: front face, outer lower corner, muz muzzle face centre (gun), bk_t / bk_b bustle basket rear outer vertical edge, top / bottom (turret).",
+ "_note": "Leopard 2A5: points read off the 1920-px Commons pictures (photos: ref/list.json; never committed). tools/ba.py -> fit/ba.json. Game frame, x = left. Names: w1..w7 road wheel hub centres (hub cap face), spr sprocket hub, idl idler hub, gt1/gt7 the track's outer bottom edge (ground) under w1 / w7, hlb headlamp guard box: front face, outer lower corner, muz muzzle face centre (gun), bk_t / bk_b bustle basket rear outer vertical edge, top / bottom (turret). fe_r / fe_f fume extractor rear / front end (gun), em_t / em_b gunner sight head right face rear edge top / bottom, hd_a / hd_b grab rail ends above the side number, peri PERI head top centre (turret), skr_t / skr_b side skirt rear end top / bottom, rr_t hull side box rear top corner (ill-determined: only side views). Solved on p01 + p03 + p08 + p12 (p04 / p05 / p06 are marked but stay out: p04 twisted the frame); w1..w7.x prior 1.81 +- 0.02 keeps the wheel row straight (left free, the side views traded it against the turret yaw).",
  "_sig_prior": 1.0,
  "_points": {
   "w1": [1.65, 0.38, 2.57],
@@ -62,7 +62,14 @@
   "w4.z": [0.0, 10.0],
   "w1.z": [2.46, 0.01],
   "w7.z": [-2.46, 0.01],
-  "muz.y": [2.12, 0.01]
+  "muz.y": [2.12, 0.01],
+  "w1.x": [1.81, 0.02],
+  "w2.x": [1.81, 0.02],
+  "w3.x": [1.81, 0.02],
+  "w4.x": [1.81, 0.02],
+  "w5.x": [1.81, 0.02],
+  "w6.x": [1.81, 0.02],
+  "w7.x": [1.81, 0.02]
  },
  "_axis": {
   "tz": [0.4, 0.03],
@@ -210,6 +217,34 @@
    "hd_b_a": [515, 316],
    "em_t_a": [383, 281],
    "em_b_a": [382, 334]
+  }
+ },
+ "p12": {
+  "size": [1920, 961],
+  "sigma": 2.5,
+  "psi": [0, 25],
+  "theta": [0, 8],
+  "f_exif": 1930,
+  "f_sig": 0.05,
+  "pts": {
+   "w1_r": [1180, 720],
+   "w2_r": [1000, 712],
+   "w3_r": [847.5, 705],
+   "w4_r": [704, 696],
+   "w5_r": [557.5, 689],
+   "w6_r": [421, 682.5],
+   "w7_r": [291, 676],
+   "spr_r": [166, 601],
+   "skr_t_r": [69, 523],
+   "skr_b_r": [69, 560.5],
+   "bk_t_r": [211, 342],
+   "bk_b_r": [223, 406],
+   "em_t_a": [677, 334],
+   "em_b_a": [679, 380],
+   "peri_a": [685, 206],
+   "hd_a_a": [821, 375],
+   "hd_b_a": [951, 375],
+   "muz_c": [1874, 334]
   }
  }
 }
