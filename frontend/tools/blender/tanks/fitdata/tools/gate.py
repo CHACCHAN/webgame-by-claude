@@ -9,6 +9,8 @@ precision gate of a tank's fit; numbers and overlays, nothing changes).
   PHOTOS      the photographs (not in the repository; default ~/.local/opt/carfit/tanks/<id>/ref)
   AXIS        "tz,gy,gz" of the MODEL (traverse axis z, trunnion height and z at 0°): the photo's psi / theta turn the
               model's turret / gun about these (default: read from the npz's `axis` if there, else ba.json's)
+  SHIFT       "dy,dz": the model moved by this before judging (the photos' frame has its origin only from guesses: the
+              model's origin is the middle of its track contact; the shift that fits best is reported with the gate)
 
 Objects whose name starts with `turret` turn with the photo's psi, `gun` with theta then psi (the dump names them
 after their node). Per photo: IoU of the silhouette on the judged pixels, the outline's distance to the photo's
@@ -58,6 +60,10 @@ def main():
         tz, gy, gz = (float(v) for v in Z['axis'])
     else:
         tz, gy, gz = ba['axis']['tz'], ba['axis']['gy'], ba['axis']['gz']
+    sy, sz = (float(v) for v in os.environ.get('SHIFT', '0,0').split(','))
+    P[..., 1] += sy
+    P[..., 2] += sz
+    tz, gy, gz = tz + sz, gy + sy, gz + sz
     kind = np.array(['gun' if names[o].startswith('gun') else 'turret' if names[o].startswith('turret') else 'hull' for o in O])
     os.makedirs(out, exist_ok=True)
     rows = {}

@@ -5,6 +5,12 @@ ONE Part per moving assembly, not an object per plate, bolt, or tyre. Parts
 below are unbuilt and contain material NAME keys, not bpy material objects.
 
 RUNNING GEAR
+  Round 2 additions: road_wheel, idler, sprocket and return_roller accept
+  keyword-only seg=None (circular rim/dish tessellation; teeth stay explicit).
+  None uses the budgeted silhouette. Higher overrides can exceed the budget.
+  paint_tank accepts optional markings (including planar normal/right/width);
+  paint_tracks accepts optional metal_tint. See tank_atlas for their keys.
+  Combined traverse_min/max pose views are available in render_check.
   RunningGear(...) describes one side. Prefer keyword fields: track_centre
   (positive left x), track_width, track_thickness (pad face to inner face),
   pitch, road=[(z,r),...], wheel_width (axle span), tyre_width (one hoop),
@@ -18,9 +24,17 @@ RUNNING GEAR
   cumulative metres; pts[-1]==pts[0]. track_band(rg,side,mats,tile_links=8)
   -> one closed Part; side='l'/'r' or +1/-1. U spans width; EXPORTED glTF V
   increases towards the rear on the bottom run. Blender UV.v=1-glTF.v.
+  Each link has a recessed web, raised pad (pad_share sets its footprint),
+  two edge pin bosses and one or two guides, all using track_l or track_r.
+  Cost per side: (30 + 10*horns) * max(8, round(path_length/pitch)) tris.
+  For an integer-link fit set pitch = path_length / desired_links on the
+  caller's RunningGear; the kit never rewrites pitch or the UV tile length.
   road_wheel(radius,width,tyre_width=None,tyre_depth=None,dish_depth=None,
   hub_bolts=8), sprocket(radius,width,teeth), idler(radius,width),
   return_roller(radius,width) -> axle-local rolling Parts, local spin axis X.
+  Disc costs (triangulated): road 696 with 8 bolts per hub, idler 776,
+  sprocket 348 + 40*teeth including both tooth rings, carrier 240. Small
+  hub rings use fewer corners than the tread; bolt count is not an LOD.
   tyre_wheel(radius,width,rim_radius=None,hub_bolts=10) -> tyre and rim.
   running_gear(body_node,rg,mats,tile_links=8) -> dict(objects,trackV,nodes):
   builds BOTH bands and every pivot (roll_l0 / roll_r0 are foremost) with one
@@ -252,36 +266,61 @@ def track_band(rg, side, mats, tile_links=8):
         def point(x,rad):
             return (xc+x,y+rad*tz,z-rad*ty)
         return point
-    # Ring wound across inside face first, returning over the chamfered
-    # shoulders and raised pad on the outside. Separate per-loop UVs close
-    # the geometric seam without interpolating a whole lap of texture there.
-    section=[(-.5,-h),(.5,-h),(.5,.42*h),(.46,.70*h),(.35,.70*h),(.33,h),
-             (-.33,h),(-.35,.70*h),(-.46,.70*h),(-.5,.42*h)]
-    def face(points,us,ds):
-        f=p.face(points,mat,False)
-        for loop,u,d in zip(f.loops,us,ds): loop[p.uv].uv=(u,1.-d/tile)
+    # The web follows the pitch polygon. Build details on its ruled faces,
+    # not on a second sampled curve (which would float off the end wheels).
+    web = .58*h
+    def face(corners):
+        f=p.face([q for q,u,d in corners],mat,False)
+        for loop,(_,u,d) in zip(f.loops,corners): loop[p.uv].uv=(u,1.-d/tile)
+
     for i in range(links):
-        d0=i*link; d1=(i+1)*link
-        f0,f1=frame(d0),frame(d1)
-        for j,(x,rad) in enumerate(section):
-            xx,rr=section[(j+1)%len(section)]
-            # For the return face use a narrow steel shoulder region of the tile.
-            ua,ub=(.865,.895) if j==0 else (x+.5,xx+.5)
-            if abs(ua-ub)<1.e-7: ub+= .008 if ub<.5 else -.008
-            face([f0(x*w,rad),f0(xx*w,rr),f1(xx*w,rr),f1(x*w,rad)],
-                 [ua,ub,ub,ua],[d0,d0,d1,d1])
-        # A tapered guide per pitch (or a pair outside the wheel pack).
-        for x in ((0.,) if rg.horns==1 else (-.442*w,.442*w)):
+        d0=i*link
+        a,b=frame(d0),frame(((i+1)%links)*link)
+        def corner(x,rad,t,u):
+            q=np.asarray(a(x,rad))*(1-t)+np.asarray(b(x,rad))*t
+            return q,u,d0+t*link
+
+        section=[(-.47,-h),(.47,-h),(.47,web),(-.47,web)]
+        for j,(x,r) in enumerate(section):
+            xx,rr=section[(j+1)%4]
+            u,v=((.865,.895),(.97,.99),(.97,.03),(.01,.03))[j]
+            face([corner(x*w,r,0,u),corner(xx*w,rr,0,v),
+                  corner(xx*w,rr,1,v),corner(x*w,r,1,u)])
+
+        def lug(x,base,tip,outer):
+            # Open foot on the web, four sloping walls and a flat crown.
+            # Both dimensions taper, so plan-projected UVs have area even
+            # on the two end walls. Guides sample steel, pads span the tile.
             rings=[]
-            for hh,half,ax in ((-h,.5*rg.horn_width,.21*link),(-h-rg.horn_height,.17*rg.horn_width,.085*link)):
-                d=(d0+d1)*.5
-                rings.append([(frame(d+st*ax)(x+sx*half,hh),.88+sx*.016,d+st*ax)
-                              for sx,st in ((-1,-1),(1,-1),(1,1),(-1,1))])
+            for rad,half,span in (base,tip):
+                ring=[corner(x+sx*half,rad,.5+st*span,
+                             .5+sx*half/w if outer else .88+sx*.017*half/base[1])
+                      for sx,st in ((-1,-1),(1,-1),(1,1),(-1,1))]
+                rings.append(ring[::-1] if outer else ring)
+            foot,cap=rings
             for j in range(4):
                 k=(j+1)%4
-                corners=[rings[0][j],rings[0][k],rings[1][k],rings[1][j]]
-                face(*zip(*corners))
-            face(*zip(*rings[1]))
+                face([foot[j],foot[k],cap[k],cap[j]])
+            face(cap)
+
+        # A separate raised rubber shoe with a lower steel valley at the
+        # joint. Only the pad reaches +h (ground on the lower straight).
+        lug(0.,(web,.35*w,.5*rg.pad_share),(h,.33*w,.46*rg.pad_share),True)
+        guide=min(.442*w,.47*w-.5*rg.horn_width)
+        for x in ((0.,) if rg.horns==1 else (-guide,guide)):
+            lug(x,(-h,.5*rg.horn_width,.21),(-h-rg.horn_height,.17*rg.horn_width,.085),False)
+
+        # A chamfered pin boss at each edge. Collapse the crown to a short
+        # ridge: two quads and two triangles, no buried back plate. Project
+        # UVs onto the radial/longitudinal plane in the steel edge strip.
+        for edge in (-1,1):
+            def pin(width,rad,t):
+                return corner(edge*width*w,rad*h,t,.5+edge*(.473+.015*rad))
+            q0,q1,q2,q3=(pin(.47,rad,t) for rad,t in
+                         ((-.78,.06),(.42,.06),(.42,.39),(-.78,.39)))
+            n,m=pin(.5,-.18,.12),pin(.5,-.18,.33)
+            for poly in ([q0,q1,n],[q1,q2,m,n],[q2,q3,m],[q3,q0,n,m]):
+                face(poly if edge>0 else poly[::-1])
     return p
 
 
@@ -306,46 +345,100 @@ def _dish(p,r,w,x,outer,bolts,seg,tyre_width=None,tyre_depth=None,dish_depth=Non
                       (x+side*(.45*w-inset),y,z),axis=(side,0,0),seg=6,cap0=True,smooth=False)
 
 
-def road_wheel(radius,width,tyre_width=None,tyre_depth=None,dish_depth=None,hub_bolts=8):
+def _axial_ring(x,r,n):
+    return [(x,r*math.cos(i*math.tau/n),r*math.sin(i*math.tau/n)) for i in range(n)]
+
+
+def _ring_strip(p,a,b,mat,smooth):
+    # Both rows run CCW about +X. Advance whichever row reaches the next
+    # azimuth first; coincident steps form a quad. No T-junctions or poles.
+    na,nb=len(a),len(b)
+    i=j=0
+    while i<na or j<nb:
+        da,db=(i+1)*nb,(j+1)*na
+        poly=[a[i%na]]
+        if da<=db:
+            i+=1; poly.append(a[i%na])
+        if db<=da:
+            poly.append(b[(j+1)%nb])
+        poly.append(b[j%nb])
+        if db<=da: j+=1
+        p.face(poly,mat,smooth)
+
+
+def _rolling_disc(p,r,w,x,outer,bolts,seg,tyre_width=None,tyre_depth=None,dish_depth=None,carrier=False):
+    # Spend circumference on the silhouette, not the small concentric hub
+    # rings. Keep both faces of each disc, including the inboard bolt heads.
+    tread=min(.90*w,tyre_width if tyre_width is not None else .72*w)
+    inner=r-(tyre_depth if tyre_depth is not None else .12*r)
+    inset=min(.32*w,dish_depth if dish_depth is not None else .18*w)
+    seat=.45*w-inset
+    if carrier:
+        profile=[(.56*inner,seat,6),(inner,.49*w,6),(r,.5*tread,seg)]
+        zones=['tank_paint',outer]
+    else:
+        profile=[(.22*inner,.50*w,8),(.32*inner,seat,8),(.88*inner,seat,8),
+                 (inner,.49*w,seg),(r,.5*tread,seg)]
+        zones=['steel','tank_paint','steel',outer]
+    rows=[_axial_ring(x-a,rr,n) for rr,a,n in profile]
+    rows.extend(_axial_ring(x+a,rr,n) for rr,a,n in reversed(profile))
+    p.face(rows[0][::-1],'steel',False)
+    for a,b,mat in zip(rows,rows[1:],zones+[outer]+zones[::-1]):
+        _ring_strip(p,a,b,mat,True)
+    p.face(rows[-1],'steel',False)
+
+    for side in (-1,1):
+        for i in range(bolts):
+            angle=math.tau*i/bolts
+            y,z=.39*inner*math.cos(angle),.39*inner*math.sin(angle)
+            base=[(xx,y+dy,z+dz) for xx,dy,dz in _axial_ring(x+side*seat,.055*r,6)]
+            if side<0: base.reverse()
+            tip=(x+side*(seat+.038*r),y,z)
+            for a,b in zip(base,base[1:]+base[:1]): p.face([a,b,tip],'steel',False)
+
+
+def road_wheel(radius,width,tyre_width=None,tyre_depth=None,dish_depth=None,hub_bolts=8,*,seg=None):
     p=Part('road_disc')
+    seg=max(8,min(20,(700-184-24*hub_bolts)//16)) if seg is None else max(8,int(seg))
     for sign in (-1,1):
-        _dish(p,radius,.41*width,sign*.295*width,'rubber',hub_bolts,32,tyre_width,tyre_depth,dish_depth)
+        _rolling_disc(p,radius,.41*width,sign*.295*width,'rubber',hub_bolts,seg,tyre_width,tyre_depth,dish_depth)
     return p
 
 
-def sprocket(radius,width,teeth):
+def sprocket(radius,width,teeth,*,seg=None):
     if not isinstance(teeth,int) or teeth < 3:
         raise ValueError('teeth must be an integer >= 3')
     p = Part('drive_disc')
-    _dish(p,.84*radius,.86*width,0.,'steel',8,32)
+    _rolling_disc(p,.84*radius,.86*width,0.,'steel',8,20 if seg is None else max(8,int(seg)))
     for sign in (-1,1):
-        # Four vertices per tooth: root, rising flank, flat tip, falling flank.
-        rows = []
-        for x in sorted((sign*.42*width, sign*.50*width)):
-            ring = []
+        # Keep the four-corner tooth silhouette, but only one bore vertex
+        # per tooth. Back and front annuli have opposite winding.
+        lo,hi=sorted((sign*.42*width,sign*.50*width))
+        rows=[]
+        for x in (lo,hi):
+            ring=[]
             for i in range(teeth):
                 for phase,scale in ((0,.88),(.28,1.),(.56,1.),(.84,.88)):
-                    a = math.tau*(i+phase)/teeth
+                    a=math.tau*(i+phase)/teeth
                     ring.append((x,radius*scale*math.cos(a),radius*scale*math.sin(a)))
             rows.append(ring)
-        # Annular faces leave the dished centre visible.
-        inner = [[(x,.76*radius*math.cos(a),.76*radius*math.sin(a))
-                  for _,y,z in rows[0] for a in [math.atan2(z,y)]] for x in (rows[0][0][0],rows[1][0][0])]
-        p.grid([*rows,inner[1],inner[0]],'steel',closed_u=True,closed_v=True,smooth=False)
+        bore0,bore1=(_axial_ring(x,.76*radius,teeth) for x in (lo,hi))
+        for a,b in ((bore0,rows[0]),(rows[0],rows[1]),(rows[1],bore1),(bore1,bore0)):
+            _ring_strip(p,a,b,'steel',False)
     return p
 
 
-def idler(radius,width):
+def idler(radius,width,*,seg=None):
     p = Part('idler_disc')
     for sign in (-1,1):
-        _dish(p,radius,.41*width,sign*.295*width,'steel',6,28)
+        _rolling_disc(p,radius,.41*width,sign*.295*width,'steel',6,28 if seg is None else max(8,int(seg)))
     return p
 
 
-def return_roller(radius,width):
+def return_roller(radius,width,*,seg=None):
     p = Part('carrier_disc')
     for sign in (-1,1):
-        _dish(p,radius,.4*width,sign*.30*width,'rubber',3,16)
+        _rolling_disc(p,radius,.4*width,sign*.30*width,'rubber',3,10 if seg is None else max(8,int(seg)),carrier=True)
     return p
 
 
@@ -734,13 +827,13 @@ def dump(objects,path):
 
 
 def report(root):
-    """Jet triangle/material census plus measured rest dimensions and track scale. Clearance is hull centreline underside."""
+    """Jet triangle/material census plus measured rest dimensions and track scale. Hull z bounds include fixed fittings and flaps, not the bands. Clearance is hull centreline underside."""
     bpy.context.view_layer.update()
     total,used=_jet.report(root)
     body=next(o for o in root.children if o.name=='body'); turret=next(o for o in body.children if o.name=='turret')
     gun=next(o for o in turret.children if o.name=='gun')
     inv=body.matrix_world.inverted(); invgun=gun.matrix_world.inverted()
-    clouds=[]; barrel=[]; belly=[]
+    clouds=[]; barrel=[]; belly=[]; hull_bounds=[]
     for o in body.children_recursive:
         if o.type!='MESH': continue
         matrix=inv @ o.matrix_world
@@ -748,6 +841,7 @@ def report(root):
         if o in list(gun.children_recursive):
             m=invgun @ o.matrix_world; barrel.extend(G(m @ v.co)[2] for v in o.data.vertices)
         if o.parent==body and not any(m.name in ('track_l','track_r') for m in o.data.materials):
+            hull_bounds.append((pts[:,2].min(),pts[:,2].max()))
             # Intersect triangle edges with x=0: skirts, wheel pods and lamps aren't belly clearance.
             o.data.calc_loop_triangles()
             for t in o.data.loop_triangles:
@@ -757,7 +851,10 @@ def report(root):
                     elif a[0]*b[0]<0: belly.append(a[1]+(b[1]-a[1])*a[0]/(a[0]-b[0]))
     allpts=np.concatenate(clouds); lo,hi=allpts.min(0),allpts.max(0); width,height,length=hi-lo
     muzzle=G(inv @ gun.matrix_world @ B(0,0,max(barrel)))
+    hull_rear=min((lo_z for lo_z,_ in hull_bounds),default=float('nan'))
+    hull_front=max((hi_z for _,hi_z in hull_bounds),default=float('nan'))
     if 'trackV' in body: print(f'TRACKV {body["trackV"]:.6f} bottom_front_to_rear')
     print(f'DIMS length={length:.3f} width={width:.3f} height={height:.3f} groundClearance={min(belly,default=float("nan")):.3f} '
-          f'muzzle=({muzzle[0]:.3f},{muzzle[1]:.3f},{muzzle[2]:.3f})')
+          f'muzzle=({muzzle[0]:.3f},{muzzle[1]:.3f},{muzzle[2]:.3f}) '
+          f'hullFrontZ={hull_front:.3f} hullRearZ={hull_rear:.3f} lengthOverGun={muzzle[2]-hull_rear:.3f}')
     return total,used

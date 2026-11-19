@@ -1,5 +1,9 @@
 """Procedural tank skin for the game. All sampling (including marks) is in the
 rest pose, in game metres: +X left, +Y up, +Z forward. No photo overlays.
+Optional extensions: scheme['pattern']='type10' selects the two-tone finish;
+paint_tank(..., markings=...) inks digits into the atlas. A marking can give
+normal, right and width for orthogonal projection onto a sloped plate.
+paint_tracks(..., metal_tint='#59564C') overrides the link steel swatch.
 The lamps keep their shaders; the belts keep both their shaders and scrolling UVs.
 """
 import os
@@ -116,7 +120,89 @@ def _relief(pos, obj, paint, features):
     return edge + detail, ink
 
 
-def _hull_maps(tris, raster, ao, sc, names, marks, ppm):
+# Rest-pose samples, not UV islands: neighbouring plates meet at the same
+# phase. Staggered ovals grow/shrink along their rows instead of repeating a tile.
+def _type10(pos, obj, labels, painted, sc, phase):
+    x, y, z = pos.T
+    size = np.full(len(x), sc['scale'], np.float32)
+    size[np.isin(obj, [i for i, n in enumerate(labels) if n == 'turret_shell'])] *= 1.45
+    across = x + y
+    u = (0.91*z + 0.41*across) / size + phase[0]
+    v = (0.91*across - 0.41*z) / size + phase[1]
+    v += 0.09*np.sin(3.2*u + phase[2])
+    # Two nearest rows suffice: minor radii are < row spacing. At the
+    # nominal contour the full axes are 0.70..1.40 m and 0.40..0.90 m.
+    spacing = 0.84
+    row = np.floor(v / spacing)
+    dist = np.full(len(x), np.inf, np.float32)
+    for j in (row, row + 1):
+        col = np.rint(u / 1.55 - 0.5*(j % 2))
+        du = u - (col + 0.5*(j % 2))*1.55
+        a = 0.525 + 0.175*np.sin(1.7*col + 2.2*j + phase[2])
+        b = 0.325 + 0.125*np.sin(2.4*col - 1.9*j + phase[3])
+        dist = np.minimum(dist, (du/a)**2 + ((v - j*spacing)/b)**2)
+    # Bias gun samples towards olive before setting one contour for the
+    # whole painted area. Do not count racks, tyres, lenses etc. as camo.
+    dist[np.isin(obj, [i for i, n in enumerate(labels) if n == 'gun_shell'])] += 0.9
+    fraction = float(sc.get('brown_fraction', 0.4))
+    if not 0.35 <= fraction <= 0.45:
+        raise ValueError('type10 brown_fraction must be in [0.35, 0.45]')
+    cutoff = np.quantile(dist[painted], fraction) if np.any(painted) else 1.0
+    return _mix(_rgb(sc['base']), _rgb(sc['brown']), 1 - _step(cutoff-0.035, cutoff+0.035, dist))
+
+
+# Five-row stencil, most significant bit at the reader's left.
+_DIGITS = ((7,5,5,5,7), (2,6,2,2,7), (7,1,7,4,7), (7,1,7,1,7),
+           (5,5,7,1,1), (7,4,7,1,7), (7,4,7,5,7), (7,1,2,2,2),
+           (7,5,7,5,7), (7,5,7,1,7))
+
+
+def _stencils(base, pos, obj, labels, painted, markings):
+    for mark in markings:
+        face = mark['face']
+        if face not in ('front', 'rear'):
+            raise ValueError('stencil face must be front or rear')
+        text = mark.get('text', '92-0417')
+        if not text or any(c not in '0123456789-' for c in text):
+            raise ValueError('stencil text accepts only digits and hyphens')
+        h = float(mark['height'])
+        depth = float(mark.get('depth', h))
+        if not (h > 0 and depth > 0):
+            raise ValueError('stencil height and depth must be positive')
+        cx, cy, cz = mark['center']
+        name = mark.get('object', 'hull_shell')
+        take = painted & np.isin(obj, [i for i, n in enumerate(labels) if n == name])
+        cell = h/5
+        sign = 1 if face == 'front' else -1
+        if 'normal' in mark:
+            n=np.array(mark['normal'],float); n/=np.linalg.norm(n)
+            right=np.array(mark.get('right',(sign,0,0)),float); right-=n*(right@n); right/=np.linalg.norm(right)
+            up=np.cross(n,right); ids=np.flatnonzero(take); rel=pos[ids]-np.array((cx,cy,cz),np.float32)
+            xx=rel@right; yy=rel@up; slab=np.abs(rel@n)<=mark.get('depth',.012)
+            width=mark.get('width',(4*len(text)-1)*cell)
+            ok=slab & (abs(xx)<=width/2) & (abs(yy)<=h/2)
+            ids=ids[ok]; col=np.floor((xx[ok]/width+.5)*(4*len(text)-1)).astype(int)
+            row=np.floor((.5-yy[ok]/h)*5).astype(int)
+        else:
+            ids = np.flatnonzero(take & (abs(pos[:, 2] - cz) <= depth) & (abs(pos[:, 1] - cy) <= h/2))
+            col = np.floor(sign*(pos[ids, 0]-cx)/cell + (4*len(text)-1)/2).astype(int)
+            row = np.floor((cy-pos[ids, 1])/cell + 2.5).astype(int)
+        glyphs = np.array([_DIGITS[int(c)] if c != '-' else (0,0,7,0,0) for c in text])
+        inside = (col >= 0) & (col < 4*len(text)-1) & (col%4 < 3) & (row >= 0) & (row < 5)
+        col, row, ids = col[inside], row[inside], ids[inside]
+        bits = glyphs[col//4, row] & (4 >> (col%4))
+        base[ids[bits != 0]] = _rgb(mark.get('colour', '#DAD9C8'))
+
+
+def _zone_style(mat, colour):
+    p = next((n for n in mat.node_tree.nodes if n.type == 'BSDF_PRINCIPLED'), None) if mat.use_nodes else None
+    rgb = p.inputs['Base Color'].default_value if p else mat.diffuse_color
+    rough = p.inputs['Roughness'].default_value if p else mat.roughness
+    metal = p.inputs['Metallic'].default_value if p else mat.metallic
+    return (_rgb(colour) if colour is not None else np.asarray(rgb[:3], np.float32), rough, metal)
+
+
+def _hull_maps(tris, raster, ao, sc, names, marks, ppm, labels=(), styles=None, markings=()):
     fill = raster['fill']
     pos = raster['pos'][fill]
     x, y, z = pos.T
@@ -133,26 +219,54 @@ def _hull_maps(tris, raster, ao, sc, names, marks, ppm):
     if s <= 0:
         raise ValueError('camo scale must be positive')
     phase = np.random.default_rng(sc['seed']).uniform(-np.pi, np.pi, 4)
-    u, v, w = x / s, y / s, z / s
-    wave = np.sin(2.25*w + 1.45*v + 0.85*u + phase[0] + 1.25*np.sin(1.5*u - 1.1*v + phase[1]))
-    wave += 0.60*np.sin(2.4*u - 1.65*v + 1.2*w + phase[2]) + 0.16*np.sin(4.4*w - 3*v + phase[3])
-    olive = _rgb(sc['base'])
-    base = _mix(olive, _rgb(sc['green']), 1 - _step(-0.10, 0.02, wave))
-    base = _mix(base, _rgb(sc['brown']), _step(-0.015, 0.115, wave))
+    obj = raster['obj'][fill]
+    pid = zone_id('tank_paint')
+    painted = zone == pid
+    type10 = sc.get('pattern', 'legacy') == 'type10'
+    if type10:
+        base = _type10(pos, obj, labels, painted, sc, phase)
+    else:
+        u, v, w = x / s, y / s, z / s
+        wave = np.sin(2.25*w + 1.45*v + 0.85*u + phase[0] + 1.25*np.sin(1.5*u - 1.1*v + phase[1]))
+        wave += 0.60*np.sin(2.4*u - 1.65*v + 1.2*w + phase[2]) + 0.16*np.sin(4.4*w - 3*v + phase[3])
+        olive = _rgb(sc['base'])
+        base = _mix(olive, _rgb(sc['green']), 1 - _step(-0.10, 0.02, wave))
+        base = _mix(base, _rgb(sc['brown']), _step(-0.015, 0.115, wave))
     rough = np.full(len(x), 0.75, np.float32)
     metal = np.zeros_like(rough)
     for key, (colour, r, m) in PLAIN.items():
         take = zone == zone_id(key)
         base[take], rough[take], metal[take] = _rgb(colour), r, m
 
-    pid = zone_id('tank_paint')
+    if type10:
+        rubber = zone == zone_id('rubber')
+        discs = [i for i, n in enumerate(labels) if n.startswith('disc_')]
+        base[rubber] = _rgb('#34372F')
+        base[rubber & np.isin(obj, discs)] = _rgb('#2C2E29')
+    for key, (rgb, r, m) in (styles or {}).items():
+        take = zone == zone_id(key)
+        base[take], rough[take], metal[take] = rgb, r, m
+
     features = _plate_edges(tris, pid)
     for mark in marks:
         kind = mark['kind']
         if kind not in ('bolt', 'seam'):
             raise ValueError(f'unknown mark kind: {kind}')
         features.append((mark['a'], mark['b'], kind, mark['radius'], mark['height'], None))
-    height, ink = _relief(pos, raster['obj'][fill], zone == pid, features)
+    height, ink = _relief(pos, obj, painted, features)
+    if type10 or 'rack_mesh' in (styles or {}):
+        rack = zone == zone_id('rack_mesh')
+        # A continuous horizontal coordinate around axis-aligned rack corners.
+        # Draw both diagonals into the opaque panel, with a raised wire profile.
+        side = x[rack] + z[rack]
+        up = 1.35*y[rack]
+        pitch = 0.11
+        wire_dist = np.minimum(abs(((side+up)/pitch + 0.5) % 1 - 0.5),
+                               abs(((side-up)/pitch + 0.5) % 1 - 0.5))
+        wire = 1 - _step(0.045, 0.16, wire_dist)
+        base[rack] *= (0.32 + 0.95*wire)[:, None]
+        height[rack] += 0.003*wire
+    _stencils(base, pos, obj, labels, painted, markings)
     cloud = np.sin(5.3*x + 2.6*z) * np.sin(4.1*y - 3.5*z + np.sin(5*x))
     dirt = np.clip(sc['dust_strength'] * (1 - _step(0.26, 1.65, y)) * (0.8 + 0.2*cloud), 0, 1)
     dirt[zone == zone_id('glass_dark')] = 0
@@ -171,11 +285,32 @@ def _hull_maps(tris, raster, ao, sc, names, marks, ppm):
     return sheet(base, 0.1), sheet(orm, (1, 0.8, 0)), normal
 
 
-def paint_tank(objects, mats, scheme, size, workdir, density=None, marks=None):
+def paint_tank(objects, mats, scheme, size, workdir, density=None, marks=None, *, markings=()):
     """Return the applied hull material. scheme overrides DEFAULT_SCHEME;
     density(object, material_name) is a relative UV density as in JA.unwrap.
     Mark a..b is a segment (a=b for a point bolt); height is signed metres.
     Build in the neutral pose, before posing/animating the exported model.
+
+    scheme={'pattern': 'type10', 'brown_fraction': 0.40,
+            'zones': {'amber_lens': None}} selects the two-colour skin.
+    base/brown override its olive/brown swatches; scale multiplies lobe sizes.
+    brown_fraction (0.35..0.45) targets the fraction of painted atlas samples
+    before dust. turret_shell has larger lobes; gun_shell is mostly olive.
+    Use material key rubber for both skirts and disc_* tyres. Assign rack_mesh
+    to the opaque lower rack panel only (no alpha, geometry or UV overlay).
+    zones maps optional material keys to None (input Principled swatch) or
+    an sRGB hex override. Roughness/metallic use the input scalar defaults;
+    linked textures aren't sampled. Type10 samples rack_mesh and amber_lens
+    automatically when present. Existing lamp and belt shaders are kept.
+
+    markings is independent of relief marks. Example (centres supplied by rig):
+      markings=[dict(face='front', center=front_xyz, height=0.14),
+                dict(face='rear', center=rear_xyz, height=0.14)]
+    Height is full glyph height in metres. Both project onto tank_paint on
+    object='hull_shell', in a +/- depth slab about center.z (depth defaults
+    to height). Place centres on the intended plates. Optional text (digits
+    and hyphens, default '92-0417') and colour (sRGB hex). Only albedo pixels
+    change; the rear reads from the opposite direction. No decal meshes.
     """
     objects = [ob for ob in objects if ob.type == 'MESH' and len(ob.data.polygons)]
     names = {key: m.name for key, m in mats.mats.items()}
@@ -195,7 +330,16 @@ def paint_tank(objects, mats, scheme, size, workdir, density=None, marks=None):
             restore.append((me, [(i, uv[i].uv[:]) for i in loops]))
     if not body:
         raise ValueError('no hull faces to paint')
-    sc = {**DEFAULT_SCHEME, **(scheme or {})}
+    options = scheme or {}
+    pattern = options.get('pattern', 'legacy')
+    if pattern not in ('type10', 'legacy'):
+        raise ValueError(f'unknown camo pattern: {pattern}')
+    swatches = dict(base='#505845', brown='#716651') if pattern == 'type10' else {}
+    sc = {**DEFAULT_SCHEME, **swatches, **options}
+    zones = dict(rack_mesh=None, amber_lens=None) if pattern == 'type10' else {}
+    zones.update(sc.get('zones', {}))
+    styles = {key: _zone_style(mats.mats[key], colour) for key, colour in zones.items()
+              if key in mats.mats}
     bpy.context.view_layer.update()
     ppm = JA.unwrap(body, density=density, angle=52.0)
     try:
@@ -207,7 +351,8 @@ def paint_tank(objects, mats, scheme, size, workdir, density=None, marks=None):
         del low
         ao = JA.blur(JA.resize(ao, size), 1)
         raster = JA.raster(tris, size)
-        maps = _hull_maps(tris, raster, ao, sc, names, marks or (), ppm)
+        maps = _hull_maps(tris, raster, ao, sc, names, marks or (), ppm,
+                          [ob.name for ob in body], styles, markings or ())
         files = _save(workdir, 'tank_', *maps)
     finally:
         # A mixed mesh can contain both atlas and scrolling faces. Its atlas
@@ -219,13 +364,13 @@ def paint_tank(objects, mats, scheme, size, workdir, density=None, marks=None):
     mat = JA.material('armor', files)
     # Workbench TEXTURE uses the active image node, not the Principled graph.
     mat.node_tree.nodes.active = next(n for n in mat.node_tree.nodes if getattr(n, 'image', None) == files['base'])
-    mat.diffuse_color = K.srgb(sc['green'])
+    mat.diffuse_color = K.srgb(sc['base'] if pattern == 'type10' else sc['green'])
     mats.mats['armor'] = mat
     JA.apply(body, mat, keep=keep)
     return mat
 
 
-def _track_maps(rg, tile_links):
+def _track_maps(rg, tile_links, metal_tint='#58554d'):
     if int(tile_links) != tile_links or tile_links < 1:
         raise ValueError('tile_links must be a positive integer')
     width, pitch = rg.track_width, rg.pitch
@@ -260,7 +405,7 @@ def _track_maps(rg, tile_links):
     mottling = np.sin(tau*(7*u + 3*v) + 0.8*np.sin(tau*5*v))
     wear = body * _step(0.32*pitch, 0.425*pitch, ay) * (0.67 + 0.28*mottling)
     steel = np.maximum(body, lug)
-    base = _mix(_rgb('#292825'), _rgb('#58554d'), steel)
+    base = _mix(_rgb('#292825'), _rgb(metal_tint), steel)
     base = _mix(base, _rgb('#9b9991'), np.maximum(wear, pin))
     base = _mix(base, _rgb('#343533'), pad)
     base = _mix(base, _rgb('#746550'), dirt * (1 - pad) * 0.64)
@@ -301,14 +446,16 @@ def _wire_track(mat, files, occlusion_group):
     nt.nodes.active = next(n for n in nt.nodes if getattr(n, 'image', None) == files['base'])
 
 
-def paint_tracks(mats, rg, workdir, tile_links=8):
+def paint_tracks(mats, rg, workdir, tile_links=8, *, metal_tint='#58554d'):
     """Wire the same three 512px images into both existing track materials.
     U spans track_width, V spans pitch * tile_links metres (= runtime trackV).
     pad_share is the rubber fraction of each pitch; widths and pitch in metres.
+    metal_tint is the cast shoe's sRGB hex colour (use '#59564C' for Type10);
+    rubber pads, worn edges and the scrolling UVs are unchanged.
     Returns the shared Blender images by key (base, orm, normal).
     """
     left, right = mats['track_l'], mats['track_r']
-    files = _save(workdir, 'track_', *_track_maps(rg, tile_links))
+    files = _save(workdir, 'track_', *_track_maps(rg, tile_links, metal_tint))
     group = bpy.data.node_groups.get('glTF Material Output')
     if group is None:
         group = bpy.data.node_groups.new('glTF Material Output', 'ShaderNodeTree')

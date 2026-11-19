@@ -3,6 +3,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import type { CarSpec } from '../vehicle/carSpecs';
 import { adoptMaterials, createCarMaterials, modelAnchors, type CarMaterials, type CarRig } from './CarModel';
 import { wrapAngle } from '../util/math';
+import { baked } from './mergeParts';
 
 /**
  * The tanks: our own models (public/models/tanks/<id>.glb, tools/blender/tanks/<id>.py) or a procedural stand-in while
@@ -281,7 +282,9 @@ function mergeRolls(model: THREE.Object3D) {
       r.traverse((o) => {
         const m = o as THREE.Mesh;
         if (!m.isMesh || Array.isArray(m.material)) return;
-        const g = m.geometry.clone().applyMatrix4(toParent.clone().multiply(m.matrixWorld));
+        // (plain floats first: applyMatrix4 on a quantized attribute writes metres into int16s, and the wheels,
+        // wrapped round to places inside the hull, swung out as tall slabs once they turned)
+        const g = baked(m.geometry, toParent.clone().multiply(m.matrixWorld));
         const n = g.getAttribute('position').count;
         g.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(new Uint16Array(n * 4).map((_, k) => (k % 4 === 0 ? i : 0)), 4));
         g.setAttribute('skinWeight', new THREE.Float32BufferAttribute(new Float32Array(n * 4).map((_, k) => (k % 4 === 0 ? 1 : 0)), 4));
