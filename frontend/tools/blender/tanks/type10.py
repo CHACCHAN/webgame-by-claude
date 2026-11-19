@@ -25,7 +25,7 @@ T = {
                  (3.575,1.17,2.925,.43,.83,.93,1.08)),
         "chine_fraction": .42,
         # Set the stern furniture INTO the two return bays; retain the centre profile.
-        "stern_spine": .030, "stern_bay_start": .102, "stern_set_in": (.22,.10),
+        "stern_spine": .030, "stern_bay_start": .102, "stern_set_in": (.13,.06),
         "arm": {"profile": ((-.33,.21),(-.25,.28),(.065,.045),(.056,-.046),(-.053,-.06)),
                 "span": (.94,1.075)},
         # Shoulder ribs: z, inner/outer x, underside, top. High underside over sprocket.
@@ -79,11 +79,11 @@ T = {
                              ((.93,.43,-3.41),(1.48,.45,-3.40))),"gauge":.018},
     },
     # Hull frame at zero aim. Roof is a datum, not the overall height.
-    'ring': (1.55,-.02), 'trunnion': (1.96,1.40), 'roof': 2.30,
+    'ring': (1.55,-.02), 'trunnion': (1.97,1.40), 'roof': 2.30,
     'elevation': (-7.,10.), 'check_yaw': (0.,30.),
     'gear': dict(track_centre=1.25,track_width=.60,track_thickness=.05,pitch=.16,
                  road=((2.12,.37),(1.06,.37),(0.,.37),(-1.06,.37),(-2.12,.37)),
-                 sprocket=(-3.05,.83,.37,12,.46), idler=(2.92,.73,.35),
+                 sprocket=(-3.05,.83,.37,12,.46), idler=(3.02,.73,.35),
                  rollers=((1.59,1.06,.13),(0.,1.06,.13),(-1.59,1.06,.13)),
                  horns=1,horn_height=.063,horn_width=.040,sag=.018,pad_share=.72,
                  wheel_width=.46,tyre_width=.15,tyre_depth=.064,dish_depth=.031,hub_bolts=8,
@@ -94,9 +94,10 @@ T = {
     'turret': dict(
         lower=((.30,1.78),(.84,1.73),(1.30,1.59),(1.32,1.34),(1.415,.48),(1.43,-1.40),(1.44,-1.95)),
         crease=((.30,2.23),(.83,2.18),(1.32,1.59),(1.35,1.34),(1.44,.48),(1.445,-1.40),(1.43,-1.95)),
-        upper=((.30,1.82),(.795,1.77),(1.14,1.405),(1.185,1.14),(1.24,.40),(1.24,-1.39),(1.195,-1.83)),
+        upper=((.30,1.82),(.795,1.77),(1.100,1.405),(1.155,1.14),(1.24,.40),(1.24,-1.39),(1.195,-1.83)),
+        upper_y=(2.190,2.190,2.215,2.235,2.300,2.300,2.300),
         lower_y=(1.641,1.641,1.604,1.602,1.621,1.673,1.670),crease_y=(1.98,1.98,1.98,1.98,1.98,1.99,2.010), slot_back=.95,
-        core_halfwidth=1.15, core_front=.95,core_aft=-1.48,core_y=(1.667,2.275),
+        core_halfwidth=1.15, core_front=.95,core_aft=-1.48,core_bottom=1.667,core_recess=.025,
         race=((1.525,.95),(1.54,1.045),(1.60,1.045),(1.635,.985)),
         # Three butt-jointed side modules on the long flank, aft-most steps up.
         modules=((.48,-.10,1.617),(-.115,-.68,1.635),(-.695,-1.30,1.66)),
@@ -110,7 +111,7 @@ T = {
         surround=((1.35,.353,.225,.215,.182),(1.52,.349,.236,.225,.187),
                   (1.63,.316,.232,.230,.202)),
         socket=((1.615,.240,.209,.227,.199),(1.669,.238,.217,.227,.207))),
-    'rack': dict(half=1.35,front=-1.88,rear=-3.135,base=1.735,rail=2.153,mesh_top=1.933,
+    'rack': dict(half=1.35,front=-1.88,rear=-2.945,base=1.735,rail=2.153,mesh_top=1.933,
                  cap_r=.0175,post_r=.012,horizontal_r=.013,skin=.008,back_div=9,side_div=4,
                  cleats=(-.96,.96),cleat_size=(.064,.094,.18)),
     'roof_fit':dict(
@@ -119,7 +120,7 @@ T = {
         pano_gap=.019,head_brow=(.45,.026,.060),shutter_size=(.30,.132,.016),
         handle_half=.123,handle_h=.032,handle_r=.009,
         # Forward optical face (also the game's eye), not the panoramic head.
-        sight=(.60,2.444,.912),hood_cz=.73,hood_size=(.49,.27,.46),hood_t=.026,
+        sight=(.60,2.399,.912),hood_cz=.73,hood_size=(.49,.245,.46),hood_t=.026,
         hood_window=(.344,.158,.014),hood_foot=.032,
         cupola=(-.48,-.05),cup_profile=((0.,.315),(.044,.34),(.109,.316),(.131,.342),(.157,.331)),
         blocks=9,block_radius=.319,block_y=.077,block_size=(.141,.062,.029),
@@ -128,13 +129,13 @@ T = {
         aft_fitting=(1.306,2.086,-1.49),fitting_size=(.036,.158,.105),
         antenna=(1.16,2.297,-1.46),antenna_r=.041,antenna_base_h=.117,whip_delta=(.048,.435,-.099),whip_r=.007,
         mast=(0.,2.30,-1.32),mast_h=.532,mast_r=.025,mast_cap=(.079,.044,.067),
-        pintle=(-.35,2.443,.03),mg_scale=1.00,mg_post=.074,
+        pintle=(-.15,2.443,.03),mg_scale=1.00,mg_post=.074,
         mg_lift=.054,bag_offset=(-.142,.281,-.128),bag_size=(.122,.194,.229),
         mg_body=(.157,.152,.466),mg_centre=(0.,.364,-.08),mg_box=(.212,.211,.274),
         mg_box_centre=(.160,.324,-.126),mg_fork=(.109,.210,.414,-.158,.095),
         mg_stock_z=-.408,mg_jacket_z=.420,mg_tip=.99,mg_tip_r=.021),
     # Axial station and outside diameter, all z in hull frame; inside is a blind dark socket.
-    'tube':dict(muzzle_y=1.99,root=((1.37,.245),(1.60,.271),(1.835,.312)),
+    'tube':dict(muzzle_y=1.97,root=((1.37,.245),(1.60,.271),(1.835,.312)),
                 boot=((1.826,.323),(1.852,.40),(1.903,.374),(1.934,.390),(1.994,.350),(2.044,.372),
                       (2.111,.343),(2.156,.359),(2.222,.322),(2.275,.340),(2.38,.320)),
                 wrinkle=.011,
@@ -411,21 +412,68 @@ def _fixed_frame(stations,mat,seg):
     return p
 
 
-def _turret_shell(marks):
-    t=T['turret']; roof=T['roof']; rows=[]
-    for outline,ys in ((t['lower'],t['lower_y']),(t['crease'],t['crease_y']),
-                       (t['upper'],[roof]*len(t['upper']))):
-        half=[(x,y,z) for (x,z),y in zip(outline,ys)]
-        # U-shaped nose slot runs back past the trunnion: the shell must not
-        # bridge the gun slot, even where its coplanar top/bottom are capped.
-        half=[(half[0][0],half[0][1],t['slot_back']),*half]
+def _roof_front_y(z):
+    """Height at a hull-frame station. np.interp holds the end heights outside the knots."""
+    t=T['turret']; knots=sorted((zz,y) for (_,zz),y in zip(t['upper'],t['upper_y'],strict=True))
+    zs,ys=zip(*knots)
+    return float(np.interp(z,zs,ys))
+
+
+def _faceted_shell(t):
+    # Build matching perimeter rings. Insert a knot at the slot back on the
+    # outside, and matching roof knots along the inside lip of each cheek.
+    plan=t['upper']; front=plan[0][1]; back=t['slot_back']
+    if not all(a[1]>b[1] for a,b in zip(plan,plan[1:])) or not plan[-1][1]<back<front:
+        raise ValueError('upper plan stations must run nose to stern past the slot')
+    zs=sorted({z for x,z in plan}|{back}); rows=[]
+    for outline,heights,is_top in ((t['lower'],t['lower_y'],False),(t['crease'],t['crease_y'],False),
+                                    (plan,t['upper_y'],True)):
+        outer=[np.array((x,y,z)) for (x,z),y in zip(outline,heights,strict=True)]
+        half=[]; x0,y0,z0=outer[0]
+        for z in zs:
+            if back<=z<front:
+                u=(z-back)/(front-back)
+                half.append((x0,_roof_front_y(z) if is_top else y0,back+u*(z0-back)))
+        for i,q in enumerate(outer):
+            half.append(q)
+            if i+1<len(plan) and plan[i][1]>back>plan[i+1][1]:
+                u=(back-plan[i][1])/(plan[i+1][1]-plan[i][1])
+                half.append(q+u*(outer[i+1]-q))
         rows.append(half+[(-x,y,z) for x,y,z in reversed(half)])
-    parts=[_skin_y('faceted shell',rows),_fixed_frame(t['surround'],'tank_paint',8),
+    p=K.Part('faceted shell')
+    # This perimeter winds clockwise in (x,z), i.e. outwards at the roof.
+    p.loft(rows,K.PAINT,cap0=True,cap1=False,cap_centre=False,smooth=False)
+    # Each band is planar, spans exactly one roof slope, and stops at the
+    # slot. Split the cross edge at the slot mouth so its vertices weld.
+    zknots,xknots=zip(*[(z,x) for x,z in reversed(plan)]); slot_x=plan[0][0]
+    def corner(x,z): return (x,_roof_front_y(z),z)
+    for a,b in zip(zs,zs[1:]):
+        wa,wb=(float(np.interp(z,zknots,xknots)) for z in (a,b))
+        if b<=back:
+            lip=[corner(-slot_x,b),corner(slot_x,b)] if b==back else []
+            p.face([corner(-wa,a),corner(-wb,b),*lip,corner(wb,b),corner(wa,a)],K.PAINT,False)
+        else:
+            right=[corner(slot_x,a),corner(slot_x,b)]
+            if wb!=slot_x: right.append(corner(wb,b))
+            right.append(corner(wa,a))
+            p.face(right,K.PAINT,False)
+            p.face([(-x,y,z) for x,y,z in reversed(right)],K.PAINT,False)
+    return p
+
+
+def _turret_shell(marks):
+    t=T['turret']
+    parts=[_faceted_shell(t),_fixed_frame(t['surround'],'tank_paint',8),
            _fixed_frame(t['socket'],'rubber',32)]
     parts.append(_turned('race',(0,0,T['ring'][1]),(0,1,0),t['race'],'race_contact',56))
-    # The box over the race is slightly recessed beneath the module skirts.
-    a,b=t['core_y']; za=t['core_aft']; zb=t['core_front']
-    parts.append(K.cbox((0,(a+b)/2,(za+zb)/2),(2*t['core_halfwidth'],b-a,zb-za),0.))
+    # Follow the entire roof profile, not just the two end heights.
+    w=t['core_halfwidth']; a=t['core_bottom']; za=t['core_aft']; zb=t['core_front']
+    stations=sorted({za,zb}|{z for _,z in t['upper'] if za<z<zb})
+    core=[]
+    for z in stations:
+        b=_roof_front_y(z)-t['core_recess']
+        core.append((z,[(-w,a),(w,a),(w,b),(-w,b)]))
+    parts.append(K.loft(core))
     parts.append(K.coax_port(t['coax'],t['coax_radius'],(0,.63,.78)))
     for side in (-1,1):
         for za,zb,bot in t['modules']:
@@ -439,7 +487,8 @@ def _turret_shell(marks):
         for z in t['loop_z']:
             x=side*t['loop_x']; y=t['loop_y']; dz=t['loop_half']; h=t['loop_h']
             parts.append(_bars('lifting eye',[[(x,y,z-dz),(x,y+h,z-dz),(x,y+h,z+dz),(x,y,z+dz)]],t['loop_r']))
-        a=t['upper']; K.weld_seam(marks,(side*a[3][0],roof,a[3][1]),(side*a[4][0],roof,a[4][1]))
+        a=t['upper']; K.weld_seam(marks,(side*a[3][0],_roof_front_y(a[3][1]),a[3][1]),
+                                      (side*a[4][0],_roof_front_y(a[4][1]),a[4][1]))
     return parts
 
 
@@ -479,20 +528,23 @@ def _roof():
     parts.append(_bars('sight grab',[[ctr-rail,ctr-rail+lift,ctr+rail+lift,ctr+rail]],t['handle_r']))
     x,ey,ez=t['sight']; z=t['hood_cz']; w,h,d=t['hood_size']; wall=t['hood_t']; foot=t['hood_foot']
     # Projecting brows above a recessed vertical lens, not a solid shiny cube.
-    parts.extend([K.cbox((x,y+foot/2,z),(w,foot,d),.008),
-                  K.cbox((x,y+h-wall/2,z),(w,wall,d),.006),
+    seat=_roof_front_y(z); aft=z-d/2; fore=z+d/2
+    # Level optics on a tapered foot: no daylight under the forward lip.
+    plinth=[(aft,_roof_front_y(aft)),(fore,_roof_front_y(fore)),(fore,seat+foot),(aft,seat+foot)]
+    parts.extend([K.prism(plinth,x-w/2,x+w/2),
+                  K.cbox((x,seat+h-wall/2,z),(w,wall,d),.006),
                   K.cbox((x,ey,ez-t['hood_window'][2]/2),t['hood_window'],.005,'glass_dark')])
     for s in (-1,1):
         xl=x+s*(w-wall)/2
-        parts.append(K.prism([(z-d/2,y),(z+d/2-wall,y),(z+d/2,y+h),(z-d/2+wall,y+h)],xl-wall/2,xl+wall/2))
-    parts.append(K.cbox((x,y+h/2,ez-wall),(w-2*wall,h-wall,wall),.008,'recess'))
+        parts.append(K.prism([(aft,seat+foot),(fore-wall,seat+foot),(fore,seat+h),(aft+wall,seat+h)],xl-wall/2,xl+wall/2))
+    parts.append(K.cbox((x,seat+h/2,ez-wall),(w-2*wall,h-wall,wall),.008,'recess'))
     x,z=t['cupola']; parts.append(_turned('cupola',(x,y,z),(0,1,0),t['cup_profile'],seg=48))
     for angle in np.arange(t['blocks'])*math.tau/t['blocks']:
         fx,fz=math.sin(angle),math.cos(angle); r=t['block_radius']
         parts.append(K.periscope((x+r*fx,y+t['block_y'],z+r*fz),t['block_size'],(fx,0,fz)))
     x,z=t['hatch']; parts.append(K.hatch((x,y,z),size=t['hatch_size'],thickness=t['hatch_t']))
     for s in (-1,1):
-        x,cy,z=t['warning']; x*=s; r=t['warning_r']
+        x,cy,z=t['warning']; x*=s; cy+=_roof_front_y(z)-y; r=t['warning_r']
         parts.append(K.cbox((x,cy,z),t['warning_foot'],.011)); cy+=t['warning_foot'][1]/2
         parts.append(_turned('receiver',(x,cy,z),(0,1,0),[(r*math.sin(a),r*max(.035,math.cos(a)))
                               for a in np.linspace(0,math.pi/2,6)],'sensor',20))
@@ -520,7 +572,7 @@ def _roof():
 
 
 def _gun():
-    y,z0=T['trunnion']; t=T['tube']; parts=[]
+    y,_=T['trunnion']; t=T['tube']; parts=[]
     def tube(st,mat,seg=40,caps=True):
         return _turned('tube section',(0,y,0),(0,0,1),[(z,d/2) for z,d in st],mat,seg,caps)
     parts.append(tube(t['root'],'recess'))
@@ -543,24 +595,15 @@ def _gun():
     parts.append(K.cbox((x,cy,front),(gw,gh,gd),.002,'glass_dark'))
     for ox in t['dots']:
         parts.append(_turned('reference lens',(x+ox,cy,front+gd/2),(0,0,1),[(0,t['dot_r']),(gd/2,t['dot_r'])],'recess',10))
-    # The section table gives z stations along a straight tube before posing.
-    # Rotate about the trunnion and compensate the tiny axial foreshortening
-    # so that the centre of the front face lands on the measured (y,z).
-    gun=K.combine('gun_shell',parts); a=_rest_pitch(); c=math.cos(a); sn=math.sin(a)
-    linear=np.array(((1,0,0),(0,c,sn/c),(0,-sn,1.)))
-    pivot=np.array((0,y,z0)); M=np.eye(4); M[:3,:3]=linear; M[:3,3]=pivot-linear@pivot
-    gun.transform(M); return gun
-
-
-def _rest_pitch():
-    ty,tz=T['trunnion']; t=T['tube']
-    return math.atan2(t['muzzle_y']-ty,t['muzzle'][-1][0]-tz)
+    return K.combine('gun_shell',parts)
 
 
 def _dims():
     ry,rz=T['ring']; ty,tz=T['trunnion']; x,y,z=T['roof_fit']['sight']
+    if abs(T['tube']['muzzle_y']-ty)>1e-6:
+        raise ValueError('horizontal rest bore requires equal trunnion and muzzle heights')
     return dict(turretZ=rz,ringY=ry,trunnion=ty-ry,trunnionZ=tz-rz,
-                barrel=math.hypot(T['tube']['muzzle'][-1][0]-tz,T['tube']['muzzle_y']-ty),sight=(x,y-ry,z-rz))
+                barrel=T['tube']['muzzle'][-1][0]-tz,sight=(x,y-ry,z-rz))
 
 
 def _gear():
@@ -587,9 +630,6 @@ def build():
         c=J.srgb(swatch); mats[name].diffuse_color=c
         mats[name].node_tree.nodes['Principled BSDF'].inputs['Base Color'].default_value=c
     root,body,turret,gun=K.tank_nodes('type10',dims)
-    # Part.build takes world geometry and reparents it to this bore-aligned
-    # frame. TankModel uses the rest quaternion and local +Z for its flash.
-    gun.rotation_euler.x=-_rest_pitch(); bpy.context.view_layer.update()
     hull=_hull(rg,marks).build(body,mats,name='hull_shell'); objects=[hull]
     built=K.running_gear(body,rg,mats,tile_links=T['tile_links']); objects.extend(built['objects'])
     # Race, turret cheeks and roof fittings share one mesh. The race seating
@@ -635,6 +675,8 @@ def _contract(root,objects,rg,full):
     if gun.parent!=turret or turret.parent!=body or body.parent!=root: raise ValueError('pivot hierarchy')
     for node,p in ((turret,(0,dims['ringY'],dims['turretZ'])),(gun,(0,dims['trunnion'],dims['trunnionZ']))):
         if not np.allclose(K.G(node.location),p,atol=1e-5): raise ValueError(f'{node.name}: pivot mismatch')
+    if not np.allclose(np.array(gun.matrix_basis.to_3x3()),np.eye(3),atol=1e-6,rtol=0.):
+        raise ValueError('gun must have an unrotated, unscaled trunnion frame at rest')
     stations=[(z,700) for z,r in rg.road]+[(rg.sprocket[0],1400),(rg.idler[0],800)]+[(z,250) for z,_,_ in rg.rollers]
     for side in ('l','r'):
         belt=nodes[f'band_{side}']
