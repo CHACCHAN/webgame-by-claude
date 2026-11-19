@@ -157,8 +157,8 @@ The EDWARDS AFB course (2026-11-12, hidden until its release) has no files of it
 pavements, buildings and lights are made in code (`render/airbaseGround.ts`, `airbasePavement.ts`,
 `airbaseScenery.ts`), and so are the three fighters' stand-in models (`render/JetModel.ts`: procedural, until their
 Blender models are made and the owner has seen their sheets). Course art `img/courses/edwards.webp`: an in-game
-picture of our own build (the F-15J stand-in lifting off the lakebed at dawn, WebGPU, 1600×900 WebP q86; to be taken
-again with the real model). Thumbnails `img/vehicles/{f15j,f15c,su47}.webp`: `COURSE=edwards node tools/thumbs.cjs`.
+picture of our own build (the F-15J lifting off the lakebed at dawn, WebGPU, 1600×900 WebP q86; taken again with the
+real model on 2026-11-19: the take-off stepped by hand, frame 18 of `CAR=f15j SPEED=75 EVERY=20 RAISE=0.25`). Thumbnails `img/vehicles/{f15j,f15c,su47}.webp`: `COURSE=edwards node tools/thumbs.cjs`.
 The fighters' sound is synthesised (`audio/jet.ts`), no recordings.
 The F-15 (2026-11-18: `models/jets/f15j.glb`, `f15j-dj.glb`, `f15c.glb`, `f15c-d.glb`; 12 draw calls, 28–31 k
 triangles, 0.9 MB each) is our own Blender model, one airframe for the four: `tools/blender/jets/f15.py` (assembly,
@@ -172,7 +172,10 @@ licences in `tools/blender/jets/fitdata/f15c/ref/list.json`, the solved cameras 
 markings are drawn by the script in its own stroke letters: national insignia (hinomaru; star and bar), invented
 numbers (62-8999 / 999 and 62-8100 / 100; TG 96-500 and 96-510), an invented fin band "NOCTURNE" and the game's own
 fin badge (a moon over a pass); no unit's emblem is copied. The pilot, the seats and the cockpit are part of the
-model. The aircraft parked on the airfield (`airbaseScenery.ts`) and the course art are still the stand-in.
+model. The aircraft parked on the airfield (2026-11-19, `models/jets/parked.glb`, 1.0 MB) are baked from the F-15C, F-15J
+and Su-47 models by `npx tsx tools/parked-jets.ts` (simplified to 2 cm, the atlases at a quarter of their size side by
+side; run it again after any change of those three files: a vitest compares their stamps); quality low keeps the
+procedural stand-ins.
 
 The **Su-47** (`models/jets/su47.glb`, 2026-11-18) is our own model: `frontend/tools/blender/jets/su47.py` + `su47_shape.py`
 (the airframe in numbers), `su47_skin.py` (skins, the atlas), `su47_paint.py` (the textures), `su47_parts.py` (gear,

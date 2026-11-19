@@ -28,6 +28,7 @@ import { lampStreak, lampsAround, mirrorLamps, showSurroundings } from './render
 import { registerRigLights } from './render/coatGlint';
 import { ensureVehicleModels, onModelWait, preloadVehicleModels, vehicleModelReady } from './render/vehicleModels';
 import { loadTrafficModels } from './render/trafficModels';
+import { loadParkedJets, parkedJetsWithin, parkedStats } from './render/parkedJets';
 import { loadSurfaceTextures } from './render/surfaceTextures';
 import { loadProps } from './render/props';
 import { loadRoadsideModels } from './render/roadsideModels';
@@ -221,6 +222,8 @@ const _zero = new THREE.Vector3();
 const VOICE_WAIT = 700;
 /** the garage shows a vehicle once its shaders are compiled, or after this long (ms) if that never comes back */
 const GARAGE_COMPILE_WAIT = 4000;
+/** how long Edwards' load waits for the parked aircraft's models (ms) before it builds the stand-ins instead */
+const PARKED_WAIT = 6000;
 const NET_SEND_INTERVAL = 1 / 30;
 /** the acceleration sent with a state is smoothed over about this long (s): suspension chatter and wall hits are not a trend */
 const NET_ACC_TAU = 0.06;
@@ -440,10 +443,14 @@ export class Game {
   private survey(courseId: CourseId) {
     const course = COURSES[courseId];
     const track = new Track(course.design);
+    // (Edwards' parked aircraft: their models come in meanwhile, see `buildWorld`; quality low keeps the stand-ins)
+    if (course.style === 'airbase' && this.quality.surfaceDetail) void loadParkedJets();
     return { courseId, track, terrain: buildTerrainParallel(courseId, track, course.landform) };
   }
   /** how the last terrain was worked out (threads, ms, why not on workers): for probes */
   readonly terrainJob = terrainStats;
+  /** how the parked aircraft's models were made (ms): for probes */
+  readonly parkedJob = parkedStats;
   /** the first course's, begun before the downloads so that both run at the same time */
   private surveyed: { courseId: CourseId; track: Track; terrain: Promise<TerrainData> } | null = null;
 
@@ -555,6 +562,8 @@ export class Game {
       loadVegetation(vegetationFiles(course.style ?? 'touge', this.quality.vegetation.undergrowth > 0), this.quality.vegetation.tier),
       // the autobahn's oncoming traffic is the game's own cars (light copies of their models)
       course.style === 'autobahn' ? ensureVehicleModels(CAR_ORDER).then(() => loadTrafficModels(CAR_ORDER)) : null,
+      // the aircraft parked on Edwards' apron are the fighters' own models (baked copies; quality low: the stand-ins)
+      course.style === 'airbase' && this.quality.surfaceDetail ? parkedJetsWithin(PARKED_WAIT) : null,
     ]);
     this.terrain = terrain;
     await this.yieldFrame(0.5, '道路と森を配置中');
