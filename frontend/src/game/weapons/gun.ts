@@ -12,9 +12,10 @@ import type { GunInfo, TankInfo } from '../vehicle/tanks';
  * the horizon (world) or above the turret ring's plane (hull frame). The hull frame is the body's: +Z forward,
  * +X left, +Y up, origin at the body's origin (`rideHeight` above the ground at rest).
  *
- * The sight and the gun. The player moves the LINE OF SIGHT; the fire control lays the gun on it: the turret to
- * its bearing, the gun to its elevation plus the superelevation for the lased range (all five have a laser
- * rangefinder and a ballistic computer). Two ways of holding the sight:
+ * The sight and the gun. The player moves the LINE OF SIGHT; the fire control lays the gun on it: the bore
+ * converged on the point of that line at the lased range (the sight head sits above and beside the bore: laid
+ * parallel, a shot passed that far off the aim point at every range), plus the superelevation for that range (all
+ * five have a laser rangefinder and a ballistic computer). Two ways of holding the sight:
  *   - carried (the driving views): the sight keeps its bearing and elevation relative to the hull, so the picture
  *     turns with the road as a chase camera's does;
  *   - stabilised (the gunner's sight): it keeps its direction in the world while the hull turns and pitches under
@@ -141,7 +142,7 @@ export interface GunInput {
   recentre: boolean;
 }
 
-const _want: Angles = { yaw: 0, pitch: 0 };
+const _want: Angles = { yaw: 0, pitch: 0 }, _off: Angles = { yaw: 0, pitch: 0 };
 const _los = new Vector3();
 
 /**
@@ -158,11 +159,32 @@ export class GunControl {
   range = BATTLE_RANGE;
   /** the laser found something at `range` */
   lased = false;
+  /** where the fire control lays the gun off the line of sight (rad, hull frame): convergence and superelevation */
+  readonly lay: Angles = { yaw: 0, pitch: 0 };
   private stabilised = false;
+  /** the sight head from the trunnions, in the turret's frame (m) */
+  private readonly head: [number, number, number];
 
   constructor(readonly spec: CarSpec) {
-    this.info = spec.tank!.gun;
+    const t = spec.tank!;
+    this.info = t.gun;
     this.gun = newGun(this.info);
+    const [x, y, z] = sightOf(t);
+    this.head = [x, y - t.dims.trunnion, z - t.dims.trunnionZ];
+  }
+
+  /**
+   * The bearing and elevation (hull frame) the gun is laid to: from the trunnions at the point of the line of sight
+   * at `range`, raised by the superelevation for the distance to it. (The turret's frame is taken at the sight's
+   * bearing: the convergence turns it by milliradians, which moves the head by millimetres.)
+   */
+  laid(out: Angles) {
+    const [x, y, z] = this.head, r = this.range, p = this.sight.pitch;
+    const tx = x, ty = y + r * Math.sin(p), tz = z + r * Math.cos(p);
+    const flat = Math.hypot(tx, tz);
+    out.yaw = wrapAngle(this.sight.yaw + Math.atan2(tx, tz));
+    out.pitch = Math.atan2(ty, flat) + superelevation(this.info, Math.hypot(flat, ty));
+    return out;
   }
 
   /** A new race: the gun forward, loaded, its racks full. */
@@ -202,8 +224,9 @@ export class GunControl {
       anglesOf(dirOf(this.sight.yaw, this.sight.pitch, _los).applyQuaternion(q), this.world);
     }
     this.stabilised = input.stabilised && !input.recentre;
-    _want.yaw = this.sight.yaw;
-    _want.pitch = this.sight.pitch + superelevation(this.info, this.range);
+    this.laid(_want);
+    this.lay.yaw = wrapAngle(_want.yaw - this.sight.yaw);
+    this.lay.pitch = _want.pitch - this.sight.pitch;
     layGun(this.gun, this.info, _want, dt);
     if (this.gun.reload > 0) this.gun.reload = Math.max(0, this.gun.reload - dt);
   }
@@ -225,7 +248,8 @@ export class GunControl {
 
   /** how far the gun is off the line it is being laid on (rad) */
   get off() {
-    return Math.hypot(wrapAngle(this.sight.yaw - this.gun.yaw) * Math.cos(this.gun.pitch), this.sight.pitch + superelevation(this.info, this.range) - this.gun.pitch);
+    this.laid(_off);
+    return Math.hypot(wrapAngle(_off.yaw - this.gun.yaw) * Math.cos(this.gun.pitch), _off.pitch - this.gun.pitch);
   }
 
   /**
