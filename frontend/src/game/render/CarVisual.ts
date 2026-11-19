@@ -13,7 +13,7 @@ import { HEADLIGHT } from './LightRig';
 const _q = new THREE.Quaternion(), _p = new THREE.Vector3(), _aim = new THREE.Vector3();
 const AXIS_Y = new THREE.Vector3(0, 1, 0), AXIS_X = new THREE.Vector3(1, 0, 0);
 /** the materials of a car model's parts that throw shadows */
-const SHADOW_PARTS = /^(paint|accent|trim|glass|tire|rim)$/;
+const SHADOW_PARTS = /^(paint|accent|trim|glass|tire|rim|airframe)$/;
 /** headlight level from which pop-up lamps open and position lamps count as "on" (below: daytime) */
 const LIGHTS_ON = 0.75;
 /** pop-up pod: width, height, depth (m); hinge angle closed / open (rad, + = folded into the bonnet) */
@@ -92,7 +92,8 @@ export class CarVisual {
     const named = (m: THREE.Mesh, test: (name: string) => boolean) => ([] as THREE.Material[]).concat(m.material).some((x) => test(x.name));
     // on our car models (their materials carry the contract's names) only the shell, the glass and the wheels throw
     // shadows: every caster is a draw call in every shadow map, and the lamps, the cabin and the brakes sit inside
-    const sorted = meshes.some((m) => named(m, (n) => n === 'paint'));
+    // (a fighter's model is one atlas, `airframe`: its lamps and the afterburner's plume throw none)
+    const sorted = meshes.some((m) => named(m, (n) => n === 'paint' || n === 'airframe'));
     for (const m of meshes) {
       m.castShadow = opts.shadows && !opts.ghost && (!sorted || named(m, (n) => SHADOW_PARTS.test(n)));
       m.receiveShadow = !opts.ghost;
@@ -183,7 +184,8 @@ export class CarVisual {
    * from `at` on, as many as fit. Returns how many (0 when the car has no lamps or they are off).
    */
   beamsInto(pool: VolumeSpot[], at: number): number {
-    if (!this.lampOrigin || !this.lampParent || !(this.beamIntensity > 0) || !this.root.visible) return 0;
+    const intensity = this.beamNow();
+    if (!this.lampOrigin || !this.lampParent || !(intensity > 0) || !this.root.visible) return 0;
     // (this also brings the lamps' parent up to date)
     this.lampOrigin.getWorldPosition(_p);
     this.lampAim!.getWorldPosition(_aim).sub(_p).normalize();
@@ -194,7 +196,7 @@ export class CarVisual {
       out.direction.copy(_aim);
       out.color.set(HEADLIGHT.color);
       // (together they are the one real light)
-      out.intensity = this.beamIntensity / this.lampSources.length;
+      out.intensity = intensity / this.lampSources.length;
       out.angle = HEADLIGHT.angle;
       out.penumbra = HEADLIGHT.penumbra;
     }
@@ -203,10 +205,16 @@ export class CarVisual {
 
   /** The headlights as a real light, for one of the game's pooled spots (`LightRig.beams`): 0 when dark or absent. */
   headlight(position: THREE.Vector3, target: THREE.Vector3): number {
-    if (!this.lampOrigin || !(this.beamIntensity > 0) || !this.root.visible) return 0;
+    const intensity = this.beamNow();
+    if (!this.lampOrigin || !(intensity > 0) || !this.root.visible) return 0;
     this.lampOrigin.getWorldPosition(position);
     this.lampAim!.getWorldPosition(target);
-    return this.beamIntensity;
+    return intensity;
+  }
+
+  /** the headlights' strength now: a fighter's taxi lamp goes out with its gear (only the spot's intensity changes) */
+  private beamNow() {
+    return this.rig.jet ? this.beamIntensity * this.rig.jet.taxiLamp() : this.beamIntensity;
   }
 
   private applyBeams(level: number) {

@@ -81,6 +81,8 @@ interface JetDef {
   /** fuselage collision box (width, height above the belly, belly clearance) */
   box: { width: number; height: number; clearance: number };
   maxSteerDeg: number;
+  /** how much of the cockpit the canopy hides, head-on (`CarSpec.glassOpacity`) */
+  glassOpacity: number;
   stats: CarSpec['stats'];
   jet: JetInfo;
   model: NonNullable<CarSpec['model']>;
@@ -132,8 +134,8 @@ function jetSpec(d: JetDef): CarSpec {
     driftiness: 0,
     stats: d.stats,
     colors: { body: d.jet.liveries[0].swatch, accent: d.jet.camo[1] },
-    // (the canopy has no cockpit under it yet: the smoked bubble, not an empty one)
-    glassOpacity: 0.88,
+    // (the models' cockpits are fit to be seen; the procedural stand-in keeps its smoked canopy: JetModel.ts)
+    glassOpacity: d.glassOpacity,
     model: d.model,
     jet: d.jet,
   };
@@ -154,6 +156,16 @@ const F15_BASE = {
   comHeight: 1.9,
   box: { width: 3.2, height: 2.0, clearance: 0.95 },
   maxSteerDeg: 45,
+  glassOpacity: 0.62,
+};
+
+// the F-15's model (tools/blender/jets/f15_shape.py): the nose wheel stands 6.62 m behind the nose tip; the nose leg folds
+// forward, each main leg forward about a skewed hinge line so that its wheel ends lying flat in the body (GEAR_FOLD there)
+const F15_NOSE_GEAR = 6.62;
+const F15_GEAR_FOLD: NonNullable<JetInfo['gearFold']> = {
+  nose: { axis: [1, 0, 0], angle: (-96 * Math.PI) / 180 },
+  left: { axis: [1, 1, -1], angle: (-120 * Math.PI) / 180 },
+  right: { axis: [1, -1, 1], angle: (-120 * Math.PI) / 180 },
 };
 
 const JETS: JetDef[] = [
@@ -171,7 +183,8 @@ const JETS: JetDef[] = [
       // F100-IHI-220E: 23,450 lbf with afterburner, 14,590 lbf dry
       engines: { count: 2, name: 'F100-IHI-220E', idle: lbf(1200), dry: lbf(14590), ab: lbf(23450), spoolUp: 4, spoolDown: 3 },
       wing: F15_WING,
-      noseGear: 5.0,
+      noseGear: F15_NOSE_GEAR,
+      gearFold: F15_GEAR_FOLD,
       vr: 66,
       lof: 75,
       liveries: [
@@ -199,11 +212,12 @@ const JETS: JetDef[] = [
       // F100-PW-220: 23,770 lbf with afterburner, 14,590 lbf dry
       engines: { count: 2, name: 'F100-PW-220', idle: lbf(1200), dry: lbf(14590), ab: lbf(23770), spoolUp: 4, spoolDown: 3 },
       wing: F15_WING,
-      noseGear: 5.0,
+      noseGear: F15_NOSE_GEAR,
+      gearFold: F15_GEAR_FOLD,
       vr: 66,
       lof: 75,
       liveries: [
-        { name: 'F-15C 412TW（ED）', swatch: '#7f8890', crew: 1 },
+        { name: 'F-15C 制空グレー', swatch: '#7f8890', crew: 1 },
         { name: 'F-15D（複座）', swatch: '#6c757d', variant: 'd', crew: 2, mass: 20500 },
       ],
       camo: ['#7f8890', '#5f6870'],
@@ -229,6 +243,8 @@ const JETS: JetDef[] = [
     comHeight: 2.2,
     box: { width: 3.6, height: 2.2, clearance: 1.0 },
     maxSteerDeg: 45,
+    // (a shade darker than the Eagle: chosen on the model's cockpit pictures)
+    glassOpacity: 0.66,
     stats: { power: 10, grip: 3, drift: 0, weight: 1 },
     jet: {
       maker: 'Sukhoi',
@@ -240,6 +256,13 @@ const JETS: JetDef[] = [
       noseGear: 5.6,
       vr: 72,
       lof: 82,
+      // measured on the model (`tools/blender/jets/su47.py --measure`): the nose leg forward into its bay, the main
+      // legs forward and inward into the intake trunks' sides
+      gearFold: {
+        nose: { axis: [-1, 0, 0], angle: 1.714 },
+        left: { axis: [-0.93, -0.335, -0.155], angle: 1.968 },
+        right: { axis: [-0.93, 0.335, 0.155], angle: 1.968 },
+      },
       liveries: [{ name: '「01」試作機', swatch: '#3b4049', crew: 1 }],
       camo: ['#3b4049', '#2a2e35'],
       courses: ['edwards'],

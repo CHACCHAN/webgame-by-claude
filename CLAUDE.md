@@ -644,9 +644,24 @@ pending. `docs/PLAN.md` holds the design.
   course): real figures (static thrust, masses, rotation and lift-off speeds; `EDWARDS_AIR` for the field's air),
   `VehicleSim.jetEngines` (spool lag, afterburner above 85 % throttle once at military power, Mach lapse),
   `jetAero` (drag, lift lightening the tyres), nose-wheel steering fading with speed. A livery may change the mass
-  (the two-seaters: `jetForLivery`). Models: `render/JetModel.ts` (GLB contract in its header,
-  `public/models/jets/<id>.glb`; a procedural stand-in while there is none: what players see now), flames from the
-  nozzles, gear. Sound `audio/JetSound.ts` + worklet `jet.worklet.ts` (`tools/jet-wav.ts` renders it). HUD: N2 % /
+  (the two-seaters: `jetForLivery`). Models: our own Blender scripts → `BLENDER=<bin> node tools/blender-models.cjs
+  jets [ids]` → `public/models/jets/<id>[-<variant>].glb`, drawn by `render/JetModel.ts` (GLB contract in its header;
+  the procedural stand-in only while a file is missing or fails), loaded by `render/vehicleModels.ts` (the base model
+  and every livery's variant together). The F-15: `tools/blender/jets/f15.py` (`--id f15j|f15c`, `--variant dj|d`;
+  `f15_shape.py`, `f15_paint.py` + `jet_atlas.py`: one 2048 px atlas incl. the steady lamps' emissive map), shape
+  measured on photos (`fitdata/f15c`). The Su-47: `su47.py` (+ `su47_shape.py` / `_skin` / `_paint` / `_parts`), from
+  the published dimensions only (no photo fit); stations `d` = metres aft of the pitot tip, game z = 8.6 − d; its tail
+  booms are unequal, the shorter on the left; both canards are node `canard_l`, both tailplanes `stab_l`; lamps in
+  material `navlight_all` (its own emissive texture); its gear folds come from `su47.py --measure`. A livery with a
+  variant is another model: the garage builds the aircraft again (`Game.setGarageColor`). A model may give both
+  nozzles as one mesh `nozzles`, both tailplanes as one node `stab`, the nose wheel as part of `steer_nose`, steady
+  lamps in the emissive map of material `airframe` (lit with the lights; an `airframe` without an emissive map, the
+  Su-47's, is untouched). `JetInfo.gearFold` is measured on the model and applies only to a loaded model (the stand-in
+  folds plainly). Canopy glass per aircraft (`glassOpacity` in `jets.ts`: F-15 0.62, Su-47 0.66; the stand-in, with no
+  cockpit, keeps 0.88: `STANDIN_GLASS`): the cockpits are seen. The game's spot light of a fighter is its taxi lamp:
+  it goes out as the gear folds (`JetRig.taxiLamp`, intensity only). `thumbs.cjs` waits for a model still loading.
+  The aircraft parked on the airfield (`airbaseScenery.ts`) and the course art are still the stand-in. Flames from
+  the nozzles, gear. Sound `audio/JetSound.ts` + worklet `jet.worklet.ts` (`tools/jet-wav.ts` renders it). HUD: N2 % /
   AB in the gear box, Mach beside km/h from M 0.5. Camera `JET_CAMERA`; garage framing scale 3.8. Medals
   `JET_MEDALS`. Check with `EDWARDS=1`-free tools now (`COURSE=edwards npx tsx tools/sim-run.ts f15j,f15c,su47 legend`).
 - Departure (`race/Departure.ts`): after the finish a fighter is taken over, lined up, in full afterburner rotates
