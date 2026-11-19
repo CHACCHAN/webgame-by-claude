@@ -1,4 +1,4 @@
-"""Type 10 exterior game mesh. Dimensions and stencil frames are in game metres (x left, y up, z forward)."""
+"""Type 10 exterior game mesh. Stations from the ground-anchored fit are in game metres (x left, y up, z forward)."""
 import argparse
 import math
 import sys
@@ -15,88 +15,87 @@ import jet_kit as J
 T = {
     "hull": {
         # Each rib: deck z/y, keel z/y, half-widths at keel/chine/deck.
-        "ribs": ((-3.55,1.53,-3.50,.88,.83,.93,1.08),
-                 (-3.35,1.60,-2.96,.43,.85,.95,1.12),
+        "ribs": ((-3.625,1.665,-3.58,.88,.83,.93,1.08),
+                 (-3.43,1.60,-3.02,.43,.85,.95,1.12),
                  (-1.66,1.60,-1.66,.43,.88,.97,1.15),
                  (-1.40,1.54,-1.40,.43,.88,.97,1.15),
-                 (1.15,1.54,1.15,.43,.88,.97,1.15),
-                 (1.63,1.53,1.63,.43,.87,.96,1.14),
-                 (2.05,1.49,2.05,.43,.86,.95,1.12),
-                 (3.15,1.19,2.50,.43,.83,.93,1.08)),
+                 (1.38,1.54,1.38,.43,.88,.97,1.15),
+                 (2.04,1.53,2.04,.43,.87,.96,1.14),
+                 (2.49,1.48,2.49,.43,.86,.95,1.12),
+                 (3.575,1.17,2.925,.43,.83,.93,1.08)),
         "chine_fraction": .42,
         # Set the stern furniture INTO the two return bays; retain the centre profile.
         "stern_spine": .030, "stern_bay_start": .102, "stern_set_in": (.22,.10),
-        "stencils": {
-            # Size = width along 'right', height along normal cross right.
-            "front": {"anchor": (.35,1.34,2.60), "normal": (0,.96476382,.26311741),
-                      "right": (1,0,0), "size": (.45,.15)},
-            "rear": {"anchor": (.67,1.444,-3.3234), "normal": (0,-.07669650,-.99705449),
-                     "right": (-1,0,0), "size": (.40,.085)},
-        },
         "arm": {"profile": ((-.33,.21),(-.25,.28),(.065,.045),(.056,-.046),(-.053,-.06)),
                 "span": (.94,1.075)},
         # Shoulder ribs: z, inner/outer x, underside, top. High underside over sprocket.
-        "shoulder": ((-3.43,1.01,1.53,1.26,1.48),(-3.20,1.01,1.56,1.265,1.55),
-                     (-1.66,1.04,1.56,1.265,1.55),(1.63,1.03,1.56,1.265,1.46),
-                     (2.47,1.01,1.55,1.235,1.35),(2.91,1.00,1.54,1.19,1.26),
-                     (3.08,1.00,1.52,1.18,1.20)),
+        "shoulder": ((-3.51,1.01,1.53,1.26,1.48),(-3.20,1.01,1.56,1.265,1.55),
+                     (-1.66,1.04,1.56,1.265,1.55),(1.98,1.03,1.56,1.265,1.46),
+                     (2.94,1.01,1.55,1.235,1.34),(3.39,1.00,1.57,1.16,1.235),
+                     (3.57,.95,1.62,1.12,1.146)),
         "bins": {"x":1.325,"width":.44,"bottom":1.535,"top":1.620,
                  "runs":((-3.18,-2.57),(-2.545,-1.74)),"bevel":.023,"lid":.019,"lip":.011},
-        "rear_bins": {"x":.72,"y":1.575,"z":-3.302,"size":(.87,.18,.35),"bevel":.027},
+        "rear_bins": {"x":.72,"y":1.575,"z":-3.405,"size":(.87,.18,.35),"bevel":.027},
         "engine": {"x":.535,"z_span":(-3.22,-1.75),"bed_y":1.606,"width":.92,"height":.034,"slats":17,"rim":.020,"rim_h":.024,"division_gap":.065},
-        "driver": {"z":1.73,"size":(.63,.56),"lid":.033,"blocks":((-.205,1.96,-.27),(0,2.01,0),(.205,1.96,.27)),
+        "driver": {"z":2.11,"size":(.63,.56),"lid":.033,"blocks":((-.205,2.335,-.27),(0,2.385,0),(.205,2.335,.27)),
                    "block_size":(.145,.085,.104),"block_lift":.053},
-        "nose": {"head":(.78,1.13,3.10),"head_size":(.18,.13,.105),
+        "nose": {"head":(.79,1.11,3.52),"head_size":(.18,.13,.105),
                  "mesh_x":(-.057,-.019,.019,.057),"mesh_y":(-.031,.0,.031),
                  "mesh_span":(.16,.107),"mesh_lift":.009,"wire":.0028,
-                 "signal":(1.24,1.30,2.91),"signal_size":(.114,.095,.136),"signal_dx":.055,
+                 "signal":(1.21,1.27,3.47),"signal_size":(.114,.095,.136),"signal_dx":.055,
                  "guard_path":((-.145,-.045,.055),(-.145,.074,.055),(.145,.074,.055),(.145,-.045,.055)),
-                 "guard_radius":.009,"signal_r":.044,"signal_depth":.012,"eye":(.49,.84,2.94),"eye_radius":.066,"eye_bar":.016,
+                 "guard_radius":.009,"signal_r":.044,"signal_depth":.012,"eye":(.49,.84,3.365),"eye_radius":.066,"eye_bar":.016,
                  "eye_pad":(.185,.077,.089),"eye_inset":.043,"eye_drop":.173,"eye_sweep":.045},
-        "stern": {"banks":((.415,.825,.47,7),(1.004,.282,.346,6)),"vent_y":1.115,"vent_depth":.18,"vent_bevel":.015,
+        "stern": {"banks":((.415,.825,.591,7),(1.004,.282,.459,6)),"vent_y":1.177,"vent_depth":.227,"vent_bevel":.015,
                   "forward_overlap":.028,"inset_depth":.007,"slat_section":(.022,.025),
                   "slat_tilt":18.,
-                  "cable":((.30,1.445,-3.35),(.21,1.458,-3.39),(.157,1.42,-3.439),(.183,1.367,-3.481),
-                           (.285,1.34,-3.505),(.65,1.277,-3.518),(.96,1.216,-3.519),(1.089,1.226,-3.513),
-                           (1.13,1.272,-3.496),(1.104,1.313,-3.479),(1.027,1.323,-3.468),(.974,1.29,-3.482)),
+                  "cable":((.30,1.521,-3.410),(.21,1.533,-3.460),(.157,1.502,-3.559),(.183,1.435,-3.622),
+                           (.285,1.403,-3.653),(.65,1.34,-3.677),(.96,1.279,-3.686),(1.089,1.289,-3.679),
+                           (1.13,1.335,-3.661),(1.104,1.376,-3.646),(1.027,1.387,-3.635),(.974,1.373,-3.646)),
                   "cable_r":.019,"cable_clamp":(.043,.049,.055),
                   "eye_xy":(.46,.906),"eye_radius":.061,"eye_bar":.015,
-                  "lamp":(1.28,.88,-3.46),"lamp_size":(.23,.09,.085),
-                  "lamp_support":(1.28,1.078,-3.425),"support_size":(.28,.486,.073),"support_bevel":.012},
+                  "lamp":(1.29,.89,-3.53),"lamp_size":(.23,.09,.085),
+                  "lamp_support":(1.29,1.078,-3.45),"support_size":(.28,.486,.073),"support_bevel":.012},
         "tube_segments":8,
     },
     "skirt": {
-        "seams":(3.10,1.65,.50,-.65,-1.80,-2.72,-3.50), "gauge":.032,"gap":.015,
-        "top":1.34,"base":.80,"front_tip":1.26,"front_foot":2.58,"rear_tip":1.08,
-        "hole": {"y":1.163,"half_height":.052,"half_width":.093,"radius":.026,
-                 "stations":((2.20,2.57),(),(),(),(-2.10,-2.47),())},
-        "hinge": {"fractions":(.21,.77),"inset":.024,"r":.022,"y":1.335,"length":.135},
-        "bolts": {"y":.852,"margin":.15,"count":4,"radius":.014,"height":.003},
-        "drops": {"bottom":(.35,.30,.28,.30,.34),"upper":.817,"gap":.031,"gauge":.017,
-                  "mid_height":.42,"x_rows":(1.582,1.578,1.608),"clip":.085,"clip_start":.77},
-        "apron": {"strap_y":1.176,"strap_z":3.125,"strap_h":.032,"strap_depth":.018,"strap_bolts":5,"bolt_r":.012,"span":(.975,1.545),"ribs":((3.055,1.197),(3.123,1.18),(3.15,.82)),"gauge":.016},
-        "cheek": {"span":(1.518,1.56),"profile":((2.75,1.30),(3.085,1.21),(3.14,1.12),(3.135,.86),(2.93,1.01))},
-        "mudflap": {"ribs":((-3.412,1.275,1.01,1.55),(-3.435,.97,1.015,1.55),
-                            (-3.475,.53,1.04,1.535),(-3.48,.43,1.08,1.49)),"gauge":.018},
+        "seams":(3.58,1.91,.69,-.46,-1.59,-2.78,-3.52), "gauge":.032,"gap":.015,
+        "top":1.27,"base":.595,"front_tip":1.16,"front_foot":3.174,"rear_tip":1.04,
+        "hole": {"half_height":.052,"half_width":.093,"radius":.026,
+                 "stations":(((2.37,.99),(2.83,.99),(2.65,.69)),(),(),(),
+                             ((-1.78,.97),(-2.24,.97),(-1.87,.67)),())},
+        "hinge": {"fractions":(.21,.77),"inset":.024,"r":.022,"y":1.265,"length":.135},
+        "bolts": {"y":.632,"margin":.15,"count":4,"radius":.014,"height":.003},
+        "drops": {"bottom":(.35,.30,.28,.30,.34),"upper":.605,"gap":.031,"gauge":.017,
+                  "mid_height":.42,"x_rows":(1.598,1.574,1.582),"clip":.085,"clip_start":.77},
+        # Ground-anchored (inner,outer) face corners, xyz, left side. Reflect x only.
+        "apron": {"strap_h":.032,"strap_depth":.018,"strap_bolts":5,"bolt_r":.012,
+                  "ribs":(((.95,1.14,3.57),(1.64,1.14,3.57)),
+                          ((.95,1.105,3.60),(1.64,1.105,3.60)),
+                          ((.95,.82,3.74),(1.63,.83,3.74))),"gauge":.016},
+        "cheek": {"span":(1.54,1.60),"profile":((3.15,1.25),(3.53,1.17),(3.59,1.105),(3.65,.86),(3.40,.978))},
+        "mudflap": {"ribs":(((.965,1.265,-3.446),(1.52,1.265,-3.446)),
+                             ((.95,.944,-3.46),(1.515,.946,-3.46)),
+                             ((.93,.43,-3.41),(1.48,.45,-3.40))),"gauge":.018},
     },
     # Hull frame at zero aim. Roof is a datum, not the overall height.
-    'ring': (1.55,.05), 'trunnion': (2.00,1.37), 'roof': 2.30,
+    'ring': (1.55,-.02), 'trunnion': (1.96,1.40), 'roof': 2.30,
     'elevation': (-7.,10.), 'check_yaw': (0.,30.),
     'gear': dict(track_centre=1.25,track_width=.60,track_thickness=.05,pitch=.16,
-                 road=((1.92,.37),(.96,.37),(0.,.37),(-.96,.37),(-1.92,.37)),
-                 sprocket=(-2.85,.83,.37,12,.46), idler=(2.72,.73,.35),
-                 rollers=((1.48,1.06,.13),(0.,1.06,.13),(-1.48,1.06,.13)),
+                 road=((2.12,.37),(1.06,.37),(0.,.37),(-1.06,.37),(-2.12,.37)),
+                 sprocket=(-3.05,.83,.37,12,.46), idler=(2.92,.73,.35),
+                 rollers=((1.59,1.06,.13),(0.,1.06,.13),(-1.59,1.06,.13)),
                  horns=1,horn_height=.063,horn_width=.040,sag=.018,pad_share=.72,
                  wheel_width=.46,tyre_width=.15,tyre_depth=.064,dish_depth=.031,hub_bolts=8,
                  skirt_outer=1.62),
-    'tile_links':8, 'tyre_colour':'#2C2E29', 'track_colour':'#59564C', 'registration':'92-0417',
+    'tile_links':8, 'tyre_colour':'#2C2E29', 'track_colour':'#59564C',
     # For each station of the half-outline: three corresponding (|x|,z) points.
     # The first two make a flat beside the gun; the long slant starts at the second.
     'turret': dict(
-        lower=((.30,1.42),(.80,1.37),(1.32,.76),(1.415,.48),(1.415,-1.28),(1.24,-1.77)),
-        crease=((.30,1.86),(.80,1.81),(1.38,.88),(1.44,.48),(1.44,-1.28),(1.27,-1.78)),
-        upper=((.30,1.46),(.77,1.41),(1.20,.66),(1.24,.40),(1.24,-1.26),(1.15,-1.72)),
-        lower_y=(1.637,1.637,1.621,1.621,1.673,1.70),crease_y=1.98, slot_back=.95,
+        lower=((.30,1.78),(.84,1.73),(1.30,1.59),(1.32,1.34),(1.415,.48),(1.43,-1.40),(1.44,-1.95)),
+        crease=((.30,2.23),(.83,2.18),(1.32,1.59),(1.35,1.34),(1.44,.48),(1.445,-1.40),(1.43,-1.95)),
+        upper=((.30,1.82),(.795,1.77),(1.14,1.405),(1.185,1.14),(1.24,.40),(1.24,-1.39),(1.195,-1.83)),
+        lower_y=(1.641,1.641,1.604,1.602,1.621,1.673,1.670),crease_y=(1.98,1.98,1.98,1.98,1.98,1.99,2.010), slot_back=.95,
         core_halfwidth=1.15, core_front=.95,core_aft=-1.48,core_y=(1.667,2.275),
         race=((1.525,.95),(1.54,1.045),(1.60,1.045),(1.635,.985)),
         # Three butt-jointed side modules on the long flank, aft-most steps up.
@@ -106,18 +105,19 @@ T = {
         cover_y=1.824, cover_h=.326, cover_x=1.454,cover_t=.022,
         tab_size=(.036,.048,.057), tab_y=1.982,tab_offset=.32,
         loop_x=1.372,loop_y=2.082,loop_z=(.233,-.399,-1.01),loop_half=.075,loop_h=.052,loop_r=.012,
-        coax=(.53,2.014,1.797),coax_radius=.053,
+        coax=(.53,2.014,2.165),coax_radius=.053,
         # Fixed annular mantlet and inner dark lip: (z,outer X/Y radii,inner X/Y radii).
-        surround=((1.32,.353,.225,.215,.182),(1.49,.349,.236,.225,.187),
-                  (1.60,.316,.232,.230,.202)),
-        socket=((1.585,.240,.209,.227,.199),(1.639,.238,.217,.227,.207))),
-    'rack': dict(half=1.29,front=-1.72,rear=-2.63,base=1.72,rail=2.24,mesh_top=1.96,
-                 cap_r=.0175,post_r=.012,horizontal_r=.013,skin=.008,back_div=9,side_div=3,
+        surround=((1.35,.353,.225,.215,.182),(1.52,.349,.236,.225,.187),
+                  (1.63,.316,.232,.230,.202)),
+        socket=((1.615,.240,.209,.227,.199),(1.669,.238,.217,.227,.207))),
+    'rack': dict(half=1.35,front=-1.88,rear=-3.135,base=1.735,rail=2.153,mesh_top=1.933,
+                 cap_r=.0175,post_r=.012,horizontal_r=.013,skin=.008,back_div=9,side_div=4,
                  cleats=(-.96,.96),cleat_size=(.064,.094,.18)),
     'roof_fit':dict(
-        pano=(-.83,-.65),plinth_lo=(.44,.43),plinth_hi=(.405,.38),plinth_h=.232,
-        pano_gap=.022,head_size=(.36,.24,.35),head_brow=(.38,.030,.091),
-        shutter_size=(.252,.143,.019),handle_half=.108,handle_h=.043,handle_r=.009,
+        pano_top=((-0.99,2.75,-.33),(-.61,2.81,-.63),(-1.08,2.79,-.91)), # FO, FI, RO
+        plinth_lo=(.47,.51),plinth_hi=(.425,.45),plinth_h=.202,
+        pano_gap=.019,head_brow=(.45,.026,.060),shutter_size=(.30,.132,.016),
+        handle_half=.123,handle_h=.032,handle_r=.009,
         # Forward optical face (also the game's eye), not the panoramic head.
         sight=(.60,2.444,.912),hood_cz=.73,hood_size=(.49,.27,.46),hood_t=.026,
         hood_window=(.344,.158,.014),hood_foot=.032,
@@ -134,15 +134,15 @@ T = {
         mg_box_centre=(.160,.324,-.126),mg_fork=(.109,.210,.414,-.158,.095),
         mg_stock_z=-.408,mg_jacket_z=.420,mg_tip=.99,mg_tip_r=.021),
     # Axial station and outside diameter, all z in hull frame; inside is a blind dark socket.
-    'tube':dict(root=((1.34,.245),(1.57,.271),(1.805,.312)),
-                boot=((1.796,.323),(1.822,.40),(1.873,.374),(1.904,.390),(1.964,.350),(2.014,.372),
-                      (2.081,.343),(2.126,.359),(2.192,.322),(2.245,.340),(2.35,.320)),
+    'tube':dict(muzzle_y=1.99,root=((1.37,.245),(1.60,.271),(1.835,.312)),
+                boot=((1.826,.323),(1.852,.40),(1.903,.374),(1.934,.390),(1.994,.350),(2.044,.372),
+                      (2.111,.343),(2.156,.359),(2.222,.322),(2.275,.340),(2.38,.320)),
                 wrinkle=.011,
-                sleeves=((2.35,3.45,.320,.290),(3.45,4.72,.280,.240),(4.72,5.67,.230,.200)),
+                sleeves=((2.38,3.42,.320,.290),(3.42,4.62,.280,.240),(4.62,5.51,.230,.200)),
                 clamp_width=.050,clamp_rise=.012,
-                muzzle=((5.666,.200),(5.824,.200),(5.841,.208),(5.870,.208)),
+                muzzle=((5.506,.200),(5.664,.200),(5.681,.208),(5.710,.208)),
                 bore=.120,bore_recess=.154,
-                reference=(-.13,2.01,5.69),ref_size=(.11,.10,.17),ref_glass=(.081,.069,.004),
+                reference=(-.13,1.97,5.53),ref_size=(.11,.10,.17),ref_glass=(.081,.069,.004),
                 dots=(-.022,0.,.022),dot_r=.006),
     'zones':dict(race_contact=('#363831',.28,.78),skirt_rubber=('#34372F',.00,.91), amber=('#ad6926',.06,.38),
                  rack_mesh=('#4b5042',.35,.79), sensor=('#8d9282',.03,.73)),
@@ -220,26 +220,27 @@ def _h_skirts(parts,side,s,marks):
         elif i==len(seams)-2:
             poly=[(high,top),(low,top),(low,s['rear_tip']),(high,base)]
         hole=s['hole']; hh,hw,r=hole['half_height'],hole['half_width'],hole['radius']
-        y=hole['y']; cuts=sorted(hole['stations'][i]); slices=[]
+        cuts=sorted(hole['stations'][i]); slices=[]
         # Horizontal scan strips with radiused slot ends. Only boundary edges
         # of the union get thickness; no doubled, coincident internal walls.
         if cuts:
             breaks=sorted({min(q[1] for q in poly),max(q[1] for q in poly),
-                           *(y+k*(hh-r+r*math.sin(theta)) for k in (-1,1) for theta in np.linspace(0,math.pi/2,5))})
-            def half_at(v):
+                           *(y+k*(hh-r+r*math.sin(theta)) for _,y in cuts for k in (-1,1) for theta in np.linspace(0,math.pi/2,5))})
+            def half_at(v,y):
                 dy=max(0,abs(v-y)-(hh-r)); return hw-r+math.sqrt(max(0,r*r-dy*dy))
             for ly,uy in zip(breaks,breaks[1:]):
                 strip=_h_clip(_h_clip(poly,1,ly,1),1,uy,-1)
                 if not strip: continue
-                if abs((ly+uy)/2-y)>=hh:
+                active=[(z,y) for z,y in cuts if abs((ly+uy)/2-y)<hh]
+                if not active:
                     slices.append(strip); continue
                 # Clip against each straight side of the approximated arc.
                 def clip_z(points,offset,gradient,sign):
                     sheared=[(z-gradient*(v-ly),v) for z,v in points]
                     return [(z+gradient*(v-ly),v) for z,v in _h_clip(sheared,0,offset,sign)]
                 remain=strip
-                for mid in cuts:
-                    f,g=half_at(ly),half_at(uy); k=(g-f)/(uy-ly)
+                for mid,y in active:
+                    f,g=half_at(ly,y),half_at(uy,y); k=(g-f)/(uy-ly)
                     slices.append(clip_z(remain,mid-f,-k,-1)); remain=clip_z(remain,mid+f,k,1)
                 slices.append(remain)
             # Build plates around real through-holes. Suppress shared faces
@@ -258,9 +259,9 @@ def _h_skirts(parts,side,s,marks):
                 for (z1,y1),(z2,y2) in zip(q,q[1:]+q[:1]):
                     plate.face([(xin,y1,z1),(xin,y2,z2),(xout,y2,z2),(xout,y1,z1)],K.PAINT,False)
             walls(poly,False)
-            for mid in cuts:
+            for mid,y in cuts:
                 ys=[v for v in breaks if y-hh-1e-8<=v<=y+hh+1e-8]
-                walls([(mid+half_at(v),v) for v in ys]+[(mid-half_at(v),v) for v in reversed(ys)],True)
+                walls([(mid+half_at(v,y),v) for v in ys]+[(mid-half_at(v,y),v) for v in reversed(ys)],True)
             parts.append(plate)
         else: parts.append(K.prism(poly,*sorted((side*(x-s['gauge']),side*x))))
         hinge=s['hinge']; length=hinge['length']; end=s['front_foot'] if i==0 else high
@@ -285,26 +286,29 @@ def _h_skirts(parts,side,s,marks):
         for (a,b),(c,e) in zip(rows,rows[1:]):
             loop=[a,b,e,c]
             parts.append(K.slab(loop if side>0 else loop[::-1],d['gauge'],'skirt_rubber'))
-    ap=s['apron']; parts.append(K.mudguard([[(side*x,y,z) for x in ap['span']] for z,y in ap['ribs']],ap['gauge'],'skirt_rubber'))
-    w=ap['span'][1]-ap['span'][0]; cx=side*sum(ap['span'])/2
-    parts.append(K.cbox((cx,ap['strap_y'],ap['strap_z']),(w,ap['strap_h'],ap['strap_depth']),.003))
-    parts.append(K.bolt_row(marks,(cx-w*.43,ap['strap_y'],ap['strap_z']+ap['strap_depth']/2),
-                (cx+w*.43,ap['strap_y'],ap['strap_z']+ap['strap_depth']/2),ap['strap_bolts'],ap['bolt_r'],.003,normal=(0,0,1)))
+    def ribs(spec):
+        return [[(side*x,y,z) for x,y,z in row] for row in spec['ribs']]
+    ap=s['apron']; parts.append(K.mudguard(ribs(ap),ap['gauge']))
+    inner,outer=ap['ribs'][0]; w=outer[0]-inner[0]; cx,sy,sz=np.mean(ribs(ap)[0],axis=0)
+    parts.append(K.cbox((cx,sy,sz),(w,ap['strap_h'],ap['strap_depth']),.003))
+    parts.append(K.bolt_row(marks,(cx-w*.43,sy,sz+ap['strap_depth']/2),
+                (cx+w*.43,sy,sz+ap['strap_depth']/2),ap['strap_bolts'],ap['bolt_r'],.003,normal=(0,0,1)))
     cheek=s['cheek']; parts.append(K.prism(cheek['profile'],*sorted(side*x for x in cheek['span'])))
-    flap=s['mudflap']; parts.append(K.mudguard([[(side*x,y,z) for x in (a,b)] for z,y,a,b in flap['ribs']],
+    flap=s['mudflap']; parts.append(K.mudguard(ribs(flap),
                                                flap['gauge'],'skirt_rubber'))
 
 
 def _h_nose(parts,side,n):
     def _h_centre(q):
         return np.array((side*q[0],*q[1:]))
-    c=_h_centre(n['head']); sz=n['head_size']; parts.append(K.lamp_box(c,sz,'headlight'))
+    sz=n['head_size']; c=_h_centre(n['head'])-(0,0,sz[2]/2); parts.append(K.lamp_box(c,sz,'headlight'))
     face=c+(0,0,sz[2]/2+n['mesh_lift']); w,h=n['mesh_span']
     for x in n['mesh_x']:
         _h_wire(parts,[face+(x,-h/2,0),face+(x,h/2,0)],n['wire'],'steel')
     for y in n['mesh_y']:
         _h_wire(parts,[face+(-w/2,y,0),face+(w/2,y,0)],n['wire'],'steel')
-    c=_h_centre(n['signal'])
+    # Station is the visible amber lens, not the cluster/guard pivot.
+    c=_h_centre(n['signal'])-(side*n['signal_dx'],0,n['signal_size'][2]/2+n['signal_depth'])
     for dx,zone in ((n['signal_dx'],'amber'),(-n['signal_dx'],'glass_dark')):
         p=c+(side*dx,0,0); sz=n['signal_size']; parts.append(K.cbox(p,sz,.012))
         parts.append(_turned('signal lens',p+(0,0,sz[2]/2),(0,0,1),[(0,n['signal_r']),(n['signal_depth'],n['signal_r'])],zone,18))
@@ -333,7 +337,7 @@ def _h_stern(parts,side,h):
         parts.append(K.cbox(c,s['cable_clamp']))
     parts.append(K.tow_hook(_h_surface(*s['eye_xy']),n,s['eye_radius'],s['eye_bar']))
     x,y,z=s['lamp_support']; parts.append(K.cbox((side*x,y,z),s['support_size'],s['support_bevel']))
-    x,y,z=s['lamp']; parts.append(K.lamp_box((side*x,y,z),s['lamp_size'],'taillight',(0,0,-1)))
+    x,y,z=s['lamp']; parts.append(K.lamp_box((side*x,y,z+s['lamp_size'][2]/2),s['lamp_size'],'taillight',(0,0,-1)))
 
 
 def _hull(rg,marks):
@@ -409,7 +413,7 @@ def _fixed_frame(stations,mat,seg):
 
 def _turret_shell(marks):
     t=T['turret']; roof=T['roof']; rows=[]
-    for outline,ys in ((t['lower'],t['lower_y']),(t['crease'],[t['crease_y']]*len(t['crease'])),
+    for outline,ys in ((t['lower'],t['lower_y']),(t['crease'],t['crease_y']),
                        (t['upper'],[roof]*len(t['upper']))):
         half=[(x,y,z) for (x,z),y in zip(outline,ys)]
         # U-shaped nose slot runs back past the trunnion: the shell must not
@@ -459,15 +463,20 @@ def _rack():
 
 def _roof():
     t=T['roof_fit']; y=T['roof']; parts=[]
-    x,z=t['pano']; sz=t['head_size']; brow=t['head_brow']; shutter=t['shutter_size']
-    py=y+t['plinth_h']; hy=py+t['pano_gap']; htop=hy+sz[1]
+    fo,fi,ro=np.array(t['pano_top']); ri=fi+ro-fo
+    # Three measured roof corners define the rake of both its top and face.
+    # Keep the base level; use the actual front face for the shutter and brow.
+    head=[fo,fi,ri,ro]; x,_,z=np.mean(head,axis=0); py=y+t['plinth_h']; hy=py+t['pano_gap']
+    foot=[(q[0],hy,q[2]) for q in head]; bearing_r=min(t['plinth_hi'])*.45
     parts.extend([_rect_y('sight plinth',x,z,[(y,*t['plinth_lo']),(py,*t['plinth_hi'])]),
-                  _turned('sight bearing',(x,py,z),(0,1,0),[(0,sz[2]*.45),(t['pano_gap'],sz[2]*.45)],'recess'),
-                  K.cbox((x,hy+sz[1]/2,z),sz,.021),
-                  K.cbox((x,hy+sz[1]/2,z+sz[2]/2),shutter,.007,'glass_dark'),
-                  K.cbox((x,htop-brow[1]/2,z+sz[2]/2),brow,.006)])
-    hw=t['handle_half']; ry=t['handle_h']; rr=t['handle_r']
-    parts.append(_bars('sight grab', [[(x-hw,htop,z),(x-hw,htop+ry,z),(x+hw,htop+ry,z),(x+hw,htop,z)]],rr))
+                  _turned('sight bearing',(x,py,z),(0,1,0),[(0,bearing_r),(t['pano_gap'],bearing_r)],'recess'),
+                  _skin_y('panoramic housing',[foot,head])])
+    front=(fo+fi)/2; right=J.unit((fi[0]-fo[0],0,fi[2]-fo[2])); up=np.array((0.,1.,0.)); outward=np.cross(right,up)
+    fittings=K.Part('panoramic optics'); brow=t['head_brow']; lens=t['shutter_size']
+    fittings.obox('glass_dark',(front[0],(front[1]+hy)/2,front[2]),lens,(right,up,outward),bevel=.004,seg=1)
+    fittings.obox(K.PAINT,front-up*brow[1]/2,brow,(right,up,outward),bevel=.004,seg=1); parts.append(fittings)
+    ctr=np.mean(head,axis=0); rail=J.unit(fi-fo)*t['handle_half']; lift=up*t['handle_h']
+    parts.append(_bars('sight grab',[[ctr-rail,ctr-rail+lift,ctr+rail+lift,ctr+rail]],t['handle_r']))
     x,ey,ez=t['sight']; z=t['hood_cz']; w,h,d=t['hood_size']; wall=t['hood_t']; foot=t['hood_foot']
     # Projecting brows above a recessed vertical lens, not a solid shiny cube.
     parts.extend([K.cbox((x,y+foot/2,z),(w,foot,d),.008),
@@ -534,18 +543,24 @@ def _gun():
     parts.append(K.cbox((x,cy,front),(gw,gh,gd),.002,'glass_dark'))
     for ox in t['dots']:
         parts.append(_turned('reference lens',(x+ox,cy,front+gd/2),(0,0,1),[(0,t['dot_r']),(gd/2,t['dot_r'])],'recess',10))
-    return K.combine('gun_shell',parts)
+    # The section table gives z stations along a straight tube before posing.
+    # Rotate about the trunnion and compensate the tiny axial foreshortening
+    # so that the centre of the front face lands on the measured (y,z).
+    gun=K.combine('gun_shell',parts); a=_rest_pitch(); c=math.cos(a); sn=math.sin(a)
+    linear=np.array(((1,0,0),(0,c,sn/c),(0,-sn,1.)))
+    pivot=np.array((0,y,z0)); M=np.eye(4); M[:3,:3]=linear; M[:3,3]=pivot-linear@pivot
+    gun.transform(M); return gun
 
 
-def _markings():
-    return [dict(face=face,center=d['anchor'],normal=d['normal'],right=d['right'],width=d['size'][0],
-                 height=d['size'][1],text=T['registration']) for face,d in T['hull']['stencils'].items()]
+def _rest_pitch():
+    ty,tz=T['trunnion']; t=T['tube']
+    return math.atan2(t['muzzle_y']-ty,t['muzzle'][-1][0]-tz)
 
 
 def _dims():
     ry,rz=T['ring']; ty,tz=T['trunnion']; x,y,z=T['roof_fit']['sight']
     return dict(turretZ=rz,ringY=ry,trunnion=ty-ry,trunnionZ=tz-rz,
-                barrel=T['tube']['muzzle'][-1][0]-tz,sight=(x,y-ry,z-rz))
+                barrel=math.hypot(T['tube']['muzzle'][-1][0]-tz,T['tube']['muzzle_y']-ty),sight=(x,y-ry,z-rz))
 
 
 def _gear():
@@ -572,6 +587,9 @@ def build():
         c=J.srgb(swatch); mats[name].diffuse_color=c
         mats[name].node_tree.nodes['Principled BSDF'].inputs['Base Color'].default_value=c
     root,body,turret,gun=K.tank_nodes('type10',dims)
+    # Part.build takes world geometry and reparents it to this bore-aligned
+    # frame. TankModel uses the rest quaternion and local +Z for its flash.
+    gun.rotation_euler.x=-_rest_pitch(); bpy.context.view_layer.update()
     hull=_hull(rg,marks).build(body,mats,name='hull_shell'); objects=[hull]
     built=K.running_gear(body,rg,mats,tile_links=T['tile_links']); objects.extend(built['objects'])
     # Race, turret cheeks and roof fittings share one mesh. The race seating
@@ -629,9 +647,11 @@ def _contract(root,objects,rg,full):
             if full and [m.name for m in mesh.data.materials]!=['armor']: raise ValueError(f'{axle.name}: wheel material')
     pts=np.asarray([K.G(o.matrix_world@v.co) for o in objects for v in o.data.vertices]); lo,hi=pts.min(0),pts.max(0)
     muzzle=max(K.G(gun.matrix_world.inverted()@nodes['gun_shell'].matrix_world@v.co)[2] for v in nodes['gun_shell'].data.vertices)
-    if not np.allclose([lo[0],hi[0],lo[2],hi[2],muzzle],[-rg.skirt_outer,rg.skirt_outer,T['hull']['ribs'][0][0],
-                       T['tube']['muzzle'][-1][0],dims['barrel']],atol=.001):
-        raise ValueError(f'scale locks: min={lo}, max={hi}, gun-local muzzle={muzzle}')
+    target=np.array((0.,T['tube']['muzzle_y'],T['tube']['muzzle'][-1][0]))
+    tip=K.G(body.matrix_world.inverted() @ gun.matrix_world @ K.B(0,0,muzzle))
+    edge=max(x for row in T['skirt']['apron']['ribs'] for x,_,_ in row)
+    if not (np.allclose(tip,target,atol=.001) and np.allclose([lo[0],hi[0]],[-edge,edge],atol=.003)):
+        raise ValueError(f'fit datums: min={lo}, max={hi}, muzzle={tip}, target={target}')
     if full and {m.name for o in objects for m in o.data.materials}!={'armor','track_l','track_r','headlight','taillight'}:
         raise ValueError('unexpected delivery materials')
     eye=','.join(f'{n:.3f}' for n in dims['sight'])
@@ -652,9 +672,9 @@ def main():
         K.paint_tracks(mats,rg,wd,T['tile_links'],metal_tint=T['track_colour'])
         scheme=dict(T['paint'],zones=dict.fromkeys(T['zones']))
         K.paint_tank(objects,mats,scheme,2048,wd,density=lambda ob,zone: .70 if ob.name.startswith('disc_') else 1.,
-                     marks=marks,markings=_markings())
+                     marks=marks)
     _contract(root,objects,rg,full); total,_=K.report(root)
-    if total>90000: raise ValueError(f'{total} triangles exceeds 90k')
+    if total>60000: raise ValueError(f'{total} triangles exceeds 60k')
     K.export(root,args.out); print('GLB',args.out)
     renderdir=args.render or (args.sheet.parent/'type10-views' if args.sheet else None)
     if renderdir:

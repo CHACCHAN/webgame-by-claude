@@ -827,13 +827,13 @@ def dump(objects,path):
 
 
 def report(root):
-    """Jet triangle/material census plus measured rest dimensions and track scale. Clearance is hull centreline underside."""
+    """Jet triangle/material census plus measured rest dimensions and track scale. Hull z bounds include fixed fittings and flaps, not the bands. Clearance is hull centreline underside."""
     bpy.context.view_layer.update()
     total,used=_jet.report(root)
     body=next(o for o in root.children if o.name=='body'); turret=next(o for o in body.children if o.name=='turret')
     gun=next(o for o in turret.children if o.name=='gun')
     inv=body.matrix_world.inverted(); invgun=gun.matrix_world.inverted()
-    clouds=[]; barrel=[]; belly=[]
+    clouds=[]; barrel=[]; belly=[]; hull_bounds=[]
     for o in body.children_recursive:
         if o.type!='MESH': continue
         matrix=inv @ o.matrix_world
@@ -841,6 +841,7 @@ def report(root):
         if o in list(gun.children_recursive):
             m=invgun @ o.matrix_world; barrel.extend(G(m @ v.co)[2] for v in o.data.vertices)
         if o.parent==body and not any(m.name in ('track_l','track_r') for m in o.data.materials):
+            hull_bounds.append((pts[:,2].min(),pts[:,2].max()))
             # Intersect triangle edges with x=0: skirts, wheel pods and lamps aren't belly clearance.
             o.data.calc_loop_triangles()
             for t in o.data.loop_triangles:
@@ -850,7 +851,10 @@ def report(root):
                     elif a[0]*b[0]<0: belly.append(a[1]+(b[1]-a[1])*a[0]/(a[0]-b[0]))
     allpts=np.concatenate(clouds); lo,hi=allpts.min(0),allpts.max(0); width,height,length=hi-lo
     muzzle=G(inv @ gun.matrix_world @ B(0,0,max(barrel)))
+    hull_rear=min((lo_z for lo_z,_ in hull_bounds),default=float('nan'))
+    hull_front=max((hi_z for _,hi_z in hull_bounds),default=float('nan'))
     if 'trackV' in body: print(f'TRACKV {body["trackV"]:.6f} bottom_front_to_rear')
     print(f'DIMS length={length:.3f} width={width:.3f} height={height:.3f} groundClearance={min(belly,default=float("nan")):.3f} '
-          f'muzzle=({muzzle[0]:.3f},{muzzle[1]:.3f},{muzzle[2]:.3f})')
+          f'muzzle=({muzzle[0]:.3f},{muzzle[1]:.3f},{muzzle[2]:.3f}) '
+          f'hullFrontZ={hull_front:.3f} hullRearZ={hull_rear:.3f} lengthOverGun={muzzle[2]-hull_rear:.3f}')
     return total,used

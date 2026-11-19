@@ -1,11 +1,8 @@
 {
- "_note": "tools/handmask.py: GrabCut from a box + hand hints; photos in ~/.local/opt/carfit/tanks/type10/ref (ref/list.json). The ground under the tracks (shadow) is not judged; t146 is left out (camouflage against a like background); p064's branches on the turret, its rail rack and the vehicle behind it are not judged.",
+ "_note": "tools/handmask.py: GrabCut from a box + hand hints; photos in ~/.local/opt/carfit/tanks/type10/ref (ref/list.json). The ground under the tracks (shadow) is not judged; t146 is left out (camouflage against a like background).",
  "t105": {"rect": [110, 390, 1850, 1005], "ign": [[1400, 360, 1560, 480], [540, 300, 660, 1010]]},
  "t118": {"rect": [20, 70, 1780, 1040], "ign": [[0, 950, 1920, 1284]]},
  "t107": {"rect": [235, 95, 1795, 1165], "ign": [[0, 1020, 1920, 1284]]},
- "p064": {"rect": [80, 140, 1915, 1240],
-          "bg": [[[0, 140], [600, 140], [600, 320], [420, 370], [400, 430], [345, 445], [265, 460], [265, 640], [0, 640]]],
-          "ign": [[0, 930, 1920, 1284], [0, 440, 250, 960], [740, 140, 1640, 440], [420, 320, 670, 420], [1840, 140, 1920, 1284]]},
  "t112": {"rect": [50, 83, 1830, 1080], "ign": [[0, 100, 330, 640], [840, 280, 1620, 490], [0, 1040, 1920, 1283]]},
  "t109": {"rect": [130, 250, 1870, 1170],
           "bg": [[[1600, 478], [1920, 460], [1920, 1000], [1600, 1000]],
