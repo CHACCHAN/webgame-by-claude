@@ -1,4 +1,4 @@
-"""Round-one Leopard 2A5. Blender background entry point, arguments after --.
+"""Round-two Leopard 2A5. Blender background entry point, arguments after --.
 --out leo.glb --stage shape --dump leo.npz --render checks --quick --views o_side,o_front
 Raw GLB is the input to the game's mesh/texture optimization, not the delivery size.
 """
@@ -27,14 +27,15 @@ def build():
     root,body,turret,gun=T.tank_nodes('leopard2a5',DIMS); rg=L.running_spec()
     objects=[L.hull(rg,marks).build(body,mats)]
     gear=T.running_gear(body,rg,mats); objects.extend(gear['objects'])
-    # Keep all kit pivots and exactly one mesh child. Only the hidden carrier
-    # geometry is replaced; neither kit module state nor track UVs are patched.
-    for pivot in gear['nodes']:
-        z=T.G(pivot.location)[2]; spec=next((c for c in rg.rollers if abs(z-c[0])<1e-5),None)
-        if spec is None: continue
-        mesh=pivot.children[0]; width=spec[3] if len(spec)>3 else .76*rg.track_width
-        tmp=L.carrier(spec[2],width).build(None,mats); old=mesh.data; mesh.data=tmp.data
+    # Preserve the kit objects (including metric UV scale and spin pivots).
+    # The replacements are modelled in the original mesh-local frames.
+    def reskin(obj,part):
+        tmp=part.build(None,mats); old=obj.data; obj.data=tmp.data
         bpy.data.objects.remove(tmp,do_unlink=True); bpy.data.meshes.remove(old)
+    for pivot in gear['nodes']:
+        reskin(pivot.children[0],L.wheel(T.G(pivot.location)[2],rg))
+    for band in gear['objects']:
+        if band.name.startswith('band_'): reskin(band,L.belt(rg,band.name[-1]))
     objects.extend((L.turret(marks).build(turret,mats),L.gun().build(gun,mats)))
     bpy.context.view_layer.update()
     return root,objects,mats,rg,marks
@@ -126,11 +127,22 @@ def main():
     root,objects,mats,rg,marks=build(); nodes=_contract(root,objects,rg,False)
     if args.dump: _dump(objects,args.dump)
     _pose_check(nodes)
+    tri={}
+    for obj in objects:
+        obj.data.calc_loop_triangles(); count=len(obj.data.loop_triangles)
+        kind=obj.name
+        if kind.startswith('disc_'):
+            z=T.G(obj.parent.location)[2]
+            kind=('idler' if abs(z-rg.idler[0])<1e-5 else 'drive' if abs(z-rg.sprocket[0])<1e-5
+                  else 'carrier' if any(abs(z-c[0])<1e-5 for c in rg.rollers) else 'road')
+        tri.setdefault(kind,[]).append(count)
+    print('PART_TRIS '+ ' '.join(f'{k}={sum(v)}({len(v)}x)' for k,v in tri.items()))
+    if sum(map(sum,tri.values()))>72000: raise ValueError('shape exceeds round-two 72000 triangle budget')
     if args.stage=='full':
         wd=args.out.resolve().parent/'tex-leopard2a5'; T.paint_tracks(mats,rg,wd); skin.paint(objects,mats,wd,marks)
         _contract(root,objects,rg,True)
     total,_=T.report(root)
-    if total>90000: raise ValueError(f'{total} triangles exceeds budget')
+    if total>72000: raise ValueError(f'{total} triangles exceeds budget')
     sight=', '.join(f'{x:.3f}' for x in DIMS['sight'])
     print('CONTRACT '+' '.join(f'{k}={DIMS[k]:.3f}' for k in ('turretZ','ringY','trunnion','trunnionZ','barrel'))+f' sight=({sight})')
     T.export(root,args.out); print('GLB',args.out)

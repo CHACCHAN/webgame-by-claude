@@ -5,7 +5,7 @@ import tank_atlas as A
 import jet_atlas as JA
 from leopard2a5_shape import S
 
-GREEN='#586049'; BROWN='#71594B'; BLACK='#41433F'; DUST='#9C9178'
+GREEN='#515C42'; BROWN='#644932'; BLACK='#30332E'; DUST='#918770'
 
 
 def _field(p, lattice):
@@ -23,11 +23,11 @@ def _field(p, lattice):
 
 def _cross(u,v,size):
     # Flared cross with scooped sides. Return outer and inset coverage.
-    def silhouette(span):
-        a,b=np.maximum(abs(u),abs(v))/span,np.minimum(abs(u),abs(v))/span
-        dist=np.maximum(a-1,b-(.212+.198*a*a))
-        return 1-A._step(-.022,.022,dist)
-    return silhouette(.5*size),silhouette(.411*size)
+    a,b=np.maximum(abs(u),abs(v))*2/size,np.minimum(abs(u),abs(v))*2/size
+    # Erode the SAME outline by a fixed stroke; scaling the shape instead
+    # pinches the white edging away halfway along each arm.
+    dist=np.maximum(a-1,b-(.19+.23*a*a))
+    return 1-A._step(-.018,.018,dist),1-A._step(-.113,-.077,dist)
 
 
 _DIGITS={
@@ -82,12 +82,16 @@ def _maps(tris,raster,ao,names,marks,ppm):
             # Rotate the sampling frame to avoid rectangular alignment with plates.
             coord=np.column_stack((.80*q[:,0]+.60*q[:,2],q[:,1],-.60*q[:,0]+.80*q[:,2]))
             warp=_field(coord*1.79,grids[2])-.5
-            coord=coord/1.04+warp[:,None]*np.array([.66,-.43,.37])
-            brown=A._step(.570,.599,_field(coord,grids[0])); black=A._step(.601,.629,_field(coord+.37,grids[1]))
+            coord=coord*np.array([1.02,1.48,1.04])+warp[:,None]*np.array([.68,-.39,.47])
+            # A common warped stripe coordinate makes the colours interlock,
+            # rather than overlaying two unrelated sets of circular spots.
+            wave=np.sin(2.9*q[:,2]+2.2*q[:,1]-1.6*q[:,0]+6.3*_field(coord,grids[0]))
+            edge=.5+.32*wave+.30*(_field(coord*.83,grids[1])-.5)
+            brown=A._step(.721,.731,edge); black=1-A._step(.224,.234,edge)
             brown[wheel[ids]]=0; black[wheel[ids]]=0
             col=A._mix(A._rgb(GREEN),A._rgb(BROWN),brown); col=A._mix(col,A._rgb(BLACK),black)
             _stencils(col,q,norm,ids,names); rgb[painted]*=col
-        dirt=.115*(1-A._step(.19,1.54,p[:,1]))*(.7+.3*_field(p*2.39,grids[2])); dirt[zz==gid]=0
+        dirt=.078*(1-A._step(.19,1.54,p[:,1]))*(.7+.3*_field(p*2.39,grids[2])); dirt[zz==gid]=0
         base[sl][valid]=A._mix(rgb,dust,dirt); om=orm[sl][valid]; om[:,1]+=(.95-om[:,1])*dirt; om[:,2]*=1-dirt; orm[sl][valid]=om
     return base,orm,normal
 
