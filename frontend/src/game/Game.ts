@@ -325,7 +325,7 @@ export class Game {
   /** the colour last picked in the garage (a train's other line is shown once its model is loaded) */
   private garageWant: string | undefined;
   /** the vehicle the garage was last asked for, not built yet (`showGarage`); `at`: not built before this time (ms) */
-  private garageNext: { ask: number; carId: CarId; color?: string; deadline: number; at: number; fetching?: boolean } | null = null;
+  private garageNext: { ask: number; carId: CarId; color?: string; deadline: number; at: number; fetching?: string; fetched?: string } | null = null;
   /** the vehicle built for the garage whose shaders are being compiled (one at a time: the next waits for it) */
   private garageBuild: { ask: number; carId: CarId; color?: string } | null = null;
   /** when the garage was last asked for a vehicle (ms) */
@@ -922,15 +922,25 @@ export class Game {
       this.garageTimer = setTimeout(() => this.garageTurn(), wait);
       return;
     }
-    // (a model still on its way: what stands there stays until it has come)
-    if (!vehicleModelReady(next.carId)) {
-      if (!next.fetching) {
-        next.fetching = true;
-        void ensureVehicleModels([next.carId]).then(() => {
-          if (this.garageNext !== next) return;
-          next.deadline = performance.now() + GARAGE_COMPILE_WAIT;
-          this.garageTurn();
-        });
+    // (a model still on its way: what stands there stays until it has come. A train in another line's paint is drawn
+    // from that line's own model, fetched after all the vehicles or when the line is picked: it is waited for too,
+    // as `setGarageColor` does for a train standing there. Else a line picked while the train was being built, or
+    // asked for with the train, stood in the base model for good, 11-19. `fetched`: what was fetched for this request,
+    // so that a file which failed to come is not waited for again)
+    const train = CAR_SPECS[next.carId].train;
+    const line = train ? trainLivery(train, next.color) : undefined;
+    const need = trainModelKey(next.carId, line);
+    if (next.fetched !== need && !(vehicleModelReady(next.carId) && (!line || trainModelReady(next.carId, line)))) {
+      if (next.fetching !== need) {
+        next.fetching = need;
+        void ensureVehicleModels([next.carId])
+          .then(() => (line?.variant ? loadTrainModel(need) : undefined))
+          .then(() => {
+            if (this.garageNext !== next) return;
+            next.fetched = need;
+            next.deadline = performance.now() + GARAGE_COMPILE_WAIT;
+            this.garageTurn();
+          });
       }
       return;
     }
