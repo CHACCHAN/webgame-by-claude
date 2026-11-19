@@ -43,6 +43,7 @@ export function loadJetModel(key: string): Promise<void> {
       try {
         const gltf = await loader.loadAsync(`/models/jets/${key}.glb`);
         dropWhiteColours(gltf.scene);
+        likeTheCars(gltf.scene);
         templates.set(key, gltf.scene);
       } catch {
         // no model yet
@@ -72,6 +73,49 @@ function dropWhiteColours(scene: THREE.Object3D) {
     for (const mat of Array.isArray(m.material) ? m.material : [m.material]) coloured.set(mat, (coloured.get(mat) ?? false) || !!m.geometry.getAttribute('color'));
   });
   for (const [mat, any] of coloured) if (!any && mat.vertexColors) mat.vertexColors = false;
+}
+
+/** an occlusion map that occludes nothing (`likeTheCars`) */
+let noOcclusion: THREE.DataTexture | null = null;
+
+/**
+ * The Su-47's airframe and lamps are drawn with shaders that every game has built at its start, for the title's car:
+ * the airframe with the cars' tyre shader, the lamps with the tail lamps'. A shader is keyed by which maps a material
+ * has (and their samplers), whether each of its numbers is 0, its side, and the geometry's attribute layout. The
+ * airframe (base, metal / roughness and normal maps, its sky share in the vertex colours, as a car's tyre) differed
+ * from a tyre by having no occlusion map and 16-bit UVs (a tyre's are floats); the lamps (map and glow map, as a
+ * shared tail lamp) by being double-sided. Each was a shader of its own, built when the aircraft was first shown
+ * (13–14 ms each in one go, 11-19). Here the airframe gets a white occlusion map (occlusion 1 changes nothing) and its
+ * UVs as floats (the same values), and the lamps, closed solids, one side: the picture is the same. A lamp's level
+ * goes through its glow colour, not its intensity (`buildJet`): an intensity of 0 is another shader too.
+ */
+function likeTheCars(scene: THREE.Object3D) {
+  scene.traverse((o) => {
+    const m = o as THREE.Mesh;
+    if (!m.isMesh) return;
+    const mat = m.material as THREE.MeshStandardMaterial;
+    if (mat.vertexColors && mat.map && mat.normalMap && mat.metalnessMap && !mat.aoMap) {
+      if (!noOcclusion) {
+        const like = mat.metalnessMap;
+        noOcclusion = new THREE.DataTexture(new Uint8Array([255, 255, 255, 255]), 1, 1);
+        noOcclusion.name = 'no-occlusion';
+        // (the sampler is part of the key: the model's own, as on a tyre's maps)
+        Object.assign(noOcclusion, { mapping: like.mapping, magFilter: like.magFilter, minFilter: like.minFilter, wrapS: like.wrapS, wrapT: like.wrapT, channel: like.channel });
+        noOcclusion.needsUpdate = true;
+      }
+      mat.aoMap = noOcclusion;
+    }
+    const uv = m.geometry.getAttribute('uv');
+    if (mat.aoMap === noOcclusion && uv && !(uv.array instanceof Float32Array)) {
+      const f = new Float32Array(uv.count * 2);
+      for (let i = 0; i < uv.count; i++) {
+        f[2 * i] = uv.getX(i);
+        f[2 * i + 1] = uv.getY(i);
+      }
+      m.geometry.setAttribute('uv', new THREE.BufferAttribute(f, 2));
+    }
+    if (mat.name.startsWith('navlight_') && mat.side === THREE.DoubleSide) mat.side = THREE.FrontSide;
+  });
 }
 
 export const jetModelReady = (key: string) => templates.has(key);
@@ -199,8 +243,15 @@ export function buildJet(spec: CarSpec, opts: { bodyColor?: string; procedural?:
     root.add(plume);
   }
 
-  // lights: the taxi lamp is the headlight (adopted by name), the rest glow at night
-  const lamps: { mat: THREE.MeshStandardMaterial; beacon: boolean }[] = [];
+  // lights: the taxi lamp is the headlight (adopted by name), the rest glow at night. A lamp's level scales its glow
+  // colour (`glow`), its intensity stays 1: whether an intensity is 0 is part of a shader's key, and a lamp shown by
+  // day had a shader of its own (`likeTheCars`).
+  const lamps: { mat: THREE.MeshStandardMaterial; beacon: boolean; glow: THREE.Color }[] = [];
+  const lamp = (mat: THREE.Material, beacon: boolean) => {
+    const m = mat as THREE.MeshStandardMaterial;
+    lamps.push({ mat: m, beacon, glow: m.emissive.clone() });
+    m.emissiveIntensity = 1;
+  };
   const seen = new Set<THREE.Material>();
   model.traverse((o) => {
     const m = o as THREE.Mesh;
@@ -208,9 +259,9 @@ export function buildJet(spec: CarSpec, opts: { bodyColor?: string; procedural?:
     for (const mat of Array.isArray(m.material) ? m.material : [m.material]) {
       if (seen.has(mat)) continue;
       seen.add(mat);
-      if (/^(navlight_|beacon|formation)/.test(mat.name)) lamps.push({ mat: mat as THREE.MeshStandardMaterial, beacon: mat.name.startsWith('beacon') });
+      if (/^(navlight_|beacon|formation)/.test(mat.name)) lamp(mat, mat.name.startsWith('beacon'));
       // an atlas whose emissive map holds the steady lamps: lit with them
-      if (mat.name === 'airframe' && (mat as THREE.MeshStandardMaterial).emissiveMap) lamps.push({ mat: mat as THREE.MeshStandardMaterial, beacon: false });
+      if (mat.name === 'airframe' && (mat as THREE.MeshStandardMaterial).emissiveMap) lamp(mat, false);
       if (mat.name === 'taxilight') {
         const sm = mat as THREE.MeshStandardMaterial;
         sm.emissive = new THREE.Color('#fff4e0');
@@ -247,7 +298,7 @@ export function buildJet(spec: CarSpec, opts: { bodyColor?: string; procedural?:
         f.time = time;
       }
       // the anti-collision beacons flash about once a second
-      for (const l of lamps) l.mat.emissiveIntensity = l.beacon ? (time % 1.1 < 0.12 ? 6 : 0) : 3 * lightOn;
+      for (const l of lamps) l.mat.emissive.copy(l.glow).multiplyScalar(l.beacon ? (time % 1.1 < 0.12 ? 6 : 0) : 3 * lightOn);
     },
     setGear(k) {
       gearK = clamp(k, 0, 1);
