@@ -7,7 +7,7 @@ import { smaa } from 'three/addons/tsl/display/SMAANode.js';
 import { ambientOcclusion } from './ambientOcclusion';
 import { graded } from './grade';
 import { beamCones, updateVolume, volumetricLights } from './volumetricLights';
-import { compileAtPassDepth, fixInterleavedDispose, keepShaders } from './threeFixes';
+import { compileAtPassDepth, fixInterleavedDispose, keepShaders, steadyAsyncBuilds } from './threeFixes';
 import { ErrorBurst } from './backendChoice';
 import { Upscaler } from '@pmndrs/upscaler';
 import { SceneUpscaler, biasSceneTextures, sceneTextureBias, steadyProjection } from './sceneUpscale';
@@ -145,6 +145,7 @@ export class RenderHost {
       await renderer.init();
       fixInterleavedDispose(renderer);
       keepShaders(renderer);
+      steadyAsyncBuilds();
       const host = new RenderHost(renderer, canvas, options);
       host.timed = timed;
       // (the upscaler's compute passes are not three.js': the tool reads their times from the package's own object,

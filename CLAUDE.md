@@ -47,7 +47,7 @@ pending. `docs/PLAN.md` holds the design.
 ## Environment notes (owner's PC `ubuntu-dev`, when the owner opens a session there)
 - The live stack (compose project `touge-nocturne` + cloudflared) runs on this machine. Deploy finished changes with
   `docker compose up -d --build` without asking (owner's standing permission; nobody else uses the site yet), then
-  check that the new build is served. Before a deploy: `node tools/gpu-errors.cjs` on the build (GPU errors over the
+  check that the new build is served. Before a deploy: `node tools/gpu-errors.cjs` on the build, three times when rendering was touched (GPU errors over the
   garage / race paths, and that the race camera is with the car) and look at one picture of a race: tests look at
   states, and a build whose camera stayed at the garage passed them all (11-11).
   Other compose projects on the host are unrelated: leave them alone.
@@ -93,6 +93,15 @@ pending. `docs/PLAN.md` holds the design.
   them, so every car leaving the scene cost its 22–32 shaders again at the next one (0.3–0.6 s); they are kept now
   (not those keyed by one object: `InstancedMesh`, morph targets). It reaches into `renderer._nodes` /
   `_pipelines`: check both when three.js is updated (`~/.local/opt/quality/builds2.cjs` counts shaders built per step).
+  `steadyAsyncBuilds` (same file): three.js builds a background compile's shaders in stages with frames in
+  between, and a material's textures go through ONE shared reference node per property
+  (`MaterialNode._propertyCache`) that every drawn object sets; the build's references are set back to its own
+  material at each stage change (without it the E231's nearest-filtered palette got bindings without a sampler
+  and code with one: "Async render pipeline creation failed", and that part of the train was never drawn for the
+  session, v2.7.1–v2.7.2). It reaches into `NodeBuilder.buildAsync` / `addNode` / `setBuildStage` /
+  `setShaderStage`: check them on a three.js update (`~/.local/opt/wt/garage-pipeline/repro.cjs`: DRIFT lines).
+  A pipeline error goes to the console only, never to `renderer.onError`: one intermittent line of
+  `gpu-errors.cjs` is a part of something not drawn, not noise.
   Passes that work from the depth buffer share `render/screenSpace.ts` (view position from the depth, sized targets,
   the surface-keeping blur that cancels a five-pixel tap pattern). The glow in the haze (`render/volumetricLights.ts`)
   takes its lights from `volume` (the course's lamps; a cone per headlamp via `CarVisual.beamsInto`, at most

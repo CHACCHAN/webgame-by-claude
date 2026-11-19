@@ -2558,3 +2558,20 @@ shader's texture sample type (TextureSampleType::Depth) …` (1 of 3 runs on v2.
 v2.7.1: the garage's compile before showing is the suspect). An agent is on it (`garage-pipeline`).
 Not verified: phones; the Edwards film in the live site's course select by picture.
 
+## v2.7.3 (11-19): parts of the E231 were not drawn after the car select (v2.7.1's regression)
+
+Merged `garage-pipeline` (`03eac0f`). Since v2.7.1 (the garage compiles a vehicle before showing it) about every
+second showing of the E231 in the car select ended with "Async render pipeline creation failed
+(PaletteMaterial00x)" and that part of the train (underfloor and bogies, or the body meshes) was not drawn for the
+rest of the session. Cause: three.js `compileAsync` builds a material in stages with frames in between, and all
+materials read their textures through one shared reference node per property that every drawn object sets: a frame
+swapped the train's nearest-filtered palette (no sampler in the bindings) for a prop's filtered texture (a sampler
+in the code). Older than v2.7.1, exposed by its background compile; only trains have nearest textures. Fix:
+`threeFixes.steadyAsyncBuilds`. Agent: default `gpu-errors.cjs` 10 runs main 5 with the error, fix 0/10 twice;
+holding the arrow key 10 s in the car select: main 1 error, fix 0, both stay on WebGPU (the burst fallback is not
+reachable by it); hitch medians hold (su47 ~57, hayate ~75, f15j ~89 ms).
+My deploy check of v2.7.1 ran the default check once and got 0: one clean run did not show a 50 % fault. From now
+on the default check runs three times before a deploy that touches rendering.
+Open: after fast flipping every flipped-past vehicle is still compiled in turn (the last appears ~4.7 s after the
+key is let go, in both builds): skip a compile whose vehicle is no longer asked for.
+
