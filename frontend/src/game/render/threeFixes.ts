@@ -1,5 +1,5 @@
 import type * as THREE from 'three';
-import type { WebGPURenderer } from 'three/webgpu';
+import { NodeBuilder, ReferenceBaseNode, ReferenceNode, type WebGPURenderer } from 'three/webgpu';
 
 type Stored = { buffer?: { destroy(): void } };
 type Backend = {
@@ -98,4 +98,63 @@ export function compileAtPassDepth(renderer: WebGPURenderer, sceneTarget: () => 
       compiling = false;
     }
   };
+}
+
+type Reference = { node: unknown; updateReference(state: unknown): unknown; updateValue(): void };
+type AsyncBuilder = {
+  nodes: Set<object>;
+  addNode(node: object): void;
+  setBuildStage(stage: string | null): void;
+  setShaderStage(stage: string | null): void;
+  buildAsync(): Promise<unknown>;
+};
+
+/**
+ * A shader built in the background (`compileAsync` → `NodeBuilder.buildAsync`, the garage's and the waiting room's
+ * object compiles) is built from the material it is for, all through. three.js 0.186 yields to the frames between
+ * the stages of such a build, and a material's textures are read through one reference node per property for ALL
+ * materials (`MaterialNode`'s `_propertyCache`: `map`, `metalnessMap`, …), whose value every drawn object sets to
+ * its own. So the frames in between left the build looking at whatever they drew last: the bindings were made with
+ * the train's palette textures (nearest: no sampler), the code a stage later with a roadside prop's (filtered: a
+ * sampler), and the pipeline failed (`Async render pipeline creation failed (renderPipeline_PaletteMaterial001…)`:
+ * a sampler, depth or comparison type in the shader against another in the layout). Its draw was then skipped for
+ * the rest of the session: a part of the E231 missing (11-19). Materials whose textures are filtered alike were
+ * built with another material's texture without an error. Here every reference the build has met is set to the
+ * build's own material and object again whenever the build changes stage, which is where it resumes after a yield.
+ * It reaches into `NodeBuilder.buildAsync` / `addNode` / `setBuildStage` / `setShaderStage`: check them when three.js
+ * is updated (`~/.local/opt/wt/garage-pipeline/repro.cjs` logs a texture that changed in a build, as DRIFT).
+ */
+export function steadyAsyncBuilds() {
+  const proto = NodeBuilder.prototype as unknown as AsyncBuilder & { buildAsync: { steady?: boolean } };
+  const { buildAsync, addNode, setBuildStage, setShaderStage } = proto;
+  if (typeof buildAsync !== 'function' || buildAsync.steady || ![addNode, setBuildStage, setShaderStage].every((f) => typeof f === 'function')) return;
+  // (the builds under way, with the references each has met; patched on the prototype, not on the builder: methods
+  // of its own on one builder would make every builder's calls slower)
+  const building = new Map<AsyncBuilder, Reference[]>();
+  const again = (builder: AsyncBuilder) => {
+    const refs = building.size ? building.get(builder) : undefined;
+    if (!refs) return;
+    for (const r of refs) {
+      if (r.node === null) continue;
+      r.updateReference(builder);
+      r.updateValue();
+    }
+  };
+  proto.addNode = function (node) {
+    if (building.size && !this.nodes.has(node) && (node instanceof ReferenceNode || node instanceof ReferenceBaseNode)) building.get(this)?.push(node as unknown as Reference);
+    addNode.call(this, node);
+  };
+  proto.setBuildStage = function (stage) {
+    again(this);
+    setBuildStage.call(this, stage);
+  };
+  proto.setShaderStage = function (stage) {
+    again(this);
+    setShaderStage.call(this, stage);
+  };
+  const steady = function (this: AsyncBuilder) {
+    building.set(this, []);
+    return buildAsync.call(this).finally(() => building.delete(this));
+  };
+  proto.buildAsync = Object.assign(steady, { steady: true });
 }
