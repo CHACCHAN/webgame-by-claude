@@ -308,8 +308,12 @@ const TANKS: TankDef[] = [
       pivotRate: 0,
       reverseSpeed: 20,
       sound: 'diesel',
-      // 全長 8.45 m over the gun, 全幅 2.98 m; the turret sits on the rear half (the engine is in the front left)
-      dims: { hull: [8.0, 2.98, 1.5], turretZ: -0.9, ringY: 2.0, barrel: 4.2, trunnion: 0.3, trunnionZ: 1.15, turret: [3.6, 2.6, 0.6] },
+      // 全長 8.45 m over the gun, 全幅 2.98 m; the turret sits on the rear half (the engine is in the front left, the
+      // driver front right). Ring, trunnions and muzzle are the model's (type16.glb, fitted to photos: ring 0.56 m
+      // behind the axles' middle at 1.80 m, muzzle 4.64 m ahead of it); the hull stays the sim's. The sight stays the
+      // default near the bore (the model's gunner's sight head is at [-0.64, 0.68, 0.94]; the fire control lays the
+      // gun parallel to the line of sight, so a sight head far from the bore misses at range).
+      dims: { hull: [8.0, 2.98, 1.5], turretZ: -0.56, ringY: 1.8, barrel: 4.15, trunnion: 0.45, trunnionZ: 1.05, turret: [3.75, 2.64, 0.65] },
       camo: ['#4a5236', '#6b5a3e'],
       figures: { engine: '水冷4サイクル 直列4気筒ターボディーゼル', power: '570 PS / 2,100 rpm', weight: '26 t', topSpeed: 100, crew: 4, transmission: '自動変速（8×8・前2軸操舵）' },
       estimated: ['変速段数', '後進速度', '砲弾初速', '装填時間', '搭載弾数', '砲塔旋回・俯仰速度', '俯仰角', '照準具の倍率'],
