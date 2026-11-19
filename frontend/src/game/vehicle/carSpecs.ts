@@ -7,7 +7,7 @@ import { TANK_ORDER, TANK_SPECS, type TankId, type TankInfo } from './tanks';
 import { JET_ORDER, JET_SPECS, type JetId, type JetInfo } from './jets';
 import { RELEASED } from '../release';
 
-export type CarId = 'hayate' | 'raijin' | 'shiden' | 'supra' | 'r34' | 's15' | 'cybertruck' | 'u9' | BikeId | TankId | JetId | TrainId | 'roach';
+export type CarId = 'hayate' | 'raijin' | 'shiden' | 'supra' | 'r34' | 's15' | 'cybertruck' | 'u9' | 'su7' | BikeId | TankId | JetId | TrainId | 'roach';
 /** the real cars (AI, bots, medals per course, procedural fallback bodies) */
 export type RoadCarId = Exclude<CarId, TrainId | BikeId | TankId | JetId | 'roach'>;
 
@@ -429,6 +429,57 @@ const CARS: Record<RoadCarId, CarSpec> = {
     colors: { body: '#1b1d22', accent: '#c9d400' },
     model: { title: '仰望 U9 Xtreme', author: 'TOUGE NOCTURNE', url: '', license: '自作', own: true },
   },
+  su7: {
+    id: 'su7',
+    name: 'XIAOMI SU7 Max',
+    tagline: 'シャオミ初の車、673馬力の電動セダン',
+    description: 'スマートフォンのシャオミ（小米）が2024年に送り出した最初の車の最上位グレード。前後2モーター673馬力で0→100km/hは2.78秒、最高速265km/h。21,000回転まで回る自社開発モーターと800V級の電池を全長5mのクーペ風セダンに収めた。2.2トンの重さは峠のブレーキングで正直に出る。',
+    drive: 'AWD',
+    engineName: '2モーター（前220kW・後275kW）電動 AWD',
+    // SU7 Max (2024), Xiaomi's configuration sheet as cited by en.wikipedia "Xiaomi SU7": front 220 kW / 338 N·m,
+    // rear 275 kW / 500 N·m; the torque's share by axle
+    frontTorqueSplit: 0.4,
+    // kerb weight 2,205 kg
+    mass: 2205,
+    size: { width: 1.963, height: 0.7, length: 4.997 },
+    wheelbase: 3.0,
+    // 1,693 / 1,699 mm (the configuration sheet, from memory: the wheels measured on the photos agree to 2 cm)
+    track: 1.696,
+    comForward: 0,
+    // the 101 kWh pack lies in the floor (an estimate)
+    comHeight: 0.46,
+    // the Max's 21-inch option: 245/35 R21 (Ø 705 mm) and 265/35 R21 (Ø 719 mm)
+    wheelRadius: 0.356,
+    // the r34's rates, scaled by the mass
+    suspension: { rest: 0.31, stiffness: 66000, damping: 5800, antiRoll: 18500 },
+    engine: {
+      idleRpm: 0,
+      // the rear motor's 21,000 rpm at the 265 km/h top speed (the final drive below is derived from the two)
+      redline: 21000,
+      // 838 N·m and 495 kW (673 PS) together: full pull to ~5,640 rpm (71 km/h), then constant power
+      torque: [[0, 838], [5640, 838], [6700, 705.5], [8000, 591], [9500, 497.6], [11000, 430], [13000, 363.6], [15000, 315], [18000, 262.6], [21000, 225.1]],
+      cylinders: 0,
+      turbo: false,
+      electric: true,
+    },
+    gears: [1],
+    finalDrive: 10.63,
+    // a heavy saloon on road tyres (P Zero)
+    gripFront: 1.36,
+    gripRear: 1.34,
+    maxSteerDeg: 32,
+    // 100 → 0 km/h in 33.3 m (published; paultan.org 2023-12-28): set so the sim stops in that distance (33.4 m)
+    brakeForce: 23900,
+    // Cd 0.195 (published) × ~2.36 m² (frontal area: an estimate from width × height)
+    dragCoef: 0.276,
+    // the active spoiler's share: small (an estimate)
+    downforce: 0.1,
+    driftiness: 0.35,
+    stats: { power: 10, grip: 8, drift: 4, weight: 3 },
+    colors: { body: '#35b6cf', accent: '#e2b100' },
+    // our own model (tools/blender/cars/su7*.py, fitted to photos)
+    model: { title: 'Xiaomi SU7 Max', author: 'TOUGE NOCTURNE', url: '', license: '自作', own: true },
+  },
 };
 
 export const CAR_SPECS: Record<CarId, CarSpec> = {
@@ -441,7 +492,7 @@ export const CAR_SPECS: Record<CarId, CarSpec> = {
 };
 
 /** the cars (AI rivals, bot ghosts and models use these) */
-export const CAR_ORDER: CarId[] = ['hayate', 's15', 'shiden', 'supra', 'raijin', 'r34', 'cybertruck', 'u9'];
+export const CAR_ORDER: CarId[] = ['hayate', 's15', 'shiden', 'supra', 'raijin', 'r34', 'cybertruck', 'u9', 'su7'];
 /** everything a player can drive: the cars, the motorcycles, the tanks, the fighters (Edwards only: `allowedOn`), the
  * trains, then the cockroach */
 /**

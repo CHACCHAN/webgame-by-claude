@@ -17,7 +17,7 @@ TOUGE NOCTURNE（朧峠夜想曲）: ブラウザで動く3Dレースゲーム�
 - 時間帯・天候: 深夜・晴れ / 深夜・雨 / 夜明け。雨はグリップが約2割落ちる。
 
 ## 車両
-- 車: SPRINTER TRUENO AE86、SILVIA spec-R (S15)、RX-7 (FD3S)、SUPRA RZ (JZA80)、IMPREZA WRX STI、SKYLINE GT-R (BNR34)、CYBERTRUCK、YANGWANG U9 Xtreme（後の2台は電気自動車で変速なし）。
+- 車: SPRINTER TRUENO AE86、SILVIA spec-R (S15)、RX-7 (FD3S)、SUPRA RZ (JZA80)、IMPREZA WRX STI、SKYLINE GT-R (BNR34)、CYBERTRUCK、YANGWANG U9 Xtreme、XIAOMI SU7 Max（後の3台はEVで変速なし）。
 - バイク: NSR250R、Ninja H2、GSX1300R 隼。
 - 戦闘機（エドワーズ限定）: F-15J イーグル、F-15C イーグル（複座の塗装あり）、Su-47 ベールクト。実機の推力・重さで地上を走る。アクセル全開でアフターバーナー（ギアの代わりにN2%/AB、マッハ数も）。ゴール後は自動で離陸。オンラインでコースが変わると別の車両になる。
 - ネタ枠: 電車（E231系、E235系、京急新1000形、東武30000系、新幹線E5系、リニアL0系。3両編成）、ゴキブリ（最速）。電車とゴキブリも変速なし。

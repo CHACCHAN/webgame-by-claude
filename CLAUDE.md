@@ -236,6 +236,13 @@ pending. `docs/PLAN.md` holds the design.
   new model with `~/.local/opt/quality/lamps.cjs`. Lamp materials only on lamp parts (check: only at the car's ends). Dark lens textures:
   `tailLampGain`. Unpainted metal swatches (the Cybertruck's stainless; with `clearcoat` the H2's mirror coat): `CarSpec.bareMetal`. A new model goes in
   only after the owner has seen its sheet; never label a third-party model 自作.
+  A photo mask grown from the model's own outline (GrabCut seeded by the silhouette) agrees with the model's
+  mistakes, and a "not judged" box over an end of the car takes that end out of the fit: outline the car's ends in
+  the side photos by hand (`fitdata/su7/tools/endmask.py`) before trusting a camera (the SU7's tail band tip was
+  13-20 cm off). `gate.py` keeps its own copy of each mask (`gate/<id>/masks/<n>_shell.png`): remove it after a
+  mask has changed. A lamp or band that runs round a corner is laid out by bearing round a vertical axis
+  (`su7_details.Wrap`). Check that cabin parts hung from the header are under the glass (the SU7's mirror stalk
+  stood 6 cm through the windscreen; only the picture saw it). `~/.local/opt/quality/lamps.cjs` needs `OUT=<dir>`.
 - Never empty a texture slot of a material that has been drawn (`map = null` on a shadow caster): three.js 0.186
   builds the caster's shadow shader with a reference to the source material's `map` and never rebuilds it, so the
   next shadow map reads `null.matrix` and every frame from then on throws, on both backends (the cockroach's plain
@@ -363,7 +370,7 @@ pending. `docs/PLAN.md` holds the design.
   grind for the wind and the guideway's field hum; articulated bogies are a `consist` with `front: 0` cars.
 - Kinds of vehicle (`vehicle/kinds.ts`): `kindOf(spec)` → car / bike / train / creature; what differs in shared code
   (badge, garage framing, lamp height, exhaust) is a `KIND_TRAITS` entry, not a branch per call site. Electric cars
-  (`engine.electric`, `gears: [1]`: Cybertruck, Yangwang U9) sound through `audio/EvSound.ts` and have no exhaust;
+  (`engine.electric`, `gears: [1]`: Cybertruck, Yangwang U9, Xiaomi SU7 Max) sound through `audio/EvSound.ts` and have no exhaust;
   `engine.strokes: 2` / `supercharger` change EngineSound's timbre (NSR, H2).
 - Motorcycles (`vehicle/bikes.ts`, `BikeInfo`): VehicleSim on a virtual 0.7 m track with a 0.1 m centre of mass (never
   tips; ×4 pitch/roll inertia). The real centre of mass (`com`) sets the wheelie cap on the drive and the stoppie limit

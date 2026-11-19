@@ -40,8 +40,8 @@ class GameApiTest extends TestCase
             ->assertJsonCount(5, 'tracks')
             ->assertJsonPath('tracks.3.id', 'autobahn')
             ->assertJsonPath('tracks.4.id', 'edwards')
-            // 8 cars, 3 motorcycles, 3 fighters, the 6 trains and the cockroach (joke entries)
-            ->assertJsonCount(21, 'cars');
+            // 9 cars, 3 motorcycles, 3 fighters, the 6 trains and the cockroach (joke entries)
+            ->assertJsonCount(22, 'cars');
     }
 
     public function test_player_registration_and_profile(): void
@@ -195,7 +195,7 @@ class GameApiTest extends TestCase
     {
         $this->edwards(true);
         $token = $this->register();
-        $this->getJson('/api/content')->assertOk()->assertJsonPath('tracks.4.id', 'edwards')->assertJsonCount(21, 'cars');
+        $this->getJson('/api/content')->assertOk()->assertJsonPath('tracks.4.id', 'edwards')->assertJsonCount(22, 'cars');
 
         $edwards = ['track_id' => 'edwards', 'car_id' => 'f15j'];
         $this->withToken($token)->postJson('/api/runs', $this->runPayload(188_000, $edwards))->assertCreated();

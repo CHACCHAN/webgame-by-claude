@@ -1,7 +1,7 @@
 {
   "name": "touge-nocturne",
   "private": true,
-  "version": "2.6.10",
+  "version": "2.7.0",
   "type": "module",
   "scripts": {
     "dev": "vite",

@@ -2494,3 +2494,26 @@ Not verified: quality low / medium, phones, upscaler, rain, frame cost (+9k tria
 Known, old: the mid / hind knees come through the open hind wings on the down-stroke; a wing case passes the
 pronotum's hind corner. Next step proposed: a tucked-leg flight pose.
 
+## v2.7.0 (11-19): the Xiaomi SU7 Max; the fighters' own models (F-15J / DJ, F-15C / D, Su-47)
+
+Owner saw the three sheets (Su-47, F-15s, SU7) and said OK (11-19).
+
+**SU7** (`su7`, merged `4e712b0`): own model fitted to 8 Commons photos (mean IoU 0.966; dimensions on the published
+figures, paint to paint 4,999 mm), 75.8 k triangles, 20 draw calls, 642 kB; electric, AWD 495 kW, 2,205 kg, nine
+paints; sim: top 265.2 km/h (265 published), 100-0 33.4 m (33.3), 0-100 3.24 s (2.78 published: the game's launch
+model, not fudged); medals from the legend AI. Weak: head lamp's edge 1-1.5 cm high head-on, the hollow under the deck
+lip, the cabin is the shared kit's, colour names / tracks / tyre sizes partly from memory. No Ultra (owner).
+**Fighters** (merged `jets-stage-work` `45a48e7` = Su-47 `6263ad6` + F-15 `b35aa52` + fixes): models loaded by
+`vehicleModels.ts`; glass 0.62 (F-15s) / 0.66 (Su-47), stand-in 0.88; the taxi light's spot goes out as the gear
+folds; the livery `F-15C 412TW（ED）` is now `F-15C 制空グレー`. F-15: published dimensions to the millimetre, three
+photos for side / planform / head-on; gear, cockpit, panel lines, camouflage are plausible, not measured. Su-47:
+published dimensions only, no photo fit.
+
+Verified on the merged tree: tsc; vitest 286 (switch off and `TANKS=1`); build; backend tests 78; E2E 19/19 on the isolated stack;
+`gpu-errors.cjs` 0 on WebGPU and WebGL 2 with the su7 racing and on Edwards with f15j / su47 / f15c; race pictures
+of both looked at. By the agents: paint-drawn (all), lamps, two-seater switching, take-off series, net-replay `depart=1`.
+Not verified: phones; upscaler; an online peer / ghost / replay drawing a fighter's model as a picture (net-replay
+numbers only); the SU7 in an online room; the first Su-47 shown in the garage stalls 270-300 ms (stand-in: 105 ms):
+open. The autobahn's film shows other traffic than the game now (su7 in `CAR_ORDER`). The aircraft parked on the
+airfield and Edwards' course art are still the stand-in shape.
+
