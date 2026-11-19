@@ -7,7 +7,7 @@ const PIVOT = /^(body|wheel_|spin_|popup_|steer|headlight_target|anchor_)/;
 const KEEP = /muffler|exhaust|tailpipe/i;
 
 /** the geometry with plain float attributes in `matrix`'s frame (the models' are quantized integers under a scaled node) */
-function baked(src: THREE.BufferGeometry, matrix: THREE.Matrix4) {
+export function baked(src: THREE.BufferGeometry, matrix: THREE.Matrix4) {
   const geo = new THREE.BufferGeometry();
   for (const name of Object.keys(src.attributes)) {
     const a = src.attributes[name] as THREE.BufferAttribute;
