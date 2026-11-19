@@ -98,6 +98,8 @@ export type RenderTrouble = 'lost' | 'errors' | 'memory';
 const COMPILE_LANES = 6;
 /** what stops a compile whose object is no longer wanted (`precompile`'s `stale`) */
 const STALE = Symbol('stale compile');
+/** ms of texture uploads in the time after a frame (`RenderHost.upload`; one 2048 px texture takes 3–20 ms by itself) */
+const UPLOAD_SHARE = 4;
 
 /**
  * Owns the canvas' renderer, the scene, the camera and the post-processing chain, and drives the frame loop:
@@ -374,11 +376,12 @@ export class RenderHost {
   }
 
   /**
-   * Puts the textures of `what` that are not on the GPU yet there, one large one a frame, in the time after a frame
-   * was drawn. A compile otherwise uploads all of an object's textures in one go when it makes its bindings, and a
-   * 2048 px texture took 3–20 ms (the first F-15 shown: 40 ms for four, 96 ms in all with its shader, 11-19); the
-   * frames then hand them over as they are. Nothing is uploaded before it is needed (a vehicle's textures on the GPU
-   * only once it is shown, as before). False: `what` stopped being wanted meanwhile.
+   * Puts the textures of `what` that are not on the GPU yet there, a few ms of them in the time after each frame
+   * (`UPLOAD_SHARE`; a large one alone). A compile otherwise uploads all of an object's textures in one go when it
+   * makes its bindings, and a 2048 px texture took 3–20 ms (the first F-15 shown: 40 ms for four, 96 ms in all with
+   * its shader, 11-19); the frames then hand them over as they are. Nothing is uploaded before it is needed (a
+   * vehicle's textures go to the GPU when it is first shown, as before: all vehicles' together are ~1.5 GB with
+   * their mipmaps). False: `what` stopped being wanted meanwhile.
    */
   private async upload(what: THREE.Object3D, stale?: () => boolean): Promise<boolean> {
     const state = (this.renderer as unknown as { _textures?: { get(t: THREE.Texture): { initialized?: boolean; version?: number } } })._textures;
@@ -391,15 +394,17 @@ export class RenderHost {
         for (const v of Object.values(m)) if ((v as THREE.Texture | null)?.isTexture && !(v as THREE.Texture).isRenderTargetTexture) textures.add(v as THREE.Texture);
       }
     });
+    // (the time this frame's share began: a large one waits for the next frame once the share is spent; small ones go along)
+    let since = -Infinity;
     for (const t of textures) {
       const image = t.image as { width?: number; height?: number } | null;
       if (!image?.width || !image.height) continue;
       const known = state.get(t);
       if (known.initialized && known.version === t.version) continue;
-      // (small ones go along at once)
-      if (image.width * image.height >= 512 * 512) {
+      if (image.width * image.height >= 512 * 512 && performance.now() - since > UPLOAD_SHARE) {
         await afterFrame();
         if (stale?.()) return false;
+        since = performance.now();
       }
       this.renderer.initTexture(t);
     }
