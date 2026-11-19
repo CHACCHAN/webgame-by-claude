@@ -95,6 +95,8 @@ export type RenderTrouble = 'lost' | 'errors' | 'memory';
 
 /** compiles side by side while the picture is held (`RenderHost.lanes`) */
 const COMPILE_LANES = 6;
+/** what stops a compile whose object is no longer wanted (`precompile`'s `stale`) */
+const STALE = Symbol('stale compile');
 
 /**
  * Owns the canvas' renderer, the scene, the camera and the post-processing chain, and drives the frame loop:
@@ -297,19 +299,29 @@ export class RenderHost {
    * with the upscaler, the motion vectors' target are part of each pipeline): ahead of the first frame that shows
    * a thing, not as a hitch in it. `hold`: no frame is drawn until it is done (the loading screen is up). `what`: one
    * object that is not in the scene yet (a model about to be shown), compiled under the scene's lights.
+   * `stale`: says when that object is no longer wanted (the car select has moved on): a compile whose turn comes
+   * after that does not start, and one under way stops after the object it is at (three.js cannot stop a material's
+   * build or a pipeline half-way). Either way the promise resolves, once nothing of it runs any more.
    */
-  precompile(hold = false, what: THREE.Object3D = this.scene): Promise<void> {
+  precompile(hold = false, what: THREE.Object3D = this.scene, stale?: () => boolean): Promise<void> {
     // The renderer builds each shader for the target (and motion-vector outputs) it has *when that shader's turn
     // comes*, and that is spread over many frames: the scene pass' target stays set between the frames while a
     // compile runs (`aim`), the frame loop draws to the canvas and sets it again. One compile at a time, or the
     // second would hand back the first one's state.
     const run = async () => {
+      // (its turn came after it stopped being wanted: a car select held down queued one for every vehicle passed)
+      if (stale?.()) return;
       this.compiling = true;
       this.holding = hold;
       this.aim();
       try {
         // (one object about to be shown is taken as in view as a whole: the camera may still be elsewhere)
-        await Promise.all(this.seeAll(hold || what !== this.scene ? what : null, () => (hold ? this.lanes(what) : [what]).map((part) => this.forPass(() => this.renderer.compileAsync(part, this.camera, this.scene)))));
+        // (`compileAsync` reports after each object, between them nothing of its own is under way: a throw there
+        // ends it cleanly, the objects before are built as they would be)
+        const progress = stale ? () => { if (stale()) throw STALE; } : null;
+        await Promise.all(this.seeAll(hold || what !== this.scene ? what : null, () => (hold ? this.lanes(what) : [what]).map((part) => this.forPass(() => this.renderer.compileAsync(part, this.camera, this.scene, progress))))).catch((err) => {
+          if (err !== STALE) throw err;
+        });
         // three.js draws no shadow map while it compiles. A map first met in a compile therefore gets its depth
         // texture from a material's binding, as an ordinary texture, and the first drawing into the map replaces it
         // by a new one on the GPU. What three.js then takes for unchanged (a plain material on a thing that stands

@@ -220,8 +220,12 @@ const _zero = new THREE.Vector3();
 /** car states go out this often (s): every other frame of a 60 Hz screen, so the peers get them evenly spaced */
 /** how long a rival's line waits for its voice before it is shown without it, ms */
 const VOICE_WAIT = 700;
-/** the garage shows a vehicle once its shaders are compiled, or after this long (ms) if that never comes back */
+/** the garage shows a vehicle once its shaders are compiled, or this long (ms) after it was asked for if that never comes back */
 const GARAGE_COMPILE_WAIT = 4000;
+/** a garage request this soon (ms) after the one before it is part of a run (a key held down or tapped fast) … */
+const GARAGE_RUN = 150;
+/** … and its vehicle is built once no other has been asked for this long (ms; a held key repeats every 30–40 ms) */
+const GARAGE_SETTLE = 60;
 /** how long Edwards' load waits for the parked aircraft's models (ms) before it builds the stand-ins instead */
 const PARKED_WAIT = 6000;
 const NET_SEND_INTERVAL = 1 / 30;
@@ -320,8 +324,15 @@ export class Game {
   private asked = 0;
   /** the colour last picked in the garage (a train's other line is shown once its model is loaded) */
   private garageWant: string | undefined;
-  /** a vehicle the garage is about to show, its shaders being compiled (`showGarage`), while `ask` is still the last request */
-  private garagePending: { ask: number; carId: CarId } | null = null;
+  /** the vehicle the garage was last asked for, not built yet (`showGarage`); `at`: not built before this time (ms) */
+  private garageNext: { ask: number; carId: CarId; color?: string; deadline: number; at: number; fetching?: boolean } | null = null;
+  /** the vehicle built for the garage whose shaders are being compiled (one at a time: the next waits for it) */
+  private garageBuild: { ask: number; carId: CarId; color?: string } | null = null;
+  /** when the garage was last asked for a vehicle (ms) */
+  private garageAskAt = -Infinity;
+  private garageTimer: ReturnType<typeof setTimeout> | undefined;
+  /** visuals whose compile has not settled: one of them is disposed only after it has (`retire`) */
+  private compiling = new Map<CarVisual, Promise<unknown>>();
   private garageAngle = 0;
   /** world yaw of the camera offset that looks from the hillside out over the valley */
   private garageViewYaw = 0;
@@ -405,8 +416,11 @@ export class Game {
   private compileTarget: THREE.RenderTarget | null = null;
   /** compiles the scene's shaders for the buffers it is really drawn into (the render host's scene pass), when given */
   compileScene: ((hold: boolean) => Promise<unknown>) | null = null;
-  /** … and those of one object that is not in the scene yet (a model about to be shown), when given */
-  compileObject: ((object: THREE.Object3D) => Promise<unknown>) | null = null;
+  /**
+   * … and those of one object that is not in the scene yet (a model about to be shown), when given. `stale`: true
+   * once the object is not wanted any more (the compile is then not started, or stopped after the part it is at).
+   */
+  compileObject: ((object: THREE.Object3D, stale?: () => boolean) => Promise<unknown>) | null = null;
   private cornerIdx = 0;
   private warnedCorner = -1;
   /** debug/testing: let an AI drive the player car and speed up simulated time */
@@ -839,7 +853,7 @@ export class Game {
     this.lights.showroom.intensity = 0;
     if (this.garageCar) {
       this.root.remove(this.garageCar.root);
-      this.garageCar.dispose();
+      this.retire(this.garageCar);
       this.garageCar = null;
     }
     this.lobby?.dispose();
@@ -874,9 +888,57 @@ export class Game {
     if (announce) this.setPhase('attract');
   }
 
+  /**
+   * Shows a vehicle in the garage (the car select's highlighted one, the waiting room's browsing). What stands there
+   * stays until the new one is built and its shaders are compiled. One vehicle is built and compiled at a time, and
+   * only the one asked for last: a key held down in the car select asks for ~30 a second, and every one of them used
+   * to be built and compiled in turn, so the last one came seconds after the key was let go (4.7 s after 10 s held,
+   * 11-19). Now a request during a run of them waits until none has come for `GARAGE_SETTLE`, a build in progress
+   * whose vehicle is no longer wanted stops after the material it is at (`compileObject`'s `stale`), and the last
+   * request goes next. A single press is built at once.
+   */
   showGarage(carId: CarId, color?: string) {
+    const ask = ++this.asked;
+    const now = performance.now();
+    const run = now - this.garageAskAt < GARAGE_RUN;
+    this.garageAskAt = now;
+    this.garageNext = { ask, carId, color, deadline: now + GARAGE_COMPILE_WAIT, at: run ? now + GARAGE_SETTLE : now };
+    this.garageTurn();
+  }
+
+  /** Builds the vehicle last asked for when nothing else is being built for the garage, its model is there and its time has come. */
+  private garageTurn() {
+    clearTimeout(this.garageTimer);
+    const next = this.garageNext;
+    // (something else was asked for since: a race, the waiting room, the title)
+    if (!next || next.ask !== this.asked) {
+      this.garageNext = null;
+      return;
+    }
+    // (the one being built settles first: then this is called again)
+    if (this.garageBuild) return;
+    const wait = next.at - performance.now();
+    if (wait > 0) {
+      this.garageTimer = setTimeout(() => this.garageTurn(), wait);
+      return;
+    }
     // (a model still on its way: what stands there stays until it has come)
-    if (!this.needs([carId], () => this.showGarage(carId, color))) return;
+    if (!vehicleModelReady(next.carId)) {
+      if (!next.fetching) {
+        next.fetching = true;
+        void ensureVehicleModels([next.carId]).then(() => {
+          if (this.garageNext !== next) return;
+          next.deadline = performance.now() + GARAGE_COMPILE_WAIT;
+          this.garageTurn();
+        });
+      }
+      return;
+    }
+    this.garageNext = null;
+    this.buildGarage(next);
+  }
+
+  private buildGarage({ ask, carId, color, deadline }: { ask: number; carId: CarId; color?: string; deadline: number }) {
     const spec = CAR_SPECS[carId];
     const visual = new CarVisual(spec, { headlights: true, shadows: this.quality.shadows, rideHeight: 0, bodyColor: color });
     visual.setHeadlights(this.env.preset.lampsOn > 0.5 ? 1 : 0.5, true);
@@ -896,19 +958,43 @@ export class Game {
     // frame's, `threeFixes.compileAtPassDepth`, so the frame built everything again.)
     const compile = this.compileObject;
     if (!compile) return this.placeGarage(visual, color, s, p);
-    const ask = this.asked;
-    this.garagePending = { ask, carId };
-    let done = false;
+    const build = { ask, carId, color };
+    this.garageBuild = build;
+    let shown = false;
     const show = () => {
-      if (done) return;
-      done = true;
-      // (unless something else was asked for meanwhile)
-      if (ask !== this.asked) return visual.dispose();
-      this.garagePending = null;
+      if (shown || ask !== this.asked) return;
+      shown = true;
       this.placeGarage(visual, color, s, p);
     };
-    void compile(visual.root).then(show, show);
-    setTimeout(show, GARAGE_COMPILE_WAIT);
+    // the next request's turn (this one is shown, given up, or out of time)
+    const next = () => {
+      if (this.garageBuild !== build) return;
+      this.garageBuild = null;
+      this.garageTurn();
+    };
+    // (wanted while it is the last request, or, shown by the deadline, while it stands there)
+    const settled = compile(visual.root, () => (shown ? this.garageCar !== visual : ask !== this.asked)).catch(() => undefined);
+    this.compiling.set(visual, settled);
+    // (no answer by its deadline: shown as it is, its compile goes on; and the next one may start)
+    const late = setTimeout(() => {
+      show();
+      next();
+    }, Math.max(0, deadline - performance.now()));
+    void settled.then(() => {
+      clearTimeout(late);
+      this.compiling.delete(visual);
+      show();
+      // (not shown: something else was asked for meanwhile)
+      if (!shown) visual.dispose();
+      next();
+    });
+  }
+
+  /** Disposes a vehicle taken out of the scene, once a compile of it that is still under way has settled. */
+  private retire(visual: CarVisual) {
+    const compiling = this.compiling.get(visual);
+    if (compiling) void compiling.then(() => visual.dispose());
+    else visual.dispose();
   }
 
   private placeGarage(visual: CarVisual, color: string | undefined, s: number, p: THREE.Vector3) {
@@ -2475,9 +2561,11 @@ export class Game {
 
   setGarageColor(color: string) {
     // (another vehicle is on its way in: it comes in this paint)
-    const pending = this.garagePending;
-    if (pending && pending.ask === this.asked) {
-      this.showGarage(pending.carId, color);
+    const pending = [this.garageNext, this.garageBuild].find((g) => g?.ask === this.asked);
+    if (pending) {
+      // (asked for in this paint already: the picker sends the paint of a newly highlighted vehicle after it)
+      if (pending === this.garageNext) pending.color = color;
+      else if (pending.color !== color) this.showGarage(pending.carId, color);
       return;
     }
     const car = this.garageCar;
