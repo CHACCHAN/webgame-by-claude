@@ -57,6 +57,8 @@ The figures the simulation does not use (height, range, fuel) are left out unles
 | Transmission | automatic, 6 speeds (estimated) | automatic, gears not published | ja.wikipedia | gear count not found: stays estimated |
 | Reverse speed | 20 km/h (estimated) | not published | — | not found: stays estimated |
 | Steering | front two axles | 前方2軸 | ja.wikipedia | same |
+| Layout | engine front left | engine front left, driver front right (photos: the driver's hatch and periscopes on the right of the bow) | Commons photos of the vehicle (measuring only) | same |
+| Gun's place (dims) | ring 0.9 m behind the axles' middle at 2.0 m, muzzle 4.45 m ahead | ring 0.56 m behind at 1.80 m, trunnions 1.05 m ahead of the ring and 0.45 m above it, muzzle 4.15 m ahead of them (4.64 m ahead of the axles' middle) | photo fit of the own model (`fitdata/type16`) | changed to the model (the gunner's sight head too: [-0.64, 0.68, 0.94] in the turret's frame); length over the gun on the model 8.13 m against the published 8.45 m (the photos give 8.3 ± 0.1 m with the rear fittings; not explained) |
 | Crew | 4 | 4 | MOD one-sheet excerpt; ja / en.wikipedia | same |
 | Gun | 52口径105mmライフル砲 (JSW) | 105 mm L/52, JSW, loaded by hand | ja / en.wikipedia | same |
 | Round | 93式105mm APFSDS | 93式105mm装弾筒付翼安定徹甲弾 (also 91式 HEAT-MP) | ja.wikipedia | same |

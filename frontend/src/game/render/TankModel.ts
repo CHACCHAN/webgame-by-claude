@@ -28,7 +28,8 @@ import { baked } from './mergeParts';
  * speed ± its yaw rate × half the gauge.
  *
  * Draw calls: the `roll_*` nodes (2 × 7–10 of them) are merged at build into ONE skinned mesh per material, a bone per
- * node (`mergeRolls`), so the whole running gear is one call however many wheels it has; a track material's every
+ * node (`mergeRolls`), so the whole running gear is one call however many wheels it has (the 16式's eight wheels the
+ * same way, `mergeSpins`: their `spin_*` nodes are the bones and stay under their steering pivots); a track material's every
  * texture slot (colour, normal, roughness / metalness, occlusion) scrolls together.
  */
 const templates = new Map<string, THREE.Object3D>();
@@ -120,7 +121,10 @@ export function buildTank(spec: CarSpec, opts: { bodyColor?: string; procedural?
     if (Number.isFinite(maxZ)) muzzleLocal.set(0, 0, maxZ);
   }
 
-  if (tpl) mergeRolls(model);
+  if (tpl) {
+    mergeRolls(model);
+    mergeSpins(model);
+  }
   // tracks: the scrolling materials (each instance its own copy), the rolling wheels, the 16式's wheels
   const trackMats: { mat: THREE.MeshStandardMaterial; left: boolean; scrolled: THREE.Texture[] }[] = [];
   const rolls: { node: THREE.Object3D; left: boolean; radius: number }[] = [];
@@ -164,8 +168,10 @@ export function buildTank(spec: CarSpec, opts: { bodyColor?: string; procedural?
     const wheel = /^wheel_(\d)([lr])$/.exec(o.name);
     if (wheel) {
       const spin = o.getObjectByName(`spin_${wheel[1]}${wheel[2]}`) ?? o;
+      // (a merged wheel keeps no mesh of its own: its radius was measured before the merge)
       const box = new THREE.Box3().setFromObject(spin);
-      wheels8.push({ pivot: o, spin, axle: +wheel[1], base: o.quaternion.clone(), radius: Math.max(0.1, (box.max.y - box.min.y) / 2) });
+      const radius = (spin.userData.radius as number | undefined) ?? Math.max(0.1, (box.max.y - box.min.y) / 2);
+      wheels8.push({ pivot: o, spin, axle: +wheel[1], base: o.quaternion.clone(), radius });
     }
   });
   const trackV = info.trackV ?? 1;
@@ -326,6 +332,79 @@ function mergeRolls(model: THREE.Object3D) {
     mesh.name = 'running_gear';
     mesh.castShadow = p.cast;
     parent.add(mesh);
+    mesh.updateMatrixWorld(true);
+    mesh.bind(skeleton);
+  }
+}
+
+const spinCache = new Map<THREE.Object3D, RollMerge>();
+
+/**
+ * The 16式's wheels: the meshes under the `spin_<axle><l|r>` nodes become ONE skinned mesh per material under `body`,
+ * the spin nodes themselves its bones (they stay where they are, under their steering `wheel_*` pivots, so the rig
+ * steers and turns them as before). Eight wheels, one draw call. Each spin node keeps its radius in `userData.radius`.
+ */
+function mergeSpins(model: THREE.Object3D) {
+  const spins: THREE.Object3D[] = [];
+  model.traverse((o) => {
+    if (/^spin_\d[lr]$/.test(o.name)) spins.push(o);
+  });
+  if (spins.length < 2) return;
+  const host = model.getObjectByName('body') ?? model;
+  const under = (o: THREE.Object3D) => {
+    for (let p = o.parent; p; p = p.parent) if (p === host) return true;
+    return false;
+  };
+  if (!spins.every(under)) return;
+  const tpl = templateOf(model);
+  let cache = tpl ? spinCache.get(tpl) : undefined;
+  model.updateMatrixWorld(true);
+  const toHost = host.matrixWorld.clone().invert();
+  if (!cache) {
+    const byMat = new Map<THREE.Material, { geos: THREE.BufferGeometry[]; cast: boolean }>();
+    spins.forEach((s, i) => {
+      s.traverse((o) => {
+        const m = o as THREE.Mesh;
+        if (!m.isMesh || Array.isArray(m.material)) return;
+        // (plain floats first, as in mergeRolls)
+        const g = baked(m.geometry, toHost.clone().multiply(m.matrixWorld));
+        const n = g.getAttribute('position').count;
+        g.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(new Uint16Array(n * 4).map((_, k) => (k % 4 === 0 ? i : 0)), 4));
+        g.setAttribute('skinWeight', new THREE.Float32BufferAttribute(new Float32Array(n * 4).map((_, k) => (k % 4 === 0 ? 1 : 0)), 4));
+        for (const name of Object.keys(g.attributes)) if (!['position', 'normal', 'uv', 'skinIndex', 'skinWeight'].includes(name)) g.deleteAttribute(name);
+        const e = byMat.get(m.material) ?? { geos: [], cast: false };
+        e.geos.push(g);
+        e.cast ||= m.castShadow;
+        byMat.set(m.material, e);
+      });
+    });
+    const parts: RollMerge['parts'] = [];
+    for (const [material, e] of byMat) {
+      const mixed = e.geos.some((g) => !g.index) && e.geos.some((g) => !!g.index);
+      const geometry = mergeGeometries(e.geos.map((g) => (mixed && g.index ? g.toNonIndexed() : g)), false);
+      if (geometry) parts.push({ geometry, material, cast: e.cast });
+    }
+    const radius = (s: THREE.Object3D) => {
+      const box = new THREE.Box3().setFromObject(s);
+      return Math.max(0.1, (box.max.y - box.min.y) / 2);
+    };
+    cache = { parent: host.name, bones: spins.map((s) => ({ name: s.name, matrix: new THREE.Matrix4(), radius: radius(s) })), parts };
+    if (tpl) spinCache.set(tpl, cache);
+  }
+  const merged = cache;
+  spins.forEach((s, i) => {
+    s.userData.radius = merged.bones[i].radius;
+    // the wheel's own meshes go (a spin node that is itself a mesh only stops drawing: it is still a bone)
+    for (const c of [...s.children]) if ((c as THREE.Mesh).isMesh) s.remove(c);
+    if ((s as THREE.Mesh).isMesh) s.visible = false;
+  });
+  model.updateMatrixWorld(true);
+  const skeleton = new THREE.Skeleton(spins as THREE.Bone[]);
+  for (const p of merged.parts) {
+    const mesh = new THREE.SkinnedMesh(p.geometry, p.material);
+    mesh.name = 'wheels';
+    mesh.castShadow = p.cast;
+    host.add(mesh);
     mesh.updateMatrixWorld(true);
     mesh.bind(skeleton);
   }
