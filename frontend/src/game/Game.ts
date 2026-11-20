@@ -41,6 +41,7 @@ import { footprint, onlineGrid } from './net/grid';
 import { LobbyLineup } from './net/LobbyLineup';
 import { LINEUP_VIEW, type LineupEntry } from './net/lineup';
 import { BIKE_CAMERA, CAR_CAMERA, ChaseCamera, JET_CAMERA, TANK_CAMERA, TRAIN_CAMERA } from './camera/ChaseCamera';
+import { HIDDEN_OK, clearSwing, fitFraming, hiddenShare, roadsideOccluders, swingSamples, vehicleHull, type Framing, type Occluder, type ScreenBox } from './camera/garageFit';
 import { hasExhaust, traitsOf } from './vehicle/kinds';
 import { InputManager, emptyHands } from './input/Input';
 import { GunFx } from './fx/GunFx';
@@ -213,6 +214,21 @@ interface Racer {
 }
 
 const _v = new THREE.Vector3(), _w = new THREE.Vector3(), _q = new THREE.Quaternion(), _f = new THREE.Vector3();
+/** the garage camera as it would stand at a point of its swing (`garageExtent`, `garageClearPart`) */
+const _fitCam = new THREE.PerspectiveCamera(38, 1, 0.1, 100);
+const _fitVP = new THREE.Matrix4(), _fitEye = new THREE.Vector3();
+/** the farthest the car select's fit steps the camera back (× its standard distance) */
+const GARAGE_FIT_MAX = 4;
+/**
+ * points of the swing looked at for a clear view of the vehicle, and the least part of it the camera keeps to (of −1…1)
+ * (a sign or a post passed close to the camera hides the vehicle for less than 0.06 of the swing: 17 points missed one
+ * that hid 72 % on 霧降湖, 11-20)
+ */
+const CLEAR_SAMPLES = 33, CLEAR_SWING = 1;
+const _clearPass1 = new Uint8Array(CLEAR_SAMPLES);
+const _clearEyes = new Float32Array(CLEAR_SAMPLES * 3);
+/** what the garage camera never counts as standing between it and the vehicle: the land and the road (their own rules), the forest (cleared round the camera), the traffic */
+const NOT_OCCLUDING = new Set(['trees', 'clutter', 'traffic', 'terrain-near', 'terrain-far', 'road']);
 const _tip = new THREE.Vector3(), _back = new THREE.Vector3();
 /** tyre grip on a wet road (rain) as a share of the dry grip */
 export const WET_GRIP = 0.8;
@@ -346,9 +362,29 @@ export class Game {
   /**
    * Where the garage camera puts the vehicle on the screen: it aims this far to its right of and above the vehicle
    * (m at a car's distance; the default leaves the car left of centre, beside the card on the right; the car select
-   * has its list on the left and the thumbnail tool wants it in the middle), with a factor on the distance.
+   * has its list on the left and the thumbnail tool wants it in the middle), with a factor on the distance. With
+   * `free` (the part of the screen the vehicle has, NDC: the car select in the phone's layout) the game checks it
+   * against the vehicle itself and steps back and aims anew where the vehicle would leave that part (`fitGarage`).
    */
-  garageFraming = { right: 2.4, up: 0, zoom: 1 };
+  garageFraming: Framing & { free?: ScreenBox } = { right: 2.4, up: 0, zoom: 1 };
+  /** the framing the garage camera works with: `garageFraming`, or what `fitGarage` made of it for the vehicle there */
+  private garageFit: Framing = this.garageFraming;
+  /** what `garageFit` was made for (it is made again when one of them changes) */
+  private garageFitFor: { frame: object | null; car: CarVisual | null; aspect: number } = { frame: null, car: null, aspect: 0 };
+  /** points on the shown vehicle (world; a train's leading car): what has to stand in the free part of the screen (made when needed) */
+  private garageHull: Float32Array | null = null;
+  /** what stands by the road round the garage's vehicle, which a camera stepped back could have between it and the vehicle (kept per course spot, grown when a larger vehicle asks for a wider reach) */
+  private garageOccluders: Occluder[] | null = null;
+  private garageOccludersScenery: THREE.Object3D | null = null;
+  private garageOccludersAt = new THREE.Vector3();
+  private garageOccludersWithin = 0;
+  /** where on the road the garage's vehicle stands (s) */
+  private garageSpot = 0;
+  /**
+   * the field of view's widening that gives back what the bank rule took off the camera's distance (1 = none): the
+   * vehicle keeps the size the framing asked for, seen from where the camera may stand
+   */
+  private garageLens = 1;
   /** every light of the game, made once (the shaders are built for the set: see there) */
   private lights!: LightRig;
   /** camera height above the focus per unit of scale, in the automatic swing (a line-up is looked at from higher up) */
@@ -1030,8 +1066,11 @@ export class Game {
     light.decay = 1.2;
     this.garageLift = 1.7;
     // (measured at the kind's scale, around the point the camera circles: a train's camera stands 22 m out, and a
-    // bank there used to carry it 15 m up, looking down on the roof)
-    this.garageViewYaw = this.garageSide(this.garageFocus, s, 0, view.scale);
+    // bank there used to carry it 15 m up, looking down on the roof; and at the distance the framing asks for)
+    this.garageSpot = s;
+    this.garageViewYaw = this.garageSide(this.garageFocus, s, 0, view.scale, { reach: this.garageFraming.free ? this.garageFraming.zoom : 1 });
+    this.garageHull = null;
+    this.garageFitFor.car = null;
     if (this.phase !== 'garage') {
       this.garageAngle = 0.6;
       this.garageOrbit = null;
@@ -1043,17 +1082,16 @@ export class Game {
   /**
    * World yaw from which the garage camera looks at `p` (on the road at `s`): from the uphill side, so that the
    * background is the valley and not the cutting. `turn` (rad) brings it round towards the front of what stands
-   * there; `k` is the view's scale (the camera's distance).
+   * there; `k` is the view's scale (the camera's distance). `reach`: the factor on the distance the framing asks for
+   * (the car select on a phone steps back up to 2.6 times: from the uphill side of a pass that is up the bank, where
+   * the camera was stepped in again and the vehicle stood too big for its strip, 11-20); `keep`: a direction kept for
+   * as long as it allows that.
    */
-  private garageSide(p: THREE.Vector3, s: number, turn = 0, k = 1, lineup?: { swing: number; see: readonly THREE.Vector3[] }) {
-    const r = this.track.getRight(Math.round(s), new THREE.Vector3());
-    const up = this.terrain.heightAt(p.x + r.x * 14, p.z + r.z * 14) > this.terrain.heightAt(p.x - r.x * 14, p.z - r.z * 14) ? 1 : -1;
-    const ahead = this.track.headingAt(s);
-    // (the road's right is a quarter turn clockwise of its heading: towards the front is against that turn)
-    const side = Math.atan2(r.x * up, r.z * up) + up * turn;
+  private garageSide(p: THREE.Vector3, s: number, turn = 0, k = 1, { lineup, reach = 1, keep }: { lineup?: { swing: number; see: readonly THREE.Vector3[] }; reach?: number; keep?: number } = {}) {
+    const order = this.garageSides(p, s, turn);
     // too steep a bank on that side (ridge courses) hides the car: take the first direction whose whole
     // camera swing stays clear of the terrain (other side, then along the road)
-    const clear = (yaw: number) => {
+    const clear = (yaw: number, far: number) => {
       for (let j = -3; j <= 3; j++) {
         const a = yaw + (j / 3) * 0.75;
         for (const d of [2.5, 4, 5.5, 7, 8.6]) {
@@ -1061,6 +1099,13 @@ export class Game {
           // garageCamera() may lift the camera spot itself a little, but not onto a bank
           const sight = d >= 8.6 ? p.y + (this.garageLift - 0.4) * k : p.y + (0.6 + (this.garageLift - 0.6) * (d / 8.6)) * k;
           if (this.terrain.heightAt(p.x + Math.sin(a) * d * k, p.z + Math.cos(a) * d * k) > sight) return false;
+        }
+        if (far <= 1) continue;
+        // further out: the spot itself as garageCamera() takes it (its bank rule), and the sight line from there
+        const dist = 8.6 * k * far, y = p.y + this.garageLift * k * far;
+        if (this.terrain.heightAt(p.x + Math.sin(a) * dist, p.z + Math.cos(a) * dist) + 1.4 > y + 0.12 * dist) return false;
+        for (const f of [0.35, 0.55, 0.75, 0.9]) {
+          if (this.terrain.heightAt(p.x + Math.sin(a) * dist * f, p.z + Math.cos(a) * dist * f) > p.y + 0.6 * k + (y - p.y - 0.6 * k) * f) return false;
         }
       }
       // a line-up is long: the camera has to see its two ends as well (half a metre above the road there)
@@ -1076,7 +1121,22 @@ export class Game {
       }
       return true;
     };
-    return [side, side + Math.PI - 2 * up * turn, ahead, ahead + Math.PI].find(clear) ?? side;
+    if (keep !== undefined && clear(keep, reach)) return keep;
+    return order.find((yaw) => clear(yaw, reach)) ?? (keep !== undefined && clear(keep, 1) ? keep : order.find((yaw) => clear(yaw, 1))) ?? order[0];
+  }
+
+  /**
+   * The directions (world yaw) the garage camera may look at `p` (on the road at `s`) from, in the order they are
+   * preferred: from the uphill side (the background is the valley, not the cutting), the other side, then along the
+   * road from ahead and from behind. `turn`: see `garageSide`.
+   */
+  private garageSides(p: THREE.Vector3, s: number, turn = 0) {
+    const r = this.track.getRight(Math.round(s), new THREE.Vector3());
+    const up = this.terrain.heightAt(p.x + r.x * 14, p.z + r.z * 14) > this.terrain.heightAt(p.x - r.x * 14, p.z - r.z * 14) ? 1 : -1;
+    const ahead = this.track.headingAt(s);
+    // (the road's right is a quarter turn clockwise of its heading: towards the front is against that turn)
+    const side = Math.atan2(r.x * up, r.z * up) + up * turn;
+    return [side, side + Math.PI - 2 * up * turn, ahead, ahead + Math.PI];
   }
 
   /**
@@ -1115,7 +1175,7 @@ export class Game {
     // the side the camera stands on, again with every change of the room: a longer line-up moves it further out,
     // where a bank that was out of its way may stand between it and the front row
     const was = this.garageViewYaw;
-    this.garageViewYaw = this.garageSide(view.focus, s, LINEUP_VIEW.turn, view.scale, { swing: LINEUP_VIEW.swing, see: view.ends });
+    this.garageViewYaw = this.garageSide(view.focus, s, LINEUP_VIEW.turn, view.scale, { lineup: { swing: LINEUP_VIEW.swing, see: view.ends } });
     // (a camera the player has dragged stays where they put it)
     if (!fresh && this.garageOrbit) this.garageOrbit.yaw += was - this.garageViewYaw;
     if (!fresh) return;
@@ -2519,7 +2579,222 @@ export class Game {
   /** The dragged camera starts where the automatic swing is. */
   private orbitFromSwing() {
     const pitch = Math.atan2(this.garageLift - 0.6, 8.6);
-    return { yaw: Math.sin(this.garageAngle) * (this.lobby ? LINEUP_VIEW.swing : 0.75), pitch, dist: (8.6 * this.garageScale) / Math.cos(pitch) };
+    return { yaw: this.garageSwingYaw(), pitch, dist: (8.6 * this.garageScale) / Math.cos(pitch) };
+  }
+
+  /**
+   * The automatic swing's yaw off `garageViewYaw` now (rad): a line-up's own; the car select's within the part of
+   * the swing its framing keeps to (`Framing.swing`: something by the road stands in the rest).
+   */
+  private garageSwingYaw() {
+    const s = Math.sin(this.garageAngle);
+    if (this.lobby) return s * LINEUP_VIEW.swing;
+    const part = this.garageFit.swing;
+    return (part ? part[0] + ((s + 1) / 2) * (part[1] - part[0]) : s) * 0.75;
+  }
+
+  /**
+   * The framing the garage camera works with, made again when the picker's framing, the vehicle or the screen's shape
+   * has changed (`camera/garageFit.ts`): the picker's own while the vehicle stands inside the free part of the
+   * screen at every point of the swing; else stepped back and aimed anew. A camera that has to step back further
+   * than the picker asked takes a side of the road that allows it, if one does (`garageSide`).
+   */
+  private fitGarage() {
+    const frame = this.garageFraming, car = this.garageCar;
+    this.garageFitFor = { frame, car, aspect: this.camera.aspect };
+    const free = frame.free;
+    if (this.lobby || !car || !free) {
+      this.garageFit = frame;
+      return;
+    }
+    // (what has to stand in the free part of the screen: a train is framed on its leading car)
+    this.garageHull ??= vehicleHull((car.spec.train && car.root.getObjectByName('car0')) || car.root);
+    const was = this.garageViewYaw;
+    const fit = (swing?: readonly [number, number]) => fitFraming(frame, free, this.camera.aspect, (f) => this.garageExtent(f, swing), GARAGE_FIT_MAX);
+    // The side of the road and the part of the swing from which the vehicle is seen whole at the distance it needs
+    // (11-20): the bank lets the camera stand there, the land leaves the line of sight open, and nothing by the road
+    // hides more than HIDDEN_OK of it (a stepped-back camera stood with the guardrail across the wheels, 天狼's name
+    // board over the cockroach). The first side (the one placeGarage took: the bank's, for the distance asked) whose
+    // whole swing is; else the widest part of a swing, if at least CLEAR_SWING; else that first side's whole swing as
+    // the bank allows it (the bank's steps in made up by a wider view: `garageLens`).
+    const sides = [was, ...this.garageSides(this.garageFocus, this.garageSpot).filter((y) => Math.abs(Math.sin((y - was) / 2)) > 1e-6)];
+    const fullFits = new Map<number, Framing>();
+    let best: { yaw: number; made: Framing; width: number } | null = null;
+    let need = Infinity;
+    for (const yaw of sides) {
+      this.garageViewYaw = yaw;
+      const made = fit();
+      fullFits.set(yaw, made);
+      need = Math.min(need, made.zoom);
+      const minWidth = best ? best.width + 1e-6 : CLEAR_SWING;
+      let partZ = made.zoom;
+      let part = this.garageClearPart(partZ, minWidth);
+      if (part && part[0] <= -1 && part[1] >= 1) {
+        best = { yaw, made, width: 2 };
+        break;
+      }
+      // (a side from which the whole swing could not be framed stepped back further than the vehicle needs: from
+      // there the bank cuts its clear part short too; looked for again at the distance it needed elsewhere)
+      if ((!part || part[1] - part[0] < minWidth - 1e-9) && made.zoom > need + 1e-9) {
+        partZ = need;
+        part = this.garageClearPart(partZ, minWidth);
+      }
+      // (a smaller part may let the camera nearer: looked at again from there)
+      for (let round = 0; part && part[1] - part[0] >= minWidth - 1e-9 && round < 3; round++) {
+        const kept: Framing = { ...fit(part), swing: part };
+        if (Math.abs(kept.zoom - partZ) < 1e-9) {
+          if (!best || part[1] - part[0] > best.width + 1e-9) best = { yaw, made: kept, width: part[1] - part[0] };
+          break;
+        }
+        partZ = kept.zoom;
+        const again = this.garageClearPart(partZ, minWidth);
+        if (again && again[0] <= part[0] + 1e-9 && again[1] >= part[1] - 1e-9) {
+          if (!best || part[1] - part[0] > best.width + 1e-9) best = { yaw, made: kept, width: part[1] - part[0] };
+          break;
+        }
+        part = again;
+      }
+    }
+    let made: Framing;
+    if (best) {
+      this.garageViewYaw = best.yaw;
+      made = best.made;
+    } else {
+      this.garageViewYaw = was;
+      made = fullFits.get(was) ?? fit();
+      const further = this.garageSide(this.garageFocus, this.garageSpot, 0, this.garageScale, { reach: made.zoom, keep: was });
+      if (further !== was) {
+        this.garageViewYaw = further;
+        made = fullFits.get(further) ?? fit();
+      }
+    }
+    // (a camera the player has dragged stays where they put it)
+    if (this.garageOrbit) this.garageOrbit.yaw += was - this.garageViewYaw;
+    this.garageFit = made;
+  }
+
+  /**
+   * The widest part of the swing (of −1…1, looked at in CLEAR_SAMPLES points, at least `minWidth` wide) from which
+   * the garage camera, with the factor `z` on its distance, sees the vehicle whole: the bank does not step it in, the
+   * land does not cross the line of sight, nothing by the road hides more than HIDDEN_OK of it; null where no such
+   * part is.
+   */
+  private garageClearPart(z: number, minWidth = CLEAR_SWING) {
+    const hull = this.garageHull;
+    if (!hull) return null;
+    const car = this.garageFocus, k = this.garageScale;
+    const want = 8.6 * k * z + 10;
+    if (
+      this.scenery &&
+      (!this.garageOccluders || this.garageOccludersScenery !== this.scenery.group || this.garageOccludersAt.distanceTo(car) + want > this.garageOccludersWithin)
+    ) {
+      const within = 8.6 * k * Math.min(GARAGE_FIT_MAX, Math.max(z * 1.15, z + 0.5)) + 10;
+      this.garageOccluders = roadsideOccluders(this.scenery.group, car, within, (o) => NOT_OCCLUDING.has(o.name));
+      this.garageOccludersScenery = this.scenery.group;
+      this.garageOccludersAt.copy(car);
+      this.garageOccludersWithin = within;
+    }
+    // pass 1 (cheap): bank and terrain sight line for every sample; drop runs already narrower than `minWidth`
+    const target = car.y + 0.6 * k;
+    const step = 2 / (CLEAR_SAMPLES - 1);
+    const needSpan = minWidth > 0 ? Math.max(0, Math.ceil((minWidth - 1e-9) / step)) : 0;
+    const eye = _fitEye;
+    for (let i = 0; i < CLEAR_SAMPLES; i++) {
+      const s = -1 + (2 * i) / (CLEAR_SAMPLES - 1);
+      let ok = this.garageEye(this.garageViewYaw + s * 0.75, z, eye) >= z - 1e-9;
+      if (ok) {
+        const ex = eye.x, ey = eye.y, ez = eye.z, dx = car.x - ex, dy = target - ey, dz = car.z - ez;
+        if (
+          this.terrain.heightAt(ex + dx * 0.35, ez + dz * 0.35) > ey + dy * 0.35 ||
+          this.terrain.heightAt(ex + dx * 0.55, ez + dz * 0.55) > ey + dy * 0.55 ||
+          this.terrain.heightAt(ex + dx * 0.75, ez + dz * 0.75) > ey + dy * 0.75 ||
+          this.terrain.heightAt(ex + dx * 0.9, ez + dz * 0.9) > ey + dy * 0.9
+        ) ok = false;
+      }
+      _clearPass1[i] = ok ? 1 : 0;
+      _clearEyes[3 * i] = eye.x;
+      _clearEyes[3 * i + 1] = eye.y;
+      _clearEyes[3 * i + 2] = eye.z;
+    }
+    let hasRun = false, runStart = -1;
+    for (let i = 0; i <= CLEAR_SAMPLES; i++) {
+      const ok = i < CLEAR_SAMPLES && _clearPass1[i] === 1;
+      if (ok && runStart < 0) runStart = i;
+      if (!ok && runStart >= 0) {
+        if (i - 1 - runStart < needSpan) {
+          for (let j = runStart; j < i; j++) _clearPass1[j] = 0;
+        } else hasRun = true;
+        runStart = -1;
+      }
+    }
+    if (!hasRun) return null;
+    const occ = this.garageOccluders ?? [];
+    return clearSwing(
+      CLEAR_SAMPLES,
+      (s) => {
+        const idx = Math.round(((s + 1) * (CLEAR_SAMPLES - 1)) / 2);
+        if (!_clearPass1[idx]) return false;
+        if (!occ.length) return true;
+        eye.set(_clearEyes[3 * idx], _clearEyes[3 * idx + 1], _clearEyes[3 * idx + 2]);
+        return hiddenShare(eye, hull, occ, 4, HIDDEN_OK) <= HIDDEN_OK;
+      },
+      minWidth,
+    );
+  }
+
+  /**
+   * Where the undragged garage camera stands at yaw `a` with the factor `z` on its distance, as `garageCamera` puts it
+   * (the bank rule's steps in, then above the ground): into `out`; returns the factor it could keep.
+   */
+  private garageEye(a: number, z: number, out: THREE.Vector3) {
+    const car = this.garageFocus, k = this.garageScale;
+    let zoom = z;
+    for (;;) {
+      const dist = 8.6 * k * zoom;
+      out.set(car.x + Math.sin(a) * dist, car.y + this.garageLift * k * zoom, car.z + Math.cos(a) * dist);
+      if (zoom <= 1 || this.terrain.heightAt(out.x, out.z) + 1.4 <= out.y + 0.12 * dist) break;
+      zoom = Math.max(1, zoom - 0.1);
+    }
+    out.y = Math.max(out.y, this.terrain.heightAt(out.x, out.z) + 1.4);
+    return zoom;
+  }
+
+  /**
+   * The garage's vehicle on the screen (NDC) over the camera's swing (or the part `swing` of it), framed so, as
+   * `garageCamera` stands undragged: where the bank steps it in, with a view as much wider.
+   */
+  private garageExtent(fit: Framing, swing?: readonly [number, number]): ScreenBox {
+    const hull = this.garageHull!, car = this.garageFocus, k = this.garageScale, cam = _fitCam;
+    let left = Infinity, right = -Infinity, top = -Infinity, bottom = Infinity;
+    const reach = k * fit.zoom;
+    const len = hull.length;
+    for (const s of swingSamples(swing)) {
+      const a = this.garageViewYaw + s * 0.75;
+      const lens = fit.zoom / this.garageEye(a, fit.zoom, cam.position);
+      const fov = lens === 1 ? 38 : (360 / Math.PI) * Math.atan(Math.tan((19 * Math.PI) / 180) * lens);
+      if (cam.aspect !== this.camera.aspect || cam.fov !== fov) {
+        cam.aspect = this.camera.aspect;
+        cam.fov = fov;
+        cam.updateProjectionMatrix();
+      }
+      cam.lookAt(car.x + Math.cos(a) * fit.right * reach, car.y + 0.6 * k + fit.up * reach, car.z - Math.sin(a) * fit.right * reach);
+      cam.updateMatrixWorld();
+      const me = _fitVP.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse).elements;
+      const m0 = me[0], m4 = me[4], m8 = me[8], m12 = me[12];
+      const m1 = me[1], m5 = me[5], m9 = me[9], m13 = me[13];
+      const m3 = me[3], m7 = me[7], m11 = me[11], m15 = me[15];
+      for (let i = 0; i < len; i += 3) {
+        const x = hull[i], y = hull[i + 1], z = hull[i + 2];
+        const invW = 1 / (m3 * x + m7 * y + m11 * z + m15);
+        const sx = (m0 * x + m4 * y + m8 * z + m12) * invW;
+        const sy = (m1 * x + m5 * y + m9 * z + m13) * invW;
+        if (sx < left) left = sx;
+        if (sx > right) right = sx;
+        if (sy > top) top = sy;
+        if (sy < bottom) bottom = sy;
+      }
+    }
+    return { left, right, top, bottom };
   }
 
   private garageCamera(dt: number) {
@@ -2536,10 +2811,12 @@ export class Game {
     const o = this.garageOrbit;
     // swing slowly from the uphill side; the car sits left of centre beside the UI card
     this.garageAngle += dt * 0.2;
-    const a = this.garageViewYaw + (o ? o.yaw : Math.sin(this.garageAngle) * (this.lobby ? LINEUP_VIEW.swing : 0.75));
     const cam = this.camera;
     const k = this.garageScale;
-    const frame = this.garageFraming;
+    const fitFor = this.garageFitFor;
+    if (fitFor.frame !== this.garageFraming || fitFor.car !== this.garageCar || fitFor.aspect !== cam.aspect) this.fitGarage();
+    const frame = this.garageFit;
+    const a = this.garageViewYaw + (o ? o.yaw : this.garageSwingYaw());
     let zoom = frame.zoom;
     let dist = 0;
     for (;;) {
@@ -2559,12 +2836,18 @@ export class Game {
     _v.y = Math.max(_v.y, this.terrain.heightAt(_v.x, _v.z) + 1.4);
     cam.position.lerp(_v, 1 - Math.exp(-dt * (o ? 14 : 3)));
     cam.position.y = Math.max(cam.position.y, this.terrain.heightAt(cam.position.x, cam.position.z) + 1.2);
+    // where the bank rule stepped the camera in, a wider view gives the vehicle back the size the framing asked for
+    // (the car select on a phone, whose framing is fitted; its side and part of the swing are chosen so that the bank
+    // seldom has to: `fitGarage`)
+    const lens = frame !== this.garageFraming ? frame.zoom / zoom : 1;
+    this.garageLens = Math.abs(this.garageLens - lens) < 1e-4 ? lens : damp(this.garageLens, lens, 3, dt);
     // aim beside the car (to the camera's right by default, so the car is framed in the left part of the screen)
-    const reach = dist / 8.6;
+    const reach = (dist / 8.6) * this.garageLens;
     _f.set(Math.cos(a), 0, -Math.sin(a)).multiplyScalar(frame.right * reach);
     cam.lookAt(car.x + _f.x, car.y + 0.6 * k + frame.up * reach, car.z + _f.z);
-    if (Math.abs(cam.fov - 38) > 0.01) {
-      cam.fov = damp(cam.fov, 38, 3, dt);
+    const fov = this.garageLens === 1 ? 38 : (360 / Math.PI) * Math.atan(Math.tan((19 * Math.PI) / 180) * this.garageLens);
+    if (Math.abs(cam.fov - fov) > 0.01) {
+      cam.fov = damp(cam.fov, fov, 3, dt);
       cam.updateProjectionMatrix();
     }
   }

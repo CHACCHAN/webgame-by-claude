@@ -101,7 +101,9 @@ export interface Bar {
  * standard distance (8.6 m with a 38° field of view: the screen is 5.92 m high there, whatever the kind of vehicle,
  * the garage scales the distance per kind by `garage.scale`). With some air around it a vehicle takes `garage.span`
  * of width (a car 5.2 m: its near end, seen at an angle, looms large) and 2.6 m of height at a car's scale, a bike
- * with its rider more (twice the height of its middle, `garage.middle`).
+ * with its rider more (twice the height of its middle, `garage.middle`). The free part itself goes along (`free`, in
+ * normalised device coordinates): the game checks the vehicle's own shape against it and steps back and aims anew
+ * where the rule of thumb falls short (`game/camera/garageFit.ts`; the car select hands it on in the phone's layout only).
  */
 export function garageFramingFor(view: { w: number; h: number }, free: { left: number; right: number; top: number; bottom: number }, garage: { scale: number; middle: number; span: number } = KIND_TRAITS.car.garage) {
   const span = 2 * Math.tan((38 * Math.PI) / 360) * 8.6;
@@ -118,6 +120,7 @@ export function garageFramingFor(view: { w: number; h: number }, free: { left: n
     // vehicle stands half a metre lower on the screen than its middle says (measured on pictures)
     up: ((free.top + free.bottom) / 2 - view.h / 2) * perPx - (0.5 + 0.6 - middle) / zoom,
     zoom,
+    free: { left: (2 * free.left) / view.w - 1, right: (2 * free.right) / view.w - 1, top: 1 - (2 * free.top) / view.h, bottom: 1 - (2 * free.bottom) / view.h },
   };
 }
 
