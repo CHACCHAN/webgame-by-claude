@@ -12,13 +12,12 @@ import { shadowProxies, watchShadowPasses, type ShadowPass } from './shadowCompi
 import { ErrorBurst } from './backendChoice';
 import { Upscaler } from '@pmndrs/upscaler';
 import { SceneUpscaler, biasSceneTextures, sceneTextureBias, steadyProjection } from './sceneUpscale';
+import { drawingRatio, type DrawingRule } from './drawingRatio';
 
 /** The renderer every engine module draws with (WebGPU, or its WebGL 2 backend where the browser has no WebGPU). */
 export type GameRenderer = WebGPURenderer;
 
-export interface RenderOptions {
-  /** device pixels per CSS pixel the scene is drawn at */
-  pixelRatio: number;
+export interface RenderOptions extends DrawingRule {
   shadows: boolean;
   bloom: boolean;
   smaa: boolean;
@@ -508,7 +507,8 @@ export class RenderHost {
   private resize() {
     const parent = this.canvas.parentElement;
     const w = Math.max(1, parent?.clientWidth ?? window.innerWidth), h = Math.max(1, parent?.clientHeight ?? window.innerHeight);
-    this.renderer.setPixelRatio(this.options.pixelRatio);
+    // (a pixel budget depends on the canvas' size: worked out again at every change of it)
+    this.renderer.setPixelRatio(drawingRatio(this.options, w, h));
     this.renderer.setSize(w, h, false);
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();

@@ -8,7 +8,8 @@
 // SET (JSON merged into the stored settings, e.g. '{"upscale":true,"upscaleMode":"quality"}'),
 // OUT (directory for three pictures: race, rival race, attract), CHROME, PW_MODULE,
 // COURSE (the first course instead of the stored one; then a rival race is run there too, in the last vehicle against
-// the course's legend, e.g. `COURSE=edwards VEHICLES=hayate,f15j,su47,f15j`: fighters, and one as the rival).
+// the course's legend, e.g. `COURSE=edwards VEHICLES=hayate,f15j,su47,f15j`: fighters, and one as the rival),
+// PHONE=1 (a phone: 844×390 CSS px, touch, mobile, DPR 3 or DPR=<n>; with `SET='{"quality":"low"}'` the phones' default).
 // Serve with `API_PROXY=http://127.0.0.1:9 npx vite preview`; /api is also aborted in the browser.
 const { chromium } = require(process.env.PW_MODULE || 'playwright');
 const VEHICLES = (process.env.VEHICLES || 'hayate,r34,hayate,e231,nsr250r,roach,hayate').split(',');
@@ -21,7 +22,9 @@ const COURSE = process.env.COURSE;
     headless: true,
     args: ['--ignore-gpu-blocklist', '--use-angle=vulkan', '--enable-features=Vulkan'],
   });
-  const ctx = await browser.newContext({ viewport: { width: 1280, height: 720 } });
+  const ctx = await browser.newContext(process.env.PHONE
+    ? { viewport: { width: 844, height: 390 }, hasTouch: true, isMobile: true, deviceScaleFactor: +(process.env.DPR || 3) }
+    : { viewport: { width: 1280, height: 720 } });
   await ctx.route('**/api/**', (r) => r.abort());
   const page = await ctx.newPage();
   let step = 'boot';
@@ -39,6 +42,11 @@ const COURSE = process.env.COURSE;
   await page.goto((process.env.URL || 'http://localhost:4173/') + (process.env.QUERY || ''));
   await page.waitForFunction(() => window.__game && window.__game.phase === 'attract', null, { timeout: 240000 });
   const backend = await page.evaluate(() => (window.__game.renderer.backend.isWebGPUBackend ? 'webgpu' : 'webgl2'));
+  // (what the scene is drawn at: device pixels of the canvas against its CSS size)
+  const drawn = await page.evaluate(() => {
+    const c = window.__game.renderer.domElement;
+    return `${c.width}×${c.height} for ${c.clientWidth}×${c.clientHeight} CSS px at DPR ${devicePixelRatio}`;
+  });
   const run = async (name, fn, arg, wait = 2500) => {
     step = name;
     await page.evaluate(fn, arg);
@@ -70,7 +78,7 @@ const COURSE = process.env.COURSE;
   await run('attract', () => window.__game.startAttract(), null, 5000);
   await shot('attract');
   const lines = Object.entries(seen);
-  console.log(`${backend}: ${lines.length} distinct errors / warnings`);
+  console.log(`${backend}, drawn ${drawn}: ${lines.length} distinct errors / warnings`);
   for (const [t, c] of lines.slice(0, 30)) console.log(`${c}× ${t}`);
   await browser.close();
   process.exit(lines.length ? 1 : 0);
