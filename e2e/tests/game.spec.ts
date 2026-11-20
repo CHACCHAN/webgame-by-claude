@@ -66,7 +66,9 @@ test('menu navigation, settings persistence and controls screen', async ({ page 
   await expect(page.locator('.menu-list li.active')).toContainText('SETTINGS');
   await expect(page.locator('.shell-top .trail li.now')).toContainText('メインメニュー');
   await page.locator('.menu-list li', { hasText: 'CONTROLS' }).click();
-  await expect(page.locator('.controls-table')).toContainText('サイドブレーキ');
+  await expect(page.locator('.controls-table').first()).toContainText('サイドブレーキ');
+  // the tanks are open (v2.8.0): their gun's controls are the second table
+  await expect(page.locator('.controls-table').nth(1)).toContainText('射撃');
   // (a screen on its way out is not in the document any more: one screen at a time for every selector)
   await page.keyboard.press('Escape');
   await expect(page.locator('.overlay > .screen')).toHaveCount(1);

@@ -633,8 +633,9 @@ pending. `docs/PLAN.md` holds the design.
   the two): content that is in the code but not open to players. Off, the course is left out of `COURSE_ORDER`, the
   vehicles out of `VEHICLE_ORDER` / `vehiclesFor`, and the server's `tracks` / `cars` leave out every entry with
   `'release' => '<name>'` (the whole list stays as `catalog` for tests). A check build with an entry on:
-  `VITE_<NAME>=1 npm run build`, `<NAME>=1 npx tsx tools/…`, `<NAME>=1 npx vitest run`. `edwards` is on since 11-13;
-  `tanks` is off. Backend tests set the switch themselves (`TestCase::edwards(bool)`), so they hold either way.
+  `VITE_<NAME>=1 npm run build`, `<NAME>=1 npx tsx tools/…`, `<NAME>=1 npx vitest run`. `edwards` is on since 11-13,
+  `tanks` since 11-20 (v2.8.0); no entry is off now (`asked` stays for the next one). Backend tests set the switch
+  themselves (`TestCase::edwards(bool)`, `tanks(bool)`), so they hold either way.
 - Which vehicle runs where: ONE rule on the server, `App\Support\Vehicles` (`on($track)`, `allowedOn`, `fallback` =
   the course's first vehicle), read from `game.cars.<id>.courses` (none = everywhere); the game's side is
   `vehiclesFor(courseId)` (`jet.courses`), a vitest compares the lists. Runs, the leaderboard (car filter: 422 for a
@@ -675,12 +676,23 @@ pending. `docs/PLAN.md` holds the design.
   heard later and duller with distance: `AudioEngine.far`); check with `npx tsx tools/tank-wav.ts <dir>`.
   Model contract: `render/TankModel.ts` header (`body` / `turret` / `gun`; **the gun's places are
   `TankInfo.dims`, the simulation's**: a model is built to them). Checks on the GPU:
-  `node tools/tank-check.cjs <dir>` (a build with `VITE_TANKS=1`: garage, a rival battle, sight laid, shot, the
+  `node tools/tank-check.cjs <dir>` (`TANK=<id>`: garage, a rival battle, sight laid, shot, the
   rival put back, pictures; `PHONE=1` the touch layout) and `URL=<preview on a test stack> node tools/tank-duel.cjs
   <dir>` (two games in a room: A's shell puts B back on both screens; the stack must offer the tanks).
-  **Not open yet** (11-18): the figures are checked against sources (`docs/TANK_FIGURES.md`: keep it with every change of a
-  figure), but the models are procedural stand-ins (own models come first, and the owner sees their sheets), sound unheard by ear,
-  no real gamepad tried.
+  **Open since 11-20 (v2.8.0)** after the owner's look at the five sheets; the figures are checked against sources
+  (`docs/TANK_FIGURES.md`: keep it with every change of a figure). Not verified yet: the sound by ear, a real gamepad,
+  a pivot turn on flat ground (tankprobe's pivot step never reaches a standstill on the downhill start grid: its "NOT
+  opposite" line is the probe), a real phone.
+  The models are our own (`tools/blender/tanks/<id>.py` + `<id>_*.py` on the shared kit `tank_kit.py` /
+  `tank_atlas.py` / `tank_scene.py`, `KIT.md`; modeller gpt-6.2-astra via Mistral Vibe, driven by Claude), fitted to
+  photographs through solved cameras (`fitdata/<id>/`: annotations, cameras, masks from hand hints only
+  (`fitdata/tools/handmask.py`, never seeded by the model), `ref/list.json` with the credits; the photos are never
+  committed, nor anything holding their pixels: `masks/*_chk.jpg`, overlays). Each model's gun places and `dims.sight`
+  (the gunner's sight window) are measured on the model and its photos (`TANK_FIGURES.md`). Judge a tank's paint with
+  the model rendered through a photo's solved camera (our own daylight: a gap that follows a photo's sky is the light).
+  A part flush with or inside another surface bakes black in the atlas: stand small parts 10–15 mm proud.
+  `handmask.py`'s GrabCut takes the process-wide random state (seed it before each photo). tank-check under load: the
+  pause after a hit can miss, the rival then "runs on" and the sight shot misses: rerun before chasing it.
 - Course style `'airbase'` (Edwards): `render/airbaseScenery.ts` (places in the airfield's frame: `a` m along 04R
   from its threshold, `b` m to its left; hangars, tower, all procedural; the parked aircraft: below),
   `airbasePavement.ts` (slabs and strips one hand above the ground, runway numbers / markings), `airbaseGround.ts`

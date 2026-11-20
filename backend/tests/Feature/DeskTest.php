@@ -157,7 +157,8 @@ class DeskTest extends TestCase
     {
         $knowledge = file_get_contents(resource_path('desk/knowledge.md'));
         $this->assertGreaterThan(1500, strlen($knowledge));
-        $this->assertLessThan(8192, strlen($knowledge));
+        // a guard against a prompt that only grows (10 kB is ~4k tokens; 8 kB until the tanks came, v2.8.0)
+        $this->assertLessThan(10240, strlen($knowledge));
         // every vehicle and course the server knows is spoken of by its name
         foreach (config('game.cars') as $car) {
             $this->assertStringContainsString(preg_replace('/^新幹線/u', '', $car['name']), $knowledge);
