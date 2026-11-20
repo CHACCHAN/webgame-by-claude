@@ -12,7 +12,7 @@ import { shadowProxies, watchShadowPasses, type ShadowPass } from './shadowCompi
 import { ErrorBurst } from './backendChoice';
 import { Upscaler } from '@pmndrs/upscaler';
 import { SceneUpscaler, biasSceneTextures, sceneTextureBias, steadyProjection } from './sceneUpscale';
-import { drawingRatio, type DrawingRule } from './drawingRatio';
+import { DynamicResolution, type DrawingRule } from './drawingRatio';
 
 /** The renderer every engine module draws with (WebGPU, or its WebGL 2 backend where the browser has no WebGPU). */
 export type GameRenderer = WebGPURenderer;
@@ -115,10 +115,15 @@ export class RenderHost {
   private timed = false;
   private observer: ResizeObserver | null = null;
   private last = 0;
+  private width = 0;
+  private height = 0;
+  private readonly dynamic = new DynamicResolution();
   private options: RenderOptions;
   private readonly sharpness = uniform(0);
   /** a `precompile` is running (see there) */
   private compiling = false;
+  /** textures are being uploaded to the GPU ahead of a compile (`upload`) */
+  private uploading = false;
   /** … and nothing is drawn meanwhile (behind the loading screen: the compile is then not paced by the frames) */
   private holding = false;
   private compileQueue: Promise<void> = Promise.resolve();
@@ -237,8 +242,12 @@ export class RenderHost {
     this.renderer.shadowMap.enabled = options.shadows;
     this.sharpness.value = rcasStops(options.sharpness);
     if (this.upscaler) this.upscaler.sharpness = options.sharpness;
-    if (rebuild) this.buildPipeline();
-    this.resize();
+    if (rebuild) {
+      this.buildPipeline();
+      // (pipeline effects changed the frame cost: let dynamic resolution start fresh from the ceiling)
+      this.dynamic.reset();
+    }
+    this.resize(rebuild);
   }
 
   private buildPipeline() {
@@ -322,7 +331,14 @@ export class RenderHost {
       // (its turn came after it stopped being wanted: a car select held down queued one for every vehicle passed)
       if (stale?.()) return;
       const one = what !== this.scene && !hold;
-      if (one && !(await this.upload(what, stale))) return;
+      if (one) {
+        this.uploading = true;
+        try {
+          if (!(await this.upload(what, stale))) return;
+        } finally {
+          this.uploading = false;
+        }
+      }
       this.compiling = true;
       this.holding = hold;
       this.aim();
@@ -504,23 +520,41 @@ export class RenderHost {
     this.renderer.setMRT(this.aimed ? null : this.scenePass.getMRT());
   }
 
-  private resize() {
+  private resize(force = false) {
     const parent = this.canvas.parentElement;
     const w = Math.max(1, parent?.clientWidth ?? window.innerWidth), h = Math.max(1, parent?.clientHeight ?? window.innerHeight);
+    const resized = w !== this.width || h !== this.height;
+    this.width = w;
+    this.height = h;
     // (a pixel budget depends on the canvas' size: worked out again at every change of it)
-    this.renderer.setPixelRatio(drawingRatio(this.options, w, h));
-    this.renderer.setSize(w, h, false);
-    this.camera.aspect = w / h;
-    this.camera.updateProjectionMatrix();
+    const changed = this.dynamic.configure(this.options, w, h);
+    if (force || resized || changed) {
+      this.renderer.setPixelRatio(this.dynamic.ratio);
+      this.renderer.setSize(w, h, false);
+    }
+    if (resized) {
+      this.camera.aspect = w / h;
+      this.camera.updateProjectionMatrix();
+    }
   }
 
   /** Starts the frame loop: `frame(dt)` with the seconds since the previous frame, then the render. */
   start(frame: (dt: number) => void) {
     this.last = 0;
+    let prevWall = 0;
+    let prevNormal = false;
     void this.renderer.setAnimationLoop((ms: number) => {
+      const now = performance.now();
+      // (actual wall-clock frame interval: Chrome's rAF `ms` is the scheduled vsync timestamp and can read 16.7 ms even at 41 fps)
+      const frameMs = prevWall ? now - prevWall : 0;
+      prevWall = now;
       const dt = this.last ? Math.min((ms - this.last) / 1000, 0.25) : 1 / 60;
       this.last = ms;
-      if (this.compiling) {
+      const wasNormal = prevNormal;
+      prevNormal = false;
+      const compiling = this.compiling;
+      const busy = compiling || this.uploading;
+      if (compiling) {
         this.renderer.setRenderTarget(null);
         this.renderer.setMRT(null);
       }
@@ -540,6 +574,14 @@ export class RenderHost {
           throw err;
         }
         this.drawn?.();
+        if (!busy && !this.compiling && !this.uploading) {
+          if (wasNormal && this.dynamic.sample(frameMs)) {
+            this.renderer.setPixelRatio(this.dynamic.ratio);
+            this.renderer.setSize(this.width, this.height, false);
+          } else {
+            prevNormal = true;
+          }
+        }
       }
       if (this.compiling) this.aim();
     });
