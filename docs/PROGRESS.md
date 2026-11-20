@@ -2614,3 +2614,35 @@ After the first deploy `llm:check` on the live stack still listed the old names:
 lists their own defaults (`${LLM_TAUNT_MODELS:-…}`), which win over the PHP config's. Changed there too and deployed
 again; `llm:check` then lists every model.
 
+
+## v2.7.6 (11-20): a vehicle's first showing builds no shader in a frame; a train line picked during a build
+
+Two branches merged (first-showing 82aed50, verify-277 6f6e30b), both fixes:
+- First showing of a vehicle (first-showing): the Su-47 builds no shader of its own (its airframe shares the tyre
+  shader: its own metal/roughness map as its occlusion map at intensity 1e-6, float UVs; `navlight_*` one-sided,
+  lamp levels through the emissive colour); a vehicle's textures go to the GPU before its showing, in 4 ms shares
+  after each frame (`RenderHost.upload`; not behind the menus: every vehicle's textures with mipmaps are ~1.56 GB);
+  shadow shaders shared by every plain caster (`threeFixes.shareShadowShaders`) and compiled before the showing
+  (`render/shadowCompile.ts` stand-ins, `RenderHost.compileShadows`). The agent's re-checks found two bugs in its own
+  first commit, fixed before the merge: the stand-ins shared the light material's `_listeners`, so their dispose took
+  every caster's shadow render object (the instanced props' shadow shaders were rebuilt at each showing); and a white
+  occlusion map of the Su-47's own shared a shader with the tyre's one-texture ORM slots and turned the airframe fully
+  metallic and rough (much darker than v2.7.5). Measured on its branch: shaders built in frames in the garage Edwards
+  5/1/1/1/3/1 → 0, Oboro 5/16/3 → 0 (WebGPU and WebGL 2); builds2 9/4/3/3/6 → 7/1/0/0/3; first Su-47 worst gap 54–98 →
+  0 ms (WebGL 2 126–144 → 0); first F-15J 86–120 → 48–55 ms (WebGL 2 143–151 → 110–130); a first showing comes 15–90 ms
+  later (the old vehicle stays meanwhile); title load time and memory unchanged; look at the noise floor (Su-47,
+  F-15J, hayate, 8 views). Found, left: the jets' `beacon` material has a black emissive colour in the GLB (never glows).
+- A train line picked while the garage builds the train (verify-277): it stood in the base line's model for good
+  (`garageTurn` waited only for the base model; since v2.7.1, a paint picked during a build goes through
+  `showGarage`). It now waits for the line's model too, as `setGarageColor` does for a train already standing.
+  Found by the verify sweep of v2.6.10–v2.7.4 (phones, medium / low, upscaler, WebGL 2; everything else OK there:
+  gpu-errors 0 in every run, plumes and beams per vehicle on all three paths, upscaler flicker 0.172 / 0.126 % of
+  pixels, first showings 64–682 ms on a phone, ~1 s with the CPU throttled 4×). Open from it: the phone car select on
+  oboro / kirifuri asks zoom 1.62 where the bank rule allows 1.02–1.52 (vehicle cut off; an agent is on it); quality
+  low draws 0.75 CSS px whatever the DPR (coarse on a DPR-3 phone; a proposal to the owner).
+Verified on the merged tree: tsc; vitest 292; build; backend 80; E2E 19/19; `gpu-errors.cjs` WebGPU ×3 0, WebGL 2 0,
+Edwards (hayate, f15j, su47, f15j) 0, race pictures with the camera at the car; `verify277/line.cjs` (the Sobu model
+held back): the hayate stays until the Sobu model comes, then the yellow Sobu E231 stands, Joban afterwards right;
+`garage-stale/garage.cjs` single presses 52–422 ms shown, geometries back to 237, 0 errors, 0 pipeline errors; the 10 s
+hold landed on the keikyu1000, shown 983 ms after key-up (a train's first showing, load 6–10 meanwhile). Not verified
+after the merge: phones, quality medium / low, an online waiting room's line-up compiles, Firefox / Safari.

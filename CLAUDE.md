@@ -52,7 +52,8 @@ pending. `docs/PLAN.md` holds the design.
   states, and a build whose camera stayed at the garage passed them all (11-11).
   Other compose projects on the host are unrelated: leave them alone.
 - `vite preview` inherits the dev proxy (`/api` → localhost:8080 = the live server): always serve with
-  `API_PROXY=http://127.0.0.1:9 npx vite preview …` so test runs cannot create players or submit runs.
+  `API_PROXY=http://127.0.0.1:9 npx vite preview …` so test runs cannot create players or submit runs. Stopping one
+  started through npm: kill the node child too (`ps -eo pid,ppid,args`); the npm parent alone leaves the port serving.
 - No Node on the host: use a user-space Node 24 tarball (nodejs.org) and `npm i playwright-core` outside the repo
   (`PW_MODULE=<that>/node_modules/playwright-core`); Chrome is `/usr/bin/google-chrome` and renders on the RX 5700 XT
   headless (`--use-angle=vulkan --enable-features=Vulkan`, as in `tools/perf-frame.cjs`; WebGPU is there with these flags).
@@ -108,7 +109,23 @@ pending. `docs/PLAN.md` holds the design.
   (through `compileAsync`'s progress callback). **Never dispose a visual whose compile has not settled**
   (`Game.retire`, `LobbyLineup.discard`): the compile registers its geometry again and it is never freed (+940
   geometries after holding the arrow key 10 s, v2.7.1–v2.7.3). Check with `~/.local/opt/wt/garage-stale/garage.cjs`
-  (key-up → shown, `renderer.info.memory`).
+  (key-up → shown, `renderer.info.memory`). A train in another line's paint is drawn from that line's own model
+  (`<id>-<variant>.glb`, fetched after all vehicles): whatever builds a vehicle in a paint waits for that model too
+  (`garageTurn`, `setGarageColor`), not only for `vehicleModelReady` (v2.7.6; `~/.local/opt/wt/verify277/line.cjs`).
+  An object compile (`precompile` of one object) also puts its textures on the GPU first (`RenderHost.upload`:
+  textures of 512 px and up wait for the next frame once 4 ms of the current one are used; it reaches into
+  `renderer._textures`; uploading every vehicle's textures behind the menus would be ~1.56 GB) and builds each
+  light's shadow-pass shaders from stand-ins (`render/shadowCompile.ts`, `RenderHost.compileShadows`, the pass
+  recorded by `watchShadowPasses`, through `compileAtPassDepth(start, target)`). A stand-in must carry three.js'
+  exact shadow key and never its private `_` keys (a shared `_listeners` made a stand-in's dispose dispose every
+  shadow render object); `shadowCompile.test.ts` runs three.js' `renderObject` against them: run it on a three.js
+  update. `shareShadowShaders` (threeFixes): a caster with a map or colour node got shadow shaders of its own per
+  material (`Renderer._getShadowNodes`); plain casters now share the shadow material's colour, only cut-outs, alpha,
+  mask or cast-shadow nodes keep theirs. Texture slots that hold the same texture share one binding in a built
+  shader (`TextureNode.getUniformHash` = uuid) and the shader key cannot tell that apart: never give a material a
+  separate texture in a slot where the materials it shares a shader with hold one texture (`JetModel.likeTheCars`:
+  the Su-47's occlusion map is its own metal/roughness map at intensity 1e-6, as glTF ORM materials have it; a white
+  map of its own turned the airframe fully metallic and rough).
   Passes that work from the depth buffer share `render/screenSpace.ts` (view position from the depth, sized targets,
   the surface-keeping blur that cancels a five-pixel tap pattern). The glow in the haze (`render/volumetricLights.ts`)
   takes its lights from `volume` (the course's lamps; a cone per headlamp via `CarVisual.beamsInto`, at most
