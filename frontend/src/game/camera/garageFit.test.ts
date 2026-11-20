@@ -174,4 +174,57 @@ describe('the car select framing checked against the vehicle', () => {
     expect(occ.length).toBe(1);
     expect(occ[0].radius).toBeLessThan(1);
   });
+
+  it('clearSwing with minWidth finds the exact widest run while skipping impossible spans', () => {
+    // brute-force reference matching the full scan
+    const brute = (n: number, ok: boolean[], minW: number): [number, number] | null => {
+      const at = (i: number) => -1 + (2 * i) / (n - 1);
+      let best: [number, number] | null = null, start = -1;
+      for (let i = 0; i <= n; i++) {
+        if (i < n && ok[i] && start < 0) start = i;
+        if ((i === n || !ok[i]) && start >= 0) {
+          const w = at(i - 1) - at(start);
+          if (w >= minW - 1e-9 && (!best || w > best[1] - best[0])) best = [at(start), at(i - 1)];
+          start = -1;
+        }
+      }
+      return best;
+    };
+    // blocked middle on 33 points with minWidth 1: terminates in 1 probe
+    let probes = 0;
+    const blockedMid = clearSwing(33, (s) => { probes++; return Math.abs(s) > 0.01; }, 1);
+    expect(blockedMid).toBeNull();
+    expect(probes).toBe(1);
+    // compare against brute force across varied patterns and minWidths
+    const n = 33;
+    for (let seed = 1; seed <= 40; seed++) {
+      const ok: boolean[] = [];
+      let x = seed * 2654435761;
+      for (let i = 0; i < n; i++) {
+        x = (Math.imul(x, 1664525) + 1013904223) | 0;
+        ok.push(((x >>> 16) & 7) > (seed % 4));
+      }
+      for (const minW of [0, 0.5, 1, 1.5]) {
+        const got = clearSwing(n, (s) => ok[Math.round(((s + 1) * (n - 1)) / 2)], minW);
+        expect(got).toEqual(brute(n, ok, minW));
+      }
+    }
+  });
+
+  it('handles high-triangle occluders with empty bounding-box air accurately via BVH', () => {
+    const hull = car();
+    // high-poly L-shape (pole aside + arm overhead, > 1000 triangles): box crosses the sight line, triangles do not
+    const pole = new THREE.CylinderGeometry(0.08, 0.08, 6, 32, 16).translate(7, 3, 2.6);
+    const arm = new THREE.BoxGeometry(0.1, 0.1, 3, 8, 8, 16).translate(7, 6, 1.1);
+    const g = new THREE.BufferGeometry();
+    const pa = pole.toNonIndexed().attributes.position.array;
+    const pb = arm.toNonIndexed().attributes.position.array;
+    g.setAttribute('position', new THREE.Float32BufferAttribute([...pa, ...pb], 3));
+    const lamp = new THREE.Mesh(g, new THREE.MeshStandardMaterial());
+    expect(hiddenShare(eye, hull, scenery(lamp))).toBe(0);
+    // high-poly solid cylinder right in the sight line (indexed, > 2000 triangles)
+    const pillar = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 0.9, 3, 48, 24), new THREE.MeshStandardMaterial());
+    pillar.position.set(7, 1.5, 0);
+    expect(hiddenShare(eye, hull, scenery(pillar))).toBeGreaterThan(0.5);
+  });
 });
