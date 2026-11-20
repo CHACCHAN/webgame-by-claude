@@ -6,6 +6,7 @@
 //   node tools/blender-models.cjs roadside [ids] tools/blender/roadside/<id>.py → public/models/roadside/<id>.glb
 //   node tools/blender-models.cjs creatures      tools/blender/creatures/roach.py → public/models/roach/roach.glb
 //   node tools/blender-models.cjs jets [ids]     tools/blender/jets/<id>.py   → public/models/jets/<id>.glb
+//   node tools/blender-models.cjs tanks [ids]    tools/blender/tanks/<id>.py  → public/models/tanks/<id>.glb
 //   node tools/blender-models.cjs nature [ids]   tools/blender/nature/<id>.py → public/models/nature/<id>.glb + <id>.lite.glb
 //   … --render [dir]   also renders each model's check views with its script (default dir: /tmp/<id>-render)
 // A train's line variants (`variants`: the same model painted and signed for another line, `Livery.variant` in
@@ -50,6 +51,11 @@ const KINDS = {
   },
   // the fighters (render/JetModel.ts: named nodes for gear, nozzles and moving surfaces stay apart; one atlas each)
   jets: { dir: 'tools/blender/jets', out: 'public/models/jets', palette: false, textureSize: 2048, big: {}, ids: ['f15j', 'f15c', 'su47'], variants: { f15j: ['dj'], f15c: ['d'] } },
+  // the tanks (render/TankModel.ts: body / turret / gun / roll_* nodes stay apart; one atlas `armor` each, the tracks'
+  // own small texture under track_l / track_r; tools/blender/tanks/tank_kit.py)
+  // (uniqueNames: materials of different names stay apart: track_l and track_r are the same material twice, and the game
+  // tells the two tracks apart by name)
+  tanks: { dir: 'tools/blender/tanks', out: 'public/models/tanks', palette: false, textureSize: 2048, big: {}, uniqueNames: true, ids: ['type10', 'type16', 'leopard2a5', 'm1a2', 't14'] },
   creatures: { dir: 'tools/blender/creatures', out: 'public/models/roach', palette: false, textureSize: 1024, big: {}, resample: true, ids: ['roach'] },
   // trees, bushes, undergrowth, rocks (tools/blender/nature/nature_kit.py): the script writes the geometry (every level
   // of detail a node) and its textures as PNG files next to it, which `textures` puts into the materials by name
@@ -164,7 +170,9 @@ async function optimise(raw, out, id) {
   // mesh shared by both nodes, and join + quantize then distort it (the L0's end cars came out squashed). meshopt's
   // own cleanup still shares identical buffers once they are quantised.
   const { PropertyType } = require('@gltf-transform/core');
-  const steps = [F.dedup({ propertyTypes: [PropertyType.MESH, PropertyType.TEXTURE, PropertyType.MATERIAL, PropertyType.SKIN] })];
+  const steps = kind.uniqueNames
+    ? [F.dedup({ propertyTypes: [PropertyType.MESH, PropertyType.TEXTURE, PropertyType.SKIN] }), F.dedup({ propertyTypes: [PropertyType.MATERIAL], keepUniqueNames: true })]
+    : [F.dedup({ propertyTypes: [PropertyType.MESH, PropertyType.TEXTURE, PropertyType.MATERIAL, PropertyType.SKIN] })];
   if (kind.resample) steps.push(F.resample());
   if (kind.palette) steps.push(F.palette({ min: 5 }));
   steps.push(F.join({ keepNamed: !kind.joinNamed }), F.weld(), F.prune(kind.textures ? { keepAttributes: true } : {}), F.sparse());

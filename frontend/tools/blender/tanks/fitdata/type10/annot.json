@@ -1,5 +1,5 @@
 {
- "_note": "points read off the 1920-px Commons thumbnails (photos: ref/list.json, fetched by ../tools/fetch.py); tools/ba.py -> fit/ba.json. Game frame, x = left.",
+ "_note": "points read off the 1920-px Commons thumbnails (photos: ref/list.json, fetched by ../tools/fetch.py); tools/ba.py -> fit/ba.json. Game frame, x = left. rwf / rwr: where the front / rear road wheel stands on the ground (y 0, track outer edge x ~1.55); their middle is the origin (_lin), as the game frame has it.",
  "_points": {
   "lamp": [
    1.22,
@@ -145,6 +145,16 @@
    1.3,
    2.3,
    -3.1
+  ],
+  "rwf": [
+   1.55,
+   0.0,
+   2.0
+  ],
+  "rwr": [
+   1.55,
+   0.0,
+   -2.0
   ]
  },
  "_frames": {
@@ -207,6 +217,22 @@
   "fl_top.x": [
    1.62,
    0.03
+  ],
+  "rwf.x": [
+   1.55,
+   0.05
+  ],
+  "rwf.y": [
+   0.0,
+   0.02
+  ],
+  "rwr.x": [
+   1.55,
+   0.05
+  ],
+  "rwr.y": [
+   0.0,
+   0.02
   ]
  },
  "_axis": {
@@ -294,12 +320,36 @@
     465
    ],
    "tl_r": [
-    438,
-    820
+    442,
+    818
    ],
    "rmf_o_r": [
     486,
-    906
+    915
+   ],
+   "tl_l": [
+    192,
+    824
+   ],
+   "rmf_i_r": [
+    428,
+    917
+   ],
+   "rmf_o_l": [
+    193,
+    913
+   ],
+   "rmf_i_l": [
+    245,
+    914
+   ],
+   "rwf_r": [
+    1375,
+    992
+   ],
+   "rwr_r": [
+    698,
+    999
    ]
   },
   "psi": [
@@ -522,5 +572,169 @@
     866
    ]
   }
- }
+ },
+ "t118": {
+  "size": [
+   1920,
+   1283
+  ],
+  "sigma": 3,
+  "psi": [
+   0,
+   10
+  ],
+  "pts": {
+   "muz_c": [
+    94,
+    254
+   ],
+   "lamp_r": [
+    412,
+    580
+   ],
+   "lamp_l": [
+    1265,
+    578
+   ],
+   "fl_top_r": [
+    268,
+    623
+   ],
+   "fl_tip_r": [
+    225,
+    745
+   ],
+   "fl_bin_r": [
+    429,
+    754
+   ],
+   "fl_top_l": [
+    1434,
+    630
+   ],
+   "fl_tip_l": [
+    1408,
+    785
+   ],
+   "fl_bin_l": [
+    1120,
+    773
+   ],
+   "mlt_r": [
+    532,
+    642
+   ],
+   "mlt_l": [
+    1105,
+    640
+   ]
+  }
+ },
+ "t109": {
+  "size": [
+   1920,
+   1284
+  ],
+  "sigma": 3,
+  "psi": [
+   0,
+   10
+  ],
+  "pts": {
+   "muz_c": [
+    1780,
+    392
+   ],
+   "lamp_r": [
+    888,
+    642
+   ],
+   "lamp_l": [
+    1442,
+    664
+   ],
+   "fl_top_r": [
+    787,
+    677
+   ],
+   "fl_tip_r": [
+    829,
+    790
+   ],
+   "fl_bin_r": [
+    1023,
+    794
+   ],
+   "fl_top_l": [
+    1533,
+    697
+   ],
+   "fl_tip_l": [
+    1578,
+    781
+   ],
+   "fl_bin_l": [
+    1452,
+    788
+   ],
+   "mlt_r": [
+    1019,
+    698
+   ],
+   "mlt_l": [
+    1372,
+    702
+   ],
+   "v_t1_r": [
+    532,
+    515
+   ],
+   "v_t2_r": [
+    564,
+    515
+   ],
+   "v_b_r": [
+    547,
+    567
+   ],
+   "lam_a_r": [
+    527,
+    702
+   ],
+   "lam_f1_r": [
+    515,
+    757
+   ],
+   "lam_f2_r": [
+    542,
+    757
+   ],
+   "sfa_r": [
+    595,
+    731
+   ],
+   "sfb_r": [
+    661,
+    731
+   ]
+  }
+ },
+ "_lin": [
+  [
+   {
+    "muz.z": 1,
+    "tl.z": -1
+   },
+   9.3,
+   0.05
+  ],
+  [
+   {
+    "rwf.z": 0.5,
+    "rwr.z": 0.5
+   },
+   0.0,
+   0.01
+  ]
+ ]
 }

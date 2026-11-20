@@ -5,10 +5,11 @@
  * (backend/config/game.php `$release`; a vitest compares the two).
  *
  * `edwards`: the Edwards AFB course and the three fighters that run only there (open since 11-13).
- * `tanks`: the five tanks with their guns (vehicle/tanks.ts, weapons/): everything is there but their models (the
- * procedural stand-ins are drawn) and the owner's look at the figures, which were written from memory.
+ * `tanks`: the five tanks with their guns (vehicle/tanks.ts, weapons/); own models, figures checked against sources
+ * (docs/TANK_FIGURES.md); open since 11-20 (v2.8.0, the owner's word after the five sheets).
  */
-const asked = (name: string): boolean => {
+/** A check build's switch (`VITE_<NAME>=1` / `<NAME>=1`), for the next entry that is not open yet. */
+export const asked = (name: string): boolean => {
   const vite = (import.meta as { env?: Record<string, string | undefined> }).env;
   const node = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env;
   return vite?.[`VITE_${name}`] === '1' || node?.[name] === '1';
@@ -16,5 +17,5 @@ const asked = (name: string): boolean => {
 
 export const RELEASED = {
   edwards: true,
-  tanks: false || asked('TANKS'),
+  tanks: true,
 };

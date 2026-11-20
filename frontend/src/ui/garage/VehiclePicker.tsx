@@ -121,7 +121,10 @@ export function VehiclePicker({ title, titleEn, vehicles, initial, initialColor 
       const view = { w: el.clientWidth, h: el.clientHeight };
       // (the places in the layout: both slide in, and a place read while that runs would be off; the top is the
       // list's, under the shell's bar)
-      game.garageFraming = garageFramingFor(view, { left: list.offsetLeft + list.offsetWidth, right: view.w, top: list.offsetTop, bottom: card.offsetTop }, view3d);
+      const f = garageFramingFor(view, { left: list.offsetLeft + list.offsetWidth, right: view.w, top: list.offsetTop, bottom: card.offsetTop }, view3d);
+      // the game checks the vehicle against the free part in the phone's layout only (picker.css' max-height 500px),
+      // where that is a strip of 70–110 px above the card; the desktop's framing stays the rule of thumb's
+      game.garageFraming = window.matchMedia?.('(max-height: 500px)').matches ? f : { right: f.right, up: f.up, zoom: f.zoom };
     };
     frame();
     const watch = new ResizeObserver(frame);

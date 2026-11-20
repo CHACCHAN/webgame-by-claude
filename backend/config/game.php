@@ -13,7 +13,7 @@
 */
 $release = [
     'edwards' => true,
-    'tanks' => false,
+    'tanks' => true,
 ];
 $open = fn (array $list): array => array_filter($list, fn (array $e): bool => ! isset($e['release']) || $release[$e['release']]);
 
@@ -105,7 +105,7 @@ $cars = [
 ];
 
 return [
-    'version' => env('GAME_VERSION', '2.7.6'),
+    'version' => env('GAME_VERSION', '2.8.1'),
 
     'release' => $release,
     'catalog' => ['tracks' => $tracks, 'cars' => $cars],

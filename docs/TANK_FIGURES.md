@@ -41,6 +41,7 @@ The figures the simulation does not use (height, range, fuel) are left out unles
 | Sight magnification | 4× / 10× (estimated) | not published | — | not found: stays estimated |
 | Drag (`dropPerKm`) | 60 m/s per km (estimated) | not published | — | not found: stays estimated |
 | Track contact / gauge / clearance | 4.3 / 2.7 / 0.45 m | not published | — | not found (sim geometry, not on the spec sheet) |
+| Gun's places (`dims`: ring, trunnions, barrel, sight) | ring z 0.2 / y 1.75, trunnions 0.35 above and 1.47 ahead, barrel 4.0 (muzzle 5.67 m ahead of the middle) | not published | measured on six Commons photographs through solved cameras (`tools/blender/tanks/fitdata/type10`: the road wheels' ground contacts give the origin, 9.42 m over the gun the length) | **from our model (2026-11-19)**: ring z −0.02 / y 1.55, trunnions 0.42 above and 1.42 ahead (1.97 m up), barrel 4.31 (muzzle 5.71 m ahead, hull rear −3.71); sight head = the model's forward roof hood [0.82, 0.815, 1.13] in the turret's frame (0.40 m above, 0.82 m left of the bore; the fire control converges the gun on the line of sight at the lased range); five road wheels at 1.06 m pitch |
 | Pivot rate | 30 °/s | not published (ja.wikipedia: turns on half the 90式's radius) | — | not found (sim value, not on the spec sheet) |
 
 ## 16式機動戦闘車 (type16)
@@ -56,6 +57,8 @@ The figures the simulation does not use (height, range, fuel) are left out unles
 | Transmission | automatic, 6 speeds (estimated) | automatic, gears not published | ja.wikipedia | gear count not found: stays estimated |
 | Reverse speed | 20 km/h (estimated) | not published | — | not found: stays estimated |
 | Steering | front two axles | 前方2軸 | ja.wikipedia | same |
+| Layout | engine front left | engine front left, driver front right (photos: the driver's hatch and periscopes on the right of the bow) | Commons photos of the vehicle (measuring only) | same |
+| Gun's place (dims) | ring 0.9 m behind the axles' middle at 2.0 m, muzzle 4.45 m ahead | ring 0.56 m behind at 1.80 m, trunnions 1.05 m ahead of the ring and 0.45 m above it, muzzle 4.15 m ahead of them (4.64 m ahead of the axles' middle) | photo fit of the own model (`fitdata/type16`) | changed to the model (the gunner's sight head too: [-0.64, 0.68, 0.94] in the turret's frame); length over the gun on the model 8.13 m against the published 8.45 m (the photos give 8.3 ± 0.1 m with the rear fittings; not explained) |
 | Crew | 4 | 4 | MOD one-sheet excerpt; ja / en.wikipedia | same |
 | Gun | 52口径105mmライフル砲 (JSW) | 105 mm L/52, JSW, loaded by hand | ja / en.wikipedia | same |
 | Round | 93式105mm APFSDS | 93式105mm装弾筒付翼安定徹甲弾 (also 91式 HEAT-MP) | ja.wikipedia | same |
@@ -77,7 +80,7 @@ The figures the simulation does not use (height, range, fuel) are left out unles
 | Transmission | Renk HSWL 354, 4 fwd / 2 rev | same | en.wikipedia; Army Recognition | same (ratios not published: estimated) |
 | Top speed | 68 km/h | ≤ 70 km/h (KNDS, the maker); 68 km/h (en.wikipedia text); 70 (en infobox); 72 km/h (Army Recognition; de: 2A4) | KNDS; en / de.wikipedia; Army Recognition | **corrected → 70 km/h**: the maker's own figure for the A5 (72 belongs to the lighter A4) |
 | Reverse speed | 31 km/h | 31 km/h | en.wikipedia; Army Recognition | same |
-| Length over gun | 9.97 m | 9.67 m, turret forward (KNDS; de.wikipedia infobox "bis A5"; Army Recognition); 9.97 m (en.wikipedia, for the A4) | KNDS; de.wikipedia; Army Recognition | **corrected → 9.67 m** (the maker): the muzzle 5.81 m ahead of the middle, `barrel` 4.11 → 3.81 m |
+| Length over gun | 9.97 m | 9.67 m, turret forward (KNDS; de.wikipedia infobox "bis A5"; Army Recognition); 9.97 m (en.wikipedia, for the A4) | KNDS; de.wikipedia; Army Recognition | **corrected → 9.67 m** (the maker): the muzzle 5.81 m ahead of the middle, `barrel` 4.11 → 3.81 m; since the model (2026-11-19) the frame is the road wheels' middle (w1–w7 4.92 m): muzzle 5.69 (held there by a prior from 9.67 m), the hull rear −4.13 on the model, where the photographs put it through the solved cameras (−4.12…−4.20): 9.82 m over the gun (`barrel` 4.21, row below). The photographs do not settle 9.67 against 9.97: the free fit leaned longer (muzzle ≈ 6.3 with nothing tying it), with the muzzle held at 5.69 the cameras fit with 1.3–2.9 px residuals and the rear they see gives 9.82 m, between the two published figures |
 | Width | 3.75 m | 3.76 m (Bundeswehr table, de.wikipedia), 3.77 m (Army Recognition), 3.67 m (KNDS) | as above | disagree: **3.76 m** taken (the Bundeswehr's figure; KNDS's 3.67 m is likely without the A5's skirts) |
 | Hull length | 7.72 m | not found in the sources read | — | not found (kept) |
 | Crew | 4 | 4 (loader by hand) | de / en.wikipedia | same |
@@ -92,6 +95,7 @@ The figures the simulation does not use (height, range, fuel) are left out unles
 | Sight magnification | 4× / 12× | EMES 15: 12× main sight; the thermal channel's 4× not confirmed | de.wikipedia (Zielgeräte) | 12× same; 4× not found (kept as the low setting) |
 | Track contact 4.95 m / gauge 3.1 m / clearance 0.54 m | — | clearance 540 mm (falling to 500 mm, A4 column of the de table); contact length and gauge not found | de.wikipedia | clearance same; the rest not found |
 | Pivot rate | 30 °/s (estimated) | not found | — | not found: stays estimated |
+| Gun's places (`dims`: ring, trunnions, barrel, sight) | ring z 0.4 / y 1.95, trunnions 0.4 above and 1.6 ahead, barrel 3.81 | not published | measured on four Commons photographs through solved cameras (`tools/blender/tanks/fitdata/leopard2a5`: the road wheels give the origin, 9.67 m over the gun the length) | **from our model (2026-11-19)**: ring z 0.40 / y 1.70, trunnions 0.42 above and 1.08 ahead (2.12 m up), barrel 4.21 (muzzle 5.69 m ahead, hull rear −4.13: 9.82 m over the gun; the photos put the rear at −4.12…−4.20); sight head = the model's EMES 15 window, turret frame (−0.86, 0.816, 1.035): 0.40 m above and 0.86 m right of the bore, the fire control converging the bore on its line at the lased range; seven road wheels at 0.77–0.85 m pitch (hubs z 2.46, 1.61, 0.83, 0.06, −0.79, −1.64, −2.46) |
 
 ## M1A2 SEPv3 (m1a2)
 
@@ -117,6 +121,7 @@ The figures the simulation does not use (height, range, fuel) are left out unles
 | Sight magnification | 3× / 10× | GPS: 3× and 10× (day and thermal) | Gary's guide (secondary) | same (secondary) |
 | Track contact / gauge / clearance | 4.6 / 2.9 / 0.48 m | clearance 0.43 m (M1A2), 0.48 m (M1/M1A1) | en.wikipedia | clearance disagrees slightly: 0.48 kept (sim geometry, not on the spec sheet); contact length / gauge not found |
 | Pivot rate | 30 °/s (estimated) | not found | — | not found: stays estimated |
+| Bore axis height (`dims` ringY + trunnion) | 2.20 m (1.85 + 0.35) | not published | measured on five Commons photographs of SEPv3s through their solved cameras (the model's fit, `fitdata/m1a2`): muzzle face centre 1.965–1.98 m, the barrel's centre line (bore evacuator, muzzle) 1.94–2.00 m in the two photographs that show it from the side; 1.97 taken | **corrected → 1.97 m** (trunnion 0.12): a measurement, not a published figure |
 
 ## T-14 Armata (t14)
 
@@ -144,7 +149,8 @@ Little is published by the maker. The first official weight and dimensions were 
 | Traverse / elevation rate | 40 °/s / 15 °/s (estimated) | not published | — | not found: stays estimated |
 | Sight magnification | 4× / 12× (estimated) | not published | — | not found: stays estimated |
 | Shot / charge / drag | 8.5 kg / 10 kg / 60 (estimated) | not published | — | not found: stays estimated |
-| Track contact / clearance | 5.3 / 0.5 m | not published | — | not found (sim geometry) |
+| Gun axis and muzzle (`dims`: trunnion, barrel) | trunnion 0.3 m above the ring (2.05 m), muzzle 5.04 m ahead of the trunnions (from 10.8 − 8.7 / 2) | not published | measured on parade photos through solved cameras (`tools/blender/tanks/fitdata/t14`: barrel centre lines in three photos, the gun root in a head-on one; scale from the published 8,732 mm hull and 10.8 m over the gun) | **measured → trunnion 0.10 m (bore 2.15 m above the ground), barrel 4.96 m**: the muzzle at 0° is 6.37 m ahead of the origin, which (midway between the first and last road wheels) lies 0.2 m aft of the hull's middle, so 10.8 − 8.7 / 2 overstated it |
+| Track contact / clearance | 5.3 / 0.5 m | not published | photos: the flat belly between the tracks stands 0.58 m above the road (head-on photo, solved camera) | not found in a source: 0.5 kept (sim geometry; the own model's belly is at the measured 0.58 m) |
 
 ## Effects of the corrections
 
@@ -152,7 +158,8 @@ Little is published by the maker. The first official weight and dimensions were 
   Its muzzle is 0.3 m further back.
 - M1A2 SEPv3: muzzle velocity 1,552.5 m/s, charge 8.15 kg (recoil +0.1 %), muzzle 0.06 m further back.
 - T-14: 55 t instead of 48 t (slower to accelerate), 3.9 m wide (collision box), 45 km/h backwards instead of 80,
-  32 rounds instead of 45, elevation −7° / +15°.
+  32 rounds instead of 45, elevation −7° / +15°. Its own model (2026-11-19) put the muzzle 0.08 m further back and
+  the bore 0.20 m lower (the gun's places measured on photos, above).
 - `vehicleStats.json` and `TANK_MEDALS` were re-derived for the Leopard 2A5 and the T-14 (`TANKS=1 COURSE=<id>
   LIMIT=1800 npx tsx tools/sim-run.ts leopard2a5,t14,m1a2 legend`; the unchanged M1A2's laps reproduced its old
   medals to the half-second, which checks the derivation).

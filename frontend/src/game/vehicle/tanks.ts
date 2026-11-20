@@ -246,8 +246,14 @@ const TANKS: TankDef[] = [
       cvt: { low: 34, high: (2300 * Math.PI) / 30 / (70 / 3.6 / SPROCKET) },
       reverseSpeed: 70,
       sound: 'diesel',
-      // 全長 9.42 m over the gun, 全幅 3.24 m: the muzzle 9.42 − 7.5 / 2 = 5.67 m ahead of the middle
-      dims: { hull: [7.5, 3.24, 1.3], turretZ: 0.2, ringY: 1.75, barrel: 4.0, trunnion: 0.35, trunnionZ: 1.47, turret: [4.6, 3.0, 0.6] },
+      // 全長 9.42 m over the gun, 全幅 3.24 m. The gun's places are our model's (tools/blender/tanks/type10.py prints
+      // them as CONTRACT), fitted to photographs through solved cameras (fitdata/type10): the traverse axis 2 cm behind
+      // the middle of the track contact, the trunnions 1.97 m up and 1.40 m ahead, the muzzle at 5.71 m (the hull ends
+      // at −3.71: 9.42 m over the gun); the gunner's sight head is the model's forward roof hood, 0.40 m above and
+      // 0.82 m left of the bore (the fire control converges the gun on its line at the lased range)
+      dims: { hull: [7.5, 3.24, 1.3], turretZ: -0.02, ringY: 1.55, barrel: 4.31, trunnion: 0.42, trunnionZ: 1.42, turret: [4.6, 3.0, 0.6], sight: [0.82, 0.815, 1.13] },
+      // our model's track: metres per texture repeat along the band (type10.py prints TRACKV)
+      trackV: 1.273,
       camo: ['#4a5236', '#6b5a3e'],
       figures: { engine: '水冷4サイクル V型8気筒ディーゼル', power: '1,200 PS / 2,300 rpm', weight: '44 t', topSpeed: 70, crew: 3, transmission: 'HMT（油圧機械式無段変速）' },
       estimated: ['砲弾初速', '装填時間', '即応弾数', '砲塔旋回・俯仰速度', '俯仰角', '照準具の倍率'],
@@ -308,8 +314,11 @@ const TANKS: TankDef[] = [
       pivotRate: 0,
       reverseSpeed: 20,
       sound: 'diesel',
-      // 全長 8.45 m over the gun, 全幅 2.98 m; the turret sits on the rear half (the engine is in the front left)
-      dims: { hull: [8.0, 2.98, 1.5], turretZ: -0.9, ringY: 2.0, barrel: 4.2, trunnion: 0.3, trunnionZ: 1.15, turret: [3.6, 2.6, 0.6] },
+      // 全長 8.45 m over the gun, 全幅 2.98 m; the turret sits on the rear half (the engine is in the front left, the
+      // driver front right). Ring, trunnions, muzzle and the gunner's sight head (right of the gun, low and forward)
+      // are the model's (type16.glb, fitted to photos: ring 0.56 m behind the axles' middle at 1.80 m, muzzle 4.64 m
+      // ahead of it); the hull stays the sim's.
+      dims: { hull: [8.0, 2.98, 1.5], turretZ: -0.56, ringY: 1.8, barrel: 4.15, trunnion: 0.45, trunnionZ: 1.05, turret: [3.75, 2.64, 0.65], sight: [-0.64, 0.68, 0.94] },
       camo: ['#4a5236', '#6b5a3e'],
       figures: { engine: '水冷4サイクル 直列4気筒ターボディーゼル', power: '570 PS / 2,100 rpm', weight: '26 t', topSpeed: 100, crew: 4, transmission: '自動変速（8×8・前2軸操舵）' },
       estimated: ['変速段数', '後進速度', '砲弾初速', '装填時間', '搭載弾数', '砲塔旋回・俯仰速度', '俯仰角', '照準具の倍率'],
@@ -368,8 +377,13 @@ const TANKS: TankDef[] = [
       pivotRate: 30,
       reverseSpeed: 31,
       sound: 'diesel',
-      // 9.67 m over the gun (KNDS), hull 7.72 m, 3.76 m wide: the muzzle 9.67 − 7.72 / 2 = 5.81 m ahead of the middle
-      dims: { hull: [7.72, 3.76, 1.4], turretZ: 0.4, ringY: 1.95, barrel: 3.81, trunnion: 0.4, trunnionZ: 1.6, turret: [5.0, 3.6, 0.85] },
+      // From our model (2026-11-19; fitted to four Commons photographs through solved cameras, the origin the middle of
+      // the road wheels): the muzzle 5.69 m ahead of the middle, the hull rear at z −4.13 (the photos: −4.12…−4.20),
+      // 9.82 m over the gun (published: 9.67 by the maker, 9.97 elsewhere); ring z 0.40 / y 1.70, trunnions 0.42 above and 1.08
+      // ahead (2.12 m up), barrel 4.21. The sight head is the model's EMES 15 window on the roof's right front, 0.40 m
+      // above and 0.86 m right of the bore (the fire control converges the bore on its line at the lased range).
+      dims: { hull: [7.72, 3.76, 1.4], turretZ: 0.4, ringY: 1.7, barrel: 4.21, trunnion: 0.42, trunnionZ: 1.08, turret: [5.0, 3.6, 0.85], sight: [-0.86, 0.816, 1.035] },
+      trackV: 1.48,
       camo: ['#3f4a33', '#5a4632'],
       figures: { engine: 'MTU MB 873 Ka-501 V型12気筒ツインターボディーゼル 47.6L', power: '1,500 PS / 2,600 rpm', weight: '59.5 t', topSpeed: 70, crew: 4, transmission: 'Renk HSWL 354（前進4段・後進2段）' },
       estimated: ['変速比', '装填時間', '俯仰速度', '照準具の低倍率', '超信地旋回の速さ'],
@@ -434,8 +448,13 @@ const TANKS: TankDef[] = [
       reverseSpeed: 40,
       sound: 'turbine',
       // 9.77 m over the gun (the Army's fact file; 9.83 m elsewhere), hull 7.93 m, 3.66 m wide: the muzzle
-      // 9.77 − 7.93 / 2 = 5.81 m ahead of the middle
-      dims: { hull: [7.93, 3.66, 1.3], turretZ: 0.3, ringY: 1.85, barrel: 3.72, trunnion: 0.35, trunnionZ: 1.79, turret: [5.6, 3.7, 0.8] },
+      // 9.77 − 7.93 / 2 = 5.81 m ahead of the middle; the bore axis 1.97 m above the ground (not published: measured on
+      // five photographs through their solved cameras, docs/TANK_FIGURES.md), so the trunnions 0.12 m above the ring;
+      // the gunner's sight head is the window of the model's primary sight (GPS) on the roof right of the gun, 0.46 m
+      // above and 0.73 m right of the bore (triangulated on two photos; the fire control converges the gun on its line)
+      dims: { hull: [7.93, 3.66, 1.3], turretZ: 0.3, ringY: 1.85, barrel: 3.72, trunnion: 0.12, trunnionZ: 1.79, turret: [5.6, 3.7, 0.8], sight: [-0.73, 0.58, 0.73] },
+      // our model's track: metres per texture repeat along the band (m1a2.py prints TRACKV)
+      trackV: 1.536,
       camo: ['#b9a47a', '#a8936a'],
       figures: { engine: 'Honeywell AGT1500 ガスタービン', power: '1,500 shp', weight: '66.8 t', topSpeed: 67, crew: 4, transmission: 'Allison X1100-3B（前進4段・後進2段）' },
       estimated: ['変速比', '後進速度', '砲弾初速（M829A3の値）', '装填時間', '俯仰速度', '超信地旋回の速さ'],
@@ -498,8 +517,16 @@ const TANKS: TankDef[] = [
       // the reversible gearbox (eight speeds each way): 40–50 km/h backwards as reported (Pervyy Tekhnicheskiy): 45
       reverseSpeed: 45,
       sound: 'diesel',
-      // 10.8 m over the gun, hull 8.7 m, 3.9 m wide (Army-2019): the muzzle 10.8 − 8.7 / 2 = 6.45 m ahead of the middle
-      dims: { hull: [8.7, 3.9, 1.5], turretZ: 0.0, ringY: 2.05, barrel: 5.04, trunnion: 0.3, trunnionZ: 1.41, turret: [4.4, 3.3, 0.75] },
+      // 10.8 m over the gun, hull 8.7 m, 3.9 m wide (Army-2019). The gun's places are measured on parade photos through
+      // solved cameras (the own model, docs/TANK_FIGURES.md): the bore 2.15 m above the ground (0.10 above the ring),
+      // the muzzle at 0° 6.37 m ahead of the origin (midway between the first and last road wheels, 0.2 m aft of the
+      // hull's middle); the turret 4.25 m from the cheeks to the bustle's rear, 2.72 m over the cheeks, its roof 0.68 m
+      // above the ring. The sight head is the model's gunner's sight (the box on the roof's right front): its window
+      // 0.66 m right of the axis, 2.815 m above the ground, 0.63 m ahead of the ring's centre, so 0.67 m above and 0.66 m
+      // beside the bore; the fire control converges the bore on the line of sight at the lased range (GunControl.laid)
+      dims: { hull: [8.7, 3.9, 1.5], turretZ: 0.0, ringY: 2.05, barrel: 4.96, trunnion: 0.1, trunnionZ: 1.41, turret: [4.25, 2.72, 0.68], sight: [-0.66, 0.765, 0.63] },
+      // the model's track texture: 8 links of 0.17 m per V unit
+      trackV: 1.36,
       camo: ['#4c5638', '#2f3326'],
       figures: { engine: 'ChTZ 12N360 X型12気筒ディーゼル', power: '1,500 hp', weight: '55 t', topSpeed: 80, crew: 3, transmission: 'ロボット式（前進8段・後進8段）' },
       estimated: ['最高速度（公表は75〜80 km/h）', '変速段数（12段の報道も）', '後進速度（報道は40〜50 km/h）', '機関回転数', '砲弾初速', '装填時間', '俯仰角', '砲塔旋回・俯仰速度', '照準具の倍率'],
