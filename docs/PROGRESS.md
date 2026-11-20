@@ -2761,4 +2761,33 @@ floor on heavy devices). Merged `low-resolution` (`84f7f5b` + `f7470bc`):
 - Not verified: physical mobile phone hardware; real 120 Hz mobile browser step-up recovery (unit-tested).
 
 
+## v2.8.3 (11-20): fighter CarSheet crash in 車両一覧 and tank gun sight visible over pause menu
+
+Two player-reported bugs fixed:
+- **Black screen when reaching fighters in `車両一覧` (`CarsScreen`)**:
+  - Cause: `CarSheet` (`ui/screens/Cars.tsx`) called `peakPower(spec)` → `peakPowerKw(spec)` (`game/vehicle/stats.ts`)
+    at the top of the component for every vehicle before checking `spec.jet`. Fighter specs (`f15j`, `f15c`, `su47` in
+    `game/vehicle/jets.ts`) have `torque: [[0, 0]]` (1 element), so `peakPowerKw` accessed `t[k + 1][0]` (`t[1][0]`) and
+    threw `TypeError: Cannot read properties of undefined (reading '0')`, unmounting `<App />` (and `<GameCanvas />`) to
+    the bare `#05070c` page background. (`VehiclePicker` did not hit this because `specFigures` had an `if (spec.jet)`
+    early return before calling `peakPowerKw`.)
+  - Fix: `peakPowerKw` returns `0` when `t.length < 2` (`frontend/src/game/vehicle/stats.ts`). Unit test in
+    `ui/garage/picker.test.ts` now exercises `peakPowerKw(spec)`, `specFigures(spec)` and `COLORS[id]` across every
+    vehicle in `VEHICLE_ORDER`.
+- **Tank gun sight (`.gun-hud`) displayed on top of the pause menu on `Esc`**:
+  - Cause: `<GunSight />` remains mounted while `paused` (`App.tsx`) to exit pointer lock, and `.gun-hud` had
+    `z-index: 3` while `.pause` had `z-index: auto`; exiting pointer lock also added `.free` ("クリックで砲を操作") on
+    top of the pause menu.
+  - Fix: `GunSight.tsx` toggles `.paused` on `.gun-hud` in the `useEffect([paused])` hook; `ui/theme/hud.css` hides
+    `.gun-hud.paused` (`display: none`) and sets `.pause { z-index: 10; }`. `tools/tank-check.cjs` now asserts
+    `gunHidden: getComputedStyle(document.querySelector('.gun-hud')).display === 'none'` on the `Esc` pointer step.
+- Verified:
+  - `tsc -b` (0 errors), `vitest` 318 passed (35 files), `npm run build` (`index-C9n7zMOC.js`).
+  - Real GPU (`gpurun.sh`): stepped through all 27 vehicles in `車両一覧` (`~/.local/opt/wt/jet-dark/probe-verify2.cjs`,
+    0 errors; inspected `verified-cars-step-17.jpg` F-15J, `verified-cars-step-18.jpg` F-15C,
+    `verified-cars-step-19.jpg` Su-47 and `verified-tank-pause.jpg`); `gpu-errors.cjs` 0 errors; `tank-check.cjs`
+    (`TANK=type10`) 0 errors, 0 failed steps (`{"locked":false,"paused":true,"gunHidden":true}`).
+
+
+
 

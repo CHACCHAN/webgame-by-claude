@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { CAR_ORDER, CAR_SPECS, VEHICLE_ORDER, vehiclesFor, type CarId } from '../../game/vehicle/carSpecs';
 import { RELEASED } from '../../game/release';
 import { KIND_ORDER, KIND_TRAITS, kindOf } from '../../game/vehicle/kinds';
-import { VEHICLE_STATS } from '../../game/vehicle/stats';
+import { COLORS } from '../../game/vehicle/paints';
+import { peakPowerKw, specFigures, VEHICLE_STATS } from '../../game/vehicle/stats';
 import { COURSE_ORDER } from '../../game/track/courses';
 import { BAR_KNEE, BAR_SCALES, barFill, garageFramingFor, moveInGrid, pickerTabs, sortVehicles, tabVehicles, vehicleBars, type TabId } from './picker';
 
@@ -35,6 +36,11 @@ describe('measured vehicle figures (tools/vehicle-stats.ts)', () => {
         else expect(b.fill, `${id} ${b.key}`).toBeGreaterThan(0);
         expect(b.fill, `${id} ${b.key}`).toBeLessThanOrEqual(1);
       }
+      // peakPowerKw and specFigures work for every vehicle, including fighters with a 1-point placeholder torque curve
+      const spec = CAR_SPECS[id];
+      expect(Number.isFinite(peakPowerKw(spec).kw), id).toBe(true);
+      expect(Number.isFinite(specFigures(spec).powerKw), id).toBe(true);
+      expect(COLORS[id].length, id).toBeGreaterThan(0);
     }
   });
 

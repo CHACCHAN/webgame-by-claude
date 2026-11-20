@@ -23,6 +23,8 @@ export const VEHICLE_STATS = data.vehicles as Partial<Record<CarId, VehicleStats
 export function peakPowerKw(spec: CarSpec) {
   const t = spec.engine.torque;
   let best = { kw: 0, rpm: 0 };
+  // (a fighter has no driven shaft: its placeholder torque curve has one zero point)
+  if (t.length < 2) return best;
   for (let rpm = t[0][0]; rpm <= spec.engine.redline; rpm += 50) {
     let k = 0;
     while (k < t.length - 2 && t[k + 1][0] < rpm) k++;

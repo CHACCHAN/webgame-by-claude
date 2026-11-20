@@ -279,8 +279,12 @@ const TANKS = ['type10', 'type16', 'leopard2a5', 'm1a2', 't14'];
       console.log(`     sight bearing after a mouse movement to the right: ${y0.toFixed(3)} → ${y1.toFixed(3)} rad`);
       await page.keyboard.press('Escape');
       await page.waitForTimeout(500);
-      const st = await page.evaluate(() => ({ locked: !!document.pointerLockElement, paused: window.__app.getState().paused }));
-      want(!st.locked && st.paused, `Esc opens the pause menu and frees the pointer (${JSON.stringify(st)})`);
+      const st = await page.evaluate(() => ({
+        locked: !!document.pointerLockElement,
+        paused: window.__app.getState().paused,
+        gunHidden: getComputedStyle(document.querySelector('.gun-hud')).display === 'none',
+      }));
+      want(!st.locked && st.paused && st.gunHidden, `Esc opens the pause menu, hides the gun sight and frees the pointer (${JSON.stringify(st)})`);
     }
     step = 'leave';
     await page.evaluate(() => {

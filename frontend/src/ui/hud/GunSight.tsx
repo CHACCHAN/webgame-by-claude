@@ -73,8 +73,9 @@ export function GunSight({ touch }: { touch: boolean }) {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [touch]);
-  // (the pause menu needs the pointer)
+  // (the pause menu needs the pointer, and the sight steps out of its way while it is up)
   useEffect(() => {
+    refs.root.current?.classList.toggle('paused', paused);
     if (paused && document.pointerLockElement) document.exitPointerLock();
   }, [paused]);
 

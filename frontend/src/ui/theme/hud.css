@@ -183,7 +183,7 @@
 @keyframes tach-sweep { 0% { stroke-dashoffset: 100; } 55% { stroke-dashoffset: 0; } 100% { stroke-dashoffset: 100; } }
 
 /* ------------------------------------------------------------- pause */
-.pause { display: grid; place-content: center; justify-items: center; gap: 0.9rem; background: var(--veil); }
+.pause { z-index: 10; display: grid; place-content: center; justify-items: center; gap: 0.9rem; background: var(--veil); }
 /* (its hints under the box: the foot of the screen belongs to the instruments behind) */
 .pause .hint-bar { position: static; height: auto; }
 .pause-box { --c: var(--cut-l); width: min(27rem, 90vw); padding: 1.5rem 1.4rem 1.2rem; animation: var(--kf-rise) var(--t-enter) var(--e-out) both; }
@@ -212,7 +212,7 @@
 
 /* ------------------------------------------------------------- a tank's gun (hud/GunSight.tsx) */
 .gun-hud { position: absolute; inset: 0; z-index: 3; pointer-events: none; overflow: hidden; }
-.gun-hud.none { display: none; }
+.gun-hud.none, .gun-hud.paused { display: none; }
 .gun-cross, .gun-mark, .gun-read { position: absolute; left: 0; top: 0; will-change: transform; }
 /* the line of sight's end: a broken cross */
 .gun-cross { filter: drop-shadow(0 0 1px rgb(var(--c-void))); }
