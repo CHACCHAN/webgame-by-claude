@@ -25,7 +25,7 @@ def disc(kind, sign, rg, style):
         p=[lathe(profile,24,['tank_paint','tank_paint','tank_paint','tank_paint','steel',
                                                'rubber','rubber','rubber','tank_paint'])]
         p.append(lathe([(.24*r,-gap),(lip,-gap),(r,-face+tyre),(r,-face+style['shoulder']),
-                        (lip,-face),(.35*r,-face+rg.dish_depth)],20,
+                        (lip,-face),(.35*r,-face+rg.dish_depth)],16,
                        ['tank_paint','rubber','rubber','rubber','tank_paint']))
         for i in range(rg.hub_bolts if road else 6):
             t=math.tau*i/(rg.hub_bolts if road else 6)
@@ -38,7 +38,7 @@ def disc(kind, sign, rg, style):
                                for a,b in ((gap,w/2),(-w/2,-gap))])
     _,_,r,n,w=rg.sprocket
     p=[lathe([(.26*r,w/2),(.37*r,.47*w),(.68*r,.30*w),(.80*r,.36*w),
-              (.80*r,-.36*w),(.37*r,-.30*w),(.26*r,-w/2)],28,
+              (.80*r,-.36*w),(.37*r,-.30*w),(.26*r,-w/2)],22,
              ['steel','tank_paint','tank_paint','steel','tank_paint','steel'])]
     # Two annular tooth rings, no radially overlapping full cylinders.
     for side in (-1,1):
@@ -250,10 +250,10 @@ def shield(s):
         pane=T.Part('opaque shield pane'); axes=(u,up,n)
         pane.obox('glass_dark',mid+up*(lo+hi)/2,(width-f,hi-lo-f,s['glass']),axes)
         for end in (a,b):
-            pane.obox(T.PAINT,end+up*(lo+hi)/2,(f,hi-lo,s['depth']),axes,bevel=f/5,seg=1)
+            pane.obox(T.PAINT,end+up*(lo+hi)/2,(f,hi-lo,s['depth']),axes)
         for y in (lo,hi):
-            pane.obox(T.PAINT,mid+y*up,(width+f,f,s['depth']),axes,bevel=f/5,seg=1)
+            pane.obox(T.PAINT,mid+y*up,(width+f,f,s['depth']),axes)
         for t in (.18,.82):
-            foot=a+(b-a)*t; p.append(rail([foot,foot+lo*up],s['post']))
+            foot=a+(b-a)*t; p.append(rail([foot,foot+lo*up],s['post'],seg=6))
         p.append(pane)
     return T.placed(T.combine('loader shields',p),s['base'])
