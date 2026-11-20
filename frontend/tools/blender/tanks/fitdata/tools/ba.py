@@ -14,6 +14,7 @@ x). Each feature belongs to a frame (annot "_frames": {name: "hull"|"turret"|"gu
 annot.json:
   "_points": {name: [x, y, z]} initial guesses (at psi = theta = 0), "_frames": {...},
   "_prior": {"<name>.<x|y|z>": [value, sigma]} (published sizes: the widest point, ground contacts ...),
+  "_lin": [[{"<name>.<c>": weight, ...}, value, sigma], ...] (a published length between two points: muzzle - rear),
   "_axis": {"tz": [v, sig], "gy": [v, sig], "gz": [v, sig]},
   "<photo>": {"size": [W, H], "pts": {"<name>_l": [u, v], ...}, "sigma": px, "psi": [deg, sig], "theta": [deg, sig],
               "f_exif": px, "f_sig": 0.08}
@@ -153,6 +154,9 @@ def main():
 
     SIG = A.get('_sig_prior', 0.3)
     priors = A.get('_prior', {})
+    # linear priors over coordinates: [[{"a.z": 1, "b.z": -1}, value, sigma], ...] (published lengths between points;
+    # terms naming points not in this solve are dropped with their prior)
+    lin = [(t, v, s) for t, v, s in A.get('_lin', []) if all(k.split('.')[0] in P0 and (k.split('.')[0] in pidx or k.split('.')[0] in fix) for k in t)]
 
     def residuals(X, detail=False):
         r = []; det = {}
@@ -180,6 +184,12 @@ def main():
             n, c = key.split('.')
             if n in pidx:
                 r.append(np.array([(X[pidx[n] + 'xyz'.index(c)] - val) / sg]))
+        for terms, val, sg in lin:
+            s = 0.0
+            for key, w in terms.items():
+                n, c = key.split('.')
+                s += w * (X[pidx[n] + 'xyz'.index(c)] if n in pidx else P0[n]['xyz'.index(c)])
+            r.append(np.array([(s - val) / sg]))
         for j, k in enumerate(('tz', 'gy', 'gz')):
             if k in ax0:
                 r.append(np.array([(X[axidx + j] - ax0[k][0]) / ax0[k][1]]))

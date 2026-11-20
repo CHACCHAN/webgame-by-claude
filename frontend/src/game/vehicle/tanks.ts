@@ -246,8 +246,14 @@ const TANKS: TankDef[] = [
       cvt: { low: 34, high: (2300 * Math.PI) / 30 / (70 / 3.6 / SPROCKET) },
       reverseSpeed: 70,
       sound: 'diesel',
-      // 全長 9.42 m over the gun, 全幅 3.24 m: the muzzle 9.42 − 7.5 / 2 = 5.67 m ahead of the middle
-      dims: { hull: [7.5, 3.24, 1.3], turretZ: 0.2, ringY: 1.75, barrel: 4.0, trunnion: 0.35, trunnionZ: 1.47, turret: [4.6, 3.0, 0.6] },
+      // 全長 9.42 m over the gun, 全幅 3.24 m. The gun's places are our model's (tools/blender/tanks/type10.py prints
+      // them as CONTRACT), fitted to photographs through solved cameras (fitdata/type10): the traverse axis 2 cm behind
+      // the middle of the track contact, the trunnions 1.97 m up and 1.40 m ahead, the muzzle at 5.71 m (the hull ends
+      // at −3.71: 9.42 m over the gun); the gunner's sight head is the model's forward roof hood, 0.40 m above and
+      // 0.82 m left of the bore (the fire control converges the gun on its line at the lased range)
+      dims: { hull: [7.5, 3.24, 1.3], turretZ: -0.02, ringY: 1.55, barrel: 4.31, trunnion: 0.42, trunnionZ: 1.42, turret: [4.6, 3.0, 0.6], sight: [0.82, 0.815, 1.13] },
+      // our model's track: metres per texture repeat along the band (type10.py prints TRACKV)
+      trackV: 1.273,
       camo: ['#4a5236', '#6b5a3e'],
       figures: { engine: '水冷4サイクル V型8気筒ディーゼル', power: '1,200 PS / 2,300 rpm', weight: '44 t', topSpeed: 70, crew: 3, transmission: 'HMT（油圧機械式無段変速）' },
       estimated: ['砲弾初速', '装填時間', '即応弾数', '砲塔旋回・俯仰速度', '俯仰角', '照準具の倍率'],

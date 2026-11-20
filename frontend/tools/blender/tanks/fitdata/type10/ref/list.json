@@ -1,0 +1,77 @@
+{
+ "_note": "Photographs used to MEASURE the 10式 (cameras, masks, gate); not in the repository (~/.local/opt/carfit/tanks/type10/ref). Credits as on Wikimedia Commons.",
+ "photos": [
+  {
+   "file": "t105.jpg",
+   "title": "File:JGSDF Type10 tank 20120527-03.JPG",
+   "author": "Los688",
+   "licence": "CC0",
+   "url": "https://commons.wikimedia.org/wiki/File:JGSDF_Type10_tank_20120527-03.JPG",
+   "size_orig": [
+    3348,
+    2240
+   ],
+   "fetch_width": 1600
+  },
+  {
+   "file": "t107.jpg",
+   "title": "File:JGSDF Type10 tank 20120527-05.JPG",
+   "author": "Los688",
+   "licence": "CC0",
+   "url": "https://commons.wikimedia.org/wiki/File:JGSDF_Type10_tank_20120527-05.JPG",
+   "size_orig": [
+    3187,
+    2131
+   ],
+   "fetch_width": 1600
+  },
+  {
+   "file": "t108.jpg",
+   "title": "File:JGSDF Type10 tank 20120527-06.JPG",
+   "author": "Los688",
+   "licence": "CC0",
+   "url": "https://commons.wikimedia.org/wiki/File:JGSDF_Type10_tank_20120527-06.JPG",
+   "size_orig": [
+    3872,
+    2592
+   ],
+   "fetch_width": 1600
+  },
+  {
+   "file": "t109.jpg",
+   "title": "File:JGSDF Type10 tank 20120527-07.JPG",
+   "author": "Los688",
+   "licence": "CC0",
+   "url": "https://commons.wikimedia.org/wiki/File:JGSDF_Type10_tank_20120527-07.JPG",
+   "size_orig": [
+    3397,
+    2272
+   ],
+   "fetch_width": 1600
+  },
+  {
+   "file": "t112.jpg",
+   "title": "File:JGSDF Type10 tank 20120527-10.JPG",
+   "author": "Los688",
+   "licence": "CC0",
+   "url": "https://commons.wikimedia.org/wiki/File:JGSDF_Type10_tank_20120527-10.JPG",
+   "size_orig": [
+    3182,
+    2127
+   ],
+   "fetch_width": 1600
+  },
+  {
+   "file": "t118.jpg",
+   "title": "File:JGSDF Type10 tank 20120527-16.JPG",
+   "author": "Los688",
+   "licence": "CC0",
+   "url": "https://commons.wikimedia.org/wiki/File:JGSDF_Type10_tank_20120527-16.JPG",
+   "size_orig": [
+    3439,
+    2298
+   ],
+   "fetch_width": 1600
+  }
+ ]
+}

@@ -1,7 +1,9 @@
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { CarSpec } from '../vehicle/carSpecs';
 import { adoptMaterials, createCarMaterials, modelAnchors, type CarMaterials, type CarRig } from './CarModel';
 import { wrapAngle } from '../util/math';
+import { baked } from './mergeParts';
 
 /**
  * The tanks: our own models (public/models/tanks/<id>.glb, tools/blender/tanks/<id>.py) or a procedural stand-in while
@@ -24,6 +26,10 @@ import { wrapAngle } from '../util/math';
  *
  * Everything moves by the root's motion (live sim, ghost, online peer alike): each track's speed is the root's forward
  * speed ± its yaw rate × half the gauge.
+ *
+ * Draw calls: the `roll_*` nodes (2 × 7–10 of them) are merged at build into ONE skinned mesh per material, a bone per
+ * node (`mergeRolls`), so the whole running gear is one call however many wheels it has; a track material's every
+ * texture slot (colour, normal, roughness / metalness, occlusion) scrolls together.
  */
 const templates = new Map<string, THREE.Object3D>();
 const loading = new Map<string, Promise<void>>();
@@ -80,6 +86,7 @@ export function buildTank(spec: CarSpec, opts: { bodyColor?: string; procedural?
   let model: THREE.Object3D;
   if (tpl) {
     model = tpl.clone(true);
+    model.userData = { ...model.userData, tankTemplate: tpl };
     mats = adoptMaterials(model, spec, opts.bodyColor);
   } else {
     mats = createCarMaterials(spec, opts.bodyColor);
@@ -113,8 +120,9 @@ export function buildTank(spec: CarSpec, opts: { bodyColor?: string; procedural?
     if (Number.isFinite(maxZ)) muzzleLocal.set(0, 0, maxZ);
   }
 
+  if (tpl) mergeRolls(model);
   // tracks: the scrolling materials (each instance its own copy), the rolling wheels, the 16式's wheels
-  const trackMats: { mat: THREE.MeshStandardMaterial; left: boolean }[] = [];
+  const trackMats: { mat: THREE.MeshStandardMaterial; left: boolean; scrolled: THREE.Texture[] }[] = [];
   const rolls: { node: THREE.Object3D; left: boolean; radius: number }[] = [];
   const wheels8: { pivot: THREE.Object3D; spin: THREE.Object3D; axle: number; base: THREE.Quaternion; radius: number }[] = [];
   model.traverse((o) => {
@@ -124,23 +132,34 @@ export function buildTank(spec: CarSpec, opts: { bodyColor?: string; procedural?
       const swapped = list.map((mat) => {
         if (mat.name !== 'track_l' && mat.name !== 'track_r') return mat;
         const own = (mat as THREE.MeshStandardMaterial).clone();
-        if (own.map) {
-          own.map = own.map.clone();
-          own.map.wrapS = own.map.wrapT = THREE.RepeatWrapping;
+        // every slot its own copy of the texture (one offset each; a slot shared by two, as glTF's roughness and
+        // metalness are, keeps one copy for both)
+        const copies = new Map<THREE.Texture, THREE.Texture>();
+        const scrolled: THREE.Texture[] = [];
+        for (const slot of TRACK_SLOTS) {
+          const tex = own[slot] as THREE.Texture | null;
+          if (!tex) continue;
+          let c = copies.get(tex);
+          if (!c) {
+            c = tex.clone();
+            c.wrapS = c.wrapT = THREE.RepeatWrapping;
+            c.needsUpdate = true;
+            copies.set(tex, c);
+            scrolled.push(c);
+          }
+          (own as unknown as Record<string, THREE.Texture>)[slot] = c;
         }
-        if (own.normalMap) {
-          own.normalMap = own.normalMap.clone();
-          own.normalMap.wrapS = own.normalMap.wrapT = THREE.RepeatWrapping;
-        }
-        trackMats.push({ mat: own, left: mat.name === 'track_l' });
+        trackMats.push({ mat: own, left: mat.name === 'track_l', scrolled });
         return own;
       });
       m.material = Array.isArray(m.material) ? swapped : swapped[0];
     }
     const roll = /^roll_([lr])\d+/.exec(o.name);
     if (roll) {
+      // (a merged wheel is a bone: its radius was measured before the merge)
       const box = new THREE.Box3().setFromObject(o);
-      rolls.push({ node: o, left: roll[1] === 'l', radius: Math.max(0.05, (box.max.y - box.min.y) / 2) });
+      const radius = (o.userData.radius as number | undefined) ?? Math.max(0.05, (box.max.y - box.min.y) / 2);
+      rolls.push({ node: o, left: roll[1] === 'l', radius });
     }
     const wheel = /^wheel_(\d)([lr])$/.exec(o.name);
     if (wheel) {
@@ -208,8 +227,7 @@ export function buildTank(spec: CarSpec, opts: { bodyColor?: string; procedural?
       last = { x: p.x, z: p.z, yaw: heading };
       for (const t of trackMats) {
         const d = (t.left ? distL : distR) / trackV;
-        if (t.mat.map) t.mat.map.offset.y = -d;
-        if (t.mat.normalMap) t.mat.normalMap.offset.y = -d;
+        for (const tex of t.scrolled) tex.offset.y = -d;
       }
       for (const r of rolls) r.node.rotation.x = (r.left ? distL : distR) / r.radius;
       const steer = standIns[0].pivot.rotation.y;
@@ -228,6 +246,93 @@ export function buildTank(spec: CarSpec, opts: { bodyColor?: string; procedural?
   const body = new THREE.Group();
   return { root, body, wheels: standIns, materials: mats, headlightTargets: [], anchors, fromModel: !!tpl, tank: rig };
 }
+
+/** the texture slots of a track material that scroll with it */
+const TRACK_SLOTS = ['map', 'normalMap', 'roughnessMap', 'metalnessMap', 'aoMap'] as const;
+
+/** the merged running gear of each model (geometry per material, the bones' places), made once per template */
+interface RollMerge {
+  parent: string;
+  bones: { name: string; matrix: THREE.Matrix4; radius: number }[];
+  parts: { geometry: THREE.BufferGeometry; material: THREE.Material; cast: boolean }[];
+}
+const rollCache = new Map<THREE.Object3D, RollMerge>();
+
+/**
+ * The `roll_*` nodes of a model (a copy of a template) become bones of one skinned mesh per material: each node's
+ * meshes are put into its parent's frame with the node's index as their bone, and the node itself is replaced by a
+ * `THREE.Bone` of the same name and place (so the rig turns it as before). One draw call for the whole running gear.
+ * The roll nodes must share one parent (the contract has them under `body`).
+ */
+function mergeRolls(model: THREE.Object3D) {
+  const rolls: THREE.Object3D[] = [];
+  model.traverse((o) => {
+    if (/^roll_[lr]\d+/.test(o.name)) rolls.push(o);
+  });
+  if (rolls.length < 2) return;
+  const parent = rolls[0].parent!;
+  if (rolls.some((r) => r.parent !== parent)) return;
+  const tpl = templateOf(model);
+  let cache = tpl ? rollCache.get(tpl) : undefined;
+  model.updateMatrixWorld(true);
+  const toParent = parent.matrixWorld.clone().invert();
+  if (!cache) {
+    const byMat = new Map<THREE.Material, { geos: THREE.BufferGeometry[]; cast: boolean }>();
+    rolls.forEach((r, i) => {
+      r.traverse((o) => {
+        const m = o as THREE.Mesh;
+        if (!m.isMesh || Array.isArray(m.material)) return;
+        // (plain floats first: applyMatrix4 on a quantized attribute writes metres into int16s, and the wheels,
+        // wrapped round to places inside the hull, swung out as tall slabs once they turned)
+        const g = baked(m.geometry, toParent.clone().multiply(m.matrixWorld));
+        const n = g.getAttribute('position').count;
+        g.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(new Uint16Array(n * 4).map((_, k) => (k % 4 === 0 ? i : 0)), 4));
+        g.setAttribute('skinWeight', new THREE.Float32BufferAttribute(new Float32Array(n * 4).map((_, k) => (k % 4 === 0 ? 1 : 0)), 4));
+        for (const name of Object.keys(g.attributes)) if (!['position', 'normal', 'uv', 'skinIndex', 'skinWeight'].includes(name)) g.deleteAttribute(name);
+        const e = byMat.get(m.material) ?? { geos: [], cast: false };
+        e.geos.push(g);
+        e.cast ||= m.castShadow;
+        byMat.set(m.material, e);
+      });
+    });
+    const parts: RollMerge['parts'] = [];
+    for (const [material, e] of byMat) {
+      // (all indexed or none: mixed, the indexed ones are expanded)
+      const mixed = e.geos.some((g) => !g.index) && e.geos.some((g) => !!g.index);
+      const geometry = mergeGeometries(e.geos.map((g) => (mixed && g.index ? g.toNonIndexed() : g)), false);
+      if (geometry) parts.push({ geometry, material, cast: e.cast });
+    }
+    // each wheel's radius: half its height (as the rig measured it on the node before)
+    const radius = (r: THREE.Object3D) => {
+      const box = new THREE.Box3().setFromObject(r);
+      return Math.max(0.05, (box.max.y - box.min.y) / 2);
+    };
+    cache = { parent: parent.name, bones: rolls.map((r) => ({ name: r.name, matrix: toParent.clone().multiply(r.matrixWorld), radius: radius(r) })), parts };
+    if (tpl) rollCache.set(tpl, cache);
+  }
+  for (const r of rolls) r.removeFromParent();
+  const bones = cache.bones.map((b) => {
+    const bone = new THREE.Bone();
+    bone.name = b.name;
+    bone.userData.radius = b.radius;
+    b.matrix.decompose(bone.position, bone.quaternion, bone.scale);
+    parent.add(bone);
+    return bone;
+  });
+  parent.updateMatrixWorld(true);
+  const skeleton = new THREE.Skeleton(bones);
+  for (const p of cache.parts) {
+    const mesh = new THREE.SkinnedMesh(p.geometry, p.material);
+    mesh.name = 'running_gear';
+    mesh.castShadow = p.cast;
+    parent.add(mesh);
+    mesh.updateMatrixWorld(true);
+    mesh.bind(skeleton);
+  }
+}
+
+/** the template a model was cloned from (set on the copy by buildTank) */
+const templateOf = (model: THREE.Object3D) => model.userData.tankTemplate as THREE.Object3D | undefined;
 
 /** a tileable track-link texture (dark steel links, rubber pads), drawn once */
 let linkTexture: THREE.CanvasTexture | null = null;
