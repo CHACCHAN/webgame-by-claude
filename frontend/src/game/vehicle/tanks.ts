@@ -498,8 +498,16 @@ const TANKS: TankDef[] = [
       // the reversible gearbox (eight speeds each way): 40–50 km/h backwards as reported (Pervyy Tekhnicheskiy): 45
       reverseSpeed: 45,
       sound: 'diesel',
-      // 10.8 m over the gun, hull 8.7 m, 3.9 m wide (Army-2019): the muzzle 10.8 − 8.7 / 2 = 6.45 m ahead of the middle
-      dims: { hull: [8.7, 3.9, 1.5], turretZ: 0.0, ringY: 2.05, barrel: 5.04, trunnion: 0.3, trunnionZ: 1.41, turret: [4.4, 3.3, 0.75] },
+      // 10.8 m over the gun, hull 8.7 m, 3.9 m wide (Army-2019). The gun's places are measured on parade photos through
+      // solved cameras (the own model, docs/TANK_FIGURES.md): the bore 2.15 m above the ground (0.10 above the ring),
+      // the muzzle at 0° 6.37 m ahead of the origin (midway between the first and last road wheels, 0.2 m aft of the
+      // hull's middle); the turret 4.25 m from the cheeks to the bustle's rear, 2.72 m over the cheeks, its roof 0.68 m
+      // above the ring. The sight head is the model's gunner's sight (the box on the roof's right front): its window
+      // 0.66 m right of the axis, 2.815 m above the ground, 0.63 m ahead of the ring's centre, so 0.67 m above and 0.66 m
+      // beside the bore; the fire control converges the bore on the line of sight at the lased range (GunControl.laid)
+      dims: { hull: [8.7, 3.9, 1.5], turretZ: 0.0, ringY: 2.05, barrel: 4.96, trunnion: 0.1, trunnionZ: 1.41, turret: [4.25, 2.72, 0.68], sight: [-0.66, 0.765, 0.63] },
+      // the model's track texture: 8 links of 0.17 m per V unit
+      trackV: 1.36,
       camo: ['#4c5638', '#2f3326'],
       figures: { engine: 'ChTZ 12N360 X型12気筒ディーゼル', power: '1,500 hp', weight: '55 t', topSpeed: 80, crew: 3, transmission: 'ロボット式（前進8段・後進8段）' },
       estimated: ['最高速度（公表は75〜80 km/h）', '変速段数（12段の報道も）', '後進速度（報道は40〜50 km/h）', '機関回転数', '砲弾初速', '装填時間', '俯仰角', '砲塔旋回・俯仰速度', '照準具の倍率'],
