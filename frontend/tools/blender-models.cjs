@@ -55,7 +55,7 @@ const KINDS = {
   // own small texture under track_l / track_r; tools/blender/tanks/tank_kit.py)
   // (uniqueNames: materials of different names stay apart: track_l and track_r are the same material twice, and the game
   // tells the two tracks apart by name)
-  tanks: { dir: 'tools/blender/tanks', out: 'public/models/tanks', palette: false, textureSize: 2048, big: {}, uniqueNames: true, ids: ['type10'] },
+  tanks: { dir: 'tools/blender/tanks', out: 'public/models/tanks', palette: false, textureSize: 2048, big: {}, uniqueNames: true, ids: ['type10', 'm1a2'] },
   creatures: { dir: 'tools/blender/creatures', out: 'public/models/roach', palette: false, textureSize: 1024, big: {}, resample: true, ids: ['roach'] },
   // trees, bushes, undergrowth, rocks (tools/blender/nature/nature_kit.py): the script writes the geometry (every level
   // of detail a node) and its textures as PNG files next to it, which `textures` puts into the materials by name
