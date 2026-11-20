@@ -87,3 +87,59 @@ def laid_cable(path, radius, lay, sides=8):
     phase=ds[:,None]*math.tau/lay
     strand=xyz+.77*radius*(np.cos(phase)*n+np.sin(phase)*b)
     return T.combine('laid cable',[piping(path,.84*radius,'steel',sides),piping(strand,.23*radius,'steel',5)])
+
+
+def under_rim(stations, bottom, wall, mat='recess'):
+    """Closed hollow rim. stations = increasing (z, half-width, top y) in m;
+    bottom = level base y (m), wall = horizontal inset to the inner surface (m).
+    """
+    from jet_kit import offset_poly
+    z,x,y=np.asarray(stations).T
+    plan=list(zip(-x,z))+list(zip(x[::-1],z[::-1]))  # +Y winding
+    inner=offset_poly(plan,-wall)
+    def row(poly,top):
+        return [(xx,float(np.interp(zz,z,y)) if top else bottom,zz) for xx,zz in poly]
+    p=T.Part('under rim')
+    p.grid([row(plan,False),row(plan,True),row(inner,True),row(inner,False)],
+           mat,smooth=False,closed_u=True,closed_v=True)
+    return p
+
+
+def link_guides(band, centre_x, web_width, z_limits, max_y, size, crown, tile):
+    """Append tapered guides to a built band mesh in its local game frame.
+    centre_x, full inner web_width, inclusive z_limits, max face y, xyz size
+    and UV tile length are metres; crown is the top/foot linear size ratio.
+    One guide per upward web quad (not per resampled station). Return count.
+    """
+    import bmesh
+    bm=bmesh.new(); me=band.data; count=0
+    try:
+        bm.from_mesh(me); bm.normal_update(); uv=bm.loops.layers.uv.active
+        if uv is None: raise ValueError('band has no link UVs')
+        for f in list(bm.faces):
+            if len(f.verts)!=4 or f.normal.z<.9: continue
+            q=np.array([T.G(v.co) for v in f.verts]); c=q.mean(axis=0)
+            if c[1]>=max_y or not z_limits[0]<=c[2]<=z_limits[1]: continue
+            if abs(c[0]-centre_x)>1e-4 or abs(np.ptp(q[:,0])-web_width)>1e-4: continue
+            # +Z tangent and inward normal of this actual link, including grade.
+            q=q[np.argsort(q[:,2])]; forward=q[2:].mean(axis=0)-q[:2].mean(axis=0)
+            forward/=np.linalg.norm(forward); up=np.cross(forward,(1.,0.,0.))
+            v0=sum(loop[uv].uv.y for loop in f.loops)/4
+            rings=[]; coords={}
+            for scale,rise in ((1.,0.),(crown,size[1])):
+                ring=[]
+                for sx,sz in ((-1,-1),(-1,1),(1,1),(1,-1)):
+                    dz=sz*size[2]*scale/2
+                    v=bm.verts.new(T.B(*(c+(sx*size[0]*scale/2,0,0)+dz*forward+rise*up)))
+                    ring.append(v); coords[v]=(.88+sx*.017*scale,v0+dz/tile)
+                rings.append(ring)
+            a,b=rings
+            for vs in [[a[i-1],a[i],b[i],b[i-1]] for i in range(4)]+[b]:
+                face=bm.faces.new(vs); face.material_index=f.material_index; face.smooth=False
+                for loop in face.loops: loop[uv].uv=coords[loop.vert]
+            count+=1
+        if not count: raise ValueError('no ground-run web faces on '+band.name)
+        bm.normal_update(); bm.to_mesh(me); me.update()
+    finally:
+        bm.free()
+    return count

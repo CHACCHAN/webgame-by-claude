@@ -1,4 +1,4 @@
-"""Round-three Leopard 2A5. Blender background entry point, arguments after --.
+"""Round-four Leopard 2A5. Blender background entry point, arguments after --.
 --out leo.glb --stage shape --dump leo.npz --render checks --quick --views o_side,o_front
 Raw GLB is the input to the game's mesh/texture optimization, not the delivery size.
 """
@@ -10,6 +10,7 @@ from pathlib import Path
 import bpy
 import numpy as np
 from mathutils import Matrix
+from mathutils.kdtree import KDTree
 from mathutils.bvhtree import BVHTree
 
 sys.path.insert(0,str(Path(__file__).resolve().parent))
@@ -27,6 +28,7 @@ def build():
     root,body,turret,gun=T.tank_nodes('leopard2a5',DIMS); rg=L.running_spec()
     objects=[L.hull(rg,marks).build(body,mats)]
     gear=T.running_gear(body,rg,mats); objects.extend(gear['objects'])
+    L.add_guides(gear,rg)
     # running_gear supplies the complete assembly but not per-kind seg overrides.
     # Keep its band UVs, nodes and non-road discs; refine just the exposed road rims.
     road={round(z,5):r for z,y,r in rg.road}
@@ -55,17 +57,26 @@ def _pose_check(nodes):
     # cover, fixed cheeks, sight furniture, hatches, fenders and upper deck.
     # Collision is between assemblies, not between joined detail islands.
     turret=nodes['turret']; gun=nodes['gun']; gt=gun.matrix_basis.copy(); tt=turret.matrix_basis.copy()
-    def tree(key,exclude_race=False,drop=0.):
+    # Identify only the authored skirt vertices in the rest mesh, before yaw.
+    # The rim is allowed to enter the roof, like the seated race; neither is
+    # exempt from the moving gun test. Do not skip a rectangular hull region.
+    rim=L.under_skirt(); index=KDTree(len(rim.bm.verts))
+    for i,v in enumerate(rim.bm.verts): index.insert(v.co,i)
+    index.balance(); rim.bm.free()
+    shell=nodes['turret_shell']
+    rim_ids={v.index for v in shell.data.vertices if index.find(shell.matrix_world@v.co)[2]<1e-5}
+    def tree(key,exclude_seats=False,drop=0.):
         o=nodes[key]; me=o.data; me.calc_loop_triangles(); m=Matrix.Translation(T.B(0,-drop,0))@o.matrix_world
         triangles=me.loop_triangles
-        if exclude_race:
-            # The race seats in the deck by design. Exclude only its annular surface.
+        if exclude_seats:
+            # The race test uses turret-local coordinates, so it is yaw independent.
             race=L.S['race']; pts=[T.G(v.co) for v in me.vertices]
             def seat(i):
                 x,y,z=pts[i]; radius=math.hypot(x,z)
                 return (race['low']-DIMS['ringY']-1e-4<=y<=race['high']-DIMS['ringY']+1e-4 and
                         race['inner']-1e-4<=radius<=race['r']+1e-4)
-            triangles=[t for t in triangles if not (me.materials[t.material_index].name=='recess' and all(seat(i) for i in t.vertices))]
+            triangles=[t for t in triangles if not (me.materials[t.material_index].name=='recess' and
+                       (all(i in rim_ids for i in t.vertices) or all(seat(i) for i in t.vertices)))]
         return BVHTree.FromPolygons([m@v.co for v in me.vertices],[tuple(t.vertices) for t in triangles],all_triangles=True)
     def check(moving,fixed,label):
         hit=moving.overlap(fixed)
@@ -77,7 +88,7 @@ def _pose_check(nodes):
         for yaw in range(0,360,a['sweep_step']):
             turret.matrix_basis=tt@Matrix.Rotation(math.radians(yaw),4,'Z'); bpy.context.view_layer.update()
             for drop in (0.,a['gap']):
-                check(tree('turret_shell',exclude_race=True,drop=drop),hull,f'yaw={yaw:g} turret/deck gap={drop:g}')
+                check(tree('turret_shell',exclude_seats=True,drop=drop),hull,f'yaw={yaw:g} turret/deck gap={drop:g}')
         for yaw in a['traverse_check']:
             turret.matrix_basis=tt@Matrix.Rotation(math.radians(yaw),4,'Z'); bpy.context.view_layer.update()
             fixed=tree('turret_shell')
@@ -143,7 +154,7 @@ def main():
                   else 'carrier' if any(abs(z-c[0])<1e-5 for c in rg.rollers) else 'road')
         tri.setdefault(kind,[]).append(count)
     print('PART_TRIS '+ ' '.join(f'{k}={sum(v)}({len(v)}x)' for k,v in tri.items()))
-    if sum(map(sum,tri.values()))>72000: raise ValueError('shape exceeds round-three 72000 triangle budget')
+    if sum(map(sum,tri.values()))>72000: raise ValueError('shape exceeds round-four 72000 triangle budget')
     if args.stage=='full':
         wd=args.out.resolve().parent/'tex-leopard2a5'; T.paint_tracks(mats,rg,wd,metal_tint=L.S['track_tint']); skin.paint(objects,mats,wd,marks)
         _contract(root,objects,rg,True)

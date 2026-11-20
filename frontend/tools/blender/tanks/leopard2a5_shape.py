@@ -17,6 +17,8 @@ S = {
                  idler=(3.08,.92,.315,.45), sprocket=(-3.26,.79,.35,11,.46),
                  rollers=((2.035,1.14,.105),(.445,1.13,.105),(-1.215,1.105,.105),(-2.05,1.085,.105)),
                  sag=.024, horns=2, horn_width=.037, horn_height=.044, pad_share=.84, skirt_outer=1.88),
+    # Centre guides use the kit's link pitch and existing inner web, not its edge lugs.
+    'guide':dict(size=(.045,.11,.05),crown=.76,web_share=.94),
     'road_seg':36,
     'track_tint':'#494943',
     # Tub stations (z, keel y, deck y, bottom half-width, shoulder half-width).
@@ -47,7 +49,7 @@ S = {
     'bow': dict(lens=(1.018,1.365,3.238), lamp_r=.087,lamp_depth=.144,guard=(.242,.189,.16),rod=.012,
                 eye=(.83,1.12,3.64),eye_r=.091, eye_bar=.027,marker=(1.69,1.345,3.21),marker_size=(.076,.046,.068),
                 clip=(.029,.054,.245), pin_r=.022, shoe_x=(0.,.40,-.40),shoe_z=3.17,shoe_size=(.345,.069,.215),pad_size=(.135,.028,.145)),
-    'deck': dict(grilles=((.72,1.818,-3.64,1.36,.026,.62,14),(.87,1.708,-2.52,1.28,.028,.62,11)),
+    'deck': dict(aft_base=1.69,aft_top=1.77,grilles=((.72,1.818,-3.64,1.36,.026,.62,14),(.87,1.708,-2.52,1.28,.028,.62,11)),
                  # Raised plinth only under the aft pair; narrow outer cowls start
                  # beyond the low-angle window. Rear shelf corners remain at 1.73.
                  surround=(.72,1.754,-3.645),surround_size=(1.44,.121,.68),
@@ -72,6 +74,9 @@ S = {
     # Front has two side walls and a thin roof bridge, NOT a wall through the gun.
     'bustle': [(-2.06,2.07,2.436,1.29,1.34),(-1.69,2.00,2.454,1.40,1.47),
                (-.68,1.77,2.482,1.46,1.50),(-.18,1.728,2.49,1.46,1.50)],
+    # The side rim follows the lower shell. Clip its corners to the hull beam at
+    # the check yaw; otherwise the aft corners emerge beyond the shelf at 30 deg.
+    'under_skirt':dict(aft=-1.55,front=1.60,inset=.06,bottom=1.68,engagement=.03,wall=.045),
     'crown': dict(back=-.181,front=1.31,y=2.49,thick=.041,width=2.89,slot=.392,
                   eave_drop=.028,front_drop=.011),
     'race': dict(low=1.69,high=1.79,r=1.065,inner=.83,guard_inner=1.093,guard_r=1.196,guard_base=1.692,guard_top=1.705),
@@ -85,7 +90,7 @@ S = {
     'side_module':[(1.729,[(1.39,.42),(1.544,.42),(1.526,-.70),(1.39,-.70)]),
                    (2.45,[(1.39,.42),(1.563,.42),(1.535,-.70),(1.39,-.70)])],
     # Bottom/top rear corner (half-width, y, z); solid stowage inside the rim.
-    'basket':dict(base=(1.59,1.86,-2.96),rim=(1.50,2.22,-3.07),front=-1.895,
+    'basket':dict(outer=1.78,base=(1.59,1.86,-2.96),rim=(1.50,2.22,-3.07),front=-1.895,
                   splits=(-1.,-.49,0.,.51,1.),gap=.014,lid_h=.034,lip=.012,
                   ribs=(.14,.30,.46,.62),rib_span=.255, rib_r=.011,
                   pull_r=.087,pull_bar=.012,catch_w=.071,catch_drop=.058,catch_relief=(.009,.004),
@@ -122,6 +127,7 @@ S = {
                 muzzle_r=.098,bore_r=.060,recess=.12,segments=40,
                 collar=(5.525,5.573,.105),sensor=(.050,.100,5.554),sensor_size=(.066,.052,.083)), # sensor y relative to bore
     # Projected artwork centre and size in surface metres; no decal meshes.
+    'camo_frequency':1.6, # multiplier on the round-three fields (not the stencils or dirt)
     'insignia':dict(side=(-.18,2.295,.236),rear=(.0,1.037,.133),number=(.812,2.31,.184)),
 }
 
@@ -136,6 +142,17 @@ def dims():
 def running_spec():
     kw=S['gear'].copy(); zs=kw.pop('road_z'); y=np.linspace(*kw.pop('hub_y'),len(zs)); r=kw.pop('radius')
     return T.RunningGear(road=tuple((z,float(h),r) for z,h in zip(zs,y)),**kw)
+
+
+def add_guides(gear,rg):
+    guide=S['guide']; road=np.asarray(rg.road)
+    for band in gear['objects']:
+        if not band.name.startswith('band_'): continue
+        side=1 if band.name=='band_l' else -1
+        n=P.link_guides(band,side*rg.track_centre,rg.track_width*guide['web_share'],
+                        (road[:,0].min(),road[:,0].max()),road[:,1].min(),
+                        guide['size'],guide['crown'],gear['trackV'])
+        print(f'GUIDES {band.name}={n}')
 
 
 def _signed(point,s):
@@ -240,15 +257,22 @@ def hull(rg,marks):
         parts.append(T.cbox(_signed(b['marker'],s),b['marker_size'],.01,'steel'))
         for t,axis in ((b,1),(r,-1)):
             parts.append(T.tow_hook(_signed(t['eye'],s),(0,0,axis),t['eye_r'],t['eye_bar']))
-        parts.append(T.cbox(_signed(d['surround'],s),d['surround_size'],.016))
-        parts.append(T.prism(d['cowl_profile'],*sorted(s*v for v in d['cowl_x'])))
+        aft=[T.cbox(_signed(d['surround'],s),d['surround_size'],.016),
+             T.prism(d['cowl_profile'],*sorted(s*v for v in d['cowl_x']))]
+        for i,(x,y,z,w,h,l,n) in enumerate(d['grilles']):
+            (parts if i else aft).append(T.grille((s*x,y,z),(w,h,l),n))
+        # Flatten the entire aft group together, slat peaks included, so the
+        # louvres stay seated and the existing silhouette in plan is untouched.
+        base=d['aft_base']; peak=max(v.co.z for p in aft for v in p.bm.verts)
+        for p in aft:
+            for v in p.bm.verts: v.co.z=base+(v.co.z-base)*(d['aft_top']-base)/(peak-base)
+        parts.extend(aft)
         vent=T.grille((0,0,0),d['vent_size'],d['vent_slats']); matrix=np.eye(4)
         # Mount flush with the sloping shoulder, not a vertical plane through it.
         shelf=np.asarray(S['shelf']); sz=d['vent'][2]; sh=np.interp(sz,shelf[:,0],shelf[:,2]); sw=np.interp(sz,shelf[:,0],shelf[:,3])
         skirt=S['skirt']; up=sh-skirt['rail_y']; run=rg.skirt_outer-skirt['light_depth']*.52-sw; hyp=math.hypot(up,run)
         matrix[:3,:3]=((0,s*up/hyp,-s*run/hyp),(0,run/hyp,up/hyp),(s,0,0)); matrix[:3,3]=_signed(d['vent'],s)
         vent.transform(matrix); parts.append(vent)
-        for x,y,z,w,h,l,n in d['grilles']: parts.append(T.grille((s*x,y,z),(w,h,l),n))
         for c in d['lids']:
             parts.append(T.cbox(_signed(c,s),d['lid_size'],.012)); x,y,z=_signed(c,s)
             parts.append(T.cbox(np.array((x,y,z))+d['latch'],d['latch_size'],.005,'steel'))
@@ -293,9 +317,33 @@ def hull(rg,marks):
     return T.combine('hull_shell',parts+[shoes])
 
 
+def under_skirt():
+    k=S['under_skirt']; a=S['axis']; rear=np.asarray(S['bustle']); cheek_y,cheek=S['cheeks'][0]
+    # Outside lower arrises, read back-to-front. Include the change of slope
+    # where a side module ends, but don't follow the overhanging wedge nose.
+    module_y,module=S['side_module'][0]; q=np.array([cheek[3],cheek[2],cheek[1]])
+    z0,z1=k['aft'],k['front']; shelf=np.asarray(S['shelf'])
+    beam=min(shelf[(shelf[:,0]>=shelf[1,0])&(shelf[:,0]<=k['front']),3])
+    yaw=math.radians(max(map(abs,a['traverse_check'])))
+    zs=sorted({z0,z1,*[z for z in (*rear[:,0],*q[:,1],module[1][1],module[2][1],a['traverse_z']) if z0<z<z1]})
+    stations=[]
+    for z in zs:
+        if z<q[0,1]:
+            x=np.interp(z,rear[:,0],rear[:,3]); y=np.interp(z,rear[:,0],rear[:,1])
+        else:
+            x=np.interp(z,q[:,1],q[:,0]); y=cheek_y
+        if module[2][1]<=z<=module[1][1]:
+            x=max(x,np.interp(z,[module[2][1],module[1][1]],[module[2][0],module[1][0]]))
+            # The module's toe is flat; the shell rises aft of it.
+            y=max(y,module_y)
+        w=min(x-k['inset'],(beam-abs(z-a['traverse_z'])*math.sin(yaw))/math.cos(yaw))
+        stations.append((z,w,y+k['engagement']))
+    return P.under_rim(stations,k['bottom'],k['wall'])
+
+
 def turret(marks):
     b=S['basket']; c=S['crown']; r=S['roof']; a=S['axis']; race=S['race']; sm=S['smoke']
-    parts=[T.loft([(z,[(-lo,y),(lo,y),(hi,h),(-hi,h)]) for z,y,h,lo,hi in S['bustle']]),
+    parts=[under_skirt(),T.loft([(z,[(-lo,y),(lo,y),(hi,h),(-hi,h)]) for z,y,h,lo,hi in S['bustle']]),
            P.ring((0,race['low'],a['traverse_z']),race['r'],race['inner'],race['high']-race['low'],'recess',56)]
     # One crowned bridge, falling shallowly both towards the eaves and towards the bow.
     ribs=[]
@@ -310,7 +358,8 @@ def turret(marks):
     # centre of a projecting bar) are the surveyed rim stations.
     def section(left,right,t,inset=0.):
         width=xb+t*(xt-xb); back=zb+t*(zt-zb)
-        x0=left*width+(gap/2 if left>-1 else 0)+inset; x1=right*width-(gap/2 if right<1 else 0)-inset
+        x0=-b['outer'] if left==-1 else left*width+gap/2+inset
+        x1=b['outer'] if right==1 else right*width-gap/2-inset
         return [(x0,back+inset),(x1,back+inset),(x1,front-inset),(x0,front-inset)]
     t0=1-b['lid_h']/(top-low)
     for i,(left,right) in enumerate(zip(b['splits'],b['splits'][1:])):
@@ -318,7 +367,8 @@ def turret(marks):
         parts.append(P.tiered_plate([(top-b['lid_h'],section(left,right,t0)),(top,section(left,right,1))]))
         def face(u,v):
             w=xb+(xt-xb)*v
-            return np.array([(left+(right-left)*u)*w,low+(top-low)*v,zb+(zt-zb)*v+lip*v-b['rib_r']/2])
+            l=-b['outer'] if left==-1 else left*w; rgt=b['outer'] if right==1 else right*w
+            return np.array([l+(rgt-l)*u,low+(top-low)*v,zb+(zt-zb)*v+lip*v-b['rib_r']/2])
         if i==1:
             for u in b['ribs']: parts.append(P.piping([face(u,.11),face(u+b['rib_span'],.79)],b['rib_r']))
         if i==2:
@@ -331,8 +381,8 @@ def turret(marks):
             T.weld_seam(marks,foot-(b['catch_w']/2,0,0),foot+(b['catch_w']/2,0,0),radius,height)
     for s in (-1,1):
         inner=b['flank_inner']; zf=b['flank_front']
-        parts.append(T.loft([(front,[(s*inner,low),(s*xb,low),(s*xt,top),(s*inner,top)]),
-                             (zf,[(s*inner,b['flank_low']),(s*xb,b['flank_low']),(s*xt,b['flank_high']),(s*inner,b['flank_high'])])]))
+        parts.append(T.loft([(front,[(s*inner,low),(s*b['outer'],low),(s*b['outer'],top),(s*inner,top)]),
+                             (zf,[(s*inner,b['flank_low']),(s*b['outer'],b['flank_low']),(s*b['outer'],b['flank_high']),(s*inner,b['flank_high'])])]))
         rail=S['cheek_rail']; centre=np.array(_signed(rail['hinge'],s)); plate=rail['plate']
         # Floating hinge detail alone reads as a handle. Overlay the actual
         # four-corner end facet, leaving a narrow reveal round its perimeter.

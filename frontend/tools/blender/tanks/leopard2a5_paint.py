@@ -1,4 +1,6 @@
 """One rest-pose Bundeswehr skin; lettering is projected in metres, not UV pixels."""
+from pathlib import Path
+
 import numpy as np
 import bpy
 import tank_atlas as A
@@ -87,6 +89,7 @@ def _maps(tris,raster,ao,names,marks,ppm):
             coord=np.column_stack((.80*q[:,0]+.60*q[:,2],q[:,1],-.60*q[:,0]+.80*q[:,2]))
             # Independent, broad fields with a low-amplitude domain warp. No
             # periodic longitudinal phase, so roof patches can end or branch.
+            coord*=S['camo_frequency']
             warp=_field(coord*.93,grids[2])-.5
             coord=coord*np.array([.88,1.13,.86])+warp[:,None]*np.array([.39,-.27,.31])
             umber=.84*_field(coord,grids[0])+.16*_field(coord*1.85,grids[1])
@@ -109,6 +112,8 @@ def paint(objects,mats,workdir,marks,size=2048):
     ao=JA.occlusion(JA.triangles(objects),low,reach=1.1,rays=16,floor=0.); del low
     ao=JA.blur(JA.resize(ao,size),1); raster=JA.raster(tris,size)
     files=A._save(workdir,'leo_',*_maps(tris,raster,ao,names,marks,ppm))
+    sizes={k:Path(im.filepath_raw).stat().st_size for k,im in files.items()}
+    print('ATLAS_PNG_BYTES',*(f'{k}={v}' for k,v in sizes.items()),f'total={sum(sizes.values())}')
     mat=JA.material('armor',files); mat.diffuse_color=A.K.srgb(GREEN)
     mat.node_tree.nodes.active=next(n for n in mat.node_tree.nodes if getattr(n,'image',None)==files['base'])
     mats.mats['armor']=mat; JA.apply(body,mat,keep=A.KEEP)
