@@ -93,8 +93,11 @@ export function shadowProxies(what: THREE.Object3D, pass: ShadowPass, vsm: boole
       const mat = base.clone() as Source & { isShadowPassMaterial?: boolean };
       mat.isShadowPassMaterial = true;
       // (what three.js has added to the light's material while drawing casters with it, in the same order: a
-      // material's own properties are part of a shader's key; `copy` takes only those a new material has)
-      for (const k of Object.keys(base)) if (!(k in mat)) (mat as unknown as Record<string, unknown>)[k] = (base as unknown as Record<string, unknown>)[k];
+      // material's own properties are part of a shader's key; `copy` takes only those a new material has. Never a
+      // private one, which the key leaves out: `_listeners` shared with the light's material made each stand-in's
+      // `dispose` the light material's, and every caster's shadow render object went with it, the instanced props'
+      // shaders too: 7 built again at every showing at Oboro, 11-20)
+      for (const k of Object.keys(base)) if (!k.startsWith('_') && !(k in mat)) (mat as unknown as Record<string, unknown>)[k] = (base as unknown as Record<string, unknown>)[k];
       // (as `Renderer.renderObject` sets them, in its order)
       Object.assign(mat, { alphaTest: m.alphaTest, alphaMap: m.alphaMap, displacementMap: m.displacementMap, displacementScale: m.displacementScale, displacementBias: m.displacementBias, transparent, side });
       made.push(mat);

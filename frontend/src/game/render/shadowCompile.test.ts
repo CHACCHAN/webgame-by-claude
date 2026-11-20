@@ -110,4 +110,19 @@ describe('the shadow compile stand-ins', () => {
     expect(proxies.root.children).toHaveLength(1);
     proxies.dispose();
   });
+
+  it("disposing the stand-ins leaves the light's material and what is drawn with it alone", () => {
+    const base = lightMaterial();
+    const what = new THREE.Group();
+    const meshes = casters();
+    what.add(...meshes);
+    for (const m of meshes) drawn(m, base);
+    // (each render object a frame draws with the light's material listens for its `dispose`)
+    let gone = 0;
+    base.addEventListener('dispose', () => gone++);
+    const proxies = shadowProxies(what, { material: base, target: new THREE.RenderTarget(1, 1) }, false);
+    for (const proxy of proxies.root.children) expect((proxy as THREE.Mesh).material).not.toHaveProperty('_listeners', (base as unknown as { _listeners: unknown })._listeners);
+    proxies.dispose();
+    expect(gone).toBe(0);
+  });
 });
