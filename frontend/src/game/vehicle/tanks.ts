@@ -448,8 +448,13 @@ const TANKS: TankDef[] = [
       reverseSpeed: 40,
       sound: 'turbine',
       // 9.77 m over the gun (the Army's fact file; 9.83 m elsewhere), hull 7.93 m, 3.66 m wide: the muzzle
-      // 9.77 − 7.93 / 2 = 5.81 m ahead of the middle
-      dims: { hull: [7.93, 3.66, 1.3], turretZ: 0.3, ringY: 1.85, barrel: 3.72, trunnion: 0.35, trunnionZ: 1.79, turret: [5.6, 3.7, 0.8] },
+      // 9.77 − 7.93 / 2 = 5.81 m ahead of the middle; the bore axis 1.97 m above the ground (not published: measured on
+      // five photographs through their solved cameras, docs/TANK_FIGURES.md), so the trunnions 0.12 m above the ring;
+      // the gunner's sight head is the window of the model's primary sight (GPS) on the roof right of the gun, 0.46 m
+      // above and 0.73 m right of the bore (triangulated on two photos; the fire control converges the gun on its line)
+      dims: { hull: [7.93, 3.66, 1.3], turretZ: 0.3, ringY: 1.85, barrel: 3.72, trunnion: 0.12, trunnionZ: 1.79, turret: [5.6, 3.7, 0.8], sight: [-0.73, 0.58, 0.73] },
+      // our model's track: metres per texture repeat along the band (m1a2.py prints TRACKV)
+      trackV: 1.536,
       camo: ['#b9a47a', '#a8936a'],
       figures: { engine: 'Honeywell AGT1500 ガスタービン', power: '1,500 shp', weight: '66.8 t', topSpeed: 67, crew: 4, transmission: 'Allison X1100-3B（前進4段・後進2段）' },
       estimated: ['変速比', '後進速度', '砲弾初速（M829A3の値）', '装填時間', '俯仰速度', '超信地旋回の速さ'],

@@ -1,0 +1,545 @@
+{
+ "_note": "Photographs from Wikimedia Commons (Category:M1A2 SEP V3 Abrams in United States service), used for measuring only: never in the repository, never pixels in a texture. The five marked fit=true carry the solved cameras (fit/ba.json) and the hand masks (masks/, handmask.json).",
+ "photos": [
+  {
+   "file": "p01.jpg",
+   "title": "File:1-66 AR Tanks Roll Through Iron Wolf (7486907).jpg",
+   "author": "U.S. Army National Guard photo by Spc. Casandra Ancheta",
+   "licence": "Public domain",
+   "url": "https://commons.wikimedia.org/wiki/File:1-66_AR_Tanks_Roll_Through_Iron_Wolf_(7486907).jpg",
+   "date": "Taken on 23 October 2022",
+   "fit": false
+  },
+  {
+   "file": "p02.jpg",
+   "title": "File:1-8th Cavalry Spur Ride (7899836).jpg",
+   "author": "U.S. Army National Guard photo by Staff Sgt. Cesar Rivas",
+   "licence": "Public domain",
+   "url": "https://commons.wikimedia.org/wiki/File:1-8th_Cavalry_Spur_Ride_(7899836).jpg",
+   "date": "Taken on 6 July 2023",
+   "fit": false
+  },
+  {
+   "file": "p03.jpg",
+   "title": "File:18th MP Brigade Installs ARAT Tiles (6278418).jpg",
+   "author": "U.S. Army USArmyEURAF by Sgt. Evan Ruchotzke",
+   "licence": "Public domain",
+   "url": "https://commons.wikimedia.org/wiki/File:18th_MP_Brigade_Installs_ARAT_Tiles_(6278418).jpg",
+   "date": "Taken on 10 July 2020",
+   "fit": false
+  },
+  {
+   "file": "p04.jpg",
+   "title": "File:18th MP Brigade Installs ARAT Tiles (6278420).jpg",
+   "author": "U.S. Army USArmyEURAF by Sgt. Evan Ruchotzke",
+   "licence": "Public domain",
+   "url": "https://commons.wikimedia.org/wiki/File:18th_MP_Brigade_Installs_ARAT_Tiles_(6278420).jpg",
+   "date": "Taken on 10 July 2020",
+   "fit": false
+  },
+  {
+   "file": "p05.jpg",
+   "title": "File:18th MP Brigade Installs ARAT Tiles (6278421).jpg",
+   "author": "U.S. Army photo by Sgt. Evan Ruchotzke",
+   "licence": "Public domain",
+   "url": "https://commons.wikimedia.org/wiki/File:18th_MP_Brigade_Installs_ARAT_Tiles_(6278421).jpg",
+   "date": "Taken on 10 July 2020",
+   "fit": false
+  },
+  {
+   "file": "p06.jpg",
+   "title": "File:2ndABCT,1ADsnap.jpeg",
+   "author": "",
+   "licence": "Public domain",
+   "url": "https://commons.wikimedia.org/wiki/File:2ndABCT,1ADsnap.jpeg",
+   "date": "",
+   "fit": false
+  },
+  {
+   "file": "p07.jpg",
+   "title": "File:Arrow 23 (7780441).jpg",
+   "author": "U.S. Army 2BCT-1CD by Spc. Jacob Nunnenkamp",
+   "licence": "Public domain",
+   "url": "https://commons.wikimedia.org/wiki/File:Arrow_23_(7780441).jpg",
+   "date": "Taken on 5 May 2023",
+   "fit": false
+  },
+  {
+   "file": "p08.jpg",
+   "title": "File:Arrow 23 (7780444).jpg",
+   "author": "U.S. Army 2BCT-1CD by Spc. Jacob Nunnenkamp",
+   "licence": "Public domain",
+   "url": "https://commons.wikimedia.org/wiki/File:Arrow_23_(7780444).jpg",
+   "date": "Taken on 5 May 2023",
+   "fit": false
+  },
+  {
+   "file": "p09.jpg",
+   "title": "File:Arrow 23 (7780445).jpg",
+   "author": "U.S. Army 2BCT-1CD by Spc. Jacob Nunnenkamp",
+   "licence": "Public domain",
+   "url": "https://commons.wikimedia.org/wiki/File:Arrow_23_(7780445).jpg",
+   "date": "Taken on 5 May 2023",
+   "fit": false
+  },
+  {
+   "file": "p10.jpg",
+   "title": "File:Arrow 23 (7780458).jpg",
+   "author": "U.S. Army 2BCT-1CD by Spc. Jacob Nunnenkamp",
+   "licence": "Public domain",
+   "url": "https://commons.wikimedia.org/wiki/File:Arrow_23_(7780458).jpg",
+   "date": "Taken on 5 May 2023",
+   "fit": false
+  },
+  {
+   "file": "p11.jpg",
+   "title": "File:Arrow 23 (7780468).jpg",
+   "author": "U.S. Army 2BCT-1CD by Spc. Jacob Nunnenkamp",
+   "licence": "Public domain",
+   "url": "https://commons.wikimedia.org/wiki/File:Arrow_23_(7780468).jpg",
+   "date": "Taken on 5 May 2023",
+   "fit": false
+  },
+  {
+   "file": "p12.jpg",
+   "title": "File:BRIGHT STAR 25- CALFEX (9316128).jpg",
+   "author": "U.S. Army USARCENT by Joseph Kumzak",
+   "licence": "Public domain",
+   "url": "https://commons.wikimedia.org/wiki/File:BRIGHT_STAR_25-_CALFEX_(9316128).jpg",
+   "date": "Taken on 8 September 2025",
+   "fit": false
+  },
+  {
+   "file": "p13.jpg",
+   "title": "File:BRIGHT STAR 25- CALFEX (9316147).jpg",
+   "author": "U.S. Army USARCENT by Joseph Kumzak",
+   "licence": "Public domain",
+   "url": "https://commons.wikimedia.org/wiki/File:BRIGHT_STAR_25-_CALFEX_(9316147).jpg",
+   "date": "Taken on 9 September 2025",
+   "fit": false
+  },
+  {
+   "file": "p14.jpg",
+   "title": "File:BRIGHT STAR 25- Range maneuvers (9293781).jpg",
+   "author": "U.S. Army USARCENT by Joseph Kumzak",
+   "licence": "Public domain",
+   "url": "https://commons.wikimedia.org/wiki/File:BRIGHT_STAR_25-_Range_maneuvers_(9293781).jpg",
+   "date": "Taken on 2 September 2025",
+   "fit": false
+  },
+  {
+   "file": "p15.jpg",
+   "title": "File:BRIGHT STAR 25- Range maneuvers (9293838).jpg",
+   "author": "U.S. Army USARCENT by Joseph Kumzak",
+   "licence": "Public domain",
+   "url": "https://commons.wikimedia.org/wiki/File:BRIGHT_STAR_25-_Range_maneuvers_(9293838).jpg",
+   "date": "Taken on 2 September 2025",
+   "fit": false
+  },
+  {
+   "file": "p16.jpg",
+   "title": "File:BRIGHT STAR 25- Task Force Reaper live fire training (9293476).jpg",
+   "author": "U.S. Army USARCENT by Joseph Kumzak",
+   "licence": "Public domain",
+   "url": "https://commons.wikimedia.org/wiki/File:BRIGHT_STAR_25-_Task_Force_Reaper_live_fire_training_(9293476).jpg",
+   "date": "Taken on 1 September 2025",
+   "fit": false
+  },
+  {
+   "file": "p17.jpg",
+   "title": "File:BRIGHT STAR 25- Task Force Reaper live fire training (9293481).jpg",
+   "author": "U.S. Army USARCENT by Joseph Kumzak",
+   "licence": "Public domain",
+   "url": "https://commons.wikimedia.org/wiki/File:BRIGHT_STAR_25-_Task_Force_Reaper_live_fire_training_(9293481).jpg",
+   "date": "Taken on 1 September 2025",
+   "fit": false
+  },
+  {
+   "file": "p18.jpg",
+   "title": "File:Cav. M1A2 SEPv3.jpg",
+   "author": "U.S. Army",
+   "licence": "Public domain",
+   "url": "https://commons.wikimedia.org/wiki/File:Cav._M1A2_SEPv3.jpg",
+   "date": "2019-05-20",
+   "fit": true
+  },
+  {
+   "file": "p19.jpg",
+   "title": "File:Defender Europe Multi-National LFX DPTA 22 (7218385).jpg",
+   "author": "U.S. Army photo by Capt. Tobias Cukale",
+   "licence": "Public domain",
+   "url": "https://commons.wikimedia.org/wiki/File:Defender_Europe_Multi-National_LFX_DPTA_22_(7218385).jpg",
+   "date": "Taken on 18 May 2022",
+   "fit": false
+  },
+  {
+   "file": "p20.jpg",
+   "title": "File:Joint live-fire exercise in Poland enhances U.S. and NATO alliance readiness 250625-Z-CL644-4224.jpg",
+   "author": "Staff Sgt. Christopher Saunders",
+   "licence": "Public domain",
+   "url": "https://commons.wikimedia.org/wiki/File:Joint_live-fire_exercise_in_Poland_enhances_U.S._and_NATO_alliance_readiness_250625-Z-CL644-4224.jpg",
+   "date": "2025-06-25",
+   "fit": false
+  },
+  {
+   "file": "p21.jpg",
+   "title": "File:Joint live-fire exercise in Poland enhances U.S. and NATO alliance readiness 250625-Z-CL644-4374.jpg",
+   "author": "Staff Sgt. Christopher Saunders",
+   "licence": "Public domain",
+   "url": "https://commons.wikimedia.org/wiki/File:Joint_live-fire_exercise_in_Poland_enhances_U.S._and_NATO_alliance_readiness_250625-Z-CL644-4374.jpg",
+   "date": "2025-06-25",
+   "fit": false
+  },
+  {
+   "file": "p22.jpg",
+   "title": "File:Karelian Lock 23 (7832516).jpg",
+   "author": "U.S. Army 2BCT-1CD by Spc. Jacob Nunnenkamp",
+   "licence": "Public domain",
+   "url": "https://commons.wikimedia.org/wiki/File:Karelian_Lock_23_(7832516).jpg",
+   "date": "Taken on 1 June 2023",
+   "fit": false
+  },
+  {
+   "file": "p23.jpg",
+   "title": "File:Karelian Lock 23 (7832517).jpg",
+   "author": "U.S. Army 2BCT-1CD by Spc. Jacob Nunnenkamp",
+   "licence": "Public domain",
+   "url": "https://commons.wikimedia.org/wiki/File:Karelian_Lock_23_(7832517).jpg",
+   "date": "Taken on 1 June 2023",
+   "fit": false
+  },
+  {
+   "file": "p24.jpg",
+   "title": "File:Karelian Lock 23 (7832519).jpg",
+   "author": "U.S. Army 2BCT-1CD by Spc. Jacob Nunnenkamp",
+   "licence": "Public domain",
+   "url": "https://commons.wikimedia.org/wiki/File:Karelian_Lock_23_(7832519).jpg",
+   "date": "Taken on 1 June 2023",
+   "fit": false
+  },
+  {
+   "file": "p25.jpg",
+   "title": "File:Karelian Lock 23 (7832529).jpg",
+   "author": "U.S. Army 2BCT-1CD by Spc. Jacob Nunnenkamp",
+   "licence": "Public domain",
+   "url": "https://commons.wikimedia.org/wiki/File:Karelian_Lock_23_(7832529).jpg",
+   "date": "Taken on 1 June 2023",
+   "fit": false
+  },
+  {
+   "file": "p26.jpg",
+   "title": "File:M1A2 Abrams firing.jpg",
+   "author": "Sgt. Joaquin Vasquez-Duran",
+   "licence": "Public domain",
+   "url": "https://commons.wikimedia.org/wiki/File:M1A2_Abrams_firing.jpg",
+   "date": "2023-08-16 07:48:28",
+   "fit": false
+  },
+  {
+   "file": "p27.jpg",
+   "title": "File:M1A2 SEP V3 Abrams - 200721-A-BT735-029.jpg",
+   "author": "Sgt. Calab Franklin",
+   "licence": "Public domain",
+   "url": "https://commons.wikimedia.org/wiki/File:M1A2_SEP_V3_Abrams_-_200721-A-BT735-029.jpg",
+   "date": "2020-07-20 20:00:00",
+   "fit": false
+  },
+  {
+   "file": "p28.jpg",
+   "title": "File:M1A2 SEP V3 Abrams - 200721-A-BT735-120.jpg",
+   "author": "Sgt. Calab Franklin",
+   "licence": "Public domain",
+   "url": "https://commons.wikimedia.org/wiki/File:M1A2_SEP_V3_Abrams_-_200721-A-BT735-120.jpg",
+   "date": "2020-07-20 20:00:00",
+   "fit": false
+  },
+  {
+   "file": "p29.jpg",
+   "title": "File:M1A2 SEP V3 Abrams - 200721-A-BT735-211.jpg",
+   "author": "Sgt. Calab Franklin",
+   "licence": "Public domain",
+   "url": "https://commons.wikimedia.org/wiki/File:M1A2_SEP_V3_Abrams_-_200721-A-BT735-211.jpg",
+   "date": "2020-07-20 20:00:00",
+   "fit": true
+  },
+  {
+   "file": "p30.jpg",
+   "title": "File:M1A2 SEP V3 Abrams - 200721-A-BT735-349.jpg",
+   "author": "Sgt. Calab Franklin",
+   "licence": "Public domain",
+   "url": "https://commons.wikimedia.org/wiki/File:M1A2_SEP_V3_Abrams_-_200721-A-BT735-349.jpg",
+   "date": "2020-07-20 20:00:00",
+   "fit": true
+  },
+  {
+   "file": "p31.jpg",
+   "title": "File:M1A2 SEP V3 Abrams - 200721-A-BT735-440.jpg",
+   "author": "Sgt. Calab Franklin",
+   "licence": "Public domain",
+   "url": "https://commons.wikimedia.org/wiki/File:M1A2_SEP_V3_Abrams_-_200721-A-BT735-440.jpg",
+   "date": "2020-07-20 20:00:00",
+   "fit": false
+  },
+  {
+   "file": "p32.jpg",
+   "title": "File:M1A2 SEP V3 Abrams - 200721-A-BT735-537.jpg",
+   "author": "Sgt. Calab Franklin",
+   "licence": "Public domain",
+   "url": "https://commons.wikimedia.org/wiki/File:M1A2_SEP_V3_Abrams_-_200721-A-BT735-537.jpg",
+   "date": "2020-07-20 20:00:00",
+   "fit": false
+  },
+  {
+   "file": "p33.jpg",
+   "title": "File:M1A2 SEP V3 Abrams - 200721-A-BT735-917.jpg",
+   "author": "Sgt. Calab Franklin",
+   "licence": "Public domain",
+   "url": "https://commons.wikimedia.org/wiki/File:M1A2_SEP_V3_Abrams_-_200721-A-BT735-917.jpg",
+   "date": "2020-07-20 20:00:00",
+   "fit": false
+  },
+  {
+   "file": "p34.jpg",
+   "title": "File:M1A2 SEP V3 Abrams.jpg",
+   "author": "Sgt. Calab Franklin",
+   "licence": "Public domain",
+   "url": "https://commons.wikimedia.org/wiki/File:M1A2_SEP_V3_Abrams.jpg",
+   "date": "2020-08-17 20:00:00",
+   "fit": false
+  },
+  {
+   "file": "p35.jpg",
+   "title": "File:M1A2 Sep v3.jpg",
+   "author": "Sgt. James Dunn",
+   "licence": "Public domain",
+   "url": "https://commons.wikimedia.org/wiki/File:M1A2_Sep_v3.jpg",
+   "date": "2022-02-17",
+   "fit": true
+  },
+  {
+   "file": "p36.jpg",
+   "title": "File:M1A2 SEP v3.jpg",
+   "author": "Spc. Kali Ecton",
+   "licence": "Public domain",
+   "url": "https://commons.wikimedia.org/wiki/File:M1A2_SEP_v3.jpg",
+   "date": "2024-07-12",
+   "fit": true
+  },
+  {
+   "file": "p37.jpg",
+   "title": "File:M1A2 SEPv3 Abrams tanks arrive in CENTCOM (8732126).jpg",
+   "author": "U.S. Army photo by Sgt. Richard Cole",
+   "licence": "Public domain",
+   "url": "https://commons.wikimedia.org/wiki/File:M1A2_SEPv3_Abrams_tanks_arrive_in_CENTCOM_(8732126).jpg",
+   "date": "Taken on 26 October 2024",
+   "fit": false
+  },
+  {
+   "file": "p38.jpg",
+   "title": "File:M1A2 SEPv3 Abrams tanks arrive in CENTCOM (8732127).jpg",
+   "author": "U.S. Army USARCENT by Sgt. Richard Cole",
+   "licence": "Public domain",
+   "url": "https://commons.wikimedia.org/wiki/File:M1A2_SEPv3_Abrams_tanks_arrive_in_CENTCOM_(8732127).jpg",
+   "date": "Taken on 26 October 2024",
+   "fit": false
+  },
+  {
+   "file": "p39.jpg",
+   "title": "File:M1A2 SEPv3 Abrams tanks arrive in CENTCOM (8732128).jpg",
+   "author": "U.S. Army photo by Sgt. Richard Cole",
+   "licence": "Public domain",
+   "url": "https://commons.wikimedia.org/wiki/File:M1A2_SEPv3_Abrams_tanks_arrive_in_CENTCOM_(8732128).jpg",
+   "date": "Taken on 27 October 2024",
+   "fit": false
+  },
+  {
+   "file": "p40.jpg",
+   "title": "File:M1A2 SEPv3 Abrams tanks arrive in CENTCOM (8732129).jpg",
+   "author": "U.S. Army photo by Sgt. Richard Cole",
+   "licence": "Public domain",
+   "url": "https://commons.wikimedia.org/wiki/File:M1A2_SEPv3_Abrams_tanks_arrive_in_CENTCOM_(8732129).jpg",
+   "date": "Taken on 27 October 2024",
+   "fit": false
+  },
+  {
+   "file": "p41.jpg",
+   "title": "File:M1A2 SEPv3 Abrams tanks arrive in CENTCOM (8732130).jpg",
+   "author": "U.S. Army photo by Sgt. Richard Cole",
+   "licence": "Public domain",
+   "url": "https://commons.wikimedia.org/wiki/File:M1A2_SEPv3_Abrams_tanks_arrive_in_CENTCOM_(8732130).jpg",
+   "date": "Taken on 27 October 2024",
+   "fit": false
+  },
+  {
+   "file": "p42.jpg",
+   "title": "File:M1A2 SEPv3 Abrams tanks arrive in CENTCOM (8732131).jpg",
+   "author": "U.S. Army photo by Sgt. Richard Cole",
+   "licence": "Public domain",
+   "url": "https://commons.wikimedia.org/wiki/File:M1A2_SEPv3_Abrams_tanks_arrive_in_CENTCOM_(8732131).jpg",
+   "date": "Taken on 27 October 2024",
+   "fit": false
+  },
+  {
+   "file": "p43.jpg",
+   "title": "File:M1A2 SEPv3 Abrams tanks arrive in CENTCOM (8732132).jpg",
+   "author": "U.S. Army photo by Sgt. Richard Cole",
+   "licence": "Public domain",
+   "url": "https://commons.wikimedia.org/wiki/File:M1A2_SEPv3_Abrams_tanks_arrive_in_CENTCOM_(8732132).jpg",
+   "date": "Taken on 27 October 2024",
+   "fit": false
+  },
+  {
+   "file": "p44.jpg",
+   "title": "File:M1a2sepv3.jpg",
+   "author": "Levo1Desno2",
+   "licence": "CC BY-SA 4.0",
+   "url": "https://commons.wikimedia.org/wiki/File:M1a2sepv3.jpg",
+   "date": "2021-07-15",
+   "fit": false
+  },
+  {
+   "file": "p45.jpg",
+   "title": "File:NATO Multinational Battle Group soldiers prepare their equipment for a road march.jpg",
+   "author": "Staff Sgt. Christopher Saunders",
+   "licence": "Public domain",
+   "url": "https://commons.wikimedia.org/wiki/File:NATO_Multinational_Battle_Group_soldiers_prepare_their_equipment_for_a_road_march.jpg",
+   "date": "02.24.2025",
+   "fit": false
+  },
+  {
+   "file": "p46.jpg",
+   "title": "File:Preparing for Arrow 23 (7764893).jpg",
+   "author": "U.S. Army 2BCT-1CD by Spc. Jacob Nunnenkamp",
+   "licence": "Public domain",
+   "url": "https://commons.wikimedia.org/wiki/File:Preparing_for_Arrow_23_(7764893).jpg",
+   "date": "Taken on 27 April 2023",
+   "fit": false
+  },
+  {
+   "file": "p47.jpg",
+   "title": "File:Preparing for Arrow 23 (7764981).jpg",
+   "author": "U.S. Army 2BCT-1CD by Capt. Christopher Buys",
+   "licence": "Public domain",
+   "url": "https://commons.wikimedia.org/wiki/File:Preparing_for_Arrow_23_(7764981).jpg",
+   "date": "Taken on 27 April 2023",
+   "fit": false
+  },
+  {
+   "file": "p48.jpg",
+   "title": "File:Preparing for Arrow 23 (7769635).jpg",
+   "author": "U.S. Army 2BCT-1CD by Spc. Jacob Nunnenkamp",
+   "licence": "Public domain",
+   "url": "https://commons.wikimedia.org/wiki/File:Preparing_for_Arrow_23_(7769635).jpg",
+   "date": "Taken on 29 April 2023",
+   "fit": false
+  },
+  {
+   "file": "p49.jpg",
+   "title": "File:Preparing for Arrow 23 (7769636).jpg",
+   "author": "U.S. Army 2BCT-1CD by Spc. Jacob Nunnenkamp",
+   "licence": "Public domain",
+   "url": "https://commons.wikimedia.org/wiki/File:Preparing_for_Arrow_23_(7769636).jpg",
+   "date": "Taken on 29 April 2023",
+   "fit": false
+  },
+  {
+   "file": "p50.jpg",
+   "title": "File:Preparing for Arrow 23 (7769637).jpg",
+   "author": "U.S. Army 2BCT-1CD by Spc. Jacob Nunnenkamp",
+   "licence": "Public domain",
+   "url": "https://commons.wikimedia.org/wiki/File:Preparing_for_Arrow_23_(7769637).jpg",
+   "date": "Taken on 29 April 2023",
+   "fit": false
+  },
+  {
+   "file": "p51.jpg",
+   "title": "File:Preparing for Arrow 23 (7769690).jpg",
+   "author": "U.S. Army 2BCT-1CD by Spc. Jacob Nunnenkamp",
+   "licence": "Public domain",
+   "url": "https://commons.wikimedia.org/wiki/File:Preparing_for_Arrow_23_(7769690).jpg",
+   "date": "Taken on 29 April 2023",
+   "fit": false
+  },
+  {
+   "file": "p52.jpg",
+   "title": "File:Preparing for Arrow 23 (7769693).jpg",
+   "author": "U.S. Army 2BCT-1CD by Spc. Jacob Nunnenkamp",
+   "licence": "Public domain",
+   "url": "https://commons.wikimedia.org/wiki/File:Preparing_for_Arrow_23_(7769693).jpg",
+   "date": "Taken on 29 April 2023",
+   "fit": false
+  },
+  {
+   "file": "p53.jpg",
+   "title": "File:Preparing for Arrow 23 (7769694).jpg",
+   "author": "U.S. Army 2BCT-1CD by Spc. Jacob Nunnenkamp",
+   "licence": "Public domain",
+   "url": "https://commons.wikimedia.org/wiki/File:Preparing_for_Arrow_23_(7769694).jpg",
+   "date": "Taken on 29 April 2023",
+   "fit": false
+  },
+  {
+   "file": "p54.jpg",
+   "title": "File:Preparing for Arrow 23 (7769695).jpg",
+   "author": "U.S. Army 2BCT-1CD by Spc. Jacob Nunnenkamp",
+   "licence": "Public domain",
+   "url": "https://commons.wikimedia.org/wiki/File:Preparing_for_Arrow_23_(7769695).jpg",
+   "date": "Taken on 29 April 2023",
+   "fit": false
+  },
+  {
+   "file": "p55.jpg",
+   "title": "File:Road march conducted during the Emergency Deployment Readiness Exercise.jpg",
+   "author": "Staff Sgt. Christopher Saunders",
+   "licence": "Public domain",
+   "url": "https://commons.wikimedia.org/wiki/File:Road_march_conducted_during_the_Emergency_Deployment_Readiness_Exercise.jpg",
+   "date": "02.24.2025",
+   "fit": false
+  },
+  {
+   "file": "p56.jpg",
+   "title": "File:Soldiers Train at Hohenfels 180122-A-FI259-1041.jpg",
+   "author": "Staff Sgt. Matthew Keeler",
+   "licence": "Public domain",
+   "url": "https://commons.wikimedia.org/wiki/File:Soldiers_Train_at_Hohenfels_180122-A-FI259-1041.jpg",
+   "date": "2018-01-22",
+   "fit": false
+  },
+  {
+   "file": "p57.jpg",
+   "title": "File:Tank warfare demonstration features U S Army in Poland (9180735).jpg",
+   "author": "U.S. Army photo by Sgt. Trevor Wilson",
+   "licence": "Public domain",
+   "url": "https://commons.wikimedia.org/wiki/File:Tank_warfare_demonstration_features_U_S_Army_in_Poland_(9180735).jpg",
+   "date": "Taken on 11 July 2025",
+   "fit": false
+  },
+  {
+   "file": "p58.jpg",
+   "title": "File:U.S. Army Units Host Abrams Logistical Summit in Drawsko Pomorskie - 221026-Z-OV580-1015.jpg",
+   "author": "Kevin Brown",
+   "licence": "Public domain",
+   "url": "https://commons.wikimedia.org/wiki/File:U.S._Army_Units_Host_Abrams_Logistical_Summit_in_Drawsko_Pomorskie_-_221026-Z-OV580-1015.jpg",
+   "date": "2022-10-25 20:00:00",
+   "fit": false
+  },
+  {
+   "file": "p59.jpg",
+   "title": "File:U.S. Army Units Host Abrams Logistical Summit in Drawsko Pomorskie - 221026-Z-OV580-1106.jpg",
+   "author": "Kevin Brown",
+   "licence": "Public domain",
+   "url": "https://commons.wikimedia.org/wiki/File:U.S._Army_Units_Host_Abrams_Logistical_Summit_in_Drawsko_Pomorskie_-_221026-Z-OV580-1106.jpg",
+   "date": "2022-10-25 20:00:00",
+   "fit": false
+  },
+  {
+   "file": "p60.jpg",
+   "title": "File:U.S. Army Units Host Abrams Logistical Summit in Drawsko Pomorskie - 221027-Z-OV580-1162.jpg",
+   "author": "Kevin Brown",
+   "licence": "Public domain",
+   "url": "https://commons.wikimedia.org/wiki/File:U.S._Army_Units_Host_Abrams_Logistical_Summit_in_Drawsko_Pomorskie_-_221027-Z-OV580-1162.jpg",
+   "date": "2022-10-26 20:00:00",
+   "fit": false
+  }
+ ]
+}
