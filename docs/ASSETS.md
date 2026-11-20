@@ -215,6 +215,21 @@ Markings invented (00-0000 numbers, no unit marks, no tyre brand). 54,100 triang
 wheels one skinned mesh: `mergeSpins` in `TankModel.ts`), 0.93 MB. Until the owner has seen its sheet it is in the
 branch only.
 
+The **Leopard 2A5** (`models/tanks/leopard2a5.glb`, 2026-11-20, not yet in the game: behind the release switch `tanks`,
+and the owner sees its sheet first) is our own model of the Bundeswehr build on the shared tank kit (`tank_kit.py`,
+`tank_atlas.py`, `tank_scene.py`, as for the 10式) with its own scripts: `leopard2a5.py` (assembly, pose check, contract),
+`leopard2a5_shape.py` (every station in one dict), `leopard2a5_parts.py` (hull, the arrowhead add-on armour, turret,
+bustle basket, sight heads, dischargers, lamps, track guides) and `leopard2a5_paint.py` (one 2048 px atlas painted by
+the script: our own three-tone NATO pattern (bronze green, leather brown, tar black) as one warped field, traced from no
+vehicle; panel lines, light weathering; the national cross and an invented turret number, 241; no unit marks). Built with
+`BLENDER=<bin> node tools/blender-models.cjs tanks leopard2a5`. Written by the modeller gpt-6.2-astra (via Mistral
+Vibe), driven and checked by Claude. Shape from the published figures (3.76 m wide, 3.03 m to the PERI top, seven road
+wheels a side, 120 mm L/44) and nineteen photographs from Wikimedia Commons (CC BY, CC BY-SA, CC0, public domain;
+authors in `tools/blender/tanks/fitdata/leopard2a5/ref/list.json`), measured only and not in the repository; four of
+them carry the fit (cameras solved from points read off them, `fitdata/leopard2a5/fit/ba.json`; masks from hand hints
+only, `handmask.json`; the gate `fitdata/tools/gate.py`: mean IoU 0.920). 52,282 triangles, 10 draw calls in the
+game, 1.45 MB.
+
 ### Vegetation and rocks (own, Blender; 2026-11-11)
 Trees, bushes, undergrowth and rocks are our own too: Python scripts in `frontend/tools/blender/nature/` grow each
 plant from a recipe (`nature_kit.py`), model its twigs needle by needle and leaf by leaf (`twigs.py`), make its bark
