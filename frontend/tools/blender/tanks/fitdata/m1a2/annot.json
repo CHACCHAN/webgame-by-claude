@@ -1,0 +1,430 @@
+{
+ "_note": "M1A2 SEPv3: points read off the 1920-px Commons thumbnails (photos: ref/list.json, not in the repository) with tile crosses (gv.py pattern); ../tools/ba.py -> fit/ba.json. Game frame, x = left. rwN = hub cap centre of the OUTER half of road wheel N (1 = front); hl = round headlamp lens; tow = front tow-eye pin head; cFT / cFB = turret cheek front face's top / bottom OUTER corner; muz = muzzle face centre; evF / evR = bore evacuator, middle of its front / rear taper on the axis. f_exif from EXIF focal length x sensor (crops scaled). p18 f_exif is not from EXIF (the photo has none): the focal of the settled solve, held softly so that a joint re-solve cannot slide it. p29 rw*_l are the outer rims centres (lower edge minus the wheel radius in pixels).",
+ "_points": {
+  "rw1": [
+   1.7,
+   0.43,
+   2.45
+  ],
+  "rw2": [
+   1.7,
+   0.43,
+   1.62
+  ],
+  "rw3": [
+   1.7,
+   0.43,
+   0.85
+  ],
+  "rw4": [
+   1.7,
+   0.43,
+   0.08
+  ],
+  "rw5": [
+   1.7,
+   0.43,
+   -0.68
+  ],
+  "rw6": [
+   1.7,
+   0.43,
+   -1.44
+  ],
+  "rw7": [
+   1.7,
+   0.43,
+   -2.2
+  ],
+  "hl": [
+   1.25,
+   1.2,
+   3.8
+  ],
+  "tow": [
+   0.85,
+   0.75,
+   3.9
+  ],
+  "muz": [
+   0.0,
+   2.2,
+   5.81
+  ],
+  "evF": [
+   0.0,
+   2.2,
+   3.95
+  ],
+  "evR": [
+   0.0,
+   2.2,
+   3.2
+  ],
+  "rr": [
+   1.5,
+   1.5,
+   -4.0
+  ]
+ },
+ "_frames": {
+  "muz": "gun",
+  "evF": "gun",
+  "evR": "gun",
+  "rr": "hull"
+ },
+ "_prior": {
+  "rw1.x": [
+   1.7,
+   0.05
+  ],
+  "rw4.x": [
+   1.7,
+   0.05
+  ],
+  "rw7.x": [
+   1.7,
+   0.05
+  ],
+  "rw1.y": [
+   0.42,
+   0.04
+  ],
+  "rw4.y": [
+   0.42,
+   0.04
+  ],
+  "rw7.y": [
+   0.42,
+   0.04
+  ]
+ },
+ "_axis": {
+  "tz": [
+   0.3,
+   0.5
+  ],
+  "gy": [
+   2.2,
+   0.2
+  ],
+  "gz": [
+   2.1,
+   0.5
+  ]
+ },
+ "p18": {
+  "size": [
+   1920,
+   868
+  ],
+  "sigma": 2.5,
+  "psi": [
+   0,
+   3
+  ],
+  "theta": [
+   0,
+   3
+  ],
+  "pts": {
+   "rw7_r": [
+    300,
+    670
+   ],
+   "rw6_r": [
+    433,
+    674
+   ],
+   "rw4_r": [
+    706,
+    678
+   ],
+   "rw1_r": [
+    1166,
+    708
+   ],
+   "evR_c": [
+    1447,
+    430
+   ],
+   "evF_c": [
+    1563,
+    432
+   ],
+   "muz_c": [
+    1883,
+    452
+   ],
+   "rw5_r": [
+    572,
+    675
+   ],
+   "rr_r": [
+    45,
+    440
+   ]
+  },
+  "cam_init": [
+   -40,
+   1.5,
+   0.5,
+   90,
+   0,
+   0,
+   9000
+  ],
+  "cam_prior": {
+   "y": [
+    1.5,
+    0.4
+   ],
+   "pitch": [
+    0,
+    3
+   ],
+   "roll": [
+    0,
+    3
+   ]
+  },
+  "f_exif": 6684,
+  "f_sig": 0.05
+ },
+ "p29": {
+  "size": [
+   1920,
+   1280
+  ],
+  "sigma": 2.5,
+  "psi": [
+   0,
+   3
+  ],
+  "theta": [
+   0,
+   3
+  ],
+  "f_exif": 6560,
+  "f_sig": 0.04,
+  "pts": {
+   "hl_r": [
+    340,
+    914
+   ],
+   "hl_l": [
+    838,
+    910
+   ],
+   "tow_r": [
+    367,
+    1095
+   ],
+   "tow_l": [
+    882,
+    1095
+   ],
+   "muz_c": [
+    473,
+    637
+   ],
+   "rw1_l": [
+    1168,
+    1123
+   ],
+   "rw4_l": [
+    1242,
+    1110
+   ],
+   "rw6_l": [
+    1287,
+    1099
+   ]
+  },
+  "cam_prior": {
+   "y": [
+    1.6,
+    0.4
+   ]
+  }
+ },
+ "p30": {
+  "size": [
+   1920,
+   1280
+  ],
+  "sigma": 2.5,
+  "psi": [
+   0,
+   3
+  ],
+  "theta": [
+   0,
+   3
+  ],
+  "f_exif": 10667,
+  "f_sig": 0.04,
+  "pts": {
+   "rw1_l": [
+    1124,
+    1026
+   ],
+   "rw2_l": [
+    1219,
+    1025
+   ],
+   "rw4_l": [
+    1368,
+    1023
+   ],
+   "rw5_l": [
+    1437,
+    1021
+   ],
+   "rw6_l": [
+    1503,
+    1020
+   ],
+   "rw7_l": [
+    1573,
+    1018
+   ],
+   "hl_l": [
+    803,
+    860
+   ],
+   "hl_r": [
+    477,
+    862
+   ],
+   "muz_c": [
+    444,
+    683
+   ],
+   "rr_l": [
+    1738,
+    786
+   ]
+  }
+ },
+ "p35": {
+  "size": [
+   1920,
+   1360
+  ],
+  "sigma": 2.5,
+  "psi": [
+   0,
+   3
+  ],
+  "theta": [
+   0,
+   3
+  ],
+  "f_exif": 9317,
+  "f_sig": 0.06,
+  "pts": {
+   "rw4_r": [
+    38,
+    1071
+   ],
+   "rw3_r": [
+    181,
+    1087
+   ],
+   "rw2_r": [
+    323,
+    1109
+   ],
+   "rw1_r": [
+    520,
+    1129
+   ],
+   "tow_r": [
+    983,
+    1097
+   ],
+   "tow_l": [
+    1420,
+    1073
+   ],
+   "muz_c": [
+    1772,
+    708
+   ],
+   "evF_c": [
+    1340,
+    675
+   ],
+   "evR_c": [
+    1180,
+    654
+   ]
+  }
+ },
+ "p36": {
+  "size": [
+   1920,
+   1080
+  ],
+  "sigma": 2.5,
+  "psi": [
+   0,
+   3
+  ],
+  "theta": [
+   0,
+   3
+  ],
+  "f_exif": 11057,
+  "f_sig": 0.06,
+  "pts": {
+   "rw1_l": [
+    1146,
+    903
+   ],
+   "rw2_l": [
+    1243,
+    867
+   ],
+   "rw4_l": [
+    1401,
+    829
+   ],
+   "rw5_l": [
+    1472,
+    812
+   ],
+   "rw6_l": [
+    1540,
+    789
+   ],
+   "rw7_l": [
+    1607,
+    774
+   ],
+   "hl_l": [
+    772,
+    712
+   ],
+   "hl_r": [
+    332,
+    688
+   ],
+   "muz_c": [
+    301,
+    573
+   ]
+  }
+ },
+ "_lin": [
+  [
+   {
+    "muz.z": 1,
+    "rr.z": -1
+   },
+   9.77,
+   0.05
+  ]
+ ]
+}

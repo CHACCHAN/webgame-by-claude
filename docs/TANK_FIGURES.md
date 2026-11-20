@@ -117,6 +117,7 @@ The figures the simulation does not use (height, range, fuel) are left out unles
 | Sight magnification | 3× / 10× | GPS: 3× and 10× (day and thermal) | Gary's guide (secondary) | same (secondary) |
 | Track contact / gauge / clearance | 4.6 / 2.9 / 0.48 m | clearance 0.43 m (M1A2), 0.48 m (M1/M1A1) | en.wikipedia | clearance disagrees slightly: 0.48 kept (sim geometry, not on the spec sheet); contact length / gauge not found |
 | Pivot rate | 30 °/s (estimated) | not found | — | not found: stays estimated |
+| Bore axis height (`dims` ringY + trunnion) | 2.20 m (1.85 + 0.35) | not published | measured on five Commons photographs of SEPv3s through their solved cameras (the model's fit, `fitdata/m1a2`): muzzle face centre 1.965–1.98 m, the barrel's centre line (bore evacuator, muzzle) 1.94–2.00 m in the two photographs that show it from the side; 1.97 taken | **corrected → 1.97 m** (trunnion 0.12): a measurement, not a published figure |
 
 ## T-14 Armata (t14)
 
