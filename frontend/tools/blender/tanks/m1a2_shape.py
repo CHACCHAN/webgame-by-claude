@@ -72,7 +72,7 @@ ST = dict(
         cap=((1.47,1.60,-.79),(0,1,0),((.09,.027),(.108,.018),(.108,0))),
         seam=((1.058,1.60,-3.65),(1.058,1.60,1.40),.011,.003)),
     turret=dict(
-        race=((0,1.589,.30),(0,1,0),((1.05,.224),(1.13,.18),(1.13,.069),(1.155,.057),(1.155,0)),'recess',56),
+        race=((0,1.589,.30),(0,1,0),((1.05,.224),(1.13,.18),(1.13,.069),(1.155,.057),(1.155,0)),'recess',24),
         # Measured outer roof break; derive the inner corner at the same height.
         outer=(1.70,2.24,1.17),opening=.41,sweep=45.,rake=30.,batter=.13,bevel=.065,
         lower_line=((.40,1.71),(2.36,1.75)),notch_z=1.78,
@@ -108,7 +108,7 @@ ST = dict(
                               for side in (-1,1))),
         citv=dict(base=(.80,2.265,1.15),turnings=(
                  ((0,0,0),(0,1,0),((.226,.135),(.240,.126),(.240,.041),(.224,0))),
-                 ((0,0,0),(0,1,0),((.185,.335),(.200,.322),(.200,.151),(.185,.135)),'tank_paint',40)),
+                 ((0,0,0),(0,1,0),((.185,.335),(.200,.322),(.200,.151),(.185,.135)),'tank_paint',24)),
                  optics=(((0,.238,.177),(.157,.102,.051)),)),
         commander=dict(base=(-.72,2.418,-.09),radius=.351,thick=.053,
                        profile=((.355,.117),(.386,.094),(.39,.041),(.362,0)),
@@ -123,7 +123,7 @@ ST = dict(
                                         (.026,.169),(.038,.152),(.040,0)),'steel',24),
                 # Tan bezels and separate opaque glass faces on the right-hand sensor.
                 ((-.515,.360,.390),(0,0,1),((.086,.049),(.091,.041),(.095,-.006))),
-                ((-.515,.360,.390),(0,0,1),((.080,.051),(.080,.048)),'glass_dark',32),
+                ((-.515,.360,.390),(0,0,1),((.080,.051),(.080,.048)),'glass_dark',20),
                 ((-.225,.340,.390),(0,0,1),((.050,.037),(.054,.030),(.055,-.006))),
                 ((-.225,.340,.390),(0,0,1),((.045,.039),(.045,.036)),'glass_dark',24)),
             # Narrow crosspiece and two upright cheeks leave the receiver sides visible.
@@ -160,7 +160,7 @@ ST = dict(
              rear=((2.38,.117),(2.94,.116),(2.96,.122),(3.012,.122),(3.024,.116)),
              forward=((4.24,.098),(4.70,.093),(4.708,.099),(4.734,.099),(4.745,.092),
                       (5.22,.084),(5.228,.091),(5.255,.091),(5.266,.083),(5.59,.078),
-                      (5.606,.090)),bore=.060,bore_depth=.125,seg=48,
+                      (5.606,.090)),bore=.060,bore_depth=.125,seg=24,
              ref=(((0,.107,3.55),(.092,.083,.16),.006),((0,.110,3.632),(.064,.047,.006),.002,'glass_dark'))))
 
 
@@ -170,7 +170,7 @@ def hull(marks):
                       P.pair(T.lamp_box(*s['tail'])),P.pair(T.tow_hook(*s['eyes'])),T.tow_hook(*s['pintle']),
                       P.exhaust(s['exhaust']),T.grille(*s['apu_grille']),P.pair(P.turned(*s['cap'])),
                       P.pair(T.tow_hook(*s['deck_eyes'])),P.pair(T.cbox(*s['corner_foot'])),
-                      P.pair(P.turned(s['corner_axis'],(1,0,0),s['corner_profile'],seg=32))]
+                      P.pair(P.turned(s['corner_axis'],(1,0,0),s['corner_profile'],seg=20))]
     x,y,z=s['front_pin']
     ear=T.prism([(z+a,y+b) for a,b in s['lug_zy']],*s['lug_x'])
     pin=P.turned((x,y,z),(1,0,0),[(s['pin_r'],0),(s['pin_r'],-s['pin_span'])],'steel',20)

@@ -254,7 +254,10 @@ export function buildJet(spec: CarSpec, opts: { bodyColor?: string; procedural?:
   const lamps: { mat: THREE.MeshStandardMaterial; beacon: boolean; glow: THREE.Color }[] = [];
   const lamp = (mat: THREE.Material, beacon: boolean) => {
     const m = mat as THREE.MeshStandardMaterial;
-    lamps.push({ mat: m, beacon, glow: m.emissive.clone() });
+    // (a lamp exported with a black glow, as the F-15s' beacon was up to v2.8.0 (its emission strength 0 in
+    // f15.py), glows in its own colour: only a uniform's value, no other shader)
+    const black = m.emissive.r + m.emissive.g + m.emissive.b === 0;
+    lamps.push({ mat: m, beacon, glow: (black ? m.color : m.emissive).clone() });
     m.emissiveIntensity = 1;
   };
   const seen = new Set<THREE.Material>();

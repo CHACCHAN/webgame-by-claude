@@ -1,6 +1,8 @@
 // The tanks' figures out of the game's own simulation (Node, no browser), to hold against the published ones:
 //   TANKS=1 npx tsx tools/tank-figures.ts [ids]          per tank: 0→32 and 0→50 km/h, top speed forward and in
-//                                                         reverse, the neutral turn's rate, one shot's recoil (the
+//                                                         reverse, the neutral turn's rate on flat ground (with how
+//                                                         far the hull wanders and whether the tracks run opposite),
+//                                                         one shot's recoil (the
 //                                                         hull's speed backwards and its pitch), the gun's laying
 //                                                         (a half turn of the turret, the gun through its arc), and
 //                                                         the ballistic table (time of flight, speed left, fall,
@@ -64,8 +66,21 @@ if (!args.includes('--courses')) {
     });
     let back = 0;
     run(id, 60, () => ({ brake: 1 }), (_t, v) => (back = Math.min(back, v.forwardSpeed * 3.6)));
-    let pivot = 0;
-    run(id, 8, (t) => ({ steer: t > 1 ? 1 : 0 }), (t, v) => t > 6 && (pivot = Math.max(pivot, Math.abs(v.yawRate) * DEG)));
+    // the neutral turn from a standstill on the flat pad (not on a course's grid: the passes start downhill, and a hull
+    // that never stops there never turns on the spot): its rate, how far the hull wanders, and the two tracks' speeds
+    // as the model scrolls them (`TankModel`: the hull's speed ∓ its yaw rate × half the gauge), which must run opposite
+    let pivot = 0, creep = 0, drift = 0, trackL = 0, trackR = 0;
+    const from = new Vector3();
+    run(id, 8, (t) => ({ steer: t > 1 ? 1 : 0 }), (t, v) => {
+      if (t <= 1) return void from.copy(v.position);
+      drift = Math.hypot(v.position.x - from.x, v.position.z - from.z);
+      if (t <= 6) return;
+      pivot = Math.max(pivot, Math.abs(v.yawRate) * DEG);
+      creep = Math.max(creep, Math.abs(v.forwardSpeed));
+      trackL = v.forwardSpeed - (v.yawRate * spec.track) / 2;
+      trackR = v.forwardSpeed + (v.yawRate * spec.track) / 2;
+    });
+    const tracks = tank.pivotRate > 0 ? `tracks ${trackL.toFixed(2)} / ${trackR.toFixed(2)} m/s: ${trackL * trackR < 0 ? 'opposite' : 'NOT opposite'}` : 'wheeled';
     // one shot over the front, standing: what the hull does
     let dv = 0, pitch = 0, half = NaN, arc = NaN;
     {
@@ -98,7 +113,8 @@ if (!args.includes('--courses')) {
       world.free();
     }
     console.log(`\n${id}  ${tank.gun.name}`);
-    console.log(`  0→32 km/h ${t32.toFixed(1)} s   0→50 km/h ${t50.toFixed(1)} s   top ${top.toFixed(1)} km/h   reverse ${(-back).toFixed(1)} km/h (sheet ${tank.reverseSpeed})   neutral turn ${pivot.toFixed(1)} °/s (spec ${tank.pivotRate})`);
+    console.log(`  0→32 km/h ${t32.toFixed(1)} s   0→50 km/h ${t50.toFixed(1)} s   top ${top.toFixed(1)} km/h   reverse ${(-back).toFixed(1)} km/h (sheet ${tank.reverseSpeed})`);
+    console.log(`  neutral turn on flat ground ${pivot.toFixed(1)} °/s (spec ${tank.pivotRate})   hull ${(creep * 100).toFixed(1)} cm/s at most, ${(drift * 100).toFixed(0)} cm off its place in 7 s   ${tracks}`);
     console.log(`  shot: momentum ${(recoilOf(gun) / 1000).toFixed(1)} kN·s → hull ${(dv * 100).toFixed(1)} cm/s back at most, nose up ${pitch.toFixed(2)}° at most   turret half round ${half.toFixed(1)} s (${gun.traverse} °/s)   gun ${gun.elevation[0]}°→${gun.elevation[1]}° in ${arc.toFixed(1)} s (${gun.elevationRate} °/s)`);
     console.log('  range m   flight s   speed m/s   fall m   superelevation mrad');
     for (const r of [500, 1000, 2000, 3000]) {

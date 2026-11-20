@@ -70,6 +70,42 @@ describe('the tanks\' figures', () => {
         expect(medalFor(course, id, m.bronze + 1)).toBeNull();
       }
   });
+
+  it('a tracked tank turns on the spot on flat ground: the tracks run opposite and the hull stays where it was', () => {
+    // (on the flat: the passes' grids slope downhill, and a hull that never stops never shows a neutral turn)
+    for (const id of TANK_ORDER) {
+      const spec = TANK_SPECS[id];
+      if (!spec.tank!.pivotRate) continue;
+      const world = new RAPIER.World({ x: 0, y: -9.81, z: 0 });
+      world.timestep = DT;
+      world.createCollider(RAPIER.ColliderDesc.cuboid(500, 1, 500).setTranslation(0, -1, 0).setCollisionGroups(groups(GROUP_GROUND, GROUP_CAR)));
+      const v = new VehicleSim({ world } as unknown as PhysicsWorld, spec, new Vector3(0, 0, 0), 0);
+      const input = emptyInput();
+      const from = new Vector3();
+      let turned = 0, rate = 0, left = 0, right = 0;
+      for (let k = 0; k < Math.round(8 / DT); k++) {
+        input.steer = k * DT > 1 ? 1 : 0;
+        v.input = input;
+        v.preStep(DT);
+        world.step();
+        v.postStep(DT);
+        if (k * DT <= 1) from.copy(v.position);
+        else turned += v.yawRate * DT;
+        if (k * DT > 6) {
+          rate = Math.abs(v.yawRate) / RAD;
+          // as the model scrolls them (`TankModel`): the hull's speed ∓ its yaw rate × half the gauge
+          left = v.forwardSpeed - (v.yawRate * spec.track) / 2;
+          right = v.forwardSpeed + (v.yawRate * spec.track) / 2;
+        }
+      }
+      expect(left * right, id).toBeLessThan(0);
+      expect(rate, id).toBeGreaterThan(15);
+      expect(rate, id).toBeLessThanOrEqual(spec.tank!.pivotRate);
+      expect(Math.abs(turned) / RAD, id).toBeGreaterThan(100);
+      expect(Math.hypot(v.position.x - from.x, v.position.z - from.z), id).toBeLessThan(1);
+      world.free();
+    }
+  });
 });
 
 describe('laying the gun', () => {
