@@ -59,7 +59,7 @@ const TANKS = ['type10', 'type16', 'leopard2a5', 'm1a2', 't14'];
         g.startRace({ mode: 'rival', carId: tank, rivalLevel: 'rookie' });
         window.__app.setState({ screen: 'race' });
         // what the gunnery asks of the game, counted
-        const h = g.gunHost, n = (window.__guns = { fired: 0, struck: [], rival: 0, pauseOn: null });
+        const h = g.gunHost, n = (window.__guns = { fired: 0, struck: [], rival: 0, pauseOn: null, rivalCap: null });
         if (!h.__wrapped) {
           h.__wrapped = true;
           for (const k of ['fired', 'struck', 'respawnRival']) {
@@ -70,10 +70,40 @@ const TANKS = ['type10', 'type16', 'leopard2a5', 'm1a2', 't14'];
               if (k === 'struck') c.struck.push(a[1]);
               if (k === 'respawnRival') c.rival++;
               f(...a);
-              // (hold the picture on the frame of the flash / the burst)
-              if (c.pauseOn === k) setTimeout(() => window.__game.setPaused(true), 0);
+              // (hold the picture on the exact physics step of the flash / the burst: pausing synchronously and
+              // draining the step accumulator prevents `struck` from running in the same frame as `fired` under load)
+              if (c.pauseOn === k) {
+                c.pauseOn = null;
+                window.__game.setPaused(true);
+                window.__game.accumulator = Math.min(window.__game.accumulator, 1 / 120);
+              }
             };
           }
+        }
+        // hold the rival within a steady visible range ahead of the tank during the reload wait before the sight shot
+        const ai = g.rival?.ai;
+        if (ai && !ai.__wrapped) {
+          ai.__wrapped = true;
+          const orig = ai.update.bind(ai);
+          ai.update = (sim, dt, out) => {
+            orig(sim, dt, out);
+            const cap = window.__guns?.rivalCap;
+            if (cap != null) {
+              const ahead = g.rival.proj.s - g.player.proj.s;
+              const room = cap - ahead;
+              if (room <= 10) {
+                out.throttle = 0;
+                out.brake = sim.forwardSpeed > 1.5 ? 0.6 : 0.25;
+                out.handbrake = sim.forwardSpeed <= 1.5;
+                ai.stuckTime = 0;
+              } else if (sim.forwardSpeed > Math.max(4, room * 0.5)) {
+                out.throttle = 0;
+                out.brake = 0.35;
+                out.handbrake = false;
+              }
+            }
+            return out;
+          };
         }
       },
       [TANK, time],
@@ -110,7 +140,8 @@ const TANKS = ['type10', 'type16', 'leopard2a5', 'm1a2', 't14'];
     );
   const guns = () => page.evaluate(() => ({ ...window.__guns, hud: window.__game.hud.gun && { ...window.__game.hud.gun }, rivalS: window.__game.rival?.proj.s, shells: window.__game.gunnery.shells.live.length }));
   const pauseOn = (k) => page.evaluate((k) => (window.__guns.pauseOn = k), k);
-  const resume = () => page.evaluate(() => ((window.__guns.pauseOn = null), window.__game.setPaused(false)));
+  const capRival = (cap) => page.evaluate((cap) => (window.__guns.rivalCap = cap), cap);
+  const resume = () => page.evaluate(() => ((window.__guns.pauseOn = null), (window.__game.accumulator = 0), window.__game.setPaused(false)));
   const fire = async (on) => page.evaluate((on) => (window.__game.input.touchGun.fire = on), on);
 
   if (PHONE) {
@@ -196,10 +227,11 @@ const TANKS = ['type10', 'type16', 'leopard2a5', 'm1a2', 't14'];
       await page.waitForTimeout(300);
       await shot(`${time}-flash`);
       await pauseOn('struck');
-      await page.evaluate(() => window.__game.setPaused(false));
-      await page.waitForFunction(() => window.__game.paused, null, { timeout: 8000 }).catch(() => 0);
+      await page.evaluate(() => ((window.__game.accumulator = 0), window.__game.setPaused(false)));
+      await page.waitForFunction(() => window.__game.paused || window.__guns.struck.length > 0, null, { timeout: 8000 }).catch(() => 0);
       await page.waitForTimeout(300);
       await shot(`${time}-impact`);
+      await capRival(95);
       await resume();
       await page.waitForTimeout(900);
       let g = await guns();
@@ -219,10 +251,11 @@ const TANKS = ['type10', 'type16', 'leopard2a5', 'm1a2', 't14'];
       await shot(`${time}-sight`);
       await pauseOn('struck');
       await lay(8000, true);
-      await page.waitForFunction(() => window.__game.paused, null, { timeout: 8000 }).catch(() => 0);
+      await page.waitForFunction(() => window.__game.paused || window.__guns.struck.length > 1, null, { timeout: 8000 }).catch(() => 0);
       await fire(false);
       await page.waitForTimeout(300);
       await shot(`${time}-sight-impact`);
+      await capRival(null);
       await resume();
       await page.waitForTimeout(600);
       g = await guns();

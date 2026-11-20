@@ -55,6 +55,10 @@ def main():
         pad = 20
         X0, Y0, X1, Y1 = max(0, x0 - pad), max(0, y0 - pad), min(W, x1 + pad), min(H, y1 + pad)
         sub = gc[Y0:Y1, X0:X1].copy()
+        # GrabCut's k-means starts from the process-wide random state: seeded per photo, the same hints give the same
+        # mask whichever photos are made in one run, and in what order
+        cv2.setRNGSeed(0)
+        np.random.seed(0)
         cv2.grabCut(im[Y0:Y1, X0:X1], sub, None, bgd, fgd, 8, cv2.GC_INIT_WITH_MASK)
         gc[Y0:Y1, X0:X1] = sub
         tank = np.isin(gc, (cv2.GC_FGD, cv2.GC_PR_FGD)).astype(np.uint8)

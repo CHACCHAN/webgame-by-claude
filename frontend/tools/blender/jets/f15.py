@@ -73,7 +73,8 @@ def build(aircraft, variant):
     for n, (c, m, r) in ZONES.items():
         mats.add(n, c, m, r)
     mats.add('glass', '#20262b', 0.0, 0.06)
-    mats.add('beacon', '#ff3020', 0.0, 0.4, emissive='#ff3020', strength=0.0)
+    # (a strength above 0, or the GLB's emissive is black: the game flashes the beacon through its glow colour)
+    mats.add('beacon', '#ff3020', 0.0, 0.4, emissive='#ff3020', strength=1.0)
     mats.add('taxilight', '#fff6e4', 0.0, 0.2)
     root = K.node(aircraft + ('-' + variant if variant else ''))
     body = K.node('body', root)
