@@ -2725,3 +2725,40 @@ Merged `phone-framing` (`bf054c2`) and `small-fixes-281` (`cbcbe88`):
 - Not verified: real phone hardware; sound by ear; real gamepad.
 
 
+## v2.8.2 (11-20): quality low draws up to 0.5 MP on high-DPR phones with automatic dynamic resolution scaling
+
+Owner chose option 1 (11-20: 「1」 — up to 0.5 MP ceiling + automatic dynamic resolution down to the old 0.75 CSS px
+floor on heavy devices). Merged `low-resolution` (`84f7f5b` + `f7470bc`):
+- **0.5 MP pixel budget for quality `low`** (`store/settings.ts` `LOW_PIXELS = 0.5`, `render/drawingRatio.ts`
+  `drawingRatio`):
+  - Before: quality `low` drew `0.75 CSS px` regardless of DPR (`633×292` = 0.185 MP on an `844×390` DPR-3 phone,
+    one drawn pixel over 4×4 device pixels).
+  - Now: quality `low` specifies `pixelBudget: LOW_PIXELS` (0.5 MP), `pixelFloor: 0.75` (never coarser than 0.75 CSS px:
+    a DPR-1 desktop and large DPR-2 screens keep exact prior resolution), and `pixelRatio: 0.75 * Math.max(1, dpr)`
+    (never finer than 0.75 of device pixels per axis). On an `844×390` DPR-3 phone the ceiling is `1040×480` (~0.50 MP,
+    `pr ≈ 1.2325`).
+- **Automatic dynamic resolution (`DynamicResolution` in `render/drawingRatio.ts`, wired in `render/RenderHost.ts`)**:
+  - Active only when a `DrawingRule`'s ceiling exceeds its `pixelFloor` (`low` on high-DPR screens; no-op on desktop
+    DPR 1 and on `medium` / `high` / `ultra`).
+  - Samples actual wall-clock frame intervals (`performance.now()`, skipping `compiling`, `uploading`, `holding`,
+    post-resize and tab-pause frames `> 200 ms`) in 45-frame windows (~0.75 s) using the window **median** so isolated
+    hitches (garage switches, race start) never drop resolution.
+  - **Step down**: when the 45-frame median exceeds `18.5 ms` (~54 fps), steps down one rung along 3 geometrically
+    spaced rungs between ceiling (`1040×480`) and floor (`633×292`: `1040×480` → `881×407` → `746×345` → `633×292`),
+    calling `setPixelRatio` + `setSize(w, h, false)` only when the active rung changes.
+  - **Hysteresis / no oscillation**: holds the lower rung in the 11.5–18.5 ms deadband (incl. 60 Hz vsync at 16.7 ms);
+    steps back up only after 4 consecutive 45-frame windows (180 frames, ~3 s) with median `< 11.5 ms`, and locks a
+    rung after 2 failed attempts until settings `configure()` or canvas CSS resize.
+  - Tools: `tools/perf-res.cjs` (GPU time per pass across resolutions in one race), `tools/gpu-errors.cjs` (`PHONE=1`
+    and drawn canvas dimensions in output).
+- Verified:
+  - `tsc -b` (0 errors), `vitest` 318 passed (35 files, 12 in `drawingRatio.test.ts`), `npm run build`.
+  - Real GPU (`gpurun.sh`): `PHONE=1 SET='{"quality":"low"}' node tools/gpu-errors.cjs` WebGPU (`1040×480 for 844×390
+    CSS px at DPR 3`, 0 errors) and WebGL 2 (`QUERY='?webgl=1'`, `1040×480`, 0 errors); default WebGPU ×3 0, WebGL 2 0;
+    WebGPU slow-device probe (`~/.local/opt/wt/lowres/dynres-probe.cjs`): holds `1040×480` at 60 fps, steps down under
+    sustained ~24.8 ms load (`1040×480` → `881×407` → `746×345` → `633×292`), and holds `633×292` at 60 Hz vsync with
+    zero oscillation and 0 errors.
+- Not verified: physical mobile phone hardware; real 120 Hz mobile browser step-up recovery (unit-tested).
+
+
+

@@ -75,7 +75,10 @@ pending. `docs/PLAN.md` holds the design.
 ## Gotchas
 - Rendering (`render/RenderHost.ts`, created by `ui/GameCanvas.tsx`; no react-three-fiber): `WebGPURenderer` + a TSL
   `RenderPipeline` (scene → ambient occlusion → the lights' glow in the haze → bloom → tone mapping (AgX) + the time of
-  day's grade → SMAA → lens). `?webgl=1` forces the WebGL 2 backend; without WebGPU, or when it fails while running
+  day's grade → SMAA → lens). Quality `low` draws a pixel budget (`LOW_PIXELS` = 0.5 MP in `store/settings.ts`,
+  `render/drawingRatio.ts`: between 0.75 CSS px and 0.75 × DPR, e.g. 1040×480 on an 844×390 DPR-3 phone) with automatic
+  dynamic resolution (`DynamicResolution`: steps down in 3 rungs towards 0.75 CSS px when the 45-frame wall-clock
+  median exceeds 18.5 ms, with hysteresis and a 2-failure rung lock; check with `tools/perf-res.cjs`). `?webgl=1` forces the WebGL 2 backend; without WebGPU, or when it fails while running
   (errors in a burst, a lost device), the game goes to WebGL 2 by itself (`render/backendChoice.ts`, settings 描画方式;
   check with `node tools/backend-fallback.cjs` on the GPU). Custom
   shaders are TSL node materials only: no `ShaderMaterial`, no `onBeforeCompile`, no `THREE.Points` with a size

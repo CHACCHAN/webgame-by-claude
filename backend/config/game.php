@@ -105,7 +105,7 @@ $cars = [
 ];
 
 return [
-    'version' => env('GAME_VERSION', '2.8.1'),
+    'version' => env('GAME_VERSION', '2.8.2'),
 
     'release' => $release,
     'catalog' => ['tracks' => $tracks, 'cars' => $cars],
