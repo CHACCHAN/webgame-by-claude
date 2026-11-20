@@ -149,7 +149,8 @@ Little is published by the maker. The first official weight and dimensions were 
 | Traverse / elevation rate | 40 °/s / 15 °/s (estimated) | not published | — | not found: stays estimated |
 | Sight magnification | 4× / 12× (estimated) | not published | — | not found: stays estimated |
 | Shot / charge / drag | 8.5 kg / 10 kg / 60 (estimated) | not published | — | not found: stays estimated |
-| Track contact / clearance | 5.3 / 0.5 m | not published | — | not found (sim geometry) |
+| Gun axis and muzzle (`dims`: trunnion, barrel) | trunnion 0.3 m above the ring (2.05 m), muzzle 5.04 m ahead of the trunnions (from 10.8 − 8.7 / 2) | not published | measured on parade photos through solved cameras (`tools/blender/tanks/fitdata/t14`: barrel centre lines in three photos, the gun root in a head-on one; scale from the published 8,732 mm hull and 10.8 m over the gun) | **measured → trunnion 0.10 m (bore 2.15 m above the ground), barrel 4.96 m**: the muzzle at 0° is 6.37 m ahead of the origin, which (midway between the first and last road wheels) lies 0.2 m aft of the hull's middle, so 10.8 − 8.7 / 2 overstated it |
+| Track contact / clearance | 5.3 / 0.5 m | not published | photos: the flat belly between the tracks stands 0.58 m above the road (head-on photo, solved camera) | not found in a source: 0.5 kept (sim geometry; the own model's belly is at the measured 0.58 m) |
 
 ## Effects of the corrections
 
@@ -157,7 +158,8 @@ Little is published by the maker. The first official weight and dimensions were 
   Its muzzle is 0.3 m further back.
 - M1A2 SEPv3: muzzle velocity 1,552.5 m/s, charge 8.15 kg (recoil +0.1 %), muzzle 0.06 m further back.
 - T-14: 55 t instead of 48 t (slower to accelerate), 3.9 m wide (collision box), 45 km/h backwards instead of 80,
-  32 rounds instead of 45, elevation −7° / +15°.
+  32 rounds instead of 45, elevation −7° / +15°. Its own model (2026-11-19) put the muzzle 0.08 m further back and
+  the bore 0.20 m lower (the gun's places measured on photos, above).
 - `vehicleStats.json` and `TANK_MEDALS` were re-derived for the Leopard 2A5 and the T-14 (`TANKS=1 COURSE=<id>
   LIMIT=1800 npx tsx tools/sim-run.ts leopard2a5,t14,m1a2 legend`; the unchanged M1A2's laps reproduced its old
   medals to the half-second, which checks the derivation).

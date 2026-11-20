@@ -1,0 +1,596 @@
+{
+ "_note": "T-14 (parade configuration 2015-2019). Points read off the 1920-px Commons thumbnails (photos: ref/list.json) with tools/gv.py; bundle adjustment with the scratch ba14.py (ba.py + \"_link\": the road wheels share x and y) -> fit/ba_raw.json (solver scale) and fit/ba.json (metric, ground origin). Game frame, x = left. rwN = road wheel hub centre (N from the front), spr/idl = sprocket (rear) / idler (front) hub, nose_t/b = outer top/bottom corner of the front face of the outer nose block, lamp = headlight lens (LED panel) centre, bow_k = top of the bow block where the hull side top edge kinks down, sl_pt/pb = top/bottom of the slat cage rear post, rbox = top outer corner of the rear face of the rear corner box (the one with the tail lamp), tl = tail lamp centre, t_bt/t_bb = top / bottom outer corner of the bustle basket's rear face (the perforated basket), muz = muzzle centre. Gun axis (game frame y 2.15, z 1.41) measured from the barrel centre lines in p01 / p07 / p10 (driver, 11-19), held by tight _axis priors (solver frame). The bore passes through the trunnion: muz.y at 0 deg = the axis height (prior).",
+ "_points": {
+  "rw1": [
+   1.65,
+   0.43,
+   2.455
+  ],
+  "rw2": [
+   1.65,
+   0.43,
+   1.555
+  ],
+  "rw3": [
+   1.65,
+   0.43,
+   0.638
+  ],
+  "rw4": [
+   1.65,
+   0.43,
+   -0.144
+  ],
+  "rw5": [
+   1.65,
+   0.43,
+   -0.91
+  ],
+  "rw6": [
+   1.65,
+   0.43,
+   -1.68
+  ],
+  "rw7": [
+   1.65,
+   0.43,
+   -2.455
+  ],
+  "spr": [
+   1.6,
+   0.75,
+   -3.29
+  ],
+  "idl": [
+   1.6,
+   0.65,
+   3.44
+  ],
+  "lamp": [
+   1.25,
+   1.4,
+   3.62
+  ],
+  "nose_t": [
+   1.7,
+   1.15,
+   4.11
+  ],
+  "nose_b": [
+   1.7,
+   0.85,
+   4.11
+  ],
+  "bow_k": [
+   1.85,
+   1.38,
+   3.55
+  ],
+  "sl_pt": [
+   1.95,
+   1.8,
+   -4.63
+  ],
+  "sl_pb": [
+   1.95,
+   1.3,
+   -4.63
+  ],
+  "rbox": [
+   1.7,
+   1.45,
+   -4.35
+  ],
+  "tl": [
+   1.45,
+   0.95,
+   -4.25
+  ],
+  "t_bt": [
+   1.1,
+   2.55,
+   -2.69
+  ],
+  "t_bb": [
+   1.1,
+   2.25,
+   -2.69
+  ],
+  "muz": [
+   0.0,
+   2.6,
+   6.4
+  ],
+  "mast": [
+   0.6,
+   3.3,
+   0.0
+  ]
+ },
+ "_frames": {
+  "t_bt": "turret",
+  "t_bb": "turret",
+  "muz": "gun",
+  "mast": "turret"
+ },
+ "_link": {
+  "wheels": [
+   "rw1",
+   "rw2",
+   "rw3",
+   "rw4",
+   "rw5",
+   "rw6",
+   "rw7"
+  ]
+ },
+ "_axis": {
+  "tz": [
+   0.0,
+   0.05
+  ],
+  "gy": [
+   2.0751,
+   0.02
+  ],
+  "gz": [
+   1.3848,
+   0.02
+  ]
+ },
+ "_prior": {
+  "rw1.y": [
+   0.43,
+   0.05
+  ],
+  "rw2.y": [
+   0.43,
+   0.05
+  ],
+  "rw3.y": [
+   0.43,
+   0.05
+  ],
+  "rw4.y": [
+   0.43,
+   0.05
+  ],
+  "rw5.y": [
+   0.43,
+   0.05
+  ],
+  "rw6.y": [
+   0.43,
+   0.05
+  ],
+  "rw7.y": [
+   0.43,
+   0.05
+  ],
+  "muz.y": [
+   2.0751,
+   0.01
+  ]
+ },
+ "p01": {
+  "size": [
+   1920,
+   1244
+  ],
+  "sigma": 3.0,
+  "theta": [
+   7,
+   5
+  ],
+  "f_exif": 1493.3,
+  "f_sig": 0.25,
+  "pts": {
+   "rw1_r": [
+    1305,
+    905
+   ],
+   "rw2_r": [
+    1145,
+    902
+   ],
+   "rw3_r": [
+    985,
+    902
+   ],
+   "rw4_r": [
+    847,
+    900
+   ],
+   "rw5_r": [
+    705,
+    899
+   ],
+   "rw6_r": [
+    565,
+    897
+   ],
+   "rw7_r": [
+    432,
+    895
+   ],
+   "nose_t_r": [
+    1599,
+    767
+   ],
+   "nose_b_r": [
+    1599,
+    819
+   ],
+   "bow_k_r": [
+    1500,
+    722
+   ],
+   "sl_pt_r": [
+    50,
+    660
+   ],
+   "sl_pb_r": [
+    50,
+    752
+   ],
+   "t_bt_r": [
+    400,
+    503
+   ],
+   "t_bb_r": [
+    402,
+    560
+   ],
+   "muz_c": [
+    1849,
+    486
+   ]
+  },
+  "psi": [
+   0,
+   2
+  ],
+  "roll": [
+   0,
+   3
+  ]
+ },
+ "p03": {
+  "size": [
+   1920,
+   1242
+  ],
+  "sigma": 3.0,
+  "theta": [
+   8,
+   5
+  ],
+  "f_exif": 13866.7,
+  "f_sig": 0.25,
+  "pts": {
+   "lamp_r": [
+    1166,
+    789
+   ],
+   "lamp_l": [
+    1652,
+    773
+   ],
+   "rw1_r": [
+    894,
+    995
+   ],
+   "rw2_r": [
+    794,
+    983
+   ],
+   "rw3_r": [
+    691,
+    970
+   ],
+   "rw4_r": [
+    606,
+    960
+   ],
+   "rw5_r": [
+    516,
+    948
+   ],
+   "rw6_r": [
+    435,
+    939
+   ],
+   "sl_pt_r": [
+    88,
+    598
+   ],
+   "muz_c": [
+    1672,
+    438
+   ],
+   "mast_a": [
+    1063,
+    290
+   ]
+  },
+  "psi": [
+   0,
+   2
+  ],
+  "roll": [
+   0,
+   3
+  ]
+ },
+ "p07": {
+  "size": [
+   1920,
+   1278
+  ],
+  "sigma": 3.0,
+  "theta": [
+   14,
+   5
+  ],
+  "f_exif": 5973.3,
+  "f_sig": 0.25,
+  "pts": {
+   "lamp_r": [
+    298,
+    698
+   ],
+   "lamp_l": [
+    799,
+    698
+   ],
+   "nose_t_r": [
+    153,
+    713
+   ],
+   "nose_b_r": [
+    155,
+    787
+   ],
+   "sl_pt_l": [
+    1843,
+    605
+   ],
+   "t_bt_l": [
+    1463,
+    425
+   ],
+   "muz_c": [
+    250,
+    296
+   ],
+   "mast_a": [
+    1157,
+    263
+   ]
+  },
+  "psi": [
+   0,
+   2
+  ],
+  "roll": [
+   0,
+   3
+  ]
+ },
+ "p06": {
+  "size": [
+   1920,
+   1247
+  ],
+  "sigma": 3.0,
+  "theta": [
+   3,
+   5
+  ],
+  "f_exif": 21333.3,
+  "f_sig": 0.25,
+  "pts": {
+   "nose_t_r": [
+    536,
+    857
+   ],
+   "nose_b_r": [
+    536,
+    921
+   ],
+   "nose_t_l": [
+    1400,
+    866
+   ],
+   "nose_b_l": [
+    1400,
+    934
+   ],
+   "muz_c": [
+    943,
+    507
+   ],
+   "mast_a": [
+    1111,
+    391
+   ]
+  },
+  "pitch": [
+   -1,
+   3
+  ],
+  "psi": [
+   0,
+   2
+  ],
+  "roll": [
+   0,
+   3
+  ]
+ },
+ "p19": {
+  "size": [
+   1920,
+   1280
+  ],
+  "sigma": 3.0,
+  "theta": [
+   3,
+   10
+  ],
+  "yaw": [
+   90,
+   3
+  ],
+  "f_exif": 5333.3,
+  "f_sig": 0.12,
+  "pts": {
+   "rw1_r": [
+    1412,
+    900
+   ],
+   "rw2_r": [
+    1237,
+    897
+   ],
+   "rw3_r": [
+    1066,
+    894
+   ],
+   "rw4_r": [
+    912,
+    891
+   ],
+   "rw5_r": [
+    762,
+    889
+   ],
+   "rw6_r": [
+    613,
+    887
+   ],
+   "rw7_r": [
+    457,
+    885
+   ],
+   "spr_r": [
+    295,
+    790
+   ],
+   "idl_r": [
+    1560,
+    806
+   ]
+  },
+  "psi": [
+   0,
+   2
+  ],
+  "roll": [
+   0,
+   3
+  ]
+ },
+ "p10": {
+  "size": [
+   1920,
+   1280
+  ],
+  "sigma": 3.0,
+  "theta": [
+   6.42,
+   1.0
+  ],
+  "f_exif": 2666.7,
+  "f_sig": 0.12,
+  "pts": {
+   "tl_l": [
+    1077,
+    763
+   ],
+   "rbox_l": [
+    987,
+    630
+   ],
+   "rbox_r": [
+    1838,
+    600
+   ],
+   "sl_pt_l": [
+    975,
+    624
+   ],
+   "t_bt_l": [
+    1022,
+    370
+   ],
+   "t_bt_r": [
+    1347,
+    374
+   ],
+   "t_bb_r": [
+    1344,
+    452
+   ],
+   "muz_c": [
+    224,
+    428
+   ]
+  },
+  "psi": [
+   0,
+   2
+  ],
+  "roll": [
+   0,
+   3
+  ]
+ },
+ "p12": {
+  "size": [
+   1920,
+   1247
+  ],
+  "sigma": 3.0,
+  "theta": [
+   3,
+   5
+  ],
+  "f_exif": 3466.7,
+  "f_sig": 0.25,
+  "pts": {
+   "lamp_r": [
+    1037,
+    939
+   ],
+   "lamp_l": [
+    1625,
+    754
+   ],
+   "muz_c": [
+    1779,
+    583
+   ],
+   "sl_pt_r": [
+    6,
+    333
+   ],
+   "nose_t_r": [
+    858,
+    1009
+   ],
+   "nose_t_l": [
+    1778,
+    735
+   ]
+  },
+  "psi": [
+   0,
+   2
+  ],
+  "roll": [
+   0,
+   3
+  ]
+ }
+}
