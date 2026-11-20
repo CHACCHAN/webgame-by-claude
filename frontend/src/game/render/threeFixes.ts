@@ -64,6 +64,40 @@ export function keepShaders(renderer: WebGPURenderer) {
   }
 }
 
+type ShadowNodes = { version: number; colorNode: unknown; depthNode: unknown; positionNode: unknown };
+type Caster = THREE.Material & { alphaHash?: boolean; alphaMap?: unknown; castShadowNode?: unknown; maskShadowNode?: unknown; maskNode?: unknown };
+type ShadowRenderer = { _getShadowNodes?: (material: THREE.Material) => ShadowNodes; shadowMap: { transmitted?: boolean } };
+
+/**
+ * One shadow shader for all opaque casters of a shape (a vertex layout, a side, a light). three.js 0.186 draws a
+ * caster with a map or a colour node into a shadow map with a colour made for that material (its map's or colour
+ * node's alpha), and a node is part of a shader's key by its id: every material instance had shadow shaders of its
+ * own. A vehicle's materials are cloned for each showing, so each car shown in the garage and each car of a race
+ * built 3–5 shadow shaders again in the frame that first drew it, and `keepShaders` kept them all (11-19). That alpha
+ * is read only to cut a shadow out (alpha test or hash, an alpha map, a mask node) or for coloured shadows
+ * (`shadowMap.transmitted`): any other caster's depth is the same with the shadow material's own colour, which it
+ * gets here. What it reaches into: `Renderer._getShadowNodes`; check when three.js is updated.
+ */
+export function shareShadowShaders(renderer: WebGPURenderer) {
+  const r = renderer as unknown as ShadowRenderer;
+  const own = r._getShadowNodes;
+  if (typeof own !== 'function') return;
+  const plain = new WeakMap<THREE.Material, ShadowNodes>();
+  r._getShadowNodes = function (this: ShadowRenderer, material) {
+    const nodes = own.call(this, material);
+    if (nodes.colorNode === null || !plainCaster(material) || this.shadowMap.transmitted) return nodes;
+    let shared = plain.get(material);
+    if (!shared || shared.version !== nodes.version) plain.set(material, (shared = { ...nodes, colorNode: null }));
+    return shared;
+  };
+}
+
+/** A caster whose shadow is its depth alone: no cut-outs, no alpha, no shadow nodes of its own. */
+export function plainCaster(material: THREE.Material) {
+  const m = material as Caster;
+  return !(m.alphaTest > 0) && !m.alphaHash && !m.alphaMap && !m.castShadowNode && !m.maskShadowNode && !m.maskNode;
+}
+
 type Contexts = { get(target?: THREE.RenderTarget | null, mrt?: unknown, depth?: number): unknown };
 
 /**
@@ -75,27 +109,34 @@ type Contexts = { get(target?: THREE.RenderTarget | null, mrt?: unknown, depth?:
  * pipelines were found again, by their code). At a course's load that was the whole world twice.
  *
  * The returned function runs the start of a compile (`start`: the call of `compileAsync`, which takes its context
- * before it first waits) with the context of the depth at which `sceneTarget` is drawn into: as seen in the frames,
- * one level in before the first of them. It reaches into `renderer._renderContexts`: check when three.js is updated
- * (`~/.local/opt/quality/builds2.cjs`: a material's shader must not be built again by the frame after a compile).
+ * before it first waits) with the context of the depth at which `target` (by default `sceneTarget`) is drawn into: as
+ * seen in the frames, one level in before the first of them. A shadow map is drawn one level deeper than the scene,
+ * from inside its pass: a compile for a shadow pass names the map (`RenderHost.compileShadows`). It reaches into
+ * `renderer._renderContexts`: check when three.js is updated (`~/.local/opt/quality/builds2.cjs`: a material's shader
+ * must not be built again by the frame after a compile).
  */
-export function compileAtPassDepth(renderer: WebGPURenderer, sceneTarget: () => THREE.RenderTarget | null): <T>(start: () => T) => T {
+export function compileAtPassDepth(renderer: WebGPURenderer, sceneTarget: () => THREE.RenderTarget | null): <T>(start: () => T, target?: THREE.RenderTarget | null) => T {
   const contexts = (renderer as unknown as { _renderContexts?: Contexts })._renderContexts;
   if (!contexts || typeof contexts.get !== 'function') return (start) => start();
   const get = contexts.get.bind(contexts);
-  let depth = 1;
-  let compiling = false;
+  // (how deep each target was last drawn into; the scene's is kept when its target is made anew)
+  const depths = new WeakMap<THREE.RenderTarget, number>();
+  let sceneDepth = 1;
+  let at: number | null = null;
   contexts.get = (target = null, mrt = null, callDepth = 0) => {
-    if (compiling) return get(target, mrt, depth);
-    if (target !== null && callDepth > 0 && target === sceneTarget()) depth = callDepth;
+    if (at !== null) return get(target, mrt, at);
+    if (target !== null && callDepth > 0) {
+      depths.set(target, callDepth);
+      if (target === sceneTarget()) sceneDepth = callDepth;
+    }
     return get(target, mrt, callDepth);
   };
-  return (start) => {
-    compiling = true;
+  return (start, target = null) => {
+    at = target ? (depths.get(target) ?? sceneDepth + 1) : sceneDepth;
     try {
       return start();
     } finally {
-      compiling = false;
+      at = null;
     }
   };
 }

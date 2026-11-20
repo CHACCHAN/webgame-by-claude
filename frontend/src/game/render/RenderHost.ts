@@ -7,7 +7,8 @@ import { smaa } from 'three/addons/tsl/display/SMAANode.js';
 import { ambientOcclusion } from './ambientOcclusion';
 import { graded } from './grade';
 import { beamCones, updateVolume, volumetricLights } from './volumetricLights';
-import { compileAtPassDepth, fixInterleavedDispose, keepShaders, steadyAsyncBuilds } from './threeFixes';
+import { compileAtPassDepth, fixInterleavedDispose, keepShaders, shareShadowShaders, steadyAsyncBuilds } from './threeFixes';
+import { shadowProxies, watchShadowPasses, type ShadowPass } from './shadowCompile';
 import { ErrorBurst } from './backendChoice';
 import { Upscaler } from '@pmndrs/upscaler';
 import { SceneUpscaler, biasSceneTextures, sceneTextureBias, steadyProjection } from './sceneUpscale';
@@ -97,6 +98,8 @@ export type RenderTrouble = 'lost' | 'errors' | 'memory';
 const COMPILE_LANES = 6;
 /** what stops a compile whose object is no longer wanted (`precompile`'s `stale`) */
 const STALE = Symbol('stale compile');
+/** ms of texture uploads in the time after a frame (`RenderHost.upload`; one 2048 px texture takes 3–20 ms by itself) */
+const UPLOAD_SHARE = 4;
 
 /**
  * Owns the canvas' renderer, the scene, the camera and the post-processing chain, and drives the frame loop:
@@ -120,8 +123,12 @@ export class RenderHost {
   /** … and nothing is drawn meanwhile (behind the loading screen: the compile is then not paced by the frames) */
   private holding = false;
   private compileQueue: Promise<void> = Promise.resolve();
-  /** runs the start of a compile so that it builds for the scene pass (`compileAtPassDepth`) */
-  private forPass: <T>(start: () => T) => T = (start) => start();
+  /** runs the start of a compile so that it builds for the scene pass, or a shadow map (`compileAtPassDepth`) */
+  private forPass: <T>(start: () => T, target?: THREE.RenderTarget | null) => T = (start) => start();
+  /** the shadow maps as the frames draw them, by shadow camera (`shadowCompile.ts`) */
+  private shadowPasses = new Map<THREE.Camera, ShadowPass>();
+  /** the shadow map a compile is building for (`aim`), else the scene pass */
+  private aimed: ShadowPass | null = null;
   /** called once after the next frame that was drawn (see `precompile`) */
   private drawn: (() => void) | null = null;
   private renderThrew: ((err: unknown) => void) | null = null;
@@ -147,6 +154,7 @@ export class RenderHost {
       await renderer.init();
       fixInterleavedDispose(renderer);
       keepShaders(renderer);
+      shareShadowShaders(renderer);
       steadyAsyncBuilds();
       const host = new RenderHost(renderer, canvas, options);
       host.timed = timed;
@@ -154,6 +162,7 @@ export class RenderHost {
       // `gpuTimings`; its `settings` and debug views are there for probes as well)
       if (timed) Object.assign(globalThis, { __upscaler: () => host.upscaler?.upscaler ?? null, __textureBias: sceneTextureBias });
       host.forPass = compileAtPassDepth(renderer, () => host.scenePass?.renderTarget ?? null);
+      host.shadowPasses = watchShadowPasses(renderer);
       renderer.toneMapping = THREE.AgXToneMapping;
       renderer.setClearColor('#05070c');
       renderer.shadowMap.enabled = options.shadows;
@@ -302,6 +311,8 @@ export class RenderHost {
    * `stale`: says when that object is no longer wanted (the car select has moved on): a compile whose turn comes
    * after that does not start, and one under way stops after the object it is at (three.js cannot stop a material's
    * build or a pipeline half-way). Either way the promise resolves, once nothing of it runs any more.
+   * For one object, its textures are put on the GPU first, one a frame (`upload`), and the shaders its parts throw
+   * shadows with are built as well (`compileShadows`).
    */
   precompile(hold = false, what: THREE.Object3D = this.scene, stale?: () => boolean): Promise<void> {
     // The renderer builds each shader for the target (and motion-vector outputs) it has *when that shader's turn
@@ -311,6 +322,8 @@ export class RenderHost {
     const run = async () => {
       // (its turn came after it stopped being wanted: a car select held down queued one for every vehicle passed)
       if (stale?.()) return;
+      const one = what !== this.scene && !hold;
+      if (one && !(await this.upload(what, stale))) return;
       this.compiling = true;
       this.holding = hold;
       this.aim();
@@ -322,6 +335,7 @@ export class RenderHost {
         await Promise.all(this.seeAll(hold || what !== this.scene ? what : null, () => (hold ? this.lanes(what) : [what]).map((part) => this.forPass(() => this.renderer.compileAsync(part, this.camera, this.scene, progress))))).catch((err) => {
           if (err !== STALE) throw err;
         });
+        if (one && !stale?.()) await this.compileShadows(what, progress);
         // three.js draws no shadow map while it compiles. A map first met in a compile therefore gets its depth
         // texture from a material's binding, as an ordinary texture, and the first drawing into the map replaces it
         // by a new one on the GPU. What three.js then takes for unchanged (a plain material on a thing that stands
@@ -335,6 +349,7 @@ export class RenderHost {
       } finally {
         this.compiling = false;
         this.holding = false;
+        this.aimed = null;
         this.renderer.setRenderTarget(null);
         this.renderer.setMRT(null);
       }
@@ -358,6 +373,76 @@ export class RenderHost {
     };
     this.compileQueue = this.compileQueue.then(run, run);
     return this.compileQueue;
+  }
+
+  /**
+   * Puts the textures of `what` that are not on the GPU yet there, a few ms of them in the time after each frame
+   * (`UPLOAD_SHARE`; a large one alone). A compile otherwise uploads all of an object's textures in one go when it
+   * makes its bindings, and a 2048 px texture took 3–20 ms (the first F-15 shown: 40 ms for four, 96 ms in all with
+   * its shader, 11-19); the frames then hand them over as they are. Nothing is uploaded before it is needed (a
+   * vehicle's textures go to the GPU when it is first shown, as before: all vehicles' together are ~1.5 GB with
+   * their mipmaps). False: `what` stopped being wanted meanwhile.
+   */
+  private async upload(what: THREE.Object3D, stale?: () => boolean): Promise<boolean> {
+    const state = (this.renderer as unknown as { _textures?: { get(t: THREE.Texture): { initialized?: boolean; version?: number } } })._textures;
+    if (typeof state?.get !== 'function') return true;
+    const textures = new Set<THREE.Texture>();
+    what.traverseVisible((o) => {
+      const material = (o as THREE.Mesh).material;
+      if (!material) return;
+      for (const m of Array.isArray(material) ? material : [material]) {
+        for (const v of Object.values(m)) if ((v as THREE.Texture | null)?.isTexture && !(v as THREE.Texture).isRenderTargetTexture) textures.add(v as THREE.Texture);
+      }
+    });
+    // (the time this frame's share began: a large one waits for the next frame once the share is spent; small ones go along)
+    let since = -Infinity;
+    for (const t of textures) {
+      const image = t.image as { width?: number; height?: number } | null;
+      if (!image?.width || !image.height) continue;
+      const known = state.get(t);
+      if (known.initialized && known.version === t.version) continue;
+      if (image.width * image.height >= 512 * 512 && performance.now() - since > UPLOAD_SHARE) {
+        await afterFrame();
+        if (stale?.()) return false;
+        since = performance.now();
+      }
+      this.renderer.initTexture(t);
+    }
+    return true;
+  }
+
+  /**
+   * Builds the shadow maps' shaders for the parts of `what` that throw a shadow, for every map the frames draw (each
+   * light's own shadow material, the map as the target, at the map's depth: `shadowCompile.ts`). The scene's
+   * compile builds none of them, and a vehicle shown for the first time built them in the frame that first drew it
+   * into a map (11-19). A map no frame has drawn yet is left to its first drawing.
+   */
+  private async compileShadows(what: THREE.Object3D, progress: (() => void) | null) {
+    if (!this.renderer.shadowMap.enabled) return;
+    const vsm = this.renderer.shadowMap.type === THREE.VSMShadowMap;
+    const lights: THREE.Light[] = [];
+    this.scene.traverse((o) => {
+      if ((o as THREE.Light).isLight && o.castShadow && (o as THREE.DirectionalLight).shadow) lights.push(o as THREE.Light);
+    });
+    for (const light of lights) {
+      const camera = (light as THREE.DirectionalLight).shadow.camera;
+      const pass = this.shadowPasses.get(camera);
+      if (!pass) continue;
+      const proxies = shadowProxies(what, pass, vsm);
+      if (!proxies.root.children.length) continue;
+      this.aimed = pass;
+      this.aim();
+      try {
+        await this.forPass(() => this.renderer.compileAsync(proxies.root, camera, this.scene, progress), pass.target);
+      } catch (err) {
+        if (err !== STALE) throw err;
+        return;
+      } finally {
+        // (the compile has settled: no build of it is under way)
+        proxies.dispose();
+        this.aimed = null;
+      }
+    }
   }
 
   /**
@@ -414,10 +499,10 @@ export class RenderHost {
     }
   }
 
-  /** the renderer's target and outputs as the scene pass has them when it draws */
+  /** the renderer's target and outputs as the scene pass (or the shadow map being compiled for) has them when it draws */
   private aim() {
-    this.renderer.setRenderTarget(this.scenePass.renderTarget);
-    this.renderer.setMRT(this.scenePass.getMRT());
+    this.renderer.setRenderTarget(this.aimed ? this.aimed.target : this.scenePass.renderTarget);
+    this.renderer.setMRT(this.aimed ? null : this.scenePass.getMRT());
   }
 
   private resize() {
@@ -467,6 +552,17 @@ export class RenderHost {
     this.upscaler?.dispose();
     this.renderer.dispose();
   }
+}
+
+/** resolves in the time after the next drawn frame (soon in any case: a tab in the background draws none) */
+function afterFrame() {
+  return new Promise<void>((resolve) => {
+    const late = setTimeout(resolve, 100);
+    requestAnimationFrame(() => {
+      clearTimeout(late);
+      setTimeout(resolve, 0);
+    });
+  });
 }
 
 /**
