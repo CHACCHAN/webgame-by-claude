@@ -2646,3 +2646,44 @@ held back): the hayate stays until the Sobu model comes, then the yellow Sobu E2
 `garage-stale/garage.cjs` single presses 52–422 ms shown, geometries back to 237, 0 errors, 0 pipeline errors; the 10 s
 hold landed on the keikyu1000, shown 983 ms after key-up (a train's first showing, load 6–10 meanwhile). Not verified
 after the merge: phones, quality medium / low, an online waiting room's line-up compiles, Firefox / Safari.
+
+
+## v2.8.0 (11-20): the five tanks open with their own models (10式, 16式, Leopard 2A5, M1A2 SEPv3, T-14)
+
+Owner approved the five sheets and publishing (11-20: 「はい」). Merged `tank-type10`, `tank-type16`, `tank-leopard2a5`,
+`tank-m1a2`, `tank-t14` and `course-proposal` (`7c82266` / `cc0b789`):
+- Five own Blender models on `tools/blender/tanks/tank_kit.py` (modeller: `gpt-6.2-astra` via Mistral Vibe CLI thinking
+  `high` + `ask_stream.py` `EFFORT=xhigh`; drivers: Claude Opus 5.5), fitted to photographs through solved cameras:
+  - **10式** (`type10.glb`, 1.27 MB, 40.3k tris): mean IoU 0.864 (5 photos), JGSDF banded camo (`#435349` / `#645A48`),
+    gunner's sight on the model's hood.
+  - **16式機動戦闘車** (`type16.glb`, 0.92 MB, 54.1k tris): mean IoU 0.877 (6 photos), 8 wheels as one skinned mesh
+    (`TankModel.mergeSpins`), JGSDF tones, sight `[-0.64, 0.68, 0.94]`.
+  - **Leopard 2A5** (`leopard2a5.glb`, 1.45 MB, 52.3k tris): mean IoU 0.920 on hand masks (4 photos), wedge armour,
+    PERI-R17, EMES 15 sight `[-0.860, 0.816, 1.035]`, 6+2 smoke dischargers, NATO three-tone camo.
+  - **M1A2 SEPv3** (`m1a2.glb`, 1.506 MB = 1,505,780 B, 0.4 % over the 1.5 MB budget, 57.9k tris): mean IoU 0.911 on
+    hand masks (5 photos), CROWS-LP, CITV, GPS housing with loader's shield, desert CARC tan.
+  - **T-14** (`t14.glb`, 1.18 MB, 39.7k tris): mean IoU 0.898 on hand masks (6 parade photos), faceted unmanned turret
+    shroud, Afganit launchers, slat cage, 10-bolt road-wheel hubs.
+- Game side:
+  - Release switch `tanks` turned ON (`frontend/src/game/release.ts` and `backend/config/game.php`); 27 vehicles total
+    across all courses.
+  - `TankModel.mergeRolls` / `mergeSpins` merge running gear from float copies (`mergeParts` `baked`) so quantized int16
+    GLB vertices do not wrap inside the hull.
+  - `GunControl` converges the bore on the line of sight at the lased range so model-measured sight offsets hit at
+    every range.
+  - Desk knowledge (`backend/resources/desk/knowledge.md`) updated with tanks and cannon controls (size limit test
+    8 kB → 10 kB); `e2e/tests/game.spec.ts` checks both controls tables (cars and tank gun).
+- Verified on the merged tree:
+  - Frontend: `tsc -b`, `vitest` 293 passed, `npm run build` (`index-BmLIhppp.js`).
+  - GPU (`~/.local/opt/wt/v280/`): `gpu-errors.cjs` WebGPU default 0, WebGPU with all five tanks ×2 0, WebGL 2 with
+    tanks 0, Edwards (`hayate,f15j,m1a2,su47`) 0; race pictures checked (camera with the vehicle).
+  - `tank-check.cjs` on GPU: `type10`, `type16`, `leopard2a5`, `m1a2`, `t14` (re-run `tc-t14c.log`: all steps ok in
+    night and dawn, 0 errors/warnings, 0 failed), and `phone` (`type16`, 844×390 touch: all steps ok, 0 overlap, 0
+    errors); all garage, chase, sight, flash and impact pictures inspected.
+  - `tank-duel.cjs` (isolated stack, `m1a2` vs `hayate` in an online room): all steps ok, A's shell hit B and respawned
+    B on both screens, 0 errors.
+  - Backend: 80 tests passed; E2E `game.spec.ts` 10/10 passed on the isolated stack (other 18 specs passed in the prior
+    full run).
+- Not verified: sound by ear; a real gamepad; pivot turn on flat ground; a real phone device. Note: the five tank GLBs
+  (6.3 MB total) load behind the menus for all players like the other vehicles.
+
