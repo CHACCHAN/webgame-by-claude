@@ -2687,3 +2687,41 @@ Owner approved the five sheets and publishing (11-20: 「はい」). Merged `tan
 - Not verified: sound by ear; a real gamepad; pivot turn on flat ground; a real phone device. Note: the five tank GLBs
   (6.3 MB total) load behind the menus for all players like the other vehicles.
 
+
+## v2.8.1 (11-20): phone car-select framing (fast BVH fit), fighter anti-collision beacons, M1A2 under budget, tank checks
+
+Merged `phone-framing` (`bf054c2`) and `small-fixes-281` (`cbcbe88`):
+- **Phone car-select framing (`phone-framing`)**:
+  - In the phone layout (`max-height: 500px`), `VehiclePicker` passes `garageFraming.free` (NDC) and `Game.fitGarage`
+    (`camera/garageFit.ts`) steps the camera back and picks the side and part of the swing where the vehicle's hull
+    fits inside the free strip above the card with ≤ 5 % hidden by roadside occluders.
+  - Optimized `fitGarage` from 1.2–1.5 s (1x) / 4.6–5.5 s (4x CPU throttle) on trains and the cockroach down to
+    **< 22 ms at 1x** across all vehicles (`oboro e5` 1239 → 13.9 ms, `oboro l0` 1471 → 12.9 ms, `kirifuri e5` 1178 →
+    9.0 ms, `kirifuri roach` 1309 → 21.7 ms, `tenrou roach` 1163 → 16.9 ms, cars/bikes 2.7–12.7 ms): lazy flat binary
+    BVH per `BufferGeometry` (`WeakMap` cache) with packed `Float32Array` triangles, precomputed world-space AABBs,
+    eye-to-hull cone pre-filter, `garageOccluders` cached per course spot/radius, pre-multiplied VP matrix in
+    `garageExtent`, two-pass `garageClearPart`, and gap-jumping `clearSwing(count, clear, minWidth)`.
+  - Verified on phone (844×390 touch, DPR 3, quality low): 5 courses × all vehicles (98 pairs) outside strip 82/98 →
+    **0/98** (worst −0.3 px); 5 tanks × 5 courses (25 pairs) outside strip 25/25 → **0/25** (`>5 % hidden` 8/25 →
+    6/25); WebGL 2 phone 369 rows 0 errors; desktop 1080p (882/882 rows) and 720p (882/882 rows) **0 differences**
+    (`same.py`); E2E `mobile.spec.ts` passed.
+- **Fighter anti-collision beacon & tank improvements (`small-fixes-281`)**:
+  - `render/JetModel.ts` `lamp()`: when a lamp material's exported `emissive` is black (`#000000`, as on the F-15s'
+    `beacon` where `tools/blender/jets/f15.py` had `strength=0.0`), fall back to `m.color.clone()` as `glow` (uniform
+    value only, 0 extra shaders); `f15.py` updated to `strength=1.0`, unit test `jetlamps.test.ts` added; verified on
+    Edwards at night (`crop-flash.jpg` vs `crop-dark.jpg`, `deltaR=196`).
+  - `tools/blender/tanks/m1a2_parts.py` & `m1a2_shape.py`: lightened loader's shield frame/posts and smooth-preserving
+    cylinder segments; `public/models/tanks/m1a2.glb` rebuilt to **1,479,112 B** (1.48 MB, under the 1.5 MB budget;
+    54,322 tris, 10 draw calls; hand-mask gate mean IoU **0.911** unchanged).
+  - `tools/blender/tanks/fitdata/tools/handmask.py`: seeded `cv2.setRNGSeed(0)` and `np.random.seed(0)` before GrabCut
+    (verified bit-for-bit identical output across runs).
+  - `tools/tank-check.cjs`: synchronous pause + accumulator clamp on `gunHost` events and `rivalCap = 95` m during
+    reload wait before the sight shot (eliminates the Oboro bend flake; verified 0 failed steps on `m1a2` and `t14`).
+  - `tools/tank-figures.ts` & `tanks.test.ts`: flat-ground neutral turn rate (`type10` 22.1 °/s, `leopard2a5` 21.5 °/s,
+    `m1a2` 22.2 °/s, `t14` 22.1 °/s), hull drift (43–50 cm in 7 s) and opposite track scroll velocities verified.
+- Verified on the merged v2.8.1 tree: `tsc -b`; `vitest` 301 passed (34 files); `npm run build` (`index-DfU7HPF8.js`);
+  `gpu-errors.cjs` WebGPU ×3 0 (incl. all five tanks), WebGL 2 (with tanks) 0, Edwards (`hayate,f15j,m1a2,su47`) 0;
+  race pictures checked.
+- Not verified: real phone hardware; sound by ear; real gamepad.
+
+

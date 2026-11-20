@@ -362,7 +362,9 @@ pending. `docs/PLAN.md` holds the design.
   `vehicle/vehicleStats.json`; a vitest fails without an entry) and `node tools/thumbs.cjs <id>` (the game's own
   garage on the GPU → `public/img/vehicles/<id>.webp`; run them all again after a change of the look). The garage's
   camera is aimed by `game.garageFraming` (the picker puts the vehicle in the free part of the screen) and a kind's
-  `garage.middle` / `garage.span`. Trees inside the camera's circle are shrunk away (`clearing` in
+  `garage.middle` / `garage.span`; on a phone (`garageFraming.free`) `Game.fitGarage` (`camera/garageFit.ts`) steps the
+  camera back and picks the side and part of the swing where the vehicle's hull fits the free strip with ≤ 5 % hidden
+  by roadside occluders (cached per spot, lazy flat BVH per geometry). Trees inside the camera's circle are shrunk away (`clearing` in
   `render/instancing.ts`, set by `Game.garageCamera`), in the waiting room too.
 - Race setup order (single player): mode → course → time & weather (`ConditionsScreen`) → car (`GarageScreen`) → AT/MT
   (`TransmissionScreen`) → rival (rival mode) → race; ghost battles pick the ghost between conditions and car. The last

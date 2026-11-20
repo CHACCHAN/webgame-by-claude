@@ -236,8 +236,8 @@ road wheels a side) and five public-domain U.S. Army photographs of SEPv3s from 
 not in the repository (`tools/blender/tanks/fitdata/m1a2/ref/list.json`; cameras solved from points read off them,
 `fitdata/m1a2/fit/ba.json`; masks drawn by hand hints, `handmask.json`). The SEPv3's under-armour auxiliary power unit
 grille (left rear deck) and thicker cheek armour are on it; no Trophy (none of the photos shows it). One CARC tan painted
-by the script, light dust; no unit markings, bumper numbers or registration numbers. 57,914 triangles, 10 draw calls in
-the game, 1.51 MB.
+by the script, light dust; no unit markings, bumper numbers or registration numbers. 54,322 triangles, 10 draw calls in
+the game, 1.48 MB.
 
 The **T-14 Armata** (`models/tanks/t14.glb`, 2026-11-19) is our own model: `frontend/tools/blender/tanks/t14.py` (assembly, the gun's places, the budget and
 clearance checks), `t14_shape.py` (the stations in metres, game frame), `t14_parts.py` (the faceted turret shroud, the
