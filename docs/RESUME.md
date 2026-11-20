@@ -34,13 +34,13 @@ Claude Code に戻ったとき、そこから続ける。
 - **済んだ確認:**
   - フロント: tsc、vitest 293、build（`index-BmLIhppp.js`）;
   - GPU（`~/.local/opt/wt/v280/gpu.log`）: gpu-errors は WebGPU（標準・戦車入り ×2）、WebGL 2（戦車入り）、エドワーズ（hayate, f15j, m1a2, su47）がすべて 0 件;
-  - tank-check: type10 と type16 は全手順 ok、0 件。
+  - tank-check: type10 / type16 / leopard2a5 / m1a2 は全手順 ok、0 件;
+  - バックエンド 80 件すべて通過（知識ファイルの大きさと台数の修正後）;
+  - E2E `game.spec.ts` 10 件通過（操作表の修正後。前回の全体実行でほかの 18 件は通過済み）;
+  - tank-duel（M1A2 対 hayate、テスト用スタック）: 全手順 ok。A の弾が B に当たり、B は自分の画面でコースに戻り、A の画面でもそこに見えた。0 件。
+  - ログ: `~/.local/opt/wt/e2e-280b.log`。テスト用スタックは片付け済み。
 - **まだ:**
-  - tank-check の leopard2a5 / m1a2 / t14 と phone（スクリプトは続行中。止まっていたら下のコマンドで残りだけ回す）;
-  - バックエンドテストの再実行: 修正後の 3 件。直前の実行では知識ファイルの大きさと台数 2 件が落ちていて、修正済み;
-  - E2E `game.spec.ts` の再実行: 直前は操作表が 2 つになって落ち、修正済み。ほかの 18 件は通過;
-  - tank-duel: 前回はポート 4251 が別エージェントのプレビューに使われていて無効な実行だった。コードの失敗ではない。
-  - 再実行は `~/.local/opt/wt/e2e-280b.sh`（ログ `~/.local/opt/wt/e2e-280b.log`）がまとめて行う。
+  - tank-check の t14 と phone（`~/.local/opt/wt/v280/gpu.sh` の最後の 2 本）。止まっていたらプレビュー :4179 を立て直し、その 2 行だけ回す。
 - 残りの手順:
   1. ログで `GPU-DONE`、`E2E-DONE`、`STACK-DONE` と各 `ok` を確かめ、`~/.local/opt/wt/v280/tc-*/` の画像を見る。
      - 途中で止まっていたら、プレビューを立て直してから流し直す:
