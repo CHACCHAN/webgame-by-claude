@@ -134,6 +134,10 @@ describe('car select', () => {
     expect(bike.up).toBeGreaterThan(f.up + 0.3);
     expect(f.zoom).toBeGreaterThan(1);
     expect(f.zoom).toBeLessThan(1.4);
+    // the free part goes along for the game's own check, in normalised device coordinates
+    expect(f.free.left).toBeCloseTo(650 / 640 - 1, 6);
+    expect([f.free.right, f.free.top]).toEqual([1, 1]);
+    expect(f.free.bottom).toBeCloseTo(1 - 480 / 720, 6);
     // no room at all: still a finite view
     const none = garageFramingFor({ w: 844, h: 390 }, { left: 844, right: 844, top: 0, bottom: 0 });
     expect(none.zoom).toBe(2.6);
