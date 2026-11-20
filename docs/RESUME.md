@@ -125,4 +125,4 @@ Claude Code に戻ったとき、そこから続ける。
 - **報告:** 未検証のものを検証済みと書かない。
 
 ## その後（別ハーネスが追記する）
-- （ここに 1 行ずつ）
+- 2026-11-20 / v2.8.0 / `ccr-de1f3a33-58aazj` (`ad458fc`) / 戦車 5 両公開: T-14 の `tank-check.cjs` 再実行（`tc-t14c.log`: 夜・夜明け全手順 ok、0 件）と `~/.local/opt/wt/v280/` の全画像を確認し、`PROGRESS.md`・`HANDOVER.md` 更新、`course-proposal` を `ccr-de1f3a33-58aazj` にマージ、`docker compose up -d --build` で本番反映（`index-BmLIhppp.js`、`/api/content` version `2.8.0`・車両 27 台、`/api/tracks/oboro-downhill/leaderboard` 200、`php artisan llm:check` 全モデル listed を確認）、GitHub へ push 済み。並行して `phone-framing` と `small-fixes-281`（戦闘機 `beacon`・`handmask.py` 乱数種・`tank-check` 2発目安定化・平地超信地旋回・M1A2 防盾軽量化）を Opus 5.5 ワーカーで進行中。
