@@ -75,8 +75,11 @@ function dropWhiteColours(scene: THREE.Object3D) {
   for (const [mat, any] of coloured) if (!any && mat.vertexColors) mat.vertexColors = false;
 }
 
-/** an occlusion map that occludes nothing (`likeTheCars`) */
-let noOcclusion: THREE.DataTexture | null = null;
+/**
+ * An occlusion that occludes nothing on a non-zero intensity (`likeTheCars`): a shader is keyed by whether each of
+ * a material's numbers is 0, so an intensity of 0 would be a shader of its own again. Occlusion: (r − 1) · it + 1.
+ */
+const NO_OCCLUSION = 1e-6;
 
 /**
  * The Su-47's airframe and lamps are drawn with shaders that every game has built at its start, for the title's car:
@@ -85,28 +88,30 @@ let noOcclusion: THREE.DataTexture | null = null;
  * airframe (base, metal / roughness and normal maps, its sky share in the vertex colours, as a car's tyre) differed
  * from a tyre by having no occlusion map and 16-bit UVs (a tyre's are floats); the lamps (map and glow map, as a
  * shared tail lamp) by being double-sided. Each was a shader of its own, built when the aircraft was first shown
- * (13–14 ms each in one go, 11-19). Here the airframe gets a white occlusion map (occlusion 1 changes nothing) and its
- * UVs as floats (the same values), and the lamps, closed solids, one side: the picture is the same. A lamp's level
- * goes through its glow colour, not its intensity (`buildJet`): an intensity of 0 is another shader too.
+ * (13–14 ms each in one go, 11-19). Here the airframe takes its own metal / roughness map as its occlusion map, at
+ * `NO_OCCLUSION` (no occlusion was baked: the map's red channel is 216–255 from the WebP's chroma), and its UVs as
+ * floats (the same values); the lamps, closed solids, get one side: the picture is the same. A lamp's level goes
+ * through its glow colour, not its intensity (`buildJet`): an intensity of 0 is another shader too.
+ * **The occlusion map must be the very texture of the metal / roughness map**, as on a tyre (the glTF loader hands out
+ * one texture for an ORM image): three.js makes one binding of the texture slots that hold the same texture when it
+ * builds a shader (`TextureNode.getUniformHash` is the texture's uuid), and the key does not tell such a shader from
+ * one with two textures. A white texture of its own, keyed as the tyre's map, was read for metal and roughness too
+ * inside the tyre's shader: the airframe went fully metallic and rough, near black at dawn (seen on garage pictures
+ * before release, 11-20).
  */
 function likeTheCars(scene: THREE.Object3D) {
+  const adapted = new WeakSet<THREE.Material>();
   scene.traverse((o) => {
     const m = o as THREE.Mesh;
     if (!m.isMesh) return;
     const mat = m.material as THREE.MeshStandardMaterial;
     if (mat.vertexColors && mat.map && mat.normalMap && mat.metalnessMap && !mat.aoMap) {
-      if (!noOcclusion) {
-        const like = mat.metalnessMap;
-        noOcclusion = new THREE.DataTexture(new Uint8Array([255, 255, 255, 255]), 1, 1);
-        noOcclusion.name = 'no-occlusion';
-        // (the sampler is part of the key: the model's own, as on a tyre's maps)
-        Object.assign(noOcclusion, { mapping: like.mapping, magFilter: like.magFilter, minFilter: like.minFilter, wrapS: like.wrapS, wrapT: like.wrapT, channel: like.channel });
-        noOcclusion.needsUpdate = true;
-      }
-      mat.aoMap = noOcclusion;
+      mat.aoMap = mat.metalnessMap;
+      mat.aoMapIntensity = NO_OCCLUSION;
+      adapted.add(mat);
     }
     const uv = m.geometry.getAttribute('uv');
-    if (mat.aoMap === noOcclusion && uv && !(uv.array instanceof Float32Array)) {
+    if (adapted.has(mat) && uv && !(uv.array instanceof Float32Array)) {
       const f = new Float32Array(uv.count * 2);
       for (let i = 0; i < uv.count; i++) {
         f[2 * i] = uv.getX(i);
