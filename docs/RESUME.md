@@ -59,7 +59,7 @@ Claude Code に戻ったとき、そこから続ける。
 
 ## 作業中 2: スマホの車両選択で車両が見切れる（oboro / kirifuri、zoom 1.62 > 許容 1.52）
 - ブランチ `phone-framing`、作業ツリー `.claude/worktrees/agent-a4f14c5da1b2280fe`。v2.7.5 が土台。
-- 担当エージェントに、途中状態のコミットと `~/.local/opt/wt/phone-framing/STATE.md` を書かせて止めた。続きはその STATE.md から。
+- 途中状態のコミットは `c04001c`（WIP。電車では合わせ込みが遅いので、このままでは取り込まない）。状態は `~/.local/opt/wt/phone-framing/STATE.md`（11-20 04:02）。続きはそこから。
 - 取り込むときは main（v2.8.0 以降）をマージしてから確認し、パッチ版（2.8.x）として出す。
 
 ## オーナーの判断待ち: スマホの画質「低」の解像度（測定はオーナーが 11-20 に了承）
